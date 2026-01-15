@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { Interpreter } from "./interpreter";
+import { Interpreter } from "../src/interpreter";
 
 describe("Security: Prototype Pollution Prevention", () => {
   describe("__proto__ access blocking", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { Interpreter, InterpreterError } from "./interpreter";
+import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Objects", () => {
   describe("Object literals", () => {
@@ -52,8 +52,8 @@ describe("Objects", () => {
         name: "John",
         address: {
           city: "NYC",
-          zip: 10001
-        }
+          zip: 10001,
+        },
       });
     });
 
@@ -69,7 +69,7 @@ describe("Objects", () => {
       const result = interpreter.evaluate(code);
       expect(result).toEqual({
         numbers: [1, 2, 3],
-        names: ["Alice", "Bob"]
+        names: ["Alice", "Bob"],
       });
     });
 
@@ -102,7 +102,7 @@ describe("Objects", () => {
         id: 42,
         name: "Test",
         active: true,
-        tags: ["a", "b"]
+        tags: ["a", "b"],
       });
     });
   });

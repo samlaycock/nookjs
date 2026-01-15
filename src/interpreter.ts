@@ -333,6 +333,11 @@ export class Interpreter {
       case "LogicalExpression":
         return this.evaluateLogicalExpression(node as ESTree.LogicalExpression);
 
+      case "ConditionalExpression":
+        return this.evaluateConditionalExpression(
+          node as ESTree.ConditionalExpression,
+        );
+
       case "AssignmentExpression":
         return this.evaluateAssignmentExpression(
           node as ESTree.AssignmentExpression,
@@ -438,6 +443,11 @@ export class Interpreter {
       case "LogicalExpression":
         return await this.evaluateLogicalExpressionAsync(
           node as ESTree.LogicalExpression,
+        );
+
+      case "ConditionalExpression":
+        return await this.evaluateConditionalExpressionAsync(
+          node as ESTree.ConditionalExpression,
         );
 
       case "AssignmentExpression":
@@ -668,6 +678,20 @@ export class Interpreter {
         throw new InterpreterError(
           `Unsupported logical operator: ${node.operator}`,
         );
+    }
+  }
+
+  private evaluateConditionalExpression(
+    node: ESTree.ConditionalExpression,
+  ): any {
+    // Evaluate the test condition
+    const testValue = this.evaluateNode(node.test);
+
+    // Return consequent if truthy, alternate if falsy
+    if (testValue) {
+      return this.evaluateNode(node.consequent);
+    } else {
+      return this.evaluateNode(node.alternate);
     }
   }
 
@@ -1368,6 +1392,20 @@ export class Interpreter {
         throw new InterpreterError(
           `Unsupported logical operator: ${node.operator}`,
         );
+    }
+  }
+
+  private async evaluateConditionalExpressionAsync(
+    node: ESTree.ConditionalExpression,
+  ): Promise<any> {
+    // Evaluate the test condition
+    const testValue = await this.evaluateNodeAsync(node.test);
+
+    // Return consequent if truthy, alternate if falsy
+    if (testValue) {
+      return await this.evaluateNodeAsync(node.consequent);
+    } else {
+      return await this.evaluateNodeAsync(node.alternate);
     }
   }
 

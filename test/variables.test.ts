@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { Interpreter, InterpreterError } from "./interpreter";
+import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Variables and Assignments", () => {
   let interpreter: Interpreter;

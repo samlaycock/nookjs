@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import type { ESTree } from "meriyah";
-import { Interpreter } from "./interpreter";
+import { Interpreter } from "../src/interpreter";
 
 describe("AST Validator", () => {
   describe("Constructor validator", () => {

@@ -79,6 +79,12 @@ The interpreter supports custom AST validation for security and policy enforceme
 - Logical OR (`||`) with short-circuit evaluation
 - Logical NOT (`!`)
 
+### Ternary Operator
+- Conditional expression: `condition ? valueIfTrue : valueIfFalse`
+- Short-circuit evaluation (only evaluates chosen branch)
+- Supports nesting: `a ? (b ? x : y) : z`
+- Works in all contexts (variables, functions, loops, etc.)
+
 ### Variables
 - **Variable Declarations**: `let` and `const` (with proper immutability)
 - **Variable Assignment**: Reassigning `let` variables
@@ -240,6 +246,11 @@ interpreter.evaluate('let person = { name: "Alice", age: 30 }; person.name'); //
 // Comparisons and Logic
 interpreter.evaluate('5 > 3');           // true
 interpreter.evaluate('true && false');   // false
+
+// Ternary operator
+interpreter.evaluate('let age = 20');
+interpreter.evaluate('age >= 18 ? "adult" : "minor"'); // "adult"
+interpreter.evaluate('let max = 10 > 5 ? 10 : 5'); // 10
 
 // Conditionals
 interpreter.evaluate(`
@@ -494,7 +505,7 @@ The interpreter throws `InterpreterError` for:
 
 ## Testing
 
-Comprehensive test suite with **838 tests** across 21 files:
+Comprehensive test suite with **872 tests** across 22 files:
 
 **Arithmetic Tests (43 tests)**:
 - All supported operators
@@ -703,6 +714,18 @@ Comprehensive test suite with **838 tests** across 21 files:
 - Error handling and propagation in async contexts
 - State management and const immutability
 - Closure security across async boundaries
+
+**Ternary Operator Tests (34 tests)**:
+- Basic ternary expressions (true/false conditions, numbers, strings)
+- Ternary with variables (in condition, in branches, assignment)
+- Nested ternary expressions (in consequent, in alternate, multiple levels)
+- Ternary with expressions (arithmetic, function calls, complex conditions)
+- Ternary with objects and arrays (returning, property access)
+- Falsy values handling (0, empty string, null, undefined, truthy values)
+- Ternary in return statements (functions, arrow functions)
+- Ternary in loops (for loops, while conditions)
+- Async ternary expressions (evaluateAsync, async host functions, await in branches)
+- Edge cases (short-circuit evaluation, function arguments, array/object literals)
 
 Run tests with `bun test`.
 
@@ -1135,7 +1158,6 @@ This means it can theoretically compute any computable function, given enough ti
 
 - **No labeled statements**: Labeled break/continue not supported
 - **No typeof/instanceof**: Type checking operators not supported
-- **No ternary operator**: Use if/else instead
 - **No try/catch**: Error handling not supported
 - **No spread/rest operators**: Not supported
 - **No destructuring**: Not supported

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { Interpreter } from "./interpreter";
+import { Interpreter } from "../src/interpreter";
 
 describe("evaluateAsync()", () => {
   describe("Async host functions", () => {

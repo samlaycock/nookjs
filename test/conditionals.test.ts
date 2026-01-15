@@ -1,15 +1,15 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { Interpreter, InterpreterError } from './interpreter';
+import { describe, test, expect, beforeEach } from "bun:test";
+import { Interpreter, InterpreterError } from "../src/interpreter";
 
-describe('Conditional Statements', () => {
+describe("Conditional Statements", () => {
   let interpreter: Interpreter;
 
   beforeEach(() => {
     interpreter = new Interpreter();
   });
 
-  describe('Basic if statements', () => {
-    test('executes consequent when condition is true', () => {
+  describe("Basic if statements", () => {
+    test("executes consequent when condition is true", () => {
       const code = `
         let x = 0;
         if (true) {
@@ -20,7 +20,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(5);
     });
 
-    test('skips consequent when condition is false', () => {
+    test("skips consequent when condition is false", () => {
       const code = `
         let x = 0;
         if (false) {
@@ -31,7 +31,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(0);
     });
 
-    test('evaluates condition expression', () => {
+    test("evaluates condition expression", () => {
       const code = `
         let x = 0;
         if (5 > 3) {
@@ -42,7 +42,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('handles truthy values', () => {
+    test("handles truthy values", () => {
       const code = `
         let x = 0;
         if (1) {
@@ -53,7 +53,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('handles falsy values', () => {
+    test("handles falsy values", () => {
       const code = `
         let x = 5;
         if (0) {
@@ -64,7 +64,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(5);
     });
 
-    test('supports single statement without braces', () => {
+    test("supports single statement without braces", () => {
       const code = `
         let x = 0;
         if (true)
@@ -74,7 +74,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(5);
     });
 
-    test('if with variable condition', () => {
+    test("if with variable condition", () => {
       const code = `
         let shouldExecute = true;
         let x = 0;
@@ -86,7 +86,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('if with complex condition', () => {
+    test("if with complex condition", () => {
       const code = `
         let a = 10;
         let b = 5;
@@ -100,8 +100,8 @@ describe('Conditional Statements', () => {
     });
   });
 
-  describe('if...else statements', () => {
-    test('executes consequent when true', () => {
+  describe("if...else statements", () => {
+    test("executes consequent when true", () => {
       const code = `
         let x = 0;
         if (true) {
@@ -114,7 +114,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(5);
     });
 
-    test('executes alternate when false', () => {
+    test("executes alternate when false", () => {
       const code = `
         let x = 0;
         if (false) {
@@ -127,7 +127,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('else without braces', () => {
+    test("else without braces", () => {
       const code = `
         let x = 0;
         if (false)
@@ -139,7 +139,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('if...else with comparison', () => {
+    test("if...else with comparison", () => {
       const code = `
         let age = 20;
         let status = 0;
@@ -153,7 +153,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('if...else branching with variables', () => {
+    test("if...else branching with variables", () => {
       const code = `
         let value = 5;
         let result = 0;
@@ -168,8 +168,8 @@ describe('Conditional Statements', () => {
     });
   });
 
-  describe('if...else if...else chains', () => {
-    test('executes first true branch', () => {
+  describe("if...else if...else chains", () => {
+    test("executes first true branch", () => {
       const code = `
         let x = 15;
         let result = 0;
@@ -185,7 +185,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(2);
     });
 
-    test('executes final else when all conditions false', () => {
+    test("executes final else when all conditions false", () => {
       const code = `
         let x = 25;
         let result = 0;
@@ -201,7 +201,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(3);
     });
 
-    test('multiple else if branches', () => {
+    test("multiple else if branches", () => {
       const code = `
         let score = 75;
         let grade = 0;
@@ -221,7 +221,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(3);
     });
 
-    test('stops at first true condition', () => {
+    test("stops at first true condition", () => {
       const code = `
         let x = 15;
         let count = 0;
@@ -237,7 +237,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('else if without final else', () => {
+    test("else if without final else", () => {
       const code = `
         let x = 30;
         let result = 0;
@@ -252,8 +252,8 @@ describe('Conditional Statements', () => {
     });
   });
 
-  describe('Nested if statements', () => {
-    test('nested if inside if', () => {
+  describe("Nested if statements", () => {
+    test("nested if inside if", () => {
       const code = `
         let x = 10;
         let y = 5;
@@ -268,7 +268,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('nested if...else', () => {
+    test("nested if...else", () => {
       const code = `
         let a = 10;
         let b = 20;
@@ -287,7 +287,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('deeply nested conditionals', () => {
+    test("deeply nested conditionals", () => {
       const code = `
         let x = 5;
         let result = 0;
@@ -304,8 +304,8 @@ describe('Conditional Statements', () => {
     });
   });
 
-  describe('if statements with multiple statements in blocks', () => {
-    test('multiple statements in consequent', () => {
+  describe("if statements with multiple statements in blocks", () => {
+    test("multiple statements in consequent", () => {
       const code = `
         let x = 0;
         let y = 0;
@@ -318,7 +318,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(15);
     });
 
-    test('multiple statements in both branches', () => {
+    test("multiple statements in both branches", () => {
       const code = `
         let x = 0;
         let y = 0;
@@ -334,7 +334,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(5);
     });
 
-    test('complex operations in blocks', () => {
+    test("complex operations in blocks", () => {
       const code = `
         let balance = 100;
         let amount = 50;
@@ -348,25 +348,25 @@ describe('Conditional Statements', () => {
     });
   });
 
-  describe('if statements with return-like behavior', () => {
-    test('if statement returns undefined when not executed', () => {
-      const result = interpreter.evaluate('if (false) { 5 }');
+  describe("if statements with return-like behavior", () => {
+    test("if statement returns undefined when not executed", () => {
+      const result = interpreter.evaluate("if (false) { 5 }");
       expect(result).toBeUndefined();
     });
 
-    test('if statement returns last expression value when executed', () => {
-      const result = interpreter.evaluate('if (true) { 5 }');
+    test("if statement returns last expression value when executed", () => {
+      const result = interpreter.evaluate("if (true) { 5 }");
       expect(result).toBe(5);
     });
 
-    test('if...else returns appropriate branch value', () => {
-      const result = interpreter.evaluate('if (true) { 10 } else { 20 }');
+    test("if...else returns appropriate branch value", () => {
+      const result = interpreter.evaluate("if (true) { 10 } else { 20 }");
       expect(result).toBe(10);
     });
   });
 
-  describe('Practical patterns', () => {
-    test('min/max pattern', () => {
+  describe("Practical patterns", () => {
+    test("min/max pattern", () => {
       const code = `
         let a = 10;
         let b = 20;
@@ -381,7 +381,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(20);
     });
 
-    test('clamp pattern', () => {
+    test("clamp pattern", () => {
       const code = `
         let value = 150;
         let min = 0;
@@ -396,7 +396,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(100);
     });
 
-    test('sign function pattern', () => {
+    test("sign function pattern", () => {
       const code = `
         let x = -5;
         let sign = 0;
@@ -410,7 +410,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(-1);
     });
 
-    test('validation pattern', () => {
+    test("validation pattern", () => {
       const code = `
         let age = 25;
         let hasID = true;
@@ -423,7 +423,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(true);
     });
 
-    test('error handling pattern', () => {
+    test("error handling pattern", () => {
       const code = `
         let value = 0;
         let error = false;
@@ -436,7 +436,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(true);
     });
 
-    test('state machine pattern', () => {
+    test("state machine pattern", () => {
       const code = `
         let state = 1;
         let nextState = 0;
@@ -453,8 +453,8 @@ describe('Conditional Statements', () => {
     });
   });
 
-  describe('Edge cases', () => {
-    test('empty if block', () => {
+  describe("Edge cases", () => {
+    test("empty if block", () => {
       const code = `
         let x = 5;
         if (true) {
@@ -464,7 +464,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(5);
     });
 
-    test('empty else block', () => {
+    test("empty else block", () => {
       const code = `
         let x = 5;
         if (false) {
@@ -476,7 +476,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(5);
     });
 
-    test('condition with side effects', () => {
+    test("condition with side effects", () => {
       const code = `
         let x = 0;
         let y = 5;
@@ -488,7 +488,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('if statement as final statement', () => {
+    test("if statement as final statement", () => {
       const code = `
         let x = 0;
         if (true) {
@@ -499,8 +499,8 @@ describe('Conditional Statements', () => {
     });
   });
 
-  describe('Integration with other features', () => {
-    test('if with arithmetic in condition', () => {
+  describe("Integration with other features", () => {
+    test("if with arithmetic in condition", () => {
       const code = `
         let result = 0;
         if (2 + 2 === 4) {
@@ -511,7 +511,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('if with logical operators in condition', () => {
+    test("if with logical operators in condition", () => {
       const code = `
         let a = true;
         let b = false;
@@ -524,7 +524,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('modifying variables in conditional blocks', () => {
+    test("modifying variables in conditional blocks", () => {
       const code = `
         let counter = 0;
         if (counter === 0) {
@@ -538,7 +538,7 @@ describe('Conditional Statements', () => {
       expect(interpreter.evaluate(code)).toBe(2);
     });
 
-    test('using const in conditional blocks', () => {
+    test("using const in conditional blocks", () => {
       const code = `
         let x = 0;
         if (true) {

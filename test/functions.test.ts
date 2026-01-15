@@ -1,15 +1,15 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { Interpreter, InterpreterError } from './interpreter';
+import { describe, test, expect, beforeEach } from "bun:test";
+import { Interpreter, InterpreterError } from "../src/interpreter";
 
-describe('Functions', () => {
+describe("Functions", () => {
   let interpreter: Interpreter;
 
   beforeEach(() => {
     interpreter = new Interpreter();
   });
 
-  describe('Basic function declarations', () => {
-    test('declares a simple function', () => {
+  describe("Basic function declarations", () => {
+    test("declares a simple function", () => {
       const code = `
         function foo() {
           return 42;
@@ -19,7 +19,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(42);
     });
 
-    test('function without return returns undefined', () => {
+    test("function without return returns undefined", () => {
       const code = `
         function foo() {
           let x = 5;
@@ -29,7 +29,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBeUndefined();
     });
 
-    test('empty function returns undefined', () => {
+    test("empty function returns undefined", () => {
       const code = `
         function foo() {
         }
@@ -38,7 +38,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBeUndefined();
     });
 
-    test('function with multiple statements', () => {
+    test("function with multiple statements", () => {
       const code = `
         function foo() {
           let x = 10;
@@ -50,7 +50,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(30);
     });
 
-    test('can call function multiple times', () => {
+    test("can call function multiple times", () => {
       const code = `
         function getValue() {
           return 5;
@@ -63,8 +63,8 @@ describe('Functions', () => {
     });
   });
 
-  describe('Function parameters', () => {
-    test('function with single parameter', () => {
+  describe("Function parameters", () => {
+    test("function with single parameter", () => {
       const code = `
         function double(x) {
           return x * 2;
@@ -74,7 +74,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('function with multiple parameters', () => {
+    test("function with multiple parameters", () => {
       const code = `
         function add(a, b) {
           return a + b;
@@ -84,7 +84,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('function with three parameters', () => {
+    test("function with three parameters", () => {
       const code = `
         function sum(a, b, c) {
           return a + b + c;
@@ -94,7 +94,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(6);
     });
 
-    test('parameters shadow outer variables', () => {
+    test("parameters shadow outer variables", () => {
       const code = `
         let x = 100;
         function foo(x) {
@@ -105,7 +105,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(5);
     });
 
-    test('outer variable unchanged after function call', () => {
+    test("outer variable unchanged after function call", () => {
       const code = `
         let x = 100;
         function foo(x) {
@@ -118,29 +118,33 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(100);
     });
 
-    test('throws on wrong argument count - too few', () => {
+    test("throws on wrong argument count - too few", () => {
       const code = `
         function add(a, b) {
           return a + b;
         }
         add(5)
       `;
-      expect(() => interpreter.evaluate(code)).toThrow('Expected 2 arguments but got 1');
+      expect(() => interpreter.evaluate(code)).toThrow(
+        "Expected 2 arguments but got 1",
+      );
     });
 
-    test('throws on wrong argument count - too many', () => {
+    test("throws on wrong argument count - too many", () => {
       const code = `
         function add(a, b) {
           return a + b;
         }
         add(5, 10, 15)
       `;
-      expect(() => interpreter.evaluate(code)).toThrow('Expected 2 arguments but got 3');
+      expect(() => interpreter.evaluate(code)).toThrow(
+        "Expected 2 arguments but got 3",
+      );
     });
   });
 
-  describe('Return statements', () => {
-    test('early return', () => {
+  describe("Return statements", () => {
+    test("early return", () => {
       const code = `
         function foo() {
           return 1;
@@ -151,7 +155,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('conditional return', () => {
+    test("conditional return", () => {
       const code = `
         function abs(x) {
           if (x < 0) {
@@ -164,7 +168,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(5);
     });
 
-    test('return from nested block', () => {
+    test("return from nested block", () => {
       const code = `
         function foo() {
           {
@@ -176,7 +180,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(42);
     });
 
-    test('return from loop', () => {
+    test("return from loop", () => {
       const code = `
         function findFirst() {
           let i = 0;
@@ -193,7 +197,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(5);
     });
 
-    test('return with expression', () => {
+    test("return with expression", () => {
       const code = `
         function calculate() {
           let a = 10;
@@ -205,7 +209,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(50);
     });
 
-    test('return without value', () => {
+    test("return without value", () => {
       const code = `
         function foo() {
           return;
@@ -216,8 +220,8 @@ describe('Functions', () => {
     });
   });
 
-  describe('Recursion', () => {
-    test('simple recursion - factorial', () => {
+  describe("Recursion", () => {
+    test("simple recursion - factorial", () => {
       const code = `
         function factorial(n) {
           if (n <= 1) {
@@ -230,7 +234,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(120);
     });
 
-    test('fibonacci recursion', () => {
+    test("fibonacci recursion", () => {
       const code = `
         function fib(n) {
           if (n <= 1) {
@@ -243,7 +247,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(13);
     });
 
-    test('countdown recursion', () => {
+    test("countdown recursion", () => {
       const code = `
         function countdown(n) {
           if (n <= 0) {
@@ -256,7 +260,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(15);
     });
 
-    test('recursive power function', () => {
+    test("recursive power function", () => {
       const code = `
         function power(base, exp) {
           if (exp === 0) {
@@ -269,7 +273,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(1024);
     });
 
-    test('gcd recursive', () => {
+    test("gcd recursive", () => {
       const code = `
         function gcd(a, b) {
           if (b === 0) {
@@ -283,8 +287,8 @@ describe('Functions', () => {
     });
   });
 
-  describe('Closures', () => {
-    test('function closes over outer variable', () => {
+  describe("Closures", () => {
+    test("function closes over outer variable", () => {
       const code = `
         let x = 10;
         function getX() {
@@ -295,7 +299,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('function can modify outer variable', () => {
+    test("function can modify outer variable", () => {
       const code = `
         let counter = 0;
         function increment() {
@@ -309,7 +313,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(2);
     });
 
-    test('multiple functions share closure', () => {
+    test("multiple functions share closure", () => {
       const code = `
         let value = 0;
         function inc() {
@@ -326,7 +330,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('closure with parameter and outer variable', () => {
+    test("closure with parameter and outer variable", () => {
       const code = `
         let multiplier = 10;
         function multiply(x) {
@@ -337,7 +341,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(50);
     });
 
-    test('nested function closure', () => {
+    test("nested function closure", () => {
       const code = `
         function outer() {
           let x = 10;
@@ -351,7 +355,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(15);
     });
 
-    test('function defined in block closes over block variable', () => {
+    test("function defined in block closes over block variable", () => {
       const code = `
         let result = 0;
         {
@@ -367,8 +371,8 @@ describe('Functions', () => {
     });
   });
 
-  describe('Functions with local variables', () => {
-    test('function local variables are isolated', () => {
+  describe("Functions with local variables", () => {
+    test("function local variables are isolated", () => {
       const code = `
         function foo() {
           let x = 10;
@@ -380,7 +384,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('local variable does not leak', () => {
+    test("local variable does not leak", () => {
       const code = `
         function foo() {
           let x = 10;
@@ -388,10 +392,12 @@ describe('Functions', () => {
         foo();
         x
       `;
-      expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'x'");
+      expect(() => interpreter.evaluate(code)).toThrow(
+        "Undefined variable 'x'",
+      );
     });
 
-    test('local variable shadows outer', () => {
+    test("local variable shadows outer", () => {
       const code = `
         let x = 100;
         function foo() {
@@ -403,7 +409,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('outer variable unchanged by local shadow', () => {
+    test("outer variable unchanged by local shadow", () => {
       const code = `
         let x = 100;
         function foo() {
@@ -416,8 +422,8 @@ describe('Functions', () => {
     });
   });
 
-  describe('Function composition', () => {
-    test('passing function result to another function', () => {
+  describe("Function composition", () => {
+    test("passing function result to another function", () => {
       const code = `
         function double(x) {
           return x * 2;
@@ -430,7 +436,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(20);
     });
 
-    test('nested function calls', () => {
+    test("nested function calls", () => {
       const code = `
         function add(a, b) {
           return a + b;
@@ -440,7 +446,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('function call in expression', () => {
+    test("function call in expression", () => {
       const code = `
         function getValue() {
           return 5;
@@ -451,8 +457,8 @@ describe('Functions', () => {
     });
   });
 
-  describe('Functions with loops', () => {
-    test('function with while loop', () => {
+  describe("Functions with loops", () => {
+    test("function with while loop", () => {
       const code = `
         function sum(n) {
           let result = 0;
@@ -468,7 +474,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(55);
     });
 
-    test('loop counter stays in function scope', () => {
+    test("loop counter stays in function scope", () => {
       const code = `
         function foo() {
           let i = 0;
@@ -483,8 +489,8 @@ describe('Functions', () => {
     });
   });
 
-  describe('Functions with conditionals', () => {
-    test('function with if statement', () => {
+  describe("Functions with conditionals", () => {
+    test("function with if statement", () => {
       const code = `
         function max(a, b) {
           if (a > b) {
@@ -497,7 +503,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(10);
     });
 
-    test('function with if-else', () => {
+    test("function with if-else", () => {
       const code = `
         function isEven(n) {
           if (n % 2 === 0) {
@@ -511,7 +517,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('function with if-else if-else', () => {
+    test("function with if-else if-else", () => {
       const code = `
         function sign(x) {
           if (x > 0) {
@@ -528,8 +534,8 @@ describe('Functions', () => {
     });
   });
 
-  describe('Complex scenarios', () => {
-    test('helper function pattern', () => {
+  describe("Complex scenarios", () => {
+    test("helper function pattern", () => {
       const code = `
         function square(x) {
           return x * x;
@@ -542,7 +548,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(25);
     });
 
-    test('counter with reset', () => {
+    test("counter with reset", () => {
       const code = `
         let count = 0;
         function increment() {
@@ -561,7 +567,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('function with complex logic', () => {
+    test("function with complex logic", () => {
       const code = `
         function isPrime(n) {
           if (n <= 1) {
@@ -581,7 +587,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(1);
     });
 
-    test('memoization pattern with closure', () => {
+    test("memoization pattern with closure", () => {
       const code = `
         let cached = 0;
         let cacheValid = 0;
@@ -600,7 +606,7 @@ describe('Functions', () => {
       expect(interpreter.evaluate(code)).toBe(100);
     });
 
-    test('accumulator pattern', () => {
+    test("accumulator pattern", () => {
       const code = `
         function sumArray(n) {
           let sum = 0;
@@ -620,20 +626,24 @@ describe('Functions', () => {
     });
   });
 
-  describe('Error handling', () => {
-    test('calling undefined function throws', () => {
-      expect(() => interpreter.evaluate('foo()')).toThrow("Undefined variable 'foo'");
+  describe("Error handling", () => {
+    test("calling undefined function throws", () => {
+      expect(() => interpreter.evaluate("foo()")).toThrow(
+        "Undefined variable 'foo'",
+      );
     });
 
-    test('calling non-function throws', () => {
+    test("calling non-function throws", () => {
       const code = `
         let x = 5;
         x()
       `;
-      expect(() => interpreter.evaluate(code)).toThrow('Callee is not a function');
+      expect(() => interpreter.evaluate(code)).toThrow(
+        "Callee is not a function",
+      );
     });
 
-    test('cannot redeclare function', () => {
+    test("cannot redeclare function", () => {
       const code = `
         function foo() {
           return 1;
@@ -642,7 +652,9 @@ describe('Functions', () => {
           return 2;
         }
       `;
-      expect(() => interpreter.evaluate(code)).toThrow("Variable 'foo' has already been declared");
+      expect(() => interpreter.evaluate(code)).toThrow(
+        "Variable 'foo' has already been declared",
+      );
     });
   });
 });

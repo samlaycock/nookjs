@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { Interpreter } from "./interpreter";
+import { Interpreter } from "../src/interpreter";
 
 describe("Async/Await Syntax", () => {
   describe("Async function declarations", () => {
@@ -323,7 +323,7 @@ describe("Async/Await Syntax", () => {
 
     it("should propagate errors from async sandbox functions", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      expect(
         interpreter.evaluateAsync(`
           async function throwError() {
             let x = undefinedVar;

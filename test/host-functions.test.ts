@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { Interpreter } from "./interpreter";
+import { Interpreter } from "../src/interpreter";
 
 describe("Host Functions", () => {
   describe("Calling sync host functions", () => {
@@ -52,7 +52,7 @@ describe("Host Functions", () => {
         },
       });
       expect(interpreter.evaluate('combine("hello", 42, true)')).toBe(
-        "hello-42-true"
+        "hello-42-true",
       );
     });
 
@@ -276,7 +276,7 @@ describe("Host Functions", () => {
       expect(() => {
         interpreter.evaluate("asyncFunc()");
       }).toThrow(
-        "Cannot call async host function 'asyncFunc' in synchronous evaluate(). Use evaluateAsync() instead."
+        "Cannot call async host function 'asyncFunc' in synchronous evaluate(). Use evaluateAsync() instead.",
       );
     });
 

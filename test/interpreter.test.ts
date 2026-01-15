@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { Interpreter, InterpreterError } from "./interpreter";
+import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Interpreter", () => {
   const interpreter = new Interpreter();
