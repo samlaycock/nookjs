@@ -85,6 +85,12 @@ The interpreter supports custom AST validation for security and policy enforceme
 - Supports nesting: `a ? (b ? x : y) : z`
 - Works in all contexts (variables, functions, loops, etc.)
 
+### typeof Operator
+- Returns a string indicating the type of a value
+- Supported types: `"number"`, `"string"`, `"boolean"`, `"function"`, `"object"`, `"undefined"`
+- Special handling: Does not throw on undefined variables (returns `"undefined"`)
+- Works with all JavaScript values including functions, arrays, and objects
+
 ### Variables
 - **Variable Declarations**: `let` and `const` (with proper immutability)
 - **Variable Assignment**: Reassigning `let` variables
@@ -251,6 +257,15 @@ interpreter.evaluate('true && false');   // false
 interpreter.evaluate('let age = 20');
 interpreter.evaluate('age >= 18 ? "adult" : "minor"'); // "adult"
 interpreter.evaluate('let max = 10 > 5 ? 10 : 5'); // 10
+
+// typeof operator
+interpreter.evaluate('typeof 42');              // "number"
+interpreter.evaluate('typeof "hello"');         // "string"
+interpreter.evaluate('typeof true');            // "boolean"
+interpreter.evaluate('typeof undefinedVar');    // "undefined" (no error!)
+interpreter.evaluate('let x = 10; typeof x');   // "number"
+interpreter.evaluate('typeof [1, 2, 3]');       // "object"
+interpreter.evaluate('function add(a, b) { return a + b; } typeof add'); // "function"
 
 // Conditionals
 interpreter.evaluate(`
@@ -505,7 +520,7 @@ The interpreter throws `InterpreterError` for:
 
 ## Testing
 
-Comprehensive test suite with **872 tests** across 22 files:
+Comprehensive test suite with **912 tests** across 23 files:
 
 **Arithmetic Tests (43 tests)**:
 - All supported operators
@@ -726,6 +741,18 @@ Comprehensive test suite with **872 tests** across 22 files:
 - Ternary in loops (for loops, while conditions)
 - Async ternary expressions (evaluateAsync, async host functions, await in branches)
 - Edge cases (short-circuit evaluation, function arguments, array/object literals)
+
+**typeof Operator Tests (40 tests)**:
+- Primitive types (number, string, boolean, null, undefined)
+- Complex types (objects, arrays, functions)
+- With variables (declared and undefined)
+- With expressions (arithmetic, comparisons, ternary)
+- With function calls (sandbox and host functions)
+- In control flow (if/else, for loops, while loops)
+- In return statements (functions, arrow functions)
+- Type guards (runtime type checking patterns)
+- Async support (evaluateAsync, typeof in async context)
+- Edge cases (undefined variables don't throw, functions return "function", nested typeof)
 
 Run tests with `bun test`.
 
@@ -1157,7 +1184,7 @@ This means it can theoretically compute any computable function, given enough ti
 ## Limitations
 
 - **No labeled statements**: Labeled break/continue not supported
-- **No typeof/instanceof**: Type checking operators not supported
+- **No instanceof**: instanceof operator not supported
 - **No try/catch**: Error handling not supported
 - **No spread/rest operators**: Not supported
 - **No destructuring**: Not supported
@@ -1170,8 +1197,7 @@ Potential additions:
 - for...of and for...in loops
 - More array methods (push, pop, shift, unshift, slice, etc.)
 - String methods (substring, indexOf, etc.)
-- typeof operator
-- Ternary operator
+- instanceof operator
 - Template literals
 - Rest/spread operators
 - Classes and constructors

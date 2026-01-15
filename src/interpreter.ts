@@ -606,6 +606,35 @@ export class Interpreter {
   }
 
   private evaluateUnaryExpression(node: ESTree.UnaryExpression): any {
+    // Special case: typeof should not throw for undefined variables
+    if (node.operator === "typeof") {
+      // Try to evaluate, but catch undefined variable errors
+      try {
+        const argument = this.evaluateNode(node.argument);
+
+        // Handle special cases for internal types
+        if (argument instanceof FunctionValue) {
+          return "function";
+        }
+        if (argument instanceof HostFunctionValue) {
+          return "function";
+        }
+
+        return typeof argument;
+      } catch (error) {
+        // If it's an undefined variable error, return "undefined"
+        if (
+          error instanceof InterpreterError &&
+          error.message.includes("Undefined variable")
+        ) {
+          return "undefined";
+        }
+        // Re-throw other errors
+        throw error;
+      }
+    }
+
+    // For other unary operators, evaluate normally
     const argument = this.evaluateNode(node.argument);
 
     switch (node.operator) {
@@ -1323,6 +1352,35 @@ export class Interpreter {
   private async evaluateUnaryExpressionAsync(
     node: ESTree.UnaryExpression,
   ): Promise<any> {
+    // Special case: typeof should not throw for undefined variables
+    if (node.operator === "typeof") {
+      // Try to evaluate, but catch undefined variable errors
+      try {
+        const argument = await this.evaluateNodeAsync(node.argument);
+
+        // Handle special cases for internal types
+        if (argument instanceof FunctionValue) {
+          return "function";
+        }
+        if (argument instanceof HostFunctionValue) {
+          return "function";
+        }
+
+        return typeof argument;
+      } catch (error) {
+        // If it's an undefined variable error, return "undefined"
+        if (
+          error instanceof InterpreterError &&
+          error.message.includes("Undefined variable")
+        ) {
+          return "undefined";
+        }
+        // Re-throw other errors
+        throw error;
+      }
+    }
+
+    // For other unary operators, evaluate normally
     const argument = await this.evaluateNodeAsync(node.argument);
 
     switch (node.operator) {
