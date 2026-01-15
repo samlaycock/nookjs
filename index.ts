@@ -1,4 +1,4 @@
-import { Interpreter } from "./interpreter";
+import { Interpreter } from "./src/interpreter";
 
 console.log("🚀 JavaScript Interpreter Demo\n");
 
