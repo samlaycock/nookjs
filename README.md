@@ -110,12 +110,15 @@ Note: `var` is not supported for simplicity and security.
 - **while Loops**: Repeat code while condition is true
 - **for Loops**: C-style for loops with init, test, and update
 - **Nested Loops**: Both while and for loops can be nested
-- **break Statement**: Exit a loop early
+- **break Statement**: Exit a loop early (or exit switch)
 - **continue Statement**: Skip to the next iteration of a loop
 - **Block Statements**: Group multiple statements with `{ }`
 - **Loop Scoping**: For loop variables are scoped to the loop
 - **for...of Loops**: Iterate over array elements with `for (let item of array)`
 - **const in for...of**: Supports `const` loop variables (new scope per iteration)
+- **switch Statements**: Multi-way branching with case matching
+- **Fall-through**: Switch cases without break fall through to next case
+- **Default case**: Catch-all case when no other cases match
 
 ### Functions
 - **Function Declarations**: Define named functions with parameters
@@ -343,6 +346,44 @@ interpreter.evaluate(`
   result
 `); // "hello world "
 
+// switch statements
+interpreter.evaluate(`
+  let day = 2;
+  let dayName = "";
+  switch (day) {
+    case 0:
+      dayName = "Sunday";
+      break;
+    case 1:
+      dayName = "Monday";
+      break;
+    case 2:
+      dayName = "Tuesday";
+      break;
+    default:
+      dayName = "Unknown";
+  }
+  dayName
+`); // "Tuesday"
+
+// Fall-through in switch
+interpreter.evaluate(`
+  let grade = "B";
+  let message = "";
+  switch (grade) {
+    case "A":
+    case "B":
+      message = "Good job!";
+      break;
+    case "C":
+      message = "You passed";
+      break;
+    default:
+      message = "Try harder";
+  }
+  message
+`); // "Good job!"
+
 // Update operators
 interpreter.evaluate(`
   let x = 5;
@@ -541,7 +582,7 @@ The interpreter throws `InterpreterError` for:
 
 ## Testing
 
-Comprehensive test suite with **949 tests** across 24 files:
+Comprehensive test suite with **985 tests** across 25 files:
 
 **Arithmetic Tests (43 tests)**:
 - All supported operators
@@ -790,6 +831,20 @@ Comprehensive test suite with **949 tests** across 24 files:
 - Error cases (non-array iterables, null, objects)
 - Edge cases (null values, mixed types, function call results)
 
+**Switch Statement Tests (36 tests)**:
+- Basic switch (single case match, string cases, strict equality, booleans)
+- Default case (at end, beginning, middle positions)
+- Fall-through behavior (no break, multiple statements, fall to default, grouped cases)
+- Switch with expressions (discriminant expressions, case expressions, function calls)
+- Switch in functions (inside functions, early return, return without break)
+- Switch with variables (assignments in cases, outer scope access)
+- Switch with arrays and objects (array elements, object properties, modifying arrays)
+- Nested switches (nested switch statements, break in nested switch)
+- Switch in loops (inside for loop, inside while loop)
+- Error cases (continue in switch throws parser error)
+- Async switch (evaluateAsync, async host functions, async operations in cases)
+- Edge cases (empty switch, only default, null case, computed case values)
+
 Run tests with `bun test`.
 
 ## Implementation Details
@@ -866,6 +921,8 @@ Logical operators implement proper short-circuit behavior:
 - `WhileStatement`
 - `ForStatement`
 - `ForOfStatement`
+- `SwitchStatement`
+- `SwitchCase`
 - `BreakStatement`
 - `ContinueStatement`
 - `FunctionDeclaration`

@@ -451,6 +451,9 @@ export class Interpreter {
       case "ForOfStatement":
         return this.evaluateForOfStatement(node as ESTree.ForOfStatement);
 
+      case "SwitchStatement":
+        return this.evaluateSwitchStatement(node as ESTree.SwitchStatement);
+
       case "FunctionDeclaration":
         return this.evaluateFunctionDeclaration(
           node as ESTree.FunctionDeclaration,
@@ -572,6 +575,11 @@ export class Interpreter {
       case "ForOfStatement":
         return await this.evaluateForOfStatementAsync(
           node as ESTree.ForOfStatement,
+        );
+
+      case "SwitchStatement":
+        return await this.evaluateSwitchStatementAsync(
+          node as ESTree.SwitchStatement,
         );
 
       case "FunctionDeclaration":
@@ -1137,6 +1145,70 @@ export class Interpreter {
       // Restore the previous environment
       this.environment = previousEnv;
     }
+  }
+
+  /**
+   * Evaluate switch statement: switch (expr) { case val: ...; break; default: ...; }
+   *
+   * Key implementation details:
+   * - Evaluates discriminant once
+   * - Uses strict equality (===) for case matching
+   * - Supports fall-through (no break = continue to next case)
+   * - Default case can be anywhere (doesn't have to be last)
+   * - Break exits the entire switch
+   * - Return propagates out of switch
+   */
+  private evaluateSwitchStatement(node: ESTree.SwitchStatement): any {
+    // Evaluate the discriminant (the expression being switched on)
+    const discriminant = this.evaluateNode(node.discriminant);
+
+    let matched = false; // Track if we've matched a case (for fall-through)
+    let result: any = undefined;
+
+    // Iterate through all cases
+    for (const switchCase of node.cases) {
+      // Check if this case matches (or if we're falling through from a previous match)
+      if (!matched) {
+        if (switchCase.test === null) {
+          // Default case - always matches
+          matched = true;
+        } else {
+          // Regular case - check if discriminant === test value
+          const testValue = this.evaluateNode(switchCase.test);
+          if (discriminant === testValue) {
+            matched = true;
+          }
+        }
+      }
+
+      // If matched (either this case or falling through), execute consequent statements
+      if (matched) {
+        for (const statement of switchCase.consequent) {
+          result = this.evaluateNode(statement);
+
+          // If we hit a return statement, propagate it
+          if (result instanceof ReturnValue) {
+            return result;
+          }
+
+          // If we hit a break statement, exit the switch
+          if (result instanceof BreakValue) {
+            return undefined;
+          }
+
+          // Continue is not valid in switch (only in loops)
+          if (result instanceof ContinueValue) {
+            throw new InterpreterError(
+              "Continue statement not allowed in switch statement",
+            );
+          }
+        }
+        // After executing this case's statements, continue to next case (fall-through)
+        // unless we hit a break above
+      }
+    }
+
+    return result;
   }
 
   private evaluateFunctionDeclaration(node: ESTree.FunctionDeclaration): any {
@@ -2059,6 +2131,55 @@ export class Interpreter {
     } finally {
       this.environment = previousEnv;
     }
+  }
+
+  private async evaluateSwitchStatementAsync(
+    node: ESTree.SwitchStatement,
+  ): Promise<any> {
+    // Evaluate the discriminant
+    const discriminant = await this.evaluateNodeAsync(node.discriminant);
+
+    let matched = false;
+    let result: any = undefined;
+
+    // Iterate through all cases
+    for (const switchCase of node.cases) {
+      if (!matched) {
+        if (switchCase.test === null) {
+          // Default case
+          matched = true;
+        } else {
+          // Regular case - check if discriminant === test value
+          const testValue = await this.evaluateNodeAsync(switchCase.test);
+          if (discriminant === testValue) {
+            matched = true;
+          }
+        }
+      }
+
+      // If matched, execute consequent statements
+      if (matched) {
+        for (const statement of switchCase.consequent) {
+          result = await this.evaluateNodeAsync(statement);
+
+          if (result instanceof ReturnValue) {
+            return result;
+          }
+
+          if (result instanceof BreakValue) {
+            return undefined;
+          }
+
+          if (result instanceof ContinueValue) {
+            throw new InterpreterError(
+              "Continue statement not allowed in switch statement",
+            );
+          }
+        }
+      }
+    }
+
+    return result;
   }
 
   private async evaluateFunctionDeclarationAsync(
