@@ -1,0 +1,982 @@
+import { parseScript } from "meriyah";
+import type { ESTree } from "meriyah";
+
+type ASTNode = ESTree.Node;
+
+export class InterpreterError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InterpreterError";
+  }
+}
+
+class ReturnValue {
+  constructor(public value: any) {}
+}
+
+class BreakValue {
+  // Marker class to signal break statement
+}
+
+class ContinueValue {
+  // Marker class to signal continue statement
+}
+
+class FunctionValue {
+  constructor(
+    public params: string[],
+    public body: ESTree.BlockStatement,
+    public closure: Environment,
+  ) {}
+}
+
+class Environment {
+  private variables: Map<
+    string,
+    { value: any; kind: "let" | "const"; isGlobal?: boolean }
+  > = new Map();
+  private parent: Environment | null = null;
+  private thisValue: any = undefined;
+
+  constructor(parent: Environment | null = null, thisValue: any = undefined) {
+    this.parent = parent;
+    this.thisValue = thisValue;
+  }
+
+  declare(
+    name: string,
+    value: any,
+    kind: "let" | "const",
+    isGlobal: boolean = false,
+  ): void {
+    if (this.variables.has(name)) {
+      throw new InterpreterError(
+        `Variable '${name}' has already been declared`,
+      );
+    }
+    this.variables.set(name, { value, kind, isGlobal });
+  }
+
+  get(name: string): any {
+    if (this.variables.has(name)) {
+      return this.variables.get(name)!.value;
+    }
+    if (this.parent) {
+      return this.parent.get(name);
+    }
+    throw new InterpreterError(`Undefined variable '${name}'`);
+  }
+
+  set(name: string, value: any): void {
+    if (this.variables.has(name)) {
+      const variable = this.variables.get(name)!;
+      if (variable.kind === "const") {
+        throw new InterpreterError(`Cannot assign to const variable '${name}'`);
+      }
+      variable.value = value;
+      return;
+    }
+    if (this.parent) {
+      this.parent.set(name, value);
+      return;
+    }
+    throw new InterpreterError(`Undefined variable '${name}'`);
+  }
+
+  has(name: string): boolean {
+    return this.variables.has(name) || (this.parent?.has(name) ?? false);
+  }
+
+  forceSet(name: string, value: any): boolean {
+    // Force set a variable value, even if it's const
+    // Used for updating injected globals
+    // Returns true if the variable was updated, false if it's a user variable
+    if (this.variables.has(name)) {
+      const variable = this.variables.get(name)!;
+      // Only allow force-setting globals, not user-declared variables
+      if (variable.isGlobal) {
+        variable.value = value;
+        return true;
+      }
+      return false; // Don't override user variables
+    }
+    if (this.parent) {
+      return this.parent.forceSet(name, value);
+    }
+    return false; // Variable doesn't exist
+  }
+
+  delete(name: string): boolean {
+    // Delete a variable from this environment (not parent)
+    // Returns true if deleted, false if not found
+    if (this.variables.has(name)) {
+      this.variables.delete(name);
+      return true;
+    }
+    return false;
+  }
+
+  getThis(): any {
+    // If this environment has a thisValue (not undefined), return it
+    if (this.thisValue !== undefined) {
+      return this.thisValue;
+    }
+    // Otherwise, look in the parent environment
+    if (this.parent) {
+      return this.parent.getThis();
+    }
+    // No this value found in the chain
+    return undefined;
+  }
+}
+
+type ASTValidator = (ast: ESTree.Program) => boolean;
+
+type InterpreterOptions = {
+  globals?: Record<string, any>;
+  validator?: ASTValidator;
+};
+
+type EvaluateOptions = {
+  globals?: Record<string, any>;
+  validator?: ASTValidator;
+};
+
+export class Interpreter {
+  private environment: Environment;
+  private constructorGlobals: Record<string, any>;
+  private constructorValidator?: ASTValidator;
+  private perCallGlobalKeys: Set<string> = new Set();
+  private overriddenConstructorGlobals: Map<string, any> = new Map();
+
+  constructor(options?: InterpreterOptions) {
+    this.environment = new Environment();
+    this.constructorGlobals = options?.globals || {};
+    this.constructorValidator = options?.validator;
+    this.injectGlobals(this.constructorGlobals);
+  }
+
+  private injectGlobals(
+    globals: Record<string, any>,
+    allowOverride: boolean = false,
+    trackKeys: boolean = false,
+  ): void {
+    for (const [key, value] of Object.entries(globals)) {
+      if (this.environment.has(key)) {
+        // If the variable exists, check if we should override
+        if (allowOverride) {
+          // Save the original value if it's a constructor global
+          if (trackKeys && key in this.constructorGlobals) {
+            this.overriddenConstructorGlobals.set(
+              key,
+              this.environment.get(key),
+            );
+          }
+          // Try to force update the global (only works for injected globals)
+          const wasUpdated = this.environment.forceSet(key, value);
+          if (wasUpdated && trackKeys) {
+            this.perCallGlobalKeys.add(key);
+          }
+        }
+        // If not allowOverride, skip this variable (don't overwrite)
+      } else {
+        // Variable doesn't exist, declare it as const and mark as global
+        this.environment.declare(key, value, "const", true);
+        if (trackKeys) {
+          this.perCallGlobalKeys.add(key);
+        }
+      }
+    }
+  }
+
+  private removePerCallGlobals(): void {
+    // Remove all per-call globals that were injected
+    for (const key of this.perCallGlobalKeys) {
+      // Check if this was an override of a constructor global
+      if (this.overriddenConstructorGlobals.has(key)) {
+        // Restore the original constructor global value
+        const originalValue = this.overriddenConstructorGlobals.get(key);
+        this.environment.forceSet(key, originalValue);
+      } else {
+        // It was a new per-call global, delete it
+        this.environment.delete(key);
+      }
+    }
+    this.perCallGlobalKeys.clear();
+    this.overriddenConstructorGlobals.clear();
+  }
+
+  evaluate(code: string, options?: EvaluateOptions): any {
+    // Inject per-call globals if provided (with override capability)
+    if (options?.globals) {
+      this.injectGlobals(options.globals, true, true);
+    }
+
+    try {
+      const ast = parseScript(code, { module: false });
+
+      // Run validator - per-call validator takes precedence over constructor validator
+      const validator = options?.validator || this.constructorValidator;
+      if (validator) {
+        const isValid = validator(ast);
+        if (!isValid) {
+          throw new InterpreterError(
+            "AST validation failed: code is not allowed",
+          );
+        }
+      }
+
+      return this.evaluateNode(ast);
+    } finally {
+      // Always clean up per-call globals after execution
+      if (options?.globals) {
+        this.removePerCallGlobals();
+      }
+    }
+  }
+
+  private evaluateNode(node: ASTNode): any {
+    switch (node.type) {
+      case "Program":
+        return this.evaluateProgram(node as ESTree.Program);
+
+      case "ExpressionStatement":
+        return this.evaluateNode(
+          (node as ESTree.ExpressionStatement).expression,
+        );
+
+      case "Literal":
+        return this.evaluateLiteral(node as ESTree.Literal);
+
+      case "Identifier":
+        return this.evaluateIdentifier(node as ESTree.Identifier);
+
+      case "ThisExpression":
+        return this.evaluateThisExpression(node as ESTree.ThisExpression);
+
+      case "BinaryExpression":
+        return this.evaluateBinaryExpression(node as ESTree.BinaryExpression);
+
+      case "UnaryExpression":
+        return this.evaluateUnaryExpression(node as ESTree.UnaryExpression);
+
+      case "UpdateExpression":
+        return this.evaluateUpdateExpression(node as ESTree.UpdateExpression);
+
+      case "LogicalExpression":
+        return this.evaluateLogicalExpression(node as ESTree.LogicalExpression);
+
+      case "AssignmentExpression":
+        return this.evaluateAssignmentExpression(
+          node as ESTree.AssignmentExpression,
+        );
+
+      case "VariableDeclaration":
+        return this.evaluateVariableDeclaration(
+          node as ESTree.VariableDeclaration,
+        );
+
+      case "BlockStatement":
+        return this.evaluateBlockStatement(node as ESTree.BlockStatement);
+
+      case "IfStatement":
+        return this.evaluateIfStatement(node as ESTree.IfStatement);
+
+      case "WhileStatement":
+        return this.evaluateWhileStatement(node as ESTree.WhileStatement);
+
+      case "ForStatement":
+        return this.evaluateForStatement(node as ESTree.ForStatement);
+
+      case "FunctionDeclaration":
+        return this.evaluateFunctionDeclaration(
+          node as ESTree.FunctionDeclaration,
+        );
+
+      case "FunctionExpression":
+        return this.evaluateFunctionExpression(
+          node as ESTree.FunctionExpression,
+        );
+
+      case "ArrowFunctionExpression":
+        return this.evaluateArrowFunctionExpression(
+          node as ESTree.ArrowFunctionExpression,
+        );
+
+      case "ReturnStatement":
+        return this.evaluateReturnStatement(node as ESTree.ReturnStatement);
+
+      case "BreakStatement":
+        return this.evaluateBreakStatement(node as ESTree.BreakStatement);
+
+      case "ContinueStatement":
+        return this.evaluateContinueStatement(node as ESTree.ContinueStatement);
+
+      case "CallExpression":
+        return this.evaluateCallExpression(node as ESTree.CallExpression);
+
+      case "MemberExpression":
+        return this.evaluateMemberExpression(node as ESTree.MemberExpression);
+
+      case "ArrayExpression":
+        return this.evaluateArrayExpression(node as ESTree.ArrayExpression);
+
+      case "ObjectExpression":
+        return this.evaluateObjectExpression(node as ESTree.ObjectExpression);
+
+      default:
+        throw new InterpreterError(`Unsupported node type: ${node.type}`);
+    }
+  }
+
+  private evaluateProgram(node: ESTree.Program): any {
+    if (node.body.length === 0) {
+      return undefined;
+    }
+
+    let result: any;
+    for (const statement of node.body) {
+      result = this.evaluateNode(statement);
+    }
+
+    return result;
+  }
+
+  private evaluateLiteral(node: ESTree.Literal): any {
+    return node.value;
+  }
+
+  private evaluateIdentifier(node: ESTree.Identifier): any {
+    return this.environment.get(node.name);
+  }
+
+  private evaluateThisExpression(node: ESTree.ThisExpression): any {
+    return this.environment.getThis();
+  }
+
+  private evaluateBinaryExpression(node: ESTree.BinaryExpression): any {
+    const left = this.evaluateNode(node.left);
+    const right = this.evaluateNode(node.right);
+
+    switch (node.operator) {
+      // Arithmetic operators
+      case "+":
+        return left + right;
+      case "-":
+        return left - right;
+      case "*":
+        return left * right;
+      case "/":
+        if (right === 0) {
+          throw new InterpreterError("Division by zero");
+        }
+        return left / right;
+      case "%":
+        if (right === 0) {
+          throw new InterpreterError("Modulo by zero");
+        }
+        return left % right;
+      case "**":
+        return left ** right;
+
+      // Comparison operators
+      case "===":
+        return left === right;
+      case "!==":
+        return left !== right;
+      case "<":
+        return left < right;
+      case "<=":
+        return left <= right;
+      case ">":
+        return left > right;
+      case ">=":
+        return left >= right;
+
+      default:
+        throw new InterpreterError(
+          `Unsupported binary operator: ${node.operator}`,
+        );
+    }
+  }
+
+  private evaluateUnaryExpression(node: ESTree.UnaryExpression): any {
+    const argument = this.evaluateNode(node.argument);
+
+    switch (node.operator) {
+      case "+":
+        return +argument;
+      case "-":
+        return -argument;
+      case "!":
+        return !argument;
+      default:
+        throw new InterpreterError(
+          `Unsupported unary operator: ${node.operator}`,
+        );
+    }
+  }
+
+  private evaluateUpdateExpression(node: ESTree.UpdateExpression): any {
+    // UpdateExpression handles ++ and -- operators
+    if (node.argument.type !== "Identifier") {
+      throw new InterpreterError(
+        "Update expression must operate on an identifier",
+      );
+    }
+
+    const identifier = node.argument as ESTree.Identifier;
+    const name = identifier.name;
+    const currentValue = this.environment.get(name);
+
+    if (typeof currentValue !== "number") {
+      throw new InterpreterError(
+        "Update expression can only be used with numbers",
+      );
+    }
+
+    let newValue: number;
+    switch (node.operator) {
+      case "++":
+        newValue = currentValue + 1;
+        break;
+      case "--":
+        newValue = currentValue - 1;
+        break;
+      default:
+        throw new InterpreterError(
+          `Unsupported update operator: ${node.operator}`,
+        );
+    }
+
+    this.environment.set(name, newValue);
+
+    // Return old value for postfix (i++), new value for prefix (++i)
+    return node.prefix ? newValue : currentValue;
+  }
+
+  private evaluateLogicalExpression(node: ESTree.LogicalExpression): any {
+    const left = this.evaluateNode(node.left);
+
+    switch (node.operator) {
+      case "&&":
+        // Short-circuit: if left is falsy, return left without evaluating right
+        if (!left) return left;
+        return this.evaluateNode(node.right);
+
+      case "||":
+        // Short-circuit: if left is truthy, return left without evaluating right
+        if (left) return left;
+        return this.evaluateNode(node.right);
+
+      default:
+        throw new InterpreterError(
+          `Unsupported logical operator: ${node.operator}`,
+        );
+    }
+  }
+
+  private evaluateAssignmentExpression(node: ESTree.AssignmentExpression): any {
+    if (node.operator !== "=") {
+      throw new InterpreterError(
+        `Unsupported assignment operator: ${node.operator}`,
+      );
+    }
+
+    const value = this.evaluateNode(node.right);
+
+    // Handle member expression assignment: arr[index] = value or obj.prop = value
+    if (node.left.type === "MemberExpression") {
+      const memberExpr = node.left as ESTree.MemberExpression;
+      const object = this.evaluateNode(memberExpr.object);
+
+      if (memberExpr.computed) {
+        // Computed property: arr[index] = value
+        const property = this.evaluateNode(memberExpr.property);
+
+        if (Array.isArray(object)) {
+          // Array element assignment
+          if (typeof property !== "number") {
+            throw new InterpreterError("Array index must be a number");
+          }
+          object[property] = value;
+          return value;
+        } else if (typeof object === "object" && object !== null) {
+          // Object computed property assignment: obj["key"] = value
+          object[String(property)] = value;
+          return value;
+        } else {
+          throw new InterpreterError(
+            "Assignment target is not an array or object",
+          );
+        }
+      } else {
+        // Dot notation: obj.prop = value
+        if (memberExpr.property.type !== "Identifier") {
+          throw new InterpreterError("Invalid property access");
+        }
+
+        const property = (memberExpr.property as ESTree.Identifier).name;
+
+        if (
+          typeof object === "object" &&
+          object !== null &&
+          !Array.isArray(object)
+        ) {
+          object[property] = value;
+          return value;
+        } else {
+          throw new InterpreterError("Cannot assign property to non-object");
+        }
+      }
+    }
+
+    // Handle variable assignment
+    if (node.left.type !== "Identifier") {
+      throw new InterpreterError("Invalid assignment target");
+    }
+
+    this.environment.set((node.left as ESTree.Identifier).name, value);
+    return value;
+  }
+
+  private evaluateVariableDeclaration(node: ESTree.VariableDeclaration): any {
+    const kind = node.kind as "let" | "const" | "var";
+
+    if (kind === "var") {
+      throw new InterpreterError("var is not supported, use let or const");
+    }
+
+    let lastValue: any = undefined;
+
+    for (const declarator of node.declarations) {
+      if (declarator.id.type !== "Identifier") {
+        throw new InterpreterError("Destructuring is not supported");
+      }
+
+      const name = (declarator.id as ESTree.Identifier).name;
+      const value = declarator.init
+        ? this.evaluateNode(declarator.init)
+        : undefined;
+
+      if (kind === "const" && declarator.init === null) {
+        throw new InterpreterError("Missing initializer in const declaration");
+      }
+
+      this.environment.declare(name, value, kind);
+      lastValue = value;
+    }
+
+    return lastValue;
+  }
+
+  private evaluateBlockStatement(node: ESTree.BlockStatement): any {
+    // Create a new environment for block scope
+    const previousEnvironment = this.environment;
+    this.environment = new Environment(previousEnvironment);
+
+    let result: any = undefined;
+
+    try {
+      for (const statement of node.body) {
+        result = this.evaluateNode(statement);
+        // If we hit a return/break/continue statement, propagate it up
+        if (
+          result instanceof ReturnValue ||
+          result instanceof BreakValue ||
+          result instanceof ContinueValue
+        ) {
+          return result;
+        }
+      }
+    } finally {
+      // Restore the previous environment
+      this.environment = previousEnvironment;
+    }
+
+    return result;
+  }
+
+  private evaluateIfStatement(node: ESTree.IfStatement): any {
+    const condition = this.evaluateNode(node.test);
+
+    if (condition) {
+      return this.evaluateNode(node.consequent);
+    } else if (node.alternate) {
+      return this.evaluateNode(node.alternate);
+    }
+
+    return undefined;
+  }
+
+  private evaluateWhileStatement(node: ESTree.WhileStatement): any {
+    let result: any = undefined;
+
+    while (this.evaluateNode(node.test)) {
+      result = this.evaluateNode(node.body);
+
+      // If we hit a return statement in a loop, propagate it
+      if (result instanceof ReturnValue) {
+        return result;
+      }
+
+      // If we hit a break statement, exit the loop
+      if (result instanceof BreakValue) {
+        return undefined;
+      }
+
+      // If we hit a continue statement, skip to next iteration
+      if (result instanceof ContinueValue) {
+        continue;
+      }
+    }
+
+    return result;
+  }
+
+  private evaluateForStatement(node: ESTree.ForStatement): any {
+    // Create a new environment for the for loop scope
+    const previousEnv = this.environment;
+    this.environment = new Environment(previousEnv);
+
+    try {
+      // Evaluate the init expression (e.g., let i = 0)
+      if (node.init) {
+        this.evaluateNode(node.init);
+      }
+
+      let result: any = undefined;
+
+      // Loop while test condition is true
+      while (true) {
+        // Check test condition (e.g., i < 10)
+        if (node.test) {
+          const condition = this.evaluateNode(node.test);
+          if (!condition) {
+            break;
+          }
+        }
+
+        // Execute loop body
+        result = this.evaluateNode(node.body);
+
+        // If we hit a return statement in a loop, propagate it
+        if (result instanceof ReturnValue) {
+          return result;
+        }
+
+        // If we hit a break statement, exit the loop
+        if (result instanceof BreakValue) {
+          return undefined;
+        }
+
+        // Execute update expression (e.g., i++)
+        // Note: continue should skip to update, so we check after update
+        if (node.update) {
+          this.evaluateNode(node.update);
+        }
+
+        // If we hit a continue statement, skip to next iteration
+        // (already executed update above)
+        if (result instanceof ContinueValue) {
+          continue;
+        }
+      }
+
+      return result;
+    } finally {
+      // Restore the previous environment
+      this.environment = previousEnv;
+    }
+  }
+
+  private evaluateFunctionDeclaration(node: ESTree.FunctionDeclaration): any {
+    if (!node.id) {
+      throw new InterpreterError("Function declaration must have a name");
+    }
+
+    if (!node.body) {
+      throw new InterpreterError("Function must have a body");
+    }
+
+    const name = node.id.name;
+    const params: string[] = [];
+
+    for (const param of node.params) {
+      if (param.type !== "Identifier") {
+        throw new InterpreterError("Destructuring parameters not supported");
+      }
+      params.push((param as ESTree.Identifier).name);
+    }
+
+    if (node.body.type !== "BlockStatement") {
+      throw new InterpreterError("Function body must be a block statement");
+    }
+
+    // Capture the current environment as the closure
+    const func = new FunctionValue(
+      params,
+      node.body as ESTree.BlockStatement,
+      this.environment,
+    );
+
+    // Declare the function in the current environment
+    this.environment.declare(name, func, "let");
+
+    return undefined;
+  }
+
+  private evaluateFunctionExpression(node: ESTree.FunctionExpression): any {
+    if (!node.body) {
+      throw new InterpreterError("Function must have a body");
+    }
+
+    const params: string[] = [];
+
+    for (const param of node.params) {
+      if (param.type !== "Identifier") {
+        throw new InterpreterError("Destructuring parameters not supported");
+      }
+      params.push((param as ESTree.Identifier).name);
+    }
+
+    if (node.body.type !== "BlockStatement") {
+      throw new InterpreterError("Function body must be a block statement");
+    }
+
+    // Capture the current environment as the closure
+    // Return the function value directly (no declaration)
+    return new FunctionValue(
+      params,
+      node.body as ESTree.BlockStatement,
+      this.environment,
+    );
+  }
+
+  private evaluateArrowFunctionExpression(
+    node: ESTree.ArrowFunctionExpression,
+  ): any {
+    const params: string[] = [];
+
+    for (const param of node.params) {
+      if (param.type !== "Identifier") {
+        throw new InterpreterError("Destructuring parameters not supported");
+      }
+      params.push((param as ESTree.Identifier).name);
+    }
+
+    // Arrow functions can have expression body or block body
+    let body: ESTree.BlockStatement;
+
+    if (node.body.type === "BlockStatement") {
+      // Block body: (x) => { return x * 2; }
+      body = node.body as ESTree.BlockStatement;
+    } else {
+      // Expression body: (x) => x * 2
+      // Wrap the expression in a block with implicit return
+      body = {
+        type: "BlockStatement",
+        body: [
+          {
+            type: "ReturnStatement",
+            argument: node.body,
+          } as ESTree.ReturnStatement,
+        ],
+      } as ESTree.BlockStatement;
+    }
+
+    // Capture the current environment as the closure
+    const func = new FunctionValue(params, body, this.environment);
+
+    return func;
+  }
+
+  private evaluateReturnStatement(node: ESTree.ReturnStatement): any {
+    const value = node.argument ? this.evaluateNode(node.argument) : undefined;
+    return new ReturnValue(value);
+  }
+
+  private evaluateBreakStatement(node: ESTree.BreakStatement): any {
+    if (node.label) {
+      throw new InterpreterError("Labeled break statements are not supported");
+    }
+    return new BreakValue();
+  }
+
+  private evaluateContinueStatement(node: ESTree.ContinueStatement): any {
+    if (node.label) {
+      throw new InterpreterError(
+        "Labeled continue statements are not supported",
+      );
+    }
+    return new ContinueValue();
+  }
+
+  private evaluateCallExpression(node: ESTree.CallExpression): any {
+    // Determine if this is a method call (obj.method()) or regular call
+    let thisValue: any = undefined;
+    let callee: any;
+
+    if (node.callee.type === "MemberExpression") {
+      // Method call: obj.method()
+      const memberExpr = node.callee as ESTree.MemberExpression;
+      thisValue = this.evaluateNode(memberExpr.object);
+
+      // Get the method from the object
+      if (memberExpr.computed) {
+        const property = this.evaluateNode(memberExpr.property);
+        callee = thisValue[String(property)];
+      } else {
+        if (memberExpr.property.type !== "Identifier") {
+          throw new InterpreterError("Invalid method access");
+        }
+        const property = (memberExpr.property as ESTree.Identifier).name;
+        callee = thisValue[property];
+      }
+    } else {
+      // Regular function call
+      callee = this.evaluateNode(node.callee);
+    }
+
+    if (!(callee instanceof FunctionValue)) {
+      throw new InterpreterError("Callee is not a function");
+    }
+
+    // Evaluate all arguments
+    const args: any[] = [];
+    for (const arg of node.arguments) {
+      args.push(this.evaluateNode(arg as ESTree.Expression));
+    }
+
+    // Check argument count
+    if (args.length !== callee.params.length) {
+      throw new InterpreterError(
+        `Expected ${callee.params.length} arguments but got ${args.length}`,
+      );
+    }
+
+    // Create a new environment for the function execution
+    // The parent is the closure environment (where the function was defined)
+    // Pass thisValue to bind 'this' in the function
+    const previousEnvironment = this.environment;
+    this.environment = new Environment(callee.closure, thisValue);
+
+    try {
+      // Bind parameters to arguments
+      for (let i = 0; i < callee.params.length; i++) {
+        this.environment.declare(callee.params[i]!, args[i], "let");
+      }
+
+      // Execute the function body
+      const result = this.evaluateNode(callee.body);
+
+      // If we got a return value, unwrap it
+      if (result instanceof ReturnValue) {
+        return result.value;
+      }
+
+      // If no explicit return, return undefined
+      return undefined;
+    } finally {
+      // Restore the previous environment
+      this.environment = previousEnvironment;
+    }
+  }
+
+  private evaluateMemberExpression(node: ESTree.MemberExpression): any {
+    const object = this.evaluateNode(node.object);
+
+    if (node.computed) {
+      // obj[expr] - computed property access (array indexing or object bracket notation)
+      const property = this.evaluateNode(node.property);
+
+      // Handle array indexing
+      if (Array.isArray(object)) {
+        if (typeof property !== "number") {
+          throw new InterpreterError("Array index must be a number");
+        }
+        if (property < 0 || property >= object.length) {
+          return undefined; // JavaScript behavior for out-of-bounds
+        }
+        return object[property];
+      }
+
+      // Handle object computed property access: obj["key"]
+      if (typeof object === "object" && object !== null) {
+        return object[String(property)];
+      }
+
+      throw new InterpreterError(
+        "Computed property access requires an array or object",
+      );
+    } else {
+      // obj.prop - direct property access
+      if (node.property.type !== "Identifier") {
+        throw new InterpreterError("Invalid property access");
+      }
+      const property = (node.property as ESTree.Identifier).name;
+
+      // Handle .length for strings and arrays
+      if (property === "length") {
+        if (typeof object === "string" || Array.isArray(object)) {
+          return object.length;
+        }
+      }
+
+      // Handle object property access
+      if (
+        typeof object === "object" &&
+        object !== null &&
+        !Array.isArray(object)
+      ) {
+        return object[property];
+      }
+
+      throw new InterpreterError(`Property '${property}' not supported`);
+    }
+  }
+
+  private evaluateArrayExpression(node: ESTree.ArrayExpression): any {
+    const elements: any[] = [];
+
+    for (const element of node.elements) {
+      if (element === null) {
+        // Sparse array element (e.g., [1, , 3])
+        elements.push(undefined);
+      } else {
+        elements.push(this.evaluateNode(element));
+      }
+    }
+
+    return elements;
+  }
+
+  private evaluateObjectExpression(node: ESTree.ObjectExpression): any {
+    const obj: Record<string, any> = {};
+
+    for (const property of node.properties) {
+      if (property.type !== "Property") {
+        throw new InterpreterError(
+          "Only property nodes are supported in objects",
+        );
+      }
+
+      // Get the property key
+      let key: string;
+      if (property.key.type === "Identifier") {
+        key = (property.key as ESTree.Identifier).name;
+      } else if (property.key.type === "Literal") {
+        const literal = property.key as ESTree.Literal;
+        key = String(literal.value);
+      } else {
+        throw new InterpreterError("Unsupported property key type");
+      }
+
+      // Evaluate the property value
+      const value = this.evaluateNode(property.value);
+      obj[key] = value;
+    }
+
+    return obj;
+  }
+}
