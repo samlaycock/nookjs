@@ -1,8 +1,26 @@
+/**
+ * JavaScript Interpreter
+ *
+ * A secure, sandboxed JavaScript interpreter that evaluates a subset of JavaScript.
+ * Uses Meriyah to parse code into an AST, then walks the AST to execute it.
+ *
+ * Key features:
+ * - Lexical scoping with Environment chain
+ * - Closure support (functions capture their defining environment)
+ * - Support for async/await with evaluateAsync()
+ * - Injectable globals from host environment
+ * - Security protections against prototype pollution
+ * - Control flow: if/else, while, for, for...of, break, continue, return
+ */
+
 import { parseScript } from "meriyah";
 import type { ESTree } from "meriyah";
 
 type ASTNode = ESTree.Node;
 
+/**
+ * Custom error class for interpreter-specific errors
+ */
 export class InterpreterError extends Error {
   constructor(message: string) {
     super(message);
@@ -29,27 +47,50 @@ function validatePropertyName(name: string): void {
   }
 }
 
+/**
+ * Wrapper for return values to propagate them through nested scopes
+ * When a function executes `return x`, we wrap x in ReturnValue so it can
+ * bubble up through blocks, loops, and conditionals until caught by the function call handler
+ */
 class ReturnValue {
   constructor(public value: any) {}
 }
 
+/**
+ * Marker class to signal a break statement
+ * When a loop executes `break`, we return BreakValue to signal the loop to exit
+ */
 class BreakValue {
   // Marker class to signal break statement
 }
 
+/**
+ * Marker class to signal a continue statement
+ * When a loop executes `continue`, we return ContinueValue to signal skipping to next iteration
+ */
 class ContinueValue {
   // Marker class to signal continue statement
 }
 
+/**
+ * Represents a function defined in the sandbox (interpreted JavaScript)
+ * Stores the function's parameters, body AST, and captured closure environment
+ *
+ * The closure is the environment where the function was defined, enabling proper closure semantics
+ */
 class FunctionValue {
   constructor(
     public params: string[],
     public body: ESTree.BlockStatement,
-    public closure: Environment,
+    public closure: Environment, // Captured environment for closures
     public isAsync: boolean = false,
   ) {}
 }
 
+/**
+ * Wrapper for host functions (native TypeScript/JavaScript functions passed as globals)
+ * Allows calling host functions from sandbox code while preventing property access for security
+ */
 class HostFunctionValue {
   constructor(
     public hostFunc: Function,
@@ -58,6 +99,19 @@ class HostFunctionValue {
   ) {}
 }
 
+/**
+ * Environment represents a lexical scope (variable binding context)
+ *
+ * Each Environment forms a node in a chain (linked via parent pointer) that implements
+ * lexical scoping. When a variable is accessed, we search this environment first,
+ * then walk up the parent chain until found (or throw if not found).
+ *
+ * Key features:
+ * - Variables track their kind (let/const) for immutability enforcement
+ * - Variables track if they're globals (for override protection)
+ * - Supports 'this' binding for method calls
+ * - New environments are created for: blocks, functions, loops, for...of iterations
+ */
 class Environment {
   private variables: Map<
     string,
@@ -115,10 +169,16 @@ class Environment {
     return this.variables.has(name) || (this.parent?.has(name) ?? false);
   }
 
+  /**
+   * Force set a variable value, even if it's const
+   * Used for updating injected globals (allows per-call globals to override constructor globals)
+   *
+   * Important: Only allows overriding globals (isGlobal=true), NOT user-declared variables
+   * This protects user variables from being clobbered by late-injected globals
+   *
+   * Returns: true if variable was updated, false if it's a user variable or doesn't exist
+   */
   forceSet(name: string, value: any): boolean {
-    // Force set a variable value, even if it's const
-    // Used for updating injected globals
-    // Returns true if the variable was updated, false if it's a user variable
     if (this.variables.has(name)) {
       const variable = this.variables.get(name)!;
       // Only allow force-setting globals, not user-declared variables
@@ -170,12 +230,23 @@ type EvaluateOptions = {
   validator?: ASTValidator;
 };
 
+/**
+ * Main Interpreter class
+ *
+ * Evaluates JavaScript code by parsing it into an AST and walking the AST nodes.
+ * Maintains an Environment chain for variable scoping and supports both sync and async evaluation.
+ *
+ * Usage:
+ *   const interp = new Interpreter({ globals: { x: 10 } });
+ *   interp.evaluate('x + 5'); // 15
+ *   await interp.evaluateAsync('asyncFunc()');
+ */
 export class Interpreter {
   private environment: Environment;
-  private constructorGlobals: Record<string, any>;
-  private constructorValidator?: ASTValidator;
-  private perCallGlobalKeys: Set<string> = new Set();
-  private overriddenConstructorGlobals: Map<string, any> = new Map();
+  private constructorGlobals: Record<string, any>; // Globals that persist across all evaluate() calls
+  private constructorValidator?: ASTValidator; // AST validator that applies to all evaluate() calls
+  private perCallGlobalKeys: Set<string> = new Set(); // Track per-call globals for cleanup
+  private overriddenConstructorGlobals: Map<string, any> = new Map(); // Track original values when per-call globals override
 
   constructor(options?: InterpreterOptions) {
     this.environment = new Environment();
@@ -184,13 +255,23 @@ export class Interpreter {
     this.injectGlobals(this.constructorGlobals);
   }
 
+  /**
+   * Inject globals into the root environment
+   *
+   * Globals can come from constructor (persistent) or evaluate() options (per-call).
+   * Host functions are wrapped in HostFunctionValue for security (blocks property access).
+   *
+   * @param globals - Object mapping variable names to values
+   * @param allowOverride - If true, can override existing globals (for per-call globals)
+   * @param trackKeys - If true, track keys for later cleanup (for per-call globals)
+   */
   private injectGlobals(
     globals: Record<string, any>,
     allowOverride: boolean = false,
     trackKeys: boolean = false,
   ): void {
     for (const [key, value] of Object.entries(globals)) {
-      // Wrap host functions in HostFunctionValue
+      // Wrap host functions in HostFunctionValue to prevent property access
       const wrappedValue =
         typeof value === "function"
           ? new HostFunctionValue(
@@ -227,16 +308,23 @@ export class Interpreter {
     }
   }
 
+  /**
+   * Clean up per-call globals after evaluate() execution
+   *
+   * Per-call globals are temporary and should not persist. This method:
+   * 1. Restores constructor globals that were overridden
+   * 2. Deletes new per-call globals that didn't exist before
+   *
+   * Called in finally block of evaluate()/evaluateAsync()
+   */
   private removePerCallGlobals(): void {
-    // Remove all per-call globals that were injected
     for (const key of this.perCallGlobalKeys) {
-      // Check if this was an override of a constructor global
       if (this.overriddenConstructorGlobals.has(key)) {
-        // Restore the original constructor global value
+        // This per-call global overrode a constructor global - restore original value
         const originalValue = this.overriddenConstructorGlobals.get(key);
         this.environment.forceSet(key, originalValue);
       } else {
-        // It was a new per-call global, delete it
+        // This was a new per-call global - delete it completely
         this.environment.delete(key);
       }
     }
@@ -956,6 +1044,16 @@ export class Interpreter {
     }
   }
 
+  /**
+   * Evaluate for...of loop: for (let item of array) { ... }
+   *
+   * Key implementation details:
+   * - Creates new scope for the loop
+   * - For let/const declarations, creates NEW scope for EACH iteration
+   *   (this allows const loop variables - each iteration gets fresh binding)
+   * - For existing variables (for (x of arr)), just assigns in each iteration
+   * - Supports break, continue, and return
+   */
   private evaluateForOfStatement(node: ESTree.ForOfStatement): any {
     // Create a new environment for the for...of loop scope
     const previousEnv = this.environment;
@@ -965,7 +1063,7 @@ export class Interpreter {
       // Evaluate the iterable (right side)
       const iterable = this.evaluateNode(node.right);
 
-      // Check if iterable is an array
+      // Check if iterable is an array (currently only arrays are supported)
       if (!Array.isArray(iterable)) {
         throw new InterpreterError("for...of requires an iterable (array)");
       }
@@ -996,8 +1094,9 @@ export class Interpreter {
       // Iterate over the array
       for (let i = 0; i < iterable.length; i++) {
         if (isDeclaration) {
-          // For declarations (let/const), create a new scope for each iteration
+          // For declarations (let/const), create a NEW scope for EACH iteration
           // This is necessary for const since we can't reassign it
+          // It also matches JavaScript semantics where each iteration gets fresh bindings
           const iterEnv = this.environment;
           this.environment = new Environment(iterEnv);
 
@@ -1010,7 +1109,7 @@ export class Interpreter {
           // Restore environment after iteration
           this.environment = iterEnv;
         } else {
-          // For existing variables, just assign
+          // For existing variables, just assign in the current scope
           this.environment.set(variableName, iterable[i]);
 
           // Execute loop body
@@ -1169,15 +1268,26 @@ export class Interpreter {
     return new ContinueValue();
   }
 
+  /**
+   * Evaluate function call: func(args) or obj.method(args)
+   *
+   * Key responsibilities:
+   * 1. Detect method calls (obj.method()) vs regular calls (func())
+   * 2. For method calls, bind 'this' to the object
+   * 3. Handle host functions (native JS functions from globals)
+   * 4. Handle sandbox functions (interpreted functions)
+   * 5. Create new environment with closure + parameter bindings
+   * 6. Unwrap ReturnValue if function returns
+   */
   private evaluateCallExpression(node: ESTree.CallExpression): any {
     // Determine if this is a method call (obj.method()) or regular call
     let thisValue: any = undefined;
     let callee: any;
 
     if (node.callee.type === "MemberExpression") {
-      // Method call: obj.method()
+      // Method call: obj.method() - need to bind 'this'
       const memberExpr = node.callee as ESTree.MemberExpression;
-      thisValue = this.evaluateNode(memberExpr.object);
+      thisValue = this.evaluateNode(memberExpr.object); // The object becomes 'this'
 
       // Get the method from the object
       if (memberExpr.computed) {
@@ -1191,7 +1301,7 @@ export class Interpreter {
         callee = thisValue[property];
       }
     } else {
-      // Regular function call
+      // Regular function call - no 'this' binding
       callee = this.evaluateNode(node.callee);
     }
 
@@ -1246,13 +1356,14 @@ export class Interpreter {
     }
 
     // Create a new environment for the function execution
-    // The parent is the closure environment (where the function was defined)
-    // Pass thisValue to bind 'this' in the function
+    // CRITICAL: The parent is the CLOSURE environment (where function was defined), NOT current env
+    // This enables proper closure semantics - functions "remember" their defining scope
+    // Pass thisValue to bind 'this' in the function (for method calls)
     const previousEnvironment = this.environment;
     this.environment = new Environment(callee.closure, thisValue);
 
     try {
-      // Bind parameters to arguments
+      // Bind parameters to arguments in the new environment
       for (let i = 0; i < callee.params.length; i++) {
         this.environment.declare(callee.params[i]!, args[i], "let");
       }
@@ -1260,15 +1371,15 @@ export class Interpreter {
       // Execute the function body
       const result = this.evaluateNode(callee.body);
 
-      // If we got a return value, unwrap it
+      // If we got a return value, unwrap it and return the actual value
       if (result instanceof ReturnValue) {
         return result.value;
       }
 
-      // If no explicit return, return undefined
+      // If no explicit return, JavaScript functions return undefined
       return undefined;
     } finally {
-      // Restore the previous environment
+      // Restore the previous environment (exit function scope)
       this.environment = previousEnvironment;
     }
   }
