@@ -4,40 +4,44 @@ import { Interpreter } from "./interpreter";
 describe("Injected Globals", () => {
   describe("Constructor globals", () => {
     it("should access constructor globals", () => {
-      const interpreter = new Interpreter({ x: 10, y: 20 });
+      const interpreter = new Interpreter({ globals: { x: 10, y: 20 } });
       expect(interpreter.evaluate("x + y")).toBe(30);
     });
 
     it("should access single constructor global", () => {
-      const interpreter = new Interpreter({ message: "hello" });
+      const interpreter = new Interpreter({ globals: { message: "hello" } });
       expect(interpreter.evaluate("message")).toBe("hello");
     });
 
     it("should access multiple constructor globals", () => {
       const interpreter = new Interpreter({
-        a: 1,
-        b: 2,
-        c: 3,
-        d: 4,
+        globals: {
+          a: 1,
+          b: 2,
+          c: 3,
+          d: 4,
+        },
       });
       expect(interpreter.evaluate("a + b + c + d")).toBe(10);
     });
 
     it("should not allow reassigning const globals", () => {
-      const interpreter = new Interpreter({ x: 10 });
+      const interpreter = new Interpreter({ globals: { x: 10 } });
       expect(() => interpreter.evaluate("x = 20")).toThrow(
         "Cannot assign to const variable 'x'",
       );
     });
 
     it("should allow using globals in expressions", () => {
-      const interpreter = new Interpreter({ PI: 3.14159 });
+      const interpreter = new Interpreter({ globals: { PI: 3.14159 } });
       expect(interpreter.evaluate("PI * 2")).toBeCloseTo(6.28318, 4);
     });
 
     it("should support object globals", () => {
       const interpreter = new Interpreter({
-        config: { debug: true, max: 100, name: "test" },
+        globals: {
+          config: { debug: true, max: 100, name: "test" },
+        },
       });
       expect(interpreter.evaluate("config.max")).toBe(100);
       expect(interpreter.evaluate("config.debug")).toBe(true);
@@ -46,9 +50,11 @@ describe("Injected Globals", () => {
 
     it("should support nested object globals", () => {
       const interpreter = new Interpreter({
-        settings: {
-          user: { name: "Alice", age: 30 },
-          system: { version: "1.0" },
+        globals: {
+          settings: {
+            user: { name: "Alice", age: 30 },
+            system: { version: "1.0" },
+          },
         },
       });
       expect(interpreter.evaluate("settings.user.name")).toBe("Alice");
@@ -58,7 +64,9 @@ describe("Injected Globals", () => {
 
     it("should support array globals", () => {
       const interpreter = new Interpreter({
-        numbers: [1, 2, 3, 4, 5],
+        globals: {
+          numbers: [1, 2, 3, 4, 5],
+        },
       });
       expect(interpreter.evaluate("numbers[0]")).toBe(1);
       expect(interpreter.evaluate("numbers[4]")).toBe(5);
@@ -67,7 +75,9 @@ describe("Injected Globals", () => {
 
     it("should allow modifying properties of global objects", () => {
       const interpreter = new Interpreter({
-        obj: { count: 0 },
+        globals: {
+          obj: { count: 0 },
+        },
       });
       interpreter.evaluate("obj.count = obj.count + 1");
       expect(interpreter.evaluate("obj.count")).toBe(1);
@@ -75,7 +85,9 @@ describe("Injected Globals", () => {
 
     it("should allow modifying elements of global arrays", () => {
       const interpreter = new Interpreter({
-        arr: [1, 2, 3],
+        globals: {
+          arr: [1, 2, 3],
+        },
       });
       interpreter.evaluate("arr[0] = 10");
       expect(interpreter.evaluate("arr[0]")).toBe(10);
@@ -83,8 +95,10 @@ describe("Injected Globals", () => {
 
     it("should work with boolean globals", () => {
       const interpreter = new Interpreter({
-        isDebug: true,
-        isProduction: false,
+        globals: {
+          isDebug: true,
+          isProduction: false,
+        },
       });
       expect(interpreter.evaluate("isDebug")).toBe(true);
       expect(interpreter.evaluate("isProduction")).toBe(false);
@@ -93,8 +107,10 @@ describe("Injected Globals", () => {
 
     it("should work with string globals", () => {
       const interpreter = new Interpreter({
-        greeting: "Hello",
-        name: "World",
+        globals: {
+          greeting: "Hello",
+          name: "World",
+        },
       });
       expect(interpreter.evaluate("greeting + ' ' + name")).toBe("Hello World");
     });
@@ -152,17 +168,17 @@ describe("Injected Globals", () => {
 
   describe("Merge behavior", () => {
     it("should merge constructor and evaluate() globals", () => {
-      const interpreter = new Interpreter({ x: 10 });
+      const interpreter = new Interpreter({ globals: { x: 10 } });
       expect(interpreter.evaluate("x + y", { globals: { y: 5 } })).toBe(15);
     });
 
     it("should allow evaluate() globals to override constructor globals", () => {
-      const interpreter = new Interpreter({ x: 10 });
+      const interpreter = new Interpreter({ globals: { x: 10 } });
       expect(interpreter.evaluate("x", { globals: { x: 20 } })).toBe(20);
     });
 
     it("should restore constructor globals after per-call override", () => {
-      const interpreter = new Interpreter({ x: 10 });
+      const interpreter = new Interpreter({ globals: { x: 10 } });
       const duringOverride = interpreter.evaluate("x", { globals: { x: 20 } });
       expect(duringOverride).toBe(20);
       // After the override, x should be restored to constructor value (10)
@@ -170,7 +186,7 @@ describe("Injected Globals", () => {
     });
 
     it("should merge multiple globals from both sources", () => {
-      const interpreter = new Interpreter({ a: 1, b: 2 });
+      const interpreter = new Interpreter({ globals: { a: 1, b: 2 } });
       const result = interpreter.evaluate("a + b + c + d", {
         globals: { c: 3, d: 4 },
       });
@@ -179,8 +195,10 @@ describe("Injected Globals", () => {
 
     it("should handle complex merge scenarios", () => {
       const interpreter = new Interpreter({
-        x: 10,
-        config: { debug: true },
+        globals: {
+          x: 10,
+          config: { debug: true },
+        },
       });
       const code = `
         let bonus = 0;
@@ -196,13 +214,13 @@ describe("Injected Globals", () => {
 
   describe("Stateful behavior", () => {
     it("should persist globals across calls", () => {
-      const interpreter = new Interpreter({ x: 10 });
+      const interpreter = new Interpreter({ globals: { x: 10 } });
       interpreter.evaluate("let y = x + 5");
       expect(interpreter.evaluate("y")).toBe(15);
     });
 
     it("should persist constructor globals across multiple calls", () => {
-      const interpreter = new Interpreter({ PI: 3.14159 });
+      const interpreter = new Interpreter({ globals: { PI: 3.14159 } });
       expect(interpreter.evaluate("PI * 2")).toBeCloseTo(6.28318, 4);
       expect(interpreter.evaluate("PI * 10")).toBeCloseTo(31.4159, 4);
       expect(interpreter.evaluate("PI")).toBeCloseTo(3.14159, 4);
@@ -225,14 +243,14 @@ describe("Injected Globals", () => {
     });
 
     it("should not overwrite user variables even with constructor globals", () => {
-      const interpreter = new Interpreter({ y: 50 });
+      const interpreter = new Interpreter({ globals: { y: 50 } });
       interpreter.evaluate("let x = 100");
       // New globals in evaluate() shouldn't overwrite x
       expect(interpreter.evaluate("x + y", { globals: { x: 999 } })).toBe(150);
     });
 
     it("should allow using globals with user-declared variables", () => {
-      const interpreter = new Interpreter({ base: 10 });
+      const interpreter = new Interpreter({ globals: { base: 10 } });
       interpreter.evaluate("let multiplier = 5");
       expect(interpreter.evaluate("base * multiplier")).toBe(50);
     });
@@ -240,59 +258,65 @@ describe("Injected Globals", () => {
 
   describe("Edge cases", () => {
     it("should handle undefined global values", () => {
-      const interpreter = new Interpreter({ x: undefined });
+      const interpreter = new Interpreter({ globals: { x: undefined } });
       expect(interpreter.evaluate("x")).toBe(undefined);
     });
 
     it("should handle null global values", () => {
-      const interpreter = new Interpreter({ x: null });
+      const interpreter = new Interpreter({ globals: { x: null } });
       expect(interpreter.evaluate("x")).toBe(null);
     });
 
     it("should handle zero global values", () => {
-      const interpreter = new Interpreter({ x: 0 });
+      const interpreter = new Interpreter({ globals: { x: 0 } });
       expect(interpreter.evaluate("x")).toBe(0);
       expect(interpreter.evaluate("x + 5")).toBe(5);
     });
 
     it("should handle empty string global values", () => {
-      const interpreter = new Interpreter({ x: "" });
+      const interpreter = new Interpreter({ globals: { x: "" } });
       expect(interpreter.evaluate("x")).toBe("");
       expect(interpreter.evaluate("x + 'test'")).toBe("test");
     });
 
     it("should handle false boolean global values", () => {
-      const interpreter = new Interpreter({ x: false });
+      const interpreter = new Interpreter({ globals: { x: false } });
       expect(interpreter.evaluate("x")).toBe(false);
       expect(interpreter.evaluate("!x")).toBe(true);
     });
 
     it("should handle negative number globals", () => {
-      const interpreter = new Interpreter({ x: -10, y: -5 });
+      const interpreter = new Interpreter({ globals: { x: -10, y: -5 } });
       expect(interpreter.evaluate("x + y")).toBe(-15);
       expect(interpreter.evaluate("x * y")).toBe(50);
     });
 
     it("should handle floating point globals", () => {
-      const interpreter = new Interpreter({ pi: 3.14159, e: 2.71828 });
+      const interpreter = new Interpreter({
+        globals: { pi: 3.14159, e: 2.71828 },
+      });
       expect(interpreter.evaluate("pi + e")).toBeCloseTo(5.85987, 4);
     });
 
     it("should handle globals with special characters in strings", () => {
       const interpreter = new Interpreter({
-        message: "Hello\nWorld\t!",
+        globals: {
+          message: "Hello\nWorld\t!",
+        },
       });
       expect(interpreter.evaluate("message")).toBe("Hello\nWorld\t!");
     });
 
     it("should handle large objects as globals", () => {
       const interpreter = new Interpreter({
-        data: {
-          a: 1,
-          b: 2,
-          c: 3,
-          nested: { x: 10, y: 20, z: 30 },
-          arr: [1, 2, 3, 4, 5],
+        globals: {
+          data: {
+            a: 1,
+            b: 2,
+            c: 3,
+            nested: { x: 10, y: 20, z: 30 },
+            arr: [1, 2, 3, 4, 5],
+          },
         },
       });
       expect(interpreter.evaluate("data.a + data.nested.x")).toBe(11);
@@ -300,7 +324,7 @@ describe("Injected Globals", () => {
     });
 
     it("should handle globals used in functions", () => {
-      const interpreter = new Interpreter({ multiplier: 3 });
+      const interpreter = new Interpreter({ globals: { multiplier: 3 } });
       const code = `
         function multiply(x) {
           return x * multiplier;
@@ -311,7 +335,7 @@ describe("Injected Globals", () => {
     });
 
     it("should handle globals used in closures", () => {
-      const interpreter = new Interpreter({ base: 100 });
+      const interpreter = new Interpreter({ globals: { base: 100 } });
       const code = `
         function makeAdder(x) {
           return function(y) {
@@ -325,7 +349,7 @@ describe("Injected Globals", () => {
     });
 
     it("should handle globals in loops", () => {
-      const interpreter = new Interpreter({ max: 5 });
+      const interpreter = new Interpreter({ globals: { max: 5 } });
       const code = `
         let sum = 0;
         for (let i = 0; i < max; i++) {
@@ -337,7 +361,7 @@ describe("Injected Globals", () => {
     });
 
     it("should handle globals in conditionals", () => {
-      const interpreter = new Interpreter({ threshold: 10 });
+      const interpreter = new Interpreter({ globals: { threshold: 10 } });
       const code = `
         let value = 15;
         if (value > threshold) {
@@ -349,17 +373,17 @@ describe("Injected Globals", () => {
     });
 
     it("should handle empty options object", () => {
-      const interpreter = new Interpreter({ x: 5 });
+      const interpreter = new Interpreter({ globals: { x: 5 } });
       expect(interpreter.evaluate("x + 3", {})).toBe(8);
     });
 
     it("should handle options with undefined globals", () => {
-      const interpreter = new Interpreter({ x: 5 });
+      const interpreter = new Interpreter({ globals: { x: 5 } });
       expect(interpreter.evaluate("x + 3", { globals: undefined })).toBe(8);
     });
 
     it("should handle options with empty globals object", () => {
-      const interpreter = new Interpreter({ x: 5 });
+      const interpreter = new Interpreter({ globals: { x: 5 } });
       expect(interpreter.evaluate("x + 3", { globals: {} })).toBe(8);
     });
   });
@@ -367,9 +391,11 @@ describe("Injected Globals", () => {
   describe("Practical use cases", () => {
     it("should work for mathematical constants", () => {
       const interpreter = new Interpreter({
-        PI: 3.14159,
-        E: 2.71828,
-        GOLDEN_RATIO: 1.61803,
+        globals: {
+          PI: 3.14159,
+          E: 2.71828,
+          GOLDEN_RATIO: 1.61803,
+        },
       });
       const circleArea = interpreter.evaluate(`
         let radius = 10;
@@ -380,10 +406,12 @@ describe("Injected Globals", () => {
 
     it("should work for configuration objects", () => {
       const interpreter = new Interpreter({
-        config: {
-          maxIterations: 1000,
-          tolerance: 0.001,
-          debug: false,
+        globals: {
+          config: {
+            maxIterations: 1000,
+            tolerance: 0.001,
+            debug: false,
+          },
         },
       });
       const result = interpreter.evaluate(`
@@ -401,8 +429,10 @@ describe("Injected Globals", () => {
 
     it("should work for data processing", () => {
       const interpreter = new Interpreter({
-        data: [10, 20, 30, 40, 50],
-        threshold: 25,
+        globals: {
+          data: [10, 20, 30, 40, 50],
+          threshold: 25,
+        },
       });
       const result = interpreter.evaluate(`
         let count = 0;
@@ -418,8 +448,10 @@ describe("Injected Globals", () => {
 
     it("should work for accumulating values", () => {
       const interpreter = new Interpreter({
-        prices: [10.99, 25.5, 15.75, 30.0],
-        taxRate: 0.08,
+        globals: {
+          prices: [10.99, 25.5, 15.75, 30.0],
+          taxRate: 0.08,
+        },
       });
       const result = interpreter.evaluate(`
         let total = 0;
@@ -433,9 +465,11 @@ describe("Injected Globals", () => {
 
     it("should work for templating with string globals", () => {
       const interpreter = new Interpreter({
-        firstName: "John",
-        lastName: "Doe",
-        separator: " ",
+        globals: {
+          firstName: "John",
+          lastName: "Doe",
+          separator: " ",
+        },
       });
       const result = interpreter.evaluate("firstName + separator + lastName");
       expect(result).toBe("John Doe");

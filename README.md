@@ -6,16 +6,30 @@ A simple, secure JavaScript interpreter built with TypeScript and Meriyah AST pa
 
 Currently supports:
 
-### Injected Globals
+### Injected Globals & Host Functions
 
-The interpreter supports injecting global variables from the host environment:
+The interpreter supports injecting global variables and **calling host functions** from the host environment:
 
 - **Constructor Globals**: Pass globals when creating the interpreter - available for all `evaluate()` calls and persist across invocations
 - **Per-call Globals**: Pass globals as options to individual `evaluate()` calls - available ONLY for that single execution, then cleaned up
+- **Host Functions**: Functions passed as globals CAN be called from sandbox code (sync functions only in `evaluate()`)
+- **Property Protection**: Property access on host functions is blocked for security (no `.name`, `.__proto__`, etc.)
 - **Merged Globals**: Constructor and per-call globals are merged during execution, with per-call taking precedence
 - **Temporary Override**: Per-call globals can temporarily override constructor globals, but the original values are restored after execution
 - **Immutable**: Globals are declared as `const` and cannot be reassigned by interpreted code
 - **User Variable Protection**: User-declared variables take precedence over late-injected globals
+
+### Security Features
+
+The interpreter includes built-in security protections:
+
+- **Prototype Pollution Prevention**: Blocks access to dangerous properties like `__proto__`, `constructor`, `prototype`, and legacy getter/setter methods
+- **Sandboxed Execution**: Only whitelisted AST node types are evaluated - no access to `eval`, `Function`, `require`, etc.
+- **Host Function Protection**: Property access blocked on host functions, cannot await host functions directly (prevents sandbox escape)
+- **Reference Isolation**: User code cannot access the host runtime (though globals are passed by reference - users should clone sensitive data)
+- **Comprehensive Security Tests**: 22 dedicated security tests covering async/await protections, prototype pollution, closure security, and more
+
+**See [SECURITY.md](./SECURITY.md) for detailed security considerations, best practices, and threat model.**
 
 ### AST Validation
 
@@ -134,9 +148,11 @@ const interpreter = new Interpreter();
 
 // Injected Globals - Constructor
 const interpreterWithGlobals = new Interpreter({
-  PI: 3.14159,
-  E: 2.71828,
-  MAX_VALUE: 1000
+  globals: {
+    PI: 3.14159,
+    E: 2.71828,
+    MAX_VALUE: 1000
+  }
 });
 interpreterWithGlobals.evaluate('PI * 2');  // 6.28318
 interpreterWithGlobals.evaluate('let radius = 5; PI * radius * radius'); // 78.53975
@@ -145,7 +161,7 @@ interpreterWithGlobals.evaluate('let radius = 5; PI * radius * radius'); // 78.5
 interpreter.evaluate('x + y', { globals: { x: 10, y: 20 } }); // 30
 
 // Injected Globals - Merged
-const mergedInterpreter = new Interpreter({ x: 10 });
+const mergedInterpreter = new Interpreter({ globals: { x: 10 } });
 mergedInterpreter.evaluate('x + y', { globals: { y: 5 } }); // 15
 
 // Injected Globals - Objects
@@ -153,6 +169,28 @@ const configInterpreter = new Interpreter({
   globals: {config: { debug: true, maxRetries: 3 }}
 });
 configInterpreter.evaluate('config.maxRetries'); // 3
+
+// Host Functions - Call functions from host environment
+const interpreterWithFunctions = new Interpreter({
+  globals: {
+    double: (x: number) => x * 2,
+    log: (msg: string) => console.log(msg),
+    random: () => Math.random()
+  }
+});
+interpreterWithFunctions.evaluate('double(5)'); // 10
+interpreterWithFunctions.evaluate('log("Hello from sandbox!")'); // Logs to console
+interpreterWithFunctions.evaluate(`
+  let value = double(random() * 100);
+  log("Random doubled: " + value);
+`);
+
+// Host Functions - Per-call
+interpreter.evaluate('calculate(10, 5)', {
+  globals: {
+    calculate: (a: number, b: number) => a + b
+  }
+}); // 15
 
 // AST Validator - Constructor
 const noLoopsValidator = (ast) => {
@@ -452,10 +490,11 @@ The interpreter throws `InterpreterError` for:
 - Invalid function calls
 - Invalid array operations
 - Invalid syntax (via Meriyah's ParseError)
+- Security violations (accessing `__proto__`, `constructor`, etc.)
 
 ## Testing
 
-Comprehensive test suite with **663 tests** across 16 files:
+Comprehensive test suite with **838 tests** across 21 files:
 
 **Arithmetic Tests (43 tests)**:
 - All supported operators
@@ -609,6 +648,62 @@ Comprehensive test suite with **663 tests** across 16 files:
 - Validator with globals - combined functionality
 - Error cases - clear error messages, exception handling
 
+**Security Tests (49 tests)**:
+- Prototype pollution prevention - blocks `__proto__` access/assignment
+- Constructor access prevention - blocks `constructor` property
+- Prototype property blocking - blocks `prototype` property
+- Legacy method blocking - blocks `__defineGetter__`, `__defineSetter__`, etc.
+- Host function protection - property access blocking, async function blocking
+- Complex attack scenarios - nested objects, loops, function returns
+- Safe operations verification - normal properties still work
+
+**Host Function Tests (37 tests)**:
+- Calling sync host functions with various argument types
+- Returning various types from host functions (objects, arrays, primitives)
+- Host functions with closures and data structures
+- Error handling from host functions
+- Per-call host function globals
+- Property access blocking on host functions
+- Async host function blocking in sync mode
+- Edge cases and mixed host/sandbox functions
+
+**Async Tests (42 tests)**:
+- Calling async host functions with evaluateAsync()
+- Awaiting async host function results
+- Async functions with various argument and return types
+- Error handling in async host functions
+- Nested async host function calls
+- Sync host functions in async mode (evaluateAsync)
+- Mixed sync and async host functions
+- Basic async operations (arithmetic, variables, objects, arrays)
+- Async control flow (if/else, while loops, for loops)
+- Async sandbox functions (regular and arrow functions)
+- Per-call globals in async mode
+- Complex async scenarios
+
+**Async/Await Syntax Tests (26 tests)**:
+- Async function declarations
+- Async function expressions
+- Async arrow functions (expression and block body)
+- Await expressions with async host functions
+- Await expressions with async sandbox functions
+- Nested async/await calls
+- Await in control flow (if/else, for loops, while loops)
+- Mixed sync and async functions
+- Error handling (calling async in sync mode)
+- Async function closures
+- Async function return values
+
+**Security Tests (22 tests)**:
+- Host function protection (blocking property access, blocking await on host functions)
+- Sandbox function security in async context
+- Prototype pollution prevention (`__proto__`, `constructor`, `prototype`)
+- Built-in object access blocking (Promise, Function, eval, globalThis)
+- Environment isolation between interpreter instances
+- Error handling and propagation in async contexts
+- State management and const immutability
+- Closure security across async boundaries
+
 Run tests with `bun test`.
 
 ## Implementation Details
@@ -644,7 +739,7 @@ Functions are first-class values with closure support:
 
 ### Injected Globals System
 The interpreter supports injecting global variables from the host environment:
-- **Constructor Injection**: Globals passed to `new Interpreter({ ... })` are injected into the root environment and persist
+- **Constructor Injection**: Globals passed to `new Interpreter({ globals: { ... } })` are injected into the root environment and persist
 - **Per-call Injection**: Globals passed to `evaluate(code, { globals: { ... } })` are injected before execution and cleaned up after
 - **Merge Strategy**: Per-call globals can temporarily override constructor globals (but not user variables)
 - **Cleanup**: Per-call globals are removed after execution; overridden constructor globals are restored to original values
@@ -897,6 +992,135 @@ let calculator = {
 };
 calculator.add(5).multiply(3).getValue(); // 15
 ```
+
+### Async/Await Support
+
+The interpreter supports **async host functions** through the `evaluateAsync()` method, which returns a `Promise`:
+
+```typescript
+// Async host functions - using evaluateAsync()
+const asyncInterpreter = new Interpreter({
+  globals: {
+    fetchData: async (id: number) => {
+      // Simulate async operation
+      return await someAsyncAPI(id);
+    },
+    asyncDouble: async (x: number) => x * 2
+  }
+});
+
+// Call async host functions (must use evaluateAsync)
+await asyncInterpreter.evaluateAsync('fetchData(42)'); // Returns promise
+await asyncInterpreter.evaluateAsync('asyncDouble(5) + asyncDouble(10)'); // 30
+
+// Mixing sync and async host functions
+const mixedInterpreter = new Interpreter({
+  globals: {
+    syncAdd: (a: number, b: number) => a + b,      // sync function
+    asyncMultiply: async (a: number, b: number) => a * b  // async function
+  }
+});
+await mixedInterpreter.evaluateAsync('asyncMultiply(syncAdd(2, 3), 10)'); // 50
+
+// Async functions in control flow
+await asyncInterpreter.evaluateAsync(`
+  let sum = 0;
+  for (let i = 0; i < 5; i++) {
+    sum = sum + asyncDouble(i);
+  }
+  sum
+`); // 20 (0+2+4+6+8)
+
+// Async functions in conditionals
+await asyncInterpreter.evaluateAsync(`
+  let result;
+  if (asyncDouble(5) > 8) {
+    result = "greater";
+  } else {
+    result = "not greater";
+  }
+  result
+`); // "greater"
+
+// Complex async operations
+const userInterpreter = new Interpreter({
+  globals: {
+    asyncGetUser: async (id: number) => ({
+      id,
+      name: `User${id}`,
+      active: true
+    })
+  }
+});
+await userInterpreter.evaluateAsync(`
+  let user = asyncGetUser(123);
+  user.name
+`); // "User123"
+```
+
+**Async/Await Syntax in Sandbox Code:**
+
+The interpreter now supports `async` function declarations and `await` expressions in sandbox code:
+
+```typescript
+// Async function declarations
+const interpreter = new Interpreter();
+await interpreter.evaluateAsync(`
+  async function fetchData() {
+    return { name: "Alice", age: 30 };
+  }
+  
+  async function getUsername() {
+    let data = await fetchData();
+    return data.name;
+  }
+  
+  getUsername()
+`); // "Alice"
+
+// Async arrow functions
+await interpreter.evaluateAsync(`
+  let asyncDouble = async (x) => x * 2;
+  let asyncProcess = async (x) => {
+    let doubled = await asyncDouble(x);
+    return doubled + 10;
+  };
+  asyncProcess(5)
+`); // 20
+
+// Await in control flow
+await interpreter.evaluateAsync(`
+  async function sum() {
+    let total = 0;
+    for (let i = 0; i < 5; i++) {
+      total = total + (await asyncDouble(i));
+    }
+    return total;
+  }
+  sum()
+`);
+
+// Mixing async sandbox functions with async host functions
+const mixedInterpreter = new Interpreter({
+  globals: {
+    asyncFetch: async (id: number) => `Data${id}`
+  }
+});
+await mixedInterpreter.evaluateAsync(`
+  async function processData(id) {
+    let data = await asyncFetch(id);
+    return data + " processed";
+  }
+  processData(999)
+`); // "Data999 processed"
+```
+
+**Important Notes:**
+- **Sync mode** (`evaluate()`): Cannot call async functions or use await. Throws error if you try.
+- **Async mode** (`evaluateAsync()`): Supports both sync AND async functions, `async`/`await` syntax. Returns a Promise.
+- **Async functions**: Can be declared with `async function`, `async () =>`, or `async function() {}` syntax.
+- **Await expressions**: Can only be used inside async functions (standard JavaScript behavior).
+- **All operations await**: In async mode, ALL operations are awaited, ensuring proper execution order.
 
 ## Turing Completeness
 

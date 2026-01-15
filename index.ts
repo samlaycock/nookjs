@@ -255,9 +255,11 @@ console.log("Result:", shoppingCart.evaluate(shoppingCartCode));
 
 console.log("\n--- Injected Globals: Constructor ---");
 const interpreterWithGlobals = new Interpreter({
-  PI: 3.14159,
-  E: 2.71828,
-  MAX_ITERATIONS: 1000,
+  globals: {
+    PI: 3.14159,
+    E: 2.71828,
+    MAX_ITERATIONS: 1000,
+  },
 });
 
 const circleArea = interpreterWithGlobals.evaluate(`
@@ -276,7 +278,7 @@ console.log("Code: multiplier * value with per-call globals");
 console.log("Result:", perCallResult);
 
 console.log("\n--- Injected Globals: Merged ---");
-const interpreterMerged = new Interpreter({ x: 10 });
+const interpreterMerged = new Interpreter({ globals: { x: 10 } });
 const mergedResult = interpreterMerged.evaluate("x + y + z", {
   globals: { y: 20, z: 30 },
 });
@@ -285,10 +287,12 @@ console.log("Result:", mergedResult);
 
 console.log("\n--- Injected Globals: Configuration Object ---");
 const interpreterWithConfig = new Interpreter({
-  config: {
-    maxRetries: 3,
-    timeout: 5000,
-    debug: true,
+  globals: {
+    config: {
+      maxRetries: 3,
+      timeout: 5000,
+      debug: true,
+    },
   },
 });
 
@@ -364,17 +368,252 @@ try {
   console.log("Blocked: too many statements ✓");
 }
 
-console.log("\n✅ All demos completed successfully!");
-console.log("\nSupported Features:");
-console.log("- Numbers, strings, booleans, arrays, objects");
-console.log("- Arithmetic, comparison, and logical operators");
-console.log("- Update operators (++, --)");
-console.log("- Variables (let/const) with lexical scoping");
-console.log("- Conditionals (if/else)");
-console.log("- Loops (while, for) with break and continue");
-console.log("- Functions (regular and arrow) with closures and recursion");
-console.log("- Arrays and objects with full property access");
-console.log("- Higher-order functions with arrow functions");
-console.log("- Object methods with 'this' keyword binding");
-console.log("- Injected globals (constructor and per-call)");
-console.log("- AST validation (constructor and per-call)");
+console.log("\n--- Host Functions ---");
+const results: string[] = [];
+const interpreterWithHostFunctions = new Interpreter({
+  globals: {
+    double: (x: number) => x * 2,
+    add: (a: number, b: number) => a + b,
+    log: (msg: string) => results.push(msg),
+  },
+});
+
+console.log("Code: Calling host functions from sandbox");
+const hostResult1 = interpreterWithHostFunctions.evaluate("double(5)");
+console.log("double(5):", hostResult1);
+
+const hostResult2 = interpreterWithHostFunctions.evaluate("add(3, 7)");
+console.log("add(3, 7):", hostResult2);
+
+interpreterWithHostFunctions.evaluate(`
+  log("Hello from sandbox!");
+  log("Calculated: " + add(double(5), 3));
+`);
+console.log("Logged messages:", results);
+
+console.log("\n--- Host Functions: Per-call Globals ---");
+const perCallInterpreter = new Interpreter();
+const hostPerCallResult = perCallInterpreter.evaluate("multiply(4, 5)", {
+  globals: {
+    multiply: (a: number, b: number) => a * b,
+  },
+});
+console.log("multiply(4, 5) with per-call global:", hostPerCallResult);
+
+console.log("\n--- Host Functions: Mixed with Sandbox Functions ---");
+const mixedInterpreter = new Interpreter({
+  globals: {
+    hostDouble: (x: number) => x * 2,
+  },
+});
+const mixedResult = mixedInterpreter.evaluate(`
+  function sandboxTriple(x) {
+    return x * 3;
+  }
+  hostDouble(5) + sandboxTriple(5)
+`);
+console.log("hostDouble(5) + sandboxTriple(5):", mixedResult);
+
+console.log("\n--- Async/Await: Async Host Functions ---");
+(async () => {
+  const asyncInterpreter = new Interpreter({
+    globals: {
+      fetchData: async (id: number) => {
+        // Simulate async operation
+        return new Promise((resolve) => {
+          setTimeout(() => resolve(`Data for ID ${id}`), 10);
+        });
+      },
+      asyncDouble: async (x: number) => x * 2,
+    },
+  });
+
+  console.log("Code: Calling async host function");
+  const asyncResult1 = await asyncInterpreter.evaluateAsync("fetchData(42)");
+  console.log("fetchData(42):", asyncResult1);
+
+  console.log("\nCode: Async arithmetic");
+  const asyncResult2 = await asyncInterpreter.evaluateAsync(
+    "asyncDouble(5) + asyncDouble(10)",
+  );
+  console.log("asyncDouble(5) + asyncDouble(10):", asyncResult2);
+
+  console.log("\n--- Async/Await: Complex Async Operations ---");
+  const complexAsyncInterpreter = new Interpreter({
+    globals: {
+      asyncGetUser: async (id: number) => ({
+        id,
+        name: `User${id}`,
+        active: true,
+      }),
+      asyncCalculate: async (a: number, b: number) => {
+        return new Promise((resolve) => {
+          setTimeout(() => resolve(a * b + 10), 5);
+        });
+      },
+    },
+  });
+
+  console.log("Code: Async function returning object");
+  const user = await complexAsyncInterpreter.evaluateAsync(`
+    let user = asyncGetUser(123);
+    user.name
+  `);
+  console.log("User name:", user);
+
+  console.log("\nCode: Nested async calls");
+  const calculated = await complexAsyncInterpreter.evaluateAsync(`
+    asyncCalculate(5, asyncCalculate(2, 3))
+  `);
+  console.log("asyncCalculate(5, asyncCalculate(2, 3)):", calculated);
+
+  console.log("\n--- Async/Await: Async Control Flow ---");
+  const asyncLoopInterpreter = new Interpreter({
+    globals: {
+      asyncIncrement: async (x: number) => x + 1,
+    },
+  });
+
+  console.log("Code: Async function in loop");
+  const loopResult = await asyncLoopInterpreter.evaluateAsync(`
+    let sum = 0;
+    for (let i = 0; i < 5; i++) {
+      sum = sum + asyncIncrement(i);
+    }
+    sum
+  `);
+  console.log("Sum with async increments:", loopResult);
+
+  console.log("\nCode: Async function in conditional");
+  const condResult = await asyncLoopInterpreter.evaluateAsync(`
+    let result;
+    if (asyncIncrement(5) > 5) {
+      result = "greater";
+    } else {
+      result = "not greater";
+    }
+    result
+  `);
+  console.log("Conditional result:", condResult);
+
+  console.log("\n--- Async/Await: Mixed Sync and Async ---");
+  const mixedAsyncInterpreter = new Interpreter({
+    globals: {
+      syncAdd: (a: number, b: number) => a + b,
+      asyncMultiply: async (a: number, b: number) => a * b,
+    },
+  });
+
+  console.log("Code: Mixing sync and async host functions");
+  const mixedResult = await mixedAsyncInterpreter.evaluateAsync(`
+    asyncMultiply(syncAdd(2, 3), syncAdd(4, 6))
+  `);
+  console.log("asyncMultiply(syncAdd(2, 3), syncAdd(4, 6)):", mixedResult);
+
+  console.log("\n--- Async/Await: Sandbox Async Functions ---");
+  const sandboxAsyncInterpreter = new Interpreter();
+
+  console.log("Code: Async function with await");
+  const sandboxResult1 = await sandboxAsyncInterpreter.evaluateAsync(`
+    async function getData() {
+      return 42;
+    }
+    async function process() {
+      let data = await getData();
+      return data * 2;
+    }
+    process()
+  `);
+  console.log("Async function with await:", sandboxResult1);
+
+  console.log("\nCode: Nested async/await");
+  const sandboxResult2 = await sandboxAsyncInterpreter.evaluateAsync(`
+    async function fetchUser(id) {
+      return { id: id, name: "User" + id, active: true };
+    }
+    async function getUsername(id) {
+      let user = await fetchUser(id);
+      return user.name;
+    }
+    getUsername(123)
+  `);
+  console.log("Nested async/await:", sandboxResult2);
+
+  console.log("\nCode: Async functions with host functions");
+  const mixedSandboxInterpreter = new Interpreter({
+    globals: {
+      asyncFetch: async (id: number) => `Data${id}`,
+    },
+  });
+  const sandboxResult3 = await mixedSandboxInterpreter.evaluateAsync(`
+    async function processData(id) {
+      let data = await asyncFetch(id);
+      return data + " processed";
+    }
+    processData(999)
+  `);
+  console.log("Async sandbox with host functions:", sandboxResult3);
+
+  console.log("\nCode: Async arrow functions");
+  const arrowAsyncResult = await sandboxAsyncInterpreter.evaluateAsync(`
+    let asyncDouble = async (x) => x * 2;
+    let asyncProcess = async (x) => {
+      let doubled = await asyncDouble(x);
+      return doubled + 10;
+    };
+    asyncProcess(5)
+  `);
+  console.log("Async arrow functions:", arrowAsyncResult);
+
+  console.log("\n--- Async/Await: Control Flow ---");
+  console.log("Code: Await in loops");
+  const loopAsyncResult = await mixedSandboxInterpreter.evaluateAsync(`
+    async function increment(x) {
+      return x + 1;
+    }
+    async function sumSequence() {
+      let sum = 0;
+      for (let i = 0; i < 5; i++) {
+        sum = sum + (await increment(i));
+      }
+      return sum;
+    }
+    sumSequence()
+  `);
+  console.log("Await in loops:", loopAsyncResult);
+
+  console.log("\nCode: Await in conditionals");
+  const condAsyncResult = await mixedSandboxInterpreter.evaluateAsync(`
+    async function check(x) {
+      return x > 10;
+    }
+    async function classify(x) {
+      if (await check(x)) {
+        return "big";
+      } else {
+        return "small";
+      }
+    }
+    classify(15)
+  `);
+  console.log("Await in conditionals:", condAsyncResult);
+
+  console.log("\n✅ All demos completed successfully!");
+})().then(() => {
+  console.log("\nSupported Features:");
+  console.log("- Numbers, strings, booleans, arrays, objects");
+  console.log("- Arithmetic, comparison, and logical operators");
+  console.log("- Update operators (++, --)");
+  console.log("- Variables (let/const) with lexical scoping");
+  console.log("- Conditionals (if/else)");
+  console.log("- Loops (while, for) with break and continue");
+  console.log("- Functions (regular and arrow) with closures and recursion");
+  console.log("- Arrays and objects with full property access");
+  console.log("- Higher-order functions with arrow functions");
+  console.log("- Object methods with 'this' keyword binding");
+  console.log("- Injected globals (constructor and per-call)");
+  console.log("- Host functions (call host code from sandbox)");
+  console.log("- Async host functions (with evaluateAsync())");
+  console.log("- Async/await syntax (async functions and await expressions)");
+  console.log("- AST validation (constructor and per-call)");
+});

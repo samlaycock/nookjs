@@ -10,6 +10,25 @@ export class InterpreterError extends Error {
   }
 }
 
+// Security: Dangerous property names that could enable prototype pollution or sandbox escape
+const DANGEROUS_PROPERTIES = [
+  "__proto__",
+  "constructor",
+  "prototype",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
+];
+
+function validatePropertyName(name: string): void {
+  if (DANGEROUS_PROPERTIES.includes(name)) {
+    throw new InterpreterError(
+      `Property name '${name}' is not allowed for security reasons`,
+    );
+  }
+}
+
 class ReturnValue {
   constructor(public value: any) {}
 }
@@ -27,6 +46,15 @@ class FunctionValue {
     public params: string[],
     public body: ESTree.BlockStatement,
     public closure: Environment,
+    public isAsync: boolean = false,
+  ) {}
+}
+
+class HostFunctionValue {
+  constructor(
+    public hostFunc: Function,
+    public name: string,
+    public isAsync: boolean = false,
   ) {}
 }
 
@@ -162,6 +190,16 @@ export class Interpreter {
     trackKeys: boolean = false,
   ): void {
     for (const [key, value] of Object.entries(globals)) {
+      // Wrap host functions in HostFunctionValue
+      const wrappedValue =
+        typeof value === "function"
+          ? new HostFunctionValue(
+              value,
+              key,
+              value.constructor.name === "AsyncFunction",
+            )
+          : value;
+
       if (this.environment.has(key)) {
         // If the variable exists, check if we should override
         if (allowOverride) {
@@ -173,7 +211,7 @@ export class Interpreter {
             );
           }
           // Try to force update the global (only works for injected globals)
-          const wasUpdated = this.environment.forceSet(key, value);
+          const wasUpdated = this.environment.forceSet(key, wrappedValue);
           if (wasUpdated && trackKeys) {
             this.perCallGlobalKeys.add(key);
           }
@@ -181,7 +219,7 @@ export class Interpreter {
         // If not allowOverride, skip this variable (don't overwrite)
       } else {
         // Variable doesn't exist, declare it as const and mark as global
-        this.environment.declare(key, value, "const", true);
+        this.environment.declare(key, wrappedValue, "const", true);
         if (trackKeys) {
           this.perCallGlobalKeys.add(key);
         }
@@ -227,6 +265,35 @@ export class Interpreter {
       }
 
       return this.evaluateNode(ast);
+    } finally {
+      // Always clean up per-call globals after execution
+      if (options?.globals) {
+        this.removePerCallGlobals();
+      }
+    }
+  }
+
+  async evaluateAsync(code: string, options?: EvaluateOptions): Promise<any> {
+    // Inject per-call globals if provided (with override capability)
+    if (options?.globals) {
+      this.injectGlobals(options.globals, true, true);
+    }
+
+    try {
+      const ast = parseScript(code, { module: false });
+
+      // Run validator - per-call validator takes precedence over constructor validator
+      const validator = options?.validator || this.constructorValidator;
+      if (validator) {
+        const isValid = validator(ast);
+        if (!isValid) {
+          throw new InterpreterError(
+            "AST validation failed: code is not allowed",
+          );
+        }
+      }
+
+      return await this.evaluateNodeAsync(ast);
     } finally {
       // Always clean up per-call globals after execution
       if (options?.globals) {
@@ -306,6 +373,11 @@ export class Interpreter {
       case "ReturnStatement":
         return this.evaluateReturnStatement(node as ESTree.ReturnStatement);
 
+      case "AwaitExpression":
+        throw new InterpreterError(
+          "Cannot use await in synchronous evaluate(). Use evaluateAsync() instead.",
+        );
+
       case "BreakStatement":
         return this.evaluateBreakStatement(node as ESTree.BreakStatement);
 
@@ -323,6 +395,129 @@ export class Interpreter {
 
       case "ObjectExpression":
         return this.evaluateObjectExpression(node as ESTree.ObjectExpression);
+
+      default:
+        throw new InterpreterError(`Unsupported node type: ${node.type}`);
+    }
+  }
+
+  private async evaluateNodeAsync(node: ASTNode): Promise<any> {
+    switch (node.type) {
+      case "Program":
+        return await this.evaluateProgramAsync(node as ESTree.Program);
+
+      case "ExpressionStatement":
+        return await this.evaluateNodeAsync(
+          (node as ESTree.ExpressionStatement).expression,
+        );
+
+      case "Literal":
+        return this.evaluateLiteral(node as ESTree.Literal);
+
+      case "Identifier":
+        return this.evaluateIdentifier(node as ESTree.Identifier);
+
+      case "ThisExpression":
+        return this.evaluateThisExpression(node as ESTree.ThisExpression);
+
+      case "BinaryExpression":
+        return await this.evaluateBinaryExpressionAsync(
+          node as ESTree.BinaryExpression,
+        );
+
+      case "UnaryExpression":
+        return await this.evaluateUnaryExpressionAsync(
+          node as ESTree.UnaryExpression,
+        );
+
+      case "UpdateExpression":
+        return await this.evaluateUpdateExpressionAsync(
+          node as ESTree.UpdateExpression,
+        );
+
+      case "LogicalExpression":
+        return await this.evaluateLogicalExpressionAsync(
+          node as ESTree.LogicalExpression,
+        );
+
+      case "AssignmentExpression":
+        return await this.evaluateAssignmentExpressionAsync(
+          node as ESTree.AssignmentExpression,
+        );
+
+      case "VariableDeclaration":
+        return await this.evaluateVariableDeclarationAsync(
+          node as ESTree.VariableDeclaration,
+        );
+
+      case "BlockStatement":
+        return await this.evaluateBlockStatementAsync(
+          node as ESTree.BlockStatement,
+        );
+
+      case "IfStatement":
+        return await this.evaluateIfStatementAsync(node as ESTree.IfStatement);
+
+      case "WhileStatement":
+        return await this.evaluateWhileStatementAsync(
+          node as ESTree.WhileStatement,
+        );
+
+      case "ForStatement":
+        return await this.evaluateForStatementAsync(
+          node as ESTree.ForStatement,
+        );
+
+      case "FunctionDeclaration":
+        return await this.evaluateFunctionDeclarationAsync(
+          node as ESTree.FunctionDeclaration,
+        );
+
+      case "FunctionExpression":
+        return await this.evaluateFunctionExpressionAsync(
+          node as ESTree.FunctionExpression,
+        );
+
+      case "ArrowFunctionExpression":
+        return await this.evaluateArrowFunctionExpressionAsync(
+          node as ESTree.ArrowFunctionExpression,
+        );
+
+      case "ReturnStatement":
+        return await this.evaluateReturnStatementAsync(
+          node as ESTree.ReturnStatement,
+        );
+
+      case "AwaitExpression":
+        return await this.evaluateAwaitExpressionAsync(
+          node as ESTree.AwaitExpression,
+        );
+
+      case "BreakStatement":
+        return this.evaluateBreakStatement(node as ESTree.BreakStatement);
+
+      case "ContinueStatement":
+        return this.evaluateContinueStatement(node as ESTree.ContinueStatement);
+
+      case "CallExpression":
+        return await this.evaluateCallExpressionAsync(
+          node as ESTree.CallExpression,
+        );
+
+      case "MemberExpression":
+        return await this.evaluateMemberExpressionAsync(
+          node as ESTree.MemberExpression,
+        );
+
+      case "ArrayExpression":
+        return await this.evaluateArrayExpressionAsync(
+          node as ESTree.ArrayExpression,
+        );
+
+      case "ObjectExpression":
+        return await this.evaluateObjectExpressionAsync(
+          node as ESTree.ObjectExpression,
+        );
 
       default:
         throw new InterpreterError(`Unsupported node type: ${node.type}`);
@@ -490,6 +685,13 @@ export class Interpreter {
       const memberExpr = node.left as ESTree.MemberExpression;
       const object = this.evaluateNode(memberExpr.object);
 
+      // Block property assignment on host functions
+      if (object instanceof HostFunctionValue) {
+        throw new InterpreterError(
+          "Cannot assign properties on host functions",
+        );
+      }
+
       if (memberExpr.computed) {
         // Computed property: arr[index] = value
         const property = this.evaluateNode(memberExpr.property);
@@ -503,7 +705,9 @@ export class Interpreter {
           return value;
         } else if (typeof object === "object" && object !== null) {
           // Object computed property assignment: obj["key"] = value
-          object[String(property)] = value;
+          const propName = String(property);
+          validatePropertyName(propName); // Security: prevent prototype pollution
+          object[propName] = value;
           return value;
         } else {
           throw new InterpreterError(
@@ -517,6 +721,7 @@ export class Interpreter {
         }
 
         const property = (memberExpr.property as ESTree.Identifier).name;
+        validatePropertyName(property); // Security: prevent prototype pollution
 
         if (
           typeof object === "object" &&
@@ -718,6 +923,7 @@ export class Interpreter {
       params,
       node.body as ESTree.BlockStatement,
       this.environment,
+      node.async || false,
     );
 
     // Declare the function in the current environment
@@ -750,6 +956,7 @@ export class Interpreter {
       params,
       node.body as ESTree.BlockStatement,
       this.environment,
+      node.async || false,
     );
   }
 
@@ -786,7 +993,12 @@ export class Interpreter {
     }
 
     // Capture the current environment as the closure
-    const func = new FunctionValue(params, body, this.environment);
+    const func = new FunctionValue(
+      params,
+      body,
+      this.environment,
+      node.async || false,
+    );
 
     return func;
   }
@@ -838,8 +1050,41 @@ export class Interpreter {
       callee = this.evaluateNode(node.callee);
     }
 
+    // Handle host functions
+    if (callee instanceof HostFunctionValue) {
+      // Check if async host function in sync mode
+      if (callee.isAsync) {
+        throw new InterpreterError(
+          `Cannot call async host function '${callee.name}' in synchronous evaluate(). Use evaluateAsync() instead.`,
+        );
+      }
+
+      // Evaluate all arguments
+      const args: any[] = [];
+      for (const arg of node.arguments) {
+        args.push(this.evaluateNode(arg as ESTree.Expression));
+      }
+
+      // Call the host function
+      try {
+        return callee.hostFunc(...args);
+      } catch (error: any) {
+        throw new InterpreterError(
+          `Host function '${callee.name}' threw error: ${error.message}`,
+        );
+      }
+    }
+
+    // Handle sandbox functions
     if (!(callee instanceof FunctionValue)) {
       throw new InterpreterError("Callee is not a function");
+    }
+
+    // Check if async sandbox function in sync mode
+    if (callee.isAsync) {
+      throw new InterpreterError(
+        "Cannot call async function in synchronous evaluate(). Use evaluateAsync() instead.",
+      );
     }
 
     // Evaluate all arguments
@@ -886,6 +1131,11 @@ export class Interpreter {
   private evaluateMemberExpression(node: ESTree.MemberExpression): any {
     const object = this.evaluateNode(node.object);
 
+    // Block property access on host functions
+    if (object instanceof HostFunctionValue) {
+      throw new InterpreterError("Cannot access properties on host functions");
+    }
+
     if (node.computed) {
       // obj[expr] - computed property access (array indexing or object bracket notation)
       const property = this.evaluateNode(node.property);
@@ -903,7 +1153,9 @@ export class Interpreter {
 
       // Handle object computed property access: obj["key"]
       if (typeof object === "object" && object !== null) {
-        return object[String(property)];
+        const propName = String(property);
+        validatePropertyName(propName); // Security: prevent prototype pollution
+        return object[propName];
       }
 
       throw new InterpreterError(
@@ -915,6 +1167,7 @@ export class Interpreter {
         throw new InterpreterError("Invalid property access");
       }
       const property = (node.property as ESTree.Identifier).name;
+      validatePropertyName(property); // Security: prevent prototype pollution
 
       // Handle .length for strings and arrays
       if (property === "length") {
@@ -972,8 +1225,615 @@ export class Interpreter {
         throw new InterpreterError("Unsupported property key type");
       }
 
+      validatePropertyName(key); // Security: prevent prototype pollution
+
       // Evaluate the property value
       const value = this.evaluateNode(property.value);
+      obj[key] = value;
+    }
+
+    return obj;
+  }
+
+  // ============================================================================
+  // ASYNC EVALUATION METHODS
+  // ============================================================================
+
+  private async evaluateProgramAsync(node: ESTree.Program): Promise<any> {
+    if (node.body.length === 0) {
+      return undefined;
+    }
+
+    let result: any;
+    for (const statement of node.body) {
+      result = await this.evaluateNodeAsync(statement);
+    }
+
+    return result;
+  }
+
+  private async evaluateBinaryExpressionAsync(
+    node: ESTree.BinaryExpression,
+  ): Promise<any> {
+    const left = await this.evaluateNodeAsync(node.left);
+    const right = await this.evaluateNodeAsync(node.right);
+
+    switch (node.operator) {
+      case "+":
+        return left + right;
+      case "-":
+        return left - right;
+      case "*":
+        return left * right;
+      case "/":
+        if (right === 0) {
+          throw new InterpreterError("Division by zero");
+        }
+        return left / right;
+      case "%":
+        if (right === 0) {
+          throw new InterpreterError("Modulo by zero");
+        }
+        return left % right;
+      case "**":
+        return left ** right;
+      case "===":
+        return left === right;
+      case "!==":
+        return left !== right;
+      case "<":
+        return left < right;
+      case "<=":
+        return left <= right;
+      case ">":
+        return left > right;
+      case ">=":
+        return left >= right;
+      default:
+        throw new InterpreterError(
+          `Unsupported binary operator: ${node.operator}`,
+        );
+    }
+  }
+
+  private async evaluateUnaryExpressionAsync(
+    node: ESTree.UnaryExpression,
+  ): Promise<any> {
+    const argument = await this.evaluateNodeAsync(node.argument);
+
+    switch (node.operator) {
+      case "+":
+        return +argument;
+      case "-":
+        return -argument;
+      case "!":
+        return !argument;
+      default:
+        throw new InterpreterError(
+          `Unsupported unary operator: ${node.operator}`,
+        );
+    }
+  }
+
+  private async evaluateUpdateExpressionAsync(
+    node: ESTree.UpdateExpression,
+  ): Promise<any> {
+    if (node.argument.type !== "Identifier") {
+      throw new InterpreterError(
+        "Update expression must operate on an identifier",
+      );
+    }
+
+    const identifier = node.argument as ESTree.Identifier;
+    const name = identifier.name;
+    const currentValue = this.environment.get(name);
+
+    if (typeof currentValue !== "number") {
+      throw new InterpreterError(
+        "Update expression can only be used with numbers",
+      );
+    }
+
+    let newValue: number;
+    switch (node.operator) {
+      case "++":
+        newValue = currentValue + 1;
+        break;
+      case "--":
+        newValue = currentValue - 1;
+        break;
+      default:
+        throw new InterpreterError(
+          `Unsupported update operator: ${node.operator}`,
+        );
+    }
+
+    this.environment.set(name, newValue);
+    return node.prefix ? newValue : currentValue;
+  }
+
+  private async evaluateLogicalExpressionAsync(
+    node: ESTree.LogicalExpression,
+  ): Promise<any> {
+    const left = await this.evaluateNodeAsync(node.left);
+
+    switch (node.operator) {
+      case "&&":
+        if (!left) return left;
+        return await this.evaluateNodeAsync(node.right);
+      case "||":
+        if (left) return left;
+        return await this.evaluateNodeAsync(node.right);
+      default:
+        throw new InterpreterError(
+          `Unsupported logical operator: ${node.operator}`,
+        );
+    }
+  }
+
+  private async evaluateCallExpressionAsync(
+    node: ESTree.CallExpression,
+  ): Promise<any> {
+    let thisValue: any = undefined;
+    let callee: any;
+
+    if (node.callee.type === "MemberExpression") {
+      const memberExpr = node.callee as ESTree.MemberExpression;
+      thisValue = await this.evaluateNodeAsync(memberExpr.object);
+
+      if (thisValue instanceof HostFunctionValue) {
+        throw new InterpreterError(
+          "Cannot access properties on host functions",
+        );
+      }
+
+      if (memberExpr.computed) {
+        const property = await this.evaluateNodeAsync(memberExpr.property);
+        callee = thisValue[String(property)];
+      } else {
+        if (memberExpr.property.type !== "Identifier") {
+          throw new InterpreterError("Invalid method access");
+        }
+        const property = (memberExpr.property as ESTree.Identifier).name;
+        callee = thisValue[property];
+      }
+    } else {
+      callee = await this.evaluateNodeAsync(node.callee);
+    }
+
+    // Handle host functions (sync and async)
+    if (callee instanceof HostFunctionValue) {
+      const args: any[] = [];
+      for (const arg of node.arguments) {
+        args.push(await this.evaluateNodeAsync(arg as ESTree.Expression));
+      }
+
+      try {
+        const result = callee.hostFunc(...args);
+        // If async host function, await the promise
+        if (callee.isAsync) {
+          return await result;
+        }
+        return result;
+      } catch (error: any) {
+        throw new InterpreterError(
+          `Host function '${callee.name}' threw error: ${error.message}`,
+        );
+      }
+    }
+
+    // Handle sandbox functions
+    if (!(callee instanceof FunctionValue)) {
+      throw new InterpreterError("Callee is not a function");
+    }
+
+    const args: any[] = [];
+    for (const arg of node.arguments) {
+      args.push(await this.evaluateNodeAsync(arg as ESTree.Expression));
+    }
+
+    if (args.length !== callee.params.length) {
+      throw new InterpreterError(
+        `Expected ${callee.params.length} arguments but got ${args.length}`,
+      );
+    }
+
+    const previousEnvironment = this.environment;
+    this.environment = new Environment(callee.closure, thisValue);
+
+    try {
+      for (let i = 0; i < callee.params.length; i++) {
+        this.environment.declare(callee.params[i]!, args[i], "let");
+      }
+
+      // If this is an async sandbox function, execute the body and wrap in a promise
+      if (callee.isAsync) {
+        // Execute function body asynchronously
+        const executeAsync = async () => {
+          const result = await this.evaluateNodeAsync(callee.body);
+          if (result instanceof ReturnValue) {
+            return result.value;
+          }
+          return undefined;
+        };
+        // Return the promise (so it can be awaited by caller)
+        return await executeAsync();
+      }
+
+      // Sync sandbox function
+      const result = await this.evaluateNodeAsync(callee.body);
+
+      if (result instanceof ReturnValue) {
+        return result.value;
+      }
+
+      return undefined;
+    } finally {
+      this.environment = previousEnvironment;
+    }
+  }
+
+  private async evaluateAssignmentExpressionAsync(
+    node: ESTree.AssignmentExpression,
+  ): Promise<any> {
+    if (node.operator !== "=") {
+      throw new InterpreterError(
+        `Unsupported assignment operator: ${node.operator}`,
+      );
+    }
+
+    const value = await this.evaluateNodeAsync(node.right);
+
+    if (node.left.type === "MemberExpression") {
+      const memberExpr = node.left as ESTree.MemberExpression;
+      const object = await this.evaluateNodeAsync(memberExpr.object);
+
+      if (object instanceof HostFunctionValue) {
+        throw new InterpreterError(
+          "Cannot assign properties on host functions",
+        );
+      }
+
+      if (memberExpr.computed) {
+        const property = await this.evaluateNodeAsync(memberExpr.property);
+
+        if (Array.isArray(object)) {
+          if (typeof property !== "number") {
+            throw new InterpreterError("Array index must be a number");
+          }
+          object[property] = value;
+          return value;
+        } else if (typeof object === "object" && object !== null) {
+          const propName = String(property);
+          validatePropertyName(propName);
+          object[propName] = value;
+          return value;
+        } else {
+          throw new InterpreterError(
+            "Assignment target is not an array or object",
+          );
+        }
+      } else {
+        if (memberExpr.property.type !== "Identifier") {
+          throw new InterpreterError("Invalid property access");
+        }
+
+        const property = (memberExpr.property as ESTree.Identifier).name;
+        validatePropertyName(property);
+
+        if (
+          typeof object === "object" &&
+          object !== null &&
+          !Array.isArray(object)
+        ) {
+          object[property] = value;
+          return value;
+        } else {
+          throw new InterpreterError("Cannot assign property to non-object");
+        }
+      }
+    }
+
+    if (node.left.type !== "Identifier") {
+      throw new InterpreterError("Invalid assignment target");
+    }
+
+    this.environment.set((node.left as ESTree.Identifier).name, value);
+    return value;
+  }
+
+  private async evaluateVariableDeclarationAsync(
+    node: ESTree.VariableDeclaration,
+  ): Promise<any> {
+    const kind = node.kind as "let" | "const" | "var";
+
+    if (kind === "var") {
+      throw new InterpreterError("var is not supported, use let or const");
+    }
+
+    let lastValue: any = undefined;
+
+    for (const declarator of node.declarations) {
+      if (declarator.id.type !== "Identifier") {
+        throw new InterpreterError("Destructuring is not supported");
+      }
+
+      const name = (declarator.id as ESTree.Identifier).name;
+      const value = declarator.init
+        ? await this.evaluateNodeAsync(declarator.init)
+        : undefined;
+
+      if (kind === "const" && declarator.init === null) {
+        throw new InterpreterError("Missing initializer in const declaration");
+      }
+
+      this.environment.declare(name, value, kind);
+      lastValue = value;
+    }
+
+    return lastValue;
+  }
+
+  private async evaluateBlockStatementAsync(
+    node: ESTree.BlockStatement,
+  ): Promise<any> {
+    const previousEnvironment = this.environment;
+    this.environment = new Environment(previousEnvironment);
+
+    let result: any = undefined;
+
+    try {
+      for (const statement of node.body) {
+        result = await this.evaluateNodeAsync(statement);
+        if (
+          result instanceof ReturnValue ||
+          result instanceof BreakValue ||
+          result instanceof ContinueValue
+        ) {
+          return result;
+        }
+      }
+    } finally {
+      this.environment = previousEnvironment;
+    }
+
+    return result;
+  }
+
+  private async evaluateIfStatementAsync(
+    node: ESTree.IfStatement,
+  ): Promise<any> {
+    const condition = await this.evaluateNodeAsync(node.test);
+
+    if (condition) {
+      return await this.evaluateNodeAsync(node.consequent);
+    } else if (node.alternate) {
+      return await this.evaluateNodeAsync(node.alternate);
+    }
+
+    return undefined;
+  }
+
+  private async evaluateWhileStatementAsync(
+    node: ESTree.WhileStatement,
+  ): Promise<any> {
+    let result: any = undefined;
+
+    while (await this.evaluateNodeAsync(node.test)) {
+      result = await this.evaluateNodeAsync(node.body);
+
+      if (result instanceof ReturnValue) {
+        return result;
+      }
+
+      if (result instanceof BreakValue) {
+        return undefined;
+      }
+
+      if (result instanceof ContinueValue) {
+        continue;
+      }
+    }
+
+    return result;
+  }
+
+  private async evaluateForStatementAsync(
+    node: ESTree.ForStatement,
+  ): Promise<any> {
+    const previousEnv = this.environment;
+    this.environment = new Environment(previousEnv);
+
+    try {
+      if (node.init) {
+        await this.evaluateNodeAsync(node.init);
+      }
+
+      let result: any = undefined;
+
+      while (true) {
+        if (node.test) {
+          const condition = await this.evaluateNodeAsync(node.test);
+          if (!condition) {
+            break;
+          }
+        }
+
+        result = await this.evaluateNodeAsync(node.body);
+
+        if (result instanceof ReturnValue) {
+          return result;
+        }
+
+        if (result instanceof BreakValue) {
+          return undefined;
+        }
+
+        if (node.update) {
+          await this.evaluateNodeAsync(node.update);
+        }
+
+        if (result instanceof ContinueValue) {
+          continue;
+        }
+      }
+
+      return result;
+    } finally {
+      this.environment = previousEnv;
+    }
+  }
+
+  private async evaluateFunctionDeclarationAsync(
+    node: ESTree.FunctionDeclaration,
+  ): Promise<any> {
+    // Function declarations are sync - just reuse the sync version
+    return this.evaluateFunctionDeclaration(node);
+  }
+
+  private async evaluateFunctionExpressionAsync(
+    node: ESTree.FunctionExpression,
+  ): Promise<any> {
+    // Function expressions are sync - just reuse the sync version
+    return this.evaluateFunctionExpression(node);
+  }
+
+  private async evaluateArrowFunctionExpressionAsync(
+    node: ESTree.ArrowFunctionExpression,
+  ): Promise<any> {
+    // Arrow functions are sync - just reuse the sync version
+    return this.evaluateArrowFunctionExpression(node);
+  }
+
+  private async evaluateReturnStatementAsync(
+    node: ESTree.ReturnStatement,
+  ): Promise<any> {
+    const value = node.argument
+      ? await this.evaluateNodeAsync(node.argument)
+      : undefined;
+    return new ReturnValue(value);
+  }
+
+  private async evaluateAwaitExpressionAsync(
+    node: ESTree.AwaitExpression,
+  ): Promise<any> {
+    // Evaluate the argument (which should be a promise)
+    const value = await this.evaluateNodeAsync(node.argument);
+
+    // Security: Block awaiting host functions directly
+    // This prevents exposing the raw host function to the host via the HostFunctionValue wrapper
+    if (value instanceof HostFunctionValue) {
+      throw new InterpreterError(
+        "Cannot await a host function. Did you mean to call it with ()?",
+      );
+    }
+
+    // Note: We don't block awaiting FunctionValue (sandbox functions) because:
+    // 1. They can be legitimately returned from async functions
+    // 2. The information disclosure (params, body, closure) already exists when returning functions
+    // 3. The host should treat returned values as opaque (documented security consideration)
+
+    // Await the promise (or pass through non-promise values)
+    return await value;
+  }
+
+  private async evaluateMemberExpressionAsync(
+    node: ESTree.MemberExpression,
+  ): Promise<any> {
+    const object = await this.evaluateNodeAsync(node.object);
+
+    if (object instanceof HostFunctionValue) {
+      throw new InterpreterError("Cannot access properties on host functions");
+    }
+
+    if (node.computed) {
+      const property = await this.evaluateNodeAsync(node.property);
+
+      if (Array.isArray(object)) {
+        if (typeof property !== "number") {
+          throw new InterpreterError("Array index must be a number");
+        }
+        if (property < 0 || property >= object.length) {
+          return undefined;
+        }
+        return object[property];
+      }
+
+      if (typeof object === "object" && object !== null) {
+        const propName = String(property);
+        validatePropertyName(propName);
+        return object[propName];
+      }
+
+      throw new InterpreterError(
+        "Computed property access requires an array or object",
+      );
+    } else {
+      if (node.property.type !== "Identifier") {
+        throw new InterpreterError("Invalid property access");
+      }
+      const property = (node.property as ESTree.Identifier).name;
+      validatePropertyName(property);
+
+      if (property === "length") {
+        if (typeof object === "string" || Array.isArray(object)) {
+          return object.length;
+        }
+      }
+
+      if (
+        typeof object === "object" &&
+        object !== null &&
+        !Array.isArray(object)
+      ) {
+        return object[property];
+      }
+
+      throw new InterpreterError(`Property '${property}' not supported`);
+    }
+  }
+
+  private async evaluateArrayExpressionAsync(
+    node: ESTree.ArrayExpression,
+  ): Promise<any> {
+    const elements: any[] = [];
+
+    for (const element of node.elements) {
+      if (element === null) {
+        elements.push(undefined);
+      } else {
+        elements.push(await this.evaluateNodeAsync(element));
+      }
+    }
+
+    return elements;
+  }
+
+  private async evaluateObjectExpressionAsync(
+    node: ESTree.ObjectExpression,
+  ): Promise<any> {
+    const obj: Record<string, any> = {};
+
+    for (const property of node.properties) {
+      if (property.type !== "Property") {
+        throw new InterpreterError(
+          "Only property nodes are supported in objects",
+        );
+      }
+
+      let key: string;
+      if (property.key.type === "Identifier") {
+        key = (property.key as ESTree.Identifier).name;
+      } else if (property.key.type === "Literal") {
+        const literal = property.key as ESTree.Literal;
+        key = String(literal.value);
+      } else {
+        throw new InterpreterError("Unsupported property key type");
+      }
+
+      validatePropertyName(key);
+
+      const value = await this.evaluateNodeAsync(property.value);
       obj[key] = value;
     }
 
