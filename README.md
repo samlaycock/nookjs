@@ -144,6 +144,11 @@ Note: `var` is not supported for simplicity and security.
 - **Array Length**: Access `.length` property
 - **Nested Arrays**: Multi-dimensional arrays supported
 - **Reference Semantics**: Arrays are passed by reference
+- **Array Methods**: Comprehensive array method support
+  - **Mutation methods**: `push()`, `pop()`, `shift()`, `unshift()`, `reverse()`
+  - **Non-mutation methods**: `slice()`, `concat()`, `indexOf()`, `includes()`, `join()`
+  - **Higher-order methods**: `map()`, `filter()`, `reduce()`, `find()`, `findIndex()`, `every()`, `some()`
+  - **Method chaining**: Methods return values that can be chained (e.g., `arr.map().filter().reduce()`)
 
 ### Objects
 - **Object Literals**: Create objects with `{ key: value }` syntax
@@ -249,6 +254,30 @@ interpreter.evaluate('"Hello".length');           // 5
 // Arrays
 interpreter.evaluate('[1, 2, 3][1]');            // 2
 interpreter.evaluate('let arr = [10, 20, 30]; arr.length'); // 3
+
+// Array methods - mutation
+interpreter.evaluate('let arr = [1, 2, 3]; arr.push(4); arr'); // [1, 2, 3, 4]
+interpreter.evaluate('let arr = [1, 2, 3]; arr.pop()'); // 3
+interpreter.evaluate('let arr = [1, 2, 3]; arr.shift()'); // 1
+interpreter.evaluate('let arr = [1, 2, 3]; arr.unshift(0); arr'); // [0, 1, 2, 3]
+
+// Array methods - non-mutation
+interpreter.evaluate('[1, 2, 3, 4, 5].slice(1, 3)'); // [2, 3]
+interpreter.evaluate('[1, 2].concat([3, 4])'); // [1, 2, 3, 4]
+interpreter.evaluate('[1, 2, 3].indexOf(2)'); // 1
+interpreter.evaluate('[1, 2, 3].includes(2)'); // true
+interpreter.evaluate('[1, 2, 3].join("-")'); // "1-2-3"
+
+// Array methods - higher-order
+interpreter.evaluate('[1, 2, 3, 4].map(x => x * 2)'); // [2, 4, 6, 8]
+interpreter.evaluate('[1, 2, 3, 4].filter(x => x > 2)'); // [3, 4]
+interpreter.evaluate('[1, 2, 3, 4].reduce((acc, x) => acc + x, 0)'); // 10
+interpreter.evaluate('[1, 2, 3, 4].find(x => x > 2)'); // 3
+interpreter.evaluate('[1, 2, 3, 4].every(x => x > 0)'); // true
+interpreter.evaluate('[1, 2, 3, 4].some(x => x > 3)'); // true
+
+// Array method chaining
+interpreter.evaluate('[1, 2, 3, 4].map(x => x * 2).filter(x => x > 4).reduce((acc, x) => acc + x, 0)'); // 14
 
 // Objects
 interpreter.evaluate('let obj = { x: 10, y: 20 }; obj.x'); // 10
@@ -582,7 +611,7 @@ The interpreter throws `InterpreterError` for:
 
 ## Testing
 
-Comprehensive test suite with **985 tests** across 25 files:
+Comprehensive test suite with **1042 tests** across 26 files:
 
 **Arithmetic Tests (43 tests)**:
 - All supported operators
@@ -844,6 +873,16 @@ Comprehensive test suite with **985 tests** across 25 files:
 - Error cases (continue in switch throws parser error)
 - Async switch (evaluateAsync, async host functions, async operations in cases)
 - Edge cases (empty switch, only default, null case, computed case values)
+
+**Array Methods Tests (57 tests)**:
+- Mutation methods (push, pop, shift, unshift, reverse)
+- Non-mutation methods (slice, concat, indexOf, includes, join)
+- Higher-order methods (map, filter, reduce, find, findIndex, every, some)
+- Methods with callbacks (arrow functions, regular functions, index/array parameters)
+- Method chaining (map().filter().reduce(), multiple chains)
+- Async array methods (async host functions in callbacks, evaluateAsync support)
+- Edge cases (empty arrays, undefined values, not found results)
+- Return values and side effects (proper mutation behavior, return types)
 
 Run tests with `bun test`.
 
@@ -1303,8 +1342,7 @@ This means it can theoretically compute any computable function, given enough ti
 Potential additions:
 - Labeled statements (labeled break/continue)
 - for...in loops (object property iteration)
-- More array methods (push, pop, shift, unshift, slice, etc.)
-- String methods (substring, indexOf, etc.)
+- String methods (substring, indexOf, split, replace, etc.)
 - instanceof operator
 - Template literals
 - Rest/spread operators

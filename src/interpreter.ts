@@ -1361,16 +1361,22 @@ export class Interpreter {
       const memberExpr = node.callee as ESTree.MemberExpression;
       thisValue = this.evaluateNode(memberExpr.object); // The object becomes 'this'
 
-      // Get the method from the object
-      if (memberExpr.computed) {
-        const property = this.evaluateNode(memberExpr.property);
-        callee = thisValue[String(property)];
+      // For arrays, use evaluateMemberExpression to get HostFunctionValue wrappers
+      // For other objects, access the property directly
+      if (Array.isArray(thisValue)) {
+        callee = this.evaluateMemberExpression(memberExpr);
       } else {
-        if (memberExpr.property.type !== "Identifier") {
-          throw new InterpreterError("Invalid method access");
+        // Get the method from the object
+        if (memberExpr.computed) {
+          const property = this.evaluateNode(memberExpr.property);
+          callee = thisValue[String(property)];
+        } else {
+          if (memberExpr.property.type !== "Identifier") {
+            throw new InterpreterError("Invalid method access");
+          }
+          const property = (memberExpr.property as ESTree.Identifier).name;
+          callee = thisValue[property];
         }
-        const property = (memberExpr.property as ESTree.Identifier).name;
-        callee = thisValue[property];
       }
     } else {
       // Regular function call - no 'this' binding
@@ -1504,6 +1510,15 @@ export class Interpreter {
         }
       }
 
+      // Handle array methods
+      if (Array.isArray(object)) {
+        const arrayMethod = this.getArrayMethod(object, property);
+        if (arrayMethod) {
+          return arrayMethod;
+        }
+        throw new InterpreterError(`Array method '${property}' not supported`);
+      }
+
       // Handle object property access
       if (
         typeof object === "object" &&
@@ -1514,6 +1529,290 @@ export class Interpreter {
       }
 
       throw new InterpreterError(`Property '${property}' not supported`);
+    }
+  }
+
+  /**
+   * Get an array method as a HostFunctionValue
+   * Returns null if the method is not supported
+   */
+  private getArrayMethod(
+    arr: any[],
+    methodName: string,
+  ): HostFunctionValue | null {
+    switch (methodName) {
+      // Mutation methods
+      case "push":
+        return new HostFunctionValue(
+          (...items: any[]) => {
+            arr.push(...items);
+            return arr.length;
+          },
+          "push",
+          false,
+        );
+
+      case "pop":
+        return new HostFunctionValue(() => arr.pop(), "pop", false);
+
+      case "shift":
+        return new HostFunctionValue(() => arr.shift(), "shift", false);
+
+      case "unshift":
+        return new HostFunctionValue(
+          (...items: any[]) => {
+            arr.unshift(...items);
+            return arr.length;
+          },
+          "unshift",
+          false,
+        );
+
+      // Non-mutation methods
+      case "slice":
+        return new HostFunctionValue(
+          (start?: number, end?: number) => arr.slice(start, end),
+          "slice",
+          false,
+        );
+
+      case "concat":
+        return new HostFunctionValue(
+          (...items: any[]) => arr.concat(...items),
+          "concat",
+          false,
+        );
+
+      case "indexOf":
+        return new HostFunctionValue(
+          (searchElement: any, fromIndex?: number) =>
+            arr.indexOf(searchElement, fromIndex),
+          "indexOf",
+          false,
+        );
+
+      case "includes":
+        return new HostFunctionValue(
+          (searchElement: any, fromIndex?: number) =>
+            arr.includes(searchElement, fromIndex),
+          "includes",
+          false,
+        );
+
+      case "join":
+        return new HostFunctionValue(
+          (separator?: string) => arr.join(separator),
+          "join",
+          false,
+        );
+
+      case "reverse":
+        return new HostFunctionValue(() => arr.reverse(), "reverse", false);
+
+      // Higher-order methods - these need special handling to evaluate sandbox functions
+      case "map":
+        return new HostFunctionValue(
+          (callback: FunctionValue) => {
+            if (!(callback instanceof FunctionValue)) {
+              throw new InterpreterError("map callback must be a function");
+            }
+            const result: any[] = [];
+            for (let i = 0; i < arr.length; i++) {
+              // Call the sandbox function with (element, index, array)
+              const value = this.callSandboxFunction(callback, undefined, [
+                arr[i],
+                i,
+                arr,
+              ]);
+              result.push(value);
+            }
+            return result;
+          },
+          "map",
+          false,
+        );
+
+      case "filter":
+        return new HostFunctionValue(
+          (callback: FunctionValue) => {
+            if (!(callback instanceof FunctionValue)) {
+              throw new InterpreterError("filter callback must be a function");
+            }
+            const result: any[] = [];
+            for (let i = 0; i < arr.length; i++) {
+              const shouldInclude = this.callSandboxFunction(
+                callback,
+                undefined,
+                [arr[i], i, arr],
+              );
+              if (shouldInclude) {
+                result.push(arr[i]);
+              }
+            }
+            return result;
+          },
+          "filter",
+          false,
+        );
+
+      case "reduce":
+        return new HostFunctionValue(
+          (callback: FunctionValue, initialValue?: any) => {
+            if (!(callback instanceof FunctionValue)) {
+              throw new InterpreterError("reduce callback must be a function");
+            }
+            let accumulator = initialValue;
+            let startIndex = 0;
+
+            // If no initial value, use first element as accumulator
+            if (initialValue === undefined) {
+              if (arr.length === 0) {
+                throw new InterpreterError(
+                  "Reduce of empty array with no initial value",
+                );
+              }
+              accumulator = arr[0];
+              startIndex = 1;
+            }
+
+            for (let i = startIndex; i < arr.length; i++) {
+              accumulator = this.callSandboxFunction(callback, undefined, [
+                accumulator,
+                arr[i],
+                i,
+                arr,
+              ]);
+            }
+            return accumulator;
+          },
+          "reduce",
+          false,
+        );
+
+      case "find":
+        return new HostFunctionValue(
+          (callback: FunctionValue) => {
+            if (!(callback instanceof FunctionValue)) {
+              throw new InterpreterError("find callback must be a function");
+            }
+            for (let i = 0; i < arr.length; i++) {
+              const matches = this.callSandboxFunction(callback, undefined, [
+                arr[i],
+                i,
+                arr,
+              ]);
+              if (matches) {
+                return arr[i];
+              }
+            }
+            return undefined;
+          },
+          "find",
+          false,
+        );
+
+      case "findIndex":
+        return new HostFunctionValue(
+          (callback: FunctionValue) => {
+            if (!(callback instanceof FunctionValue)) {
+              throw new InterpreterError(
+                "findIndex callback must be a function",
+              );
+            }
+            for (let i = 0; i < arr.length; i++) {
+              const matches = this.callSandboxFunction(callback, undefined, [
+                arr[i],
+                i,
+                arr,
+              ]);
+              if (matches) {
+                return i;
+              }
+            }
+            return -1;
+          },
+          "findIndex",
+          false,
+        );
+
+      case "every":
+        return new HostFunctionValue(
+          (callback: FunctionValue) => {
+            if (!(callback instanceof FunctionValue)) {
+              throw new InterpreterError("every callback must be a function");
+            }
+            for (let i = 0; i < arr.length; i++) {
+              const result = this.callSandboxFunction(callback, undefined, [
+                arr[i],
+                i,
+                arr,
+              ]);
+              if (!result) {
+                return false;
+              }
+            }
+            return true;
+          },
+          "every",
+          false,
+        );
+
+      case "some":
+        return new HostFunctionValue(
+          (callback: FunctionValue) => {
+            if (!(callback instanceof FunctionValue)) {
+              throw new InterpreterError("some callback must be a function");
+            }
+            for (let i = 0; i < arr.length; i++) {
+              const result = this.callSandboxFunction(callback, undefined, [
+                arr[i],
+                i,
+                arr,
+              ]);
+              if (result) {
+                return true;
+              }
+            }
+            return false;
+          },
+          "some",
+          false,
+        );
+
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Helper to call a sandbox function (used by array methods)
+   */
+  private callSandboxFunction(
+    func: FunctionValue,
+    thisValue: any,
+    args: any[],
+  ): any {
+    // Save and restore environment
+    const previousEnvironment = this.environment;
+    this.environment = new Environment(func.closure, thisValue);
+
+    try {
+      // Bind parameters
+      for (let i = 0; i < func.params.length && i < args.length; i++) {
+        this.environment.declare(func.params[i]!, args[i], "let");
+      }
+
+      // Execute function body
+      const result = this.evaluateNode(func.body);
+
+      // Unwrap return value
+      if (result instanceof ReturnValue) {
+        return result.value;
+      }
+
+      return undefined;
+    } finally {
+      this.environment = previousEnvironment;
     }
   }
 
@@ -1752,21 +2051,27 @@ export class Interpreter {
       const memberExpr = node.callee as ESTree.MemberExpression;
       thisValue = await this.evaluateNodeAsync(memberExpr.object);
 
-      if (thisValue instanceof HostFunctionValue) {
-        throw new InterpreterError(
-          "Cannot access properties on host functions",
-        );
-      }
-
-      if (memberExpr.computed) {
-        const property = await this.evaluateNodeAsync(memberExpr.property);
-        callee = thisValue[String(property)];
+      // For arrays, use evaluateMemberExpressionAsync to get HostFunctionValue wrappers
+      // For other objects, access the property directly
+      if (Array.isArray(thisValue)) {
+        callee = await this.evaluateMemberExpressionAsync(memberExpr);
       } else {
-        if (memberExpr.property.type !== "Identifier") {
-          throw new InterpreterError("Invalid method access");
+        if (thisValue instanceof HostFunctionValue) {
+          throw new InterpreterError(
+            "Cannot access properties on host functions",
+          );
         }
-        const property = (memberExpr.property as ESTree.Identifier).name;
-        callee = thisValue[property];
+
+        if (memberExpr.computed) {
+          const property = await this.evaluateNodeAsync(memberExpr.property);
+          callee = thisValue[String(property)];
+        } else {
+          if (memberExpr.property.type !== "Identifier") {
+            throw new InterpreterError("Invalid method access");
+          }
+          const property = (memberExpr.property as ESTree.Identifier).name;
+          callee = thisValue[property];
+        }
       }
     } else {
       callee = await this.evaluateNodeAsync(node.callee);
@@ -2277,6 +2582,15 @@ export class Interpreter {
         if (typeof object === "string" || Array.isArray(object)) {
           return object.length;
         }
+      }
+
+      // Handle array methods (reuse sync version since array methods work the same)
+      if (Array.isArray(object)) {
+        const arrayMethod = this.getArrayMethod(object, property);
+        if (arrayMethod) {
+          return arrayMethod;
+        }
+        throw new InterpreterError(`Array method '${property}' not supported`);
       }
 
       if (
