@@ -114,6 +114,8 @@ Note: `var` is not supported for simplicity and security.
 - **continue Statement**: Skip to the next iteration of a loop
 - **Block Statements**: Group multiple statements with `{ }`
 - **Loop Scoping**: For loop variables are scoped to the loop
+- **for...of Loops**: Iterate over array elements with `for (let item of array)`
+- **const in for...of**: Supports `const` loop variables (new scope per iteration)
 
 ### Functions
 - **Function Declarations**: Define named functions with parameters
@@ -322,6 +324,25 @@ interpreter.evaluate(`
   sum
 `); // 25 (1+3+5+7+9)
 
+// for...of loops
+interpreter.evaluate(`
+  let arr = [1, 2, 3, 4, 5];
+  let sum = 0;
+  for (let num of arr) {
+    sum = sum + num;
+  }
+  sum
+`); // 15
+
+interpreter.evaluate(`
+  let words = ["hello", "world"];
+  let result = "";
+  for (const word of words) {
+    result = result + word + " ";
+  }
+  result
+`); // "hello world "
+
 // Update operators
 interpreter.evaluate(`
   let x = 5;
@@ -520,7 +541,7 @@ The interpreter throws `InterpreterError` for:
 
 ## Testing
 
-Comprehensive test suite with **912 tests** across 23 files:
+Comprehensive test suite with **949 tests** across 24 files:
 
 **Arithmetic Tests (43 tests)**:
 - All supported operators
@@ -754,6 +775,21 @@ Comprehensive test suite with **912 tests** across 23 files:
 - Async support (evaluateAsync, typeof in async context)
 - Edge cases (undefined variables don't throw, functions return "function", nested typeof)
 
+**for...of Loop Tests (37 tests)**:
+- Basic for...of iteration (with let and const)
+- for...of with existing variables
+- Iterating over arrays of objects
+- Nested for...of loops (2D arrays, flattening)
+- for...of with break (early exit, finding elements)
+- for...of with continue (filtering, skipping)
+- for...of in functions (regular and arrow functions, early return)
+- for...of scoping (variable shadowing, outer scope access)
+- for...of with conditionals (if/else in body, nested conditionals)
+- Building and filtering arrays with for...of
+- Async for...of (evaluateAsync, async host functions, nested async loops)
+- Error cases (non-array iterables, null, objects)
+- Edge cases (null values, mixed types, function call results)
+
 Run tests with `bun test`.
 
 ## Implementation Details
@@ -829,6 +865,7 @@ Logical operators implement proper short-circuit behavior:
 - `IfStatement`
 - `WhileStatement`
 - `ForStatement`
+- `ForOfStatement`
 - `BreakStatement`
 - `ContinueStatement`
 - `FunctionDeclaration`
@@ -994,6 +1031,20 @@ for (let i = 0; i < people.length; i++) {
   totalAge = totalAge + people[i].age;
 }
 totalAge; // 90
+
+// Array of objects with for...of
+let users = [
+  { name: "Alice", active: true },
+  { name: "Bob", active: false },
+  { name: "Charlie", active: true }
+];
+let activeCount = 0;
+for (let user of users) {
+  if (user.active) {
+    activeCount = activeCount + 1;
+  }
+}
+activeCount; // 2
 
 // Nested objects
 let user = {
@@ -1194,7 +1245,7 @@ This means it can theoretically compute any computable function, given enough ti
 
 Potential additions:
 - Labeled statements (labeled break/continue)
-- for...of and for...in loops
+- for...in loops (object property iteration)
 - More array methods (push, pop, shift, unshift, slice, etc.)
 - String methods (substring, indexOf, etc.)
 - instanceof operator

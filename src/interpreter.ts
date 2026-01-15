@@ -360,6 +360,9 @@ export class Interpreter {
       case "ForStatement":
         return this.evaluateForStatement(node as ESTree.ForStatement);
 
+      case "ForOfStatement":
+        return this.evaluateForOfStatement(node as ESTree.ForOfStatement);
+
       case "FunctionDeclaration":
         return this.evaluateFunctionDeclaration(
           node as ESTree.FunctionDeclaration,
@@ -476,6 +479,11 @@ export class Interpreter {
       case "ForStatement":
         return await this.evaluateForStatementAsync(
           node as ESTree.ForStatement,
+        );
+
+      case "ForOfStatement":
+        return await this.evaluateForOfStatementAsync(
+          node as ESTree.ForOfStatement,
         );
 
       case "FunctionDeclaration":
@@ -936,6 +944,90 @@ export class Interpreter {
 
         // If we hit a continue statement, skip to next iteration
         // (already executed update above)
+        if (result instanceof ContinueValue) {
+          continue;
+        }
+      }
+
+      return result;
+    } finally {
+      // Restore the previous environment
+      this.environment = previousEnv;
+    }
+  }
+
+  private evaluateForOfStatement(node: ESTree.ForOfStatement): any {
+    // Create a new environment for the for...of loop scope
+    const previousEnv = this.environment;
+    this.environment = new Environment(previousEnv);
+
+    try {
+      // Evaluate the iterable (right side)
+      const iterable = this.evaluateNode(node.right);
+
+      // Check if iterable is an array
+      if (!Array.isArray(iterable)) {
+        throw new InterpreterError("for...of requires an iterable (array)");
+      }
+
+      // Determine the loop variable info
+      let variableName: string;
+      let isDeclaration = false;
+      let variableKind: "let" | "const" | undefined;
+
+      if (node.left.type === "VariableDeclaration") {
+        // e.g., for (let item of arr) or for (const item of arr)
+        const decl = node.left.declarations[0];
+        if (decl?.id.type !== "Identifier") {
+          throw new InterpreterError("Unsupported for...of variable pattern");
+        }
+        variableName = decl.id.name;
+        isDeclaration = true;
+        variableKind = node.left.kind as "let" | "const";
+      } else if (node.left.type === "Identifier") {
+        // e.g., for (item of arr) where item is already declared
+        variableName = node.left.name;
+      } else {
+        throw new InterpreterError("Unsupported for...of left-hand side");
+      }
+
+      let result: any = undefined;
+
+      // Iterate over the array
+      for (let i = 0; i < iterable.length; i++) {
+        if (isDeclaration) {
+          // For declarations (let/const), create a new scope for each iteration
+          // This is necessary for const since we can't reassign it
+          const iterEnv = this.environment;
+          this.environment = new Environment(iterEnv);
+
+          // Declare the variable with the current element
+          this.environment.declare(variableName, iterable[i], variableKind!);
+
+          // Execute loop body
+          result = this.evaluateNode(node.body);
+
+          // Restore environment after iteration
+          this.environment = iterEnv;
+        } else {
+          // For existing variables, just assign
+          this.environment.set(variableName, iterable[i]);
+
+          // Execute loop body
+          result = this.evaluateNode(node.body);
+        }
+
+        // If we hit a return statement in a loop, propagate it
+        if (result instanceof ReturnValue) {
+          return result;
+        }
+
+        // If we hit a break statement, exit the loop
+        if (result instanceof BreakValue) {
+          return undefined;
+        }
+
+        // If we hit a continue statement, skip to next iteration
         if (result instanceof ContinueValue) {
           continue;
         }
@@ -1767,6 +1859,84 @@ export class Interpreter {
 
         if (node.update) {
           await this.evaluateNodeAsync(node.update);
+        }
+
+        if (result instanceof ContinueValue) {
+          continue;
+        }
+      }
+
+      return result;
+    } finally {
+      this.environment = previousEnv;
+    }
+  }
+
+  private async evaluateForOfStatementAsync(
+    node: ESTree.ForOfStatement,
+  ): Promise<any> {
+    const previousEnv = this.environment;
+    this.environment = new Environment(previousEnv);
+
+    try {
+      // Evaluate the iterable (right side)
+      const iterable = await this.evaluateNodeAsync(node.right);
+
+      // Check if iterable is an array
+      if (!Array.isArray(iterable)) {
+        throw new InterpreterError("for...of requires an iterable (array)");
+      }
+
+      // Determine the loop variable info
+      let variableName: string;
+      let isDeclaration = false;
+      let variableKind: "let" | "const" | undefined;
+
+      if (node.left.type === "VariableDeclaration") {
+        const decl = node.left.declarations[0];
+        if (decl?.id.type !== "Identifier") {
+          throw new InterpreterError("Unsupported for...of variable pattern");
+        }
+        variableName = decl.id.name;
+        isDeclaration = true;
+        variableKind = node.left.kind as "let" | "const";
+      } else if (node.left.type === "Identifier") {
+        variableName = node.left.name;
+      } else {
+        throw new InterpreterError("Unsupported for...of left-hand side");
+      }
+
+      let result: any = undefined;
+
+      // Iterate over the array
+      for (let i = 0; i < iterable.length; i++) {
+        if (isDeclaration) {
+          // For declarations (let/const), create a new scope for each iteration
+          const iterEnv = this.environment;
+          this.environment = new Environment(iterEnv);
+
+          // Declare the variable with the current element
+          this.environment.declare(variableName, iterable[i], variableKind!);
+
+          // Execute loop body
+          result = await this.evaluateNodeAsync(node.body);
+
+          // Restore environment after iteration
+          this.environment = iterEnv;
+        } else {
+          // For existing variables, just assign
+          this.environment.set(variableName, iterable[i]);
+
+          // Execute loop body
+          result = await this.evaluateNodeAsync(node.body);
+        }
+
+        if (result instanceof ReturnValue) {
+          return result;
+        }
+
+        if (result instanceof BreakValue) {
+          return undefined;
         }
 
         if (result instanceof ContinueValue) {
