@@ -542,6 +542,9 @@ export class Interpreter {
       case "CallExpression":
         return this.evaluateCallExpression(node as ESTree.CallExpression);
 
+      case "NewExpression":
+        return this.evaluateNewExpression(node as ESTree.NewExpression);
+
       case "MemberExpression":
         return this.evaluateMemberExpression(node as ESTree.MemberExpression);
 
@@ -690,6 +693,11 @@ export class Interpreter {
       case "CallExpression":
         return await this.evaluateCallExpressionAsync(
           node as ESTree.CallExpression,
+        );
+
+      case "NewExpression":
+        return await this.evaluateNewExpressionAsync(
+          node as ESTree.NewExpression,
         );
 
       case "MemberExpression":
@@ -2095,6 +2103,109 @@ export class Interpreter {
     }
   }
 
+  private evaluateNewExpression(node: ESTree.NewExpression): any {
+    // 1. Evaluate constructor
+    const constructor = this.evaluateNode(node.callee);
+
+    // 2. Validate constructor is callable
+    if (
+      !(
+        constructor instanceof FunctionValue ||
+        constructor instanceof HostFunctionValue
+      )
+    ) {
+      throw new InterpreterError("Constructor must be a function");
+    }
+
+    // 3. Create new instance object
+    const instance: Record<string, any> = {};
+
+    // 4. Evaluate arguments (handle spread just like CallExpression)
+    const args: any[] = [];
+    for (const arg of node.arguments) {
+      if (arg.type === "SpreadElement") {
+        const spreadValue = this.evaluateNode(
+          (arg as ESTree.SpreadElement).argument,
+        );
+        if (!Array.isArray(spreadValue)) {
+          throw new InterpreterError(
+            "Spread syntax in constructor calls requires an array",
+          );
+        }
+        args.push(...spreadValue);
+      } else {
+        args.push(this.evaluateNode(arg as ESTree.Expression));
+      }
+    }
+
+    // 5. Call constructor based on type
+    let result: any;
+
+    if (constructor instanceof HostFunctionValue) {
+      // Host functions (built-in constructors if we had them)
+      // For now, just call them with the instance as 'this'
+      try {
+        result = constructor.hostFunc.apply(instance, args);
+      } catch (error: any) {
+        throw new InterpreterError(`Constructor threw error: ${error.message}`);
+      }
+    } else {
+      // Sandbox functions
+      const callee = constructor as FunctionValue;
+
+      // Check minimum argument count
+      const regularParamCount =
+        callee.restParamIndex !== null
+          ? callee.restParamIndex
+          : callee.params.length;
+
+      if (args.length < regularParamCount) {
+        throw new InterpreterError(
+          `Expected at least ${regularParamCount} arguments but got ${args.length}`,
+        );
+      }
+
+      // Create new environment with instance as 'this'
+      const previousEnvironment = this.environment;
+      this.environment = new Environment(callee.closure, instance);
+
+      try {
+        // Bind regular parameters
+        for (let i = 0; i < regularParamCount; i++) {
+          this.environment.declare(callee.params[i]!, args[i], "let");
+        }
+
+        // Bind rest parameter if present
+        if (callee.restParamIndex !== null) {
+          const restParamName = callee.params[callee.restParamIndex]!;
+          const restArgs = args.slice(callee.restParamIndex);
+          this.environment.declare(restParamName, restArgs, "let");
+        }
+
+        // Execute constructor body
+        const returnValue = this.evaluateNode(callee.body);
+
+        // Unwrap return value if present
+        if (returnValue instanceof ReturnValue) {
+          result = returnValue.value;
+        } else {
+          result = undefined;
+        }
+      } finally {
+        this.environment = previousEnvironment;
+      }
+    }
+
+    // 6. Return object or constructor's returned object
+    // If constructor explicitly returns an object, use that
+    // Otherwise, return the instance we created
+    if (typeof result === "object" && result !== null) {
+      return result;
+    }
+
+    return instance;
+  }
+
   private evaluateMemberExpression(node: ESTree.MemberExpression): any {
     const object = this.evaluateNode(node.object);
 
@@ -3092,6 +3203,121 @@ export class Interpreter {
     } finally {
       this.environment = previousEnvironment;
     }
+  }
+
+  private async evaluateNewExpressionAsync(
+    node: ESTree.NewExpression,
+  ): Promise<any> {
+    // 1. Evaluate constructor
+    const constructor = await this.evaluateNodeAsync(node.callee);
+
+    // 2. Validate constructor is callable
+    if (
+      !(
+        constructor instanceof FunctionValue ||
+        constructor instanceof HostFunctionValue
+      )
+    ) {
+      throw new InterpreterError("Constructor must be a function");
+    }
+
+    // 3. Create new instance object
+    const instance: Record<string, any> = {};
+
+    // 4. Evaluate arguments (handle spread)
+    const args: any[] = [];
+    for (const arg of node.arguments) {
+      if (arg.type === "SpreadElement") {
+        const spreadValue = await this.evaluateNodeAsync(
+          (arg as ESTree.SpreadElement).argument,
+        );
+        if (!Array.isArray(spreadValue)) {
+          throw new InterpreterError(
+            "Spread syntax in constructor calls requires an array",
+          );
+        }
+        args.push(...spreadValue);
+      } else {
+        args.push(await this.evaluateNodeAsync(arg as ESTree.Expression));
+      }
+    }
+
+    // 5. Call constructor based on type
+    let result: any;
+
+    if (constructor instanceof HostFunctionValue) {
+      // Host functions
+      try {
+        result = constructor.hostFunc.apply(instance, args);
+        // If async host function, await the result
+        if (constructor.isAsync) {
+          result = await result;
+        }
+      } catch (error: any) {
+        throw new InterpreterError(`Constructor threw error: ${error.message}`);
+      }
+    } else {
+      // Sandbox functions
+      const callee = constructor as FunctionValue;
+
+      // Check minimum argument count
+      const regularParamCount =
+        callee.restParamIndex !== null
+          ? callee.restParamIndex
+          : callee.params.length;
+
+      if (args.length < regularParamCount) {
+        throw new InterpreterError(
+          `Expected at least ${regularParamCount} arguments but got ${args.length}`,
+        );
+      }
+
+      // Create new environment with instance as 'this'
+      const previousEnvironment = this.environment;
+      this.environment = new Environment(callee.closure, instance);
+
+      try {
+        // Bind regular parameters
+        for (let i = 0; i < regularParamCount; i++) {
+          this.environment.declare(callee.params[i]!, args[i], "let");
+        }
+
+        // Bind rest parameter if present
+        if (callee.restParamIndex !== null) {
+          const restParamName = callee.params[callee.restParamIndex]!;
+          const restArgs = args.slice(callee.restParamIndex);
+          this.environment.declare(restParamName, restArgs, "let");
+        }
+
+        // Execute constructor body (handle async)
+        if (callee.isAsync) {
+          const executeAsync = async () => {
+            const returnValue = await this.evaluateNodeAsync(callee.body);
+            if (returnValue instanceof ReturnValue) {
+              return returnValue.value;
+            }
+            return undefined;
+          };
+          result = await executeAsync();
+        } else {
+          const returnValue = await this.evaluateNodeAsync(callee.body);
+          if (returnValue instanceof ReturnValue) {
+            result = returnValue.value;
+          } else {
+            result = undefined;
+          }
+        }
+      } finally {
+        this.environment = previousEnvironment;
+      }
+    }
+
+    // 6. Return object or constructor's returned object
+    if (typeof result === "object" && result !== null) {
+      return result;
+    }
+
+    return instance;
   }
 
   private async evaluateAssignmentExpressionAsync(

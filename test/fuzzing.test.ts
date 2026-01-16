@@ -30,8 +30,12 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
   // Helper to generate random strings
   const randomString = (length?: number) => {
     const len = length ?? randomInt(0, 10);
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    return Array.from({ length: len }, () => chars[randomInt(0, chars.length - 1)]).join("");
+    const chars =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    return Array.from(
+      { length: len },
+      () => chars[randomInt(0, chars.length - 1)],
+    ).join("");
   };
 
   // Helper to generate random arrays
@@ -51,7 +55,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
   };
 
   // Helper to pick random element from array
-  const randomElement = <T>(arr: T[]): T => arr[randomInt(0, arr.length - 1)];
+  const randomElement = <T>(arr: T[]): T => arr[randomInt(0, arr.length - 1)]!;
 
   // ============================================================================
   // SPREAD AND REST OPERATORS FUZZING
@@ -122,7 +126,8 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
             code += `const arr${j} = ${JSON.stringify(arr)};\n`;
           }
 
-          code += "[" + arrays.map((_, idx) => `...arr${idx}`).join(", ") + "];";
+          code +=
+            "[" + arrays.map((_, idx) => `...arr${idx}`).join(", ") + "];";
 
           const result = interpreter.evaluate(code);
           const expected = arrays.flat();
@@ -575,7 +580,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         }
 
-        let code = values[0].toString();
+        let code = values[0]!.toString();
         for (let j = 0; j < ops.length; j++) {
           code += ` ${ops[j]} ${values[j + 1]}`;
         }
@@ -1265,7 +1270,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           doubled;
         `;
         const result = interpreter.evaluate(code);
-        expect(result).toEqual(arr.map(x => x * 2));
+        expect(result).toEqual(arr.map((x) => x * 2));
       }
     });
 
@@ -1281,7 +1286,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           filtered;
         `;
         const result = interpreter.evaluate(code);
-        expect(result).toEqual(arr.filter(x => x > threshold));
+        expect(result).toEqual(arr.filter((x) => x > threshold));
       }
     });
 
@@ -1312,7 +1317,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         const code = `
           const obj = ${JSON.stringify(obj)};
           const result = {};
-          ${keys.map(key => `result["${key}"] = obj["${key}"] * ${multiplier};`).join("\n          ")}
+          ${keys.map((key) => `result["${key}"] = obj["${key}"] * ${multiplier};`).join("\n          ")}
           result;
         `;
         const result = interpreter.evaluate(code);
@@ -1414,8 +1419,8 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
 
         const result = interpreter.evaluate(code);
         const expected = arr
-          .filter(x => x > 0)
-          .map(x => x * 2)
+          .filter((x) => x > 0)
+          .map((x) => x * 2)
           .reduce((a, b) => a + b, 0);
         expect(result).toBe(expected);
       }
