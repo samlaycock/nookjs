@@ -115,7 +115,8 @@ Note: `var` is not supported for simplicity and security.
 - **Block Statements**: Group multiple statements with `{ }`
 - **Loop Scoping**: For loop variables are scoped to the loop
 - **for...of Loops**: Iterate over array elements with `for (let item of array)`
-- **const in for...of**: Supports `const` loop variables (new scope per iteration)
+- **for...in Loops**: Iterate over object property names with `for (let key in obj)`
+- **const in loops**: Supports `const` loop variables (new scope per iteration)
 - **switch Statements**: Multi-way branching with case matching
 - **Fall-through**: Switch cases without break fall through to next case
 - **Default case**: Catch-all case when no other cases match
@@ -418,6 +419,25 @@ interpreter.evaluate(`
   result
 `); // "hello world "
 
+// for...in loops
+interpreter.evaluate(`
+  let obj = { x: 10, y: 20, z: 30 };
+  let sum = 0;
+  for (let key in obj) {
+    sum = sum + obj[key];
+  }
+  sum
+`); // 60
+
+interpreter.evaluate(`
+  let person = { name: "Alice", age: 30, city: "NYC" };
+  let keys = [];
+  for (const key in person) {
+    keys[keys.length] = key;
+  }
+  keys
+`); // ["name", "age", "city"]
+
 // switch statements
 interpreter.evaluate(`
   let day = 2;
@@ -654,7 +674,7 @@ The interpreter throws `InterpreterError` for:
 
 ## Testing
 
-Comprehensive test suite with **1118 tests** across 27 files:
+Comprehensive test suite with **1150 tests** across 28 files:
 
 **Arithmetic Tests (43 tests)**:
 - All supported operators
@@ -903,6 +923,20 @@ Comprehensive test suite with **1118 tests** across 27 files:
 - Error cases (non-array iterables, null, objects)
 - Edge cases (null values, mixed types, function call results)
 
+**for...in Loop Tests (32 tests)**:
+- Basic for...in with objects (iterating keys, accessing values)
+- for...in with arrays (iterating indices as strings)
+- for...in with break and continue
+- for...in in functions (regular and arrow functions, early return)
+- Nested for...in loops (nested objects, cross-product iteration)
+- for...in scoping (let/const scoping, outer scope access)
+- for...in with conditionals (filtering properties, if/else in body)
+- for...in with array methods (building arrays with push)
+- for...in with string methods (building strings from keys)
+- Mixed for...in and for...of (objects containing arrays)
+- Async for...in (evaluateAsync, async host functions)
+- Edge cases (empty objects/arrays, null/undefined, primitives, numeric keys)
+
 **Switch Statement Tests (36 tests)**:
 - Basic switch (single case match, string cases, strict equality, booleans)
 - Default case (at end, beginning, middle positions)
@@ -1016,6 +1050,7 @@ Logical operators implement proper short-circuit behavior:
 - `WhileStatement`
 - `ForStatement`
 - `ForOfStatement`
+- `ForInStatement`
 - `SwitchStatement`
 - `SwitchCase`
 - `BreakStatement`
@@ -1397,7 +1432,6 @@ This means it can theoretically compute any computable function, given enough ti
 
 Potential additions:
 - Labeled statements (labeled break/continue)
-- for...in loops (object property iteration)
 - Math object (Math.floor, Math.ceil, Math.random, etc.)
 - instanceof operator
 - Template literals

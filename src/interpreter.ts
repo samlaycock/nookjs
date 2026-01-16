@@ -451,6 +451,9 @@ export class Interpreter {
       case "ForOfStatement":
         return this.evaluateForOfStatement(node as ESTree.ForOfStatement);
 
+      case "ForInStatement":
+        return this.evaluateForInStatement(node as ESTree.ForInStatement);
+
       case "SwitchStatement":
         return this.evaluateSwitchStatement(node as ESTree.SwitchStatement);
 
@@ -575,6 +578,11 @@ export class Interpreter {
       case "ForOfStatement":
         return await this.evaluateForOfStatementAsync(
           node as ESTree.ForOfStatement,
+        );
+
+      case "ForInStatement":
+        return await this.evaluateForInStatementAsync(
+          node as ESTree.ForInStatement,
         );
 
       case "SwitchStatement":
@@ -855,10 +863,14 @@ export class Interpreter {
 
         if (Array.isArray(object)) {
           // Array element assignment
-          if (typeof property !== "number") {
+          // Convert string to number if it's a numeric string (for...in gives string indices)
+          const index =
+            typeof property === "string" ? Number(property) : property;
+
+          if (typeof index !== "number" || isNaN(index)) {
             throw new InterpreterError("Array index must be a number");
           }
-          object[property] = value;
+          object[index] = value;
           return value;
         } else if (typeof object === "object" && object !== null) {
           // Object computed property assignment: obj["key"] = value
@@ -1119,6 +1131,104 @@ export class Interpreter {
         } else {
           // For existing variables, just assign in the current scope
           this.environment.set(variableName, iterable[i]);
+
+          // Execute loop body
+          result = this.evaluateNode(node.body);
+        }
+
+        // If we hit a return statement in a loop, propagate it
+        if (result instanceof ReturnValue) {
+          return result;
+        }
+
+        // If we hit a break statement, exit the loop
+        if (result instanceof BreakValue) {
+          return undefined;
+        }
+
+        // If we hit a continue statement, skip to next iteration
+        if (result instanceof ContinueValue) {
+          continue;
+        }
+      }
+
+      return result;
+    } finally {
+      // Restore the previous environment
+      this.environment = previousEnv;
+    }
+  }
+
+  /**
+   * Evaluate for...in statement: for (let key in obj) { ... }
+   * Iterates over enumerable property names of an object
+   */
+  private evaluateForInStatement(node: ESTree.ForInStatement): any {
+    // Create a new environment for the for...in loop scope
+    const previousEnv = this.environment;
+    this.environment = new Environment(previousEnv);
+
+    try {
+      // Evaluate the object (right side)
+      const obj = this.evaluateNode(node.right);
+
+      // Check if obj is an object or array
+      if (obj === null || obj === undefined) {
+        throw new InterpreterError(
+          "for...in requires an object or array, got null/undefined",
+        );
+      }
+
+      if (typeof obj !== "object") {
+        throw new InterpreterError(
+          `for...in requires an object or array, got ${typeof obj}`,
+        );
+      }
+
+      // Determine the loop variable info
+      let variableName: string;
+      let isDeclaration = false;
+      let variableKind: "let" | "const" | undefined;
+
+      if (node.left.type === "VariableDeclaration") {
+        // e.g., for (let key in obj) or for (const key in obj)
+        const decl = node.left.declarations[0];
+        if (decl?.id.type !== "Identifier") {
+          throw new InterpreterError("Unsupported for...in variable pattern");
+        }
+        variableName = decl.id.name;
+        isDeclaration = true;
+        variableKind = node.left.kind as "let" | "const";
+      } else if (node.left.type === "Identifier") {
+        // e.g., for (key in obj) where key is already declared
+        variableName = node.left.name;
+      } else {
+        throw new InterpreterError("Unsupported for...in left-hand side");
+      }
+
+      let result: any = undefined;
+
+      // Iterate over object keys (own enumerable properties)
+      // Use Object.keys to get own enumerable property names
+      const keys = Object.keys(obj);
+
+      for (const key of keys) {
+        if (isDeclaration) {
+          // For declarations (let/const), create a NEW scope for EACH iteration
+          const iterEnv = this.environment;
+          this.environment = new Environment(iterEnv);
+
+          // Declare the variable with the current key
+          this.environment.declare(variableName, key, variableKind!);
+
+          // Execute loop body
+          result = this.evaluateNode(node.body);
+
+          // Restore environment after iteration
+          this.environment = iterEnv;
+        } else {
+          // For existing variables, just assign in the current scope
+          this.environment.set(variableName, key);
 
           // Execute loop body
           result = this.evaluateNode(node.body);
@@ -1476,13 +1586,17 @@ export class Interpreter {
 
       // Handle array indexing
       if (Array.isArray(object)) {
-        if (typeof property !== "number") {
+        // Convert string to number if it's a numeric string (for...in gives string indices)
+        const index =
+          typeof property === "string" ? Number(property) : property;
+
+        if (typeof index !== "number" || isNaN(index)) {
           throw new InterpreterError("Array index must be a number");
         }
-        if (property < 0 || property >= object.length) {
+        if (index < 0 || index >= object.length) {
           return undefined; // JavaScript behavior for out-of-bounds
         }
-        return object[property];
+        return object[index];
       }
 
       // Handle object computed property access: obj["key"]
@@ -2371,10 +2485,14 @@ export class Interpreter {
         const property = await this.evaluateNodeAsync(memberExpr.property);
 
         if (Array.isArray(object)) {
-          if (typeof property !== "number") {
+          // Convert string to number if it's a numeric string (for...in gives string indices)
+          const index =
+            typeof property === "string" ? Number(property) : property;
+
+          if (typeof index !== "number" || isNaN(index)) {
             throw new InterpreterError("Array index must be a number");
           }
-          object[property] = value;
+          object[index] = value;
           return value;
         } else if (typeof object === "object" && object !== null) {
           const propName = String(property);
@@ -2635,6 +2753,98 @@ export class Interpreter {
     }
   }
 
+  private async evaluateForInStatementAsync(
+    node: ESTree.ForInStatement,
+  ): Promise<any> {
+    // Create a new environment for the for...in loop scope
+    const previousEnv = this.environment;
+    this.environment = new Environment(previousEnv);
+
+    try {
+      // Evaluate the object (right side)
+      const obj = await this.evaluateNodeAsync(node.right);
+
+      // Check if obj is an object or array
+      if (obj === null || obj === undefined) {
+        throw new InterpreterError(
+          "for...in requires an object or array, got null/undefined",
+        );
+      }
+
+      if (typeof obj !== "object") {
+        throw new InterpreterError(
+          `for...in requires an object or array, got ${typeof obj}`,
+        );
+      }
+
+      // Determine the loop variable info
+      let variableName: string;
+      let isDeclaration = false;
+      let variableKind: "let" | "const" | undefined;
+
+      if (node.left.type === "VariableDeclaration") {
+        const decl = node.left.declarations[0];
+        if (decl?.id.type !== "Identifier") {
+          throw new InterpreterError("Unsupported for...in variable pattern");
+        }
+        variableName = decl.id.name;
+        isDeclaration = true;
+        variableKind = node.left.kind as "let" | "const";
+      } else if (node.left.type === "Identifier") {
+        variableName = node.left.name;
+      } else {
+        throw new InterpreterError("Unsupported for...in left-hand side");
+      }
+
+      let result: any = undefined;
+
+      // Iterate over object keys (own enumerable properties)
+      const keys = Object.keys(obj);
+
+      for (const key of keys) {
+        if (isDeclaration) {
+          // For declarations (let/const), create a NEW scope for EACH iteration
+          const iterEnv = this.environment;
+          this.environment = new Environment(iterEnv);
+
+          // Declare the variable with the current key
+          this.environment.declare(variableName, key, variableKind!);
+
+          // Execute loop body
+          result = await this.evaluateNodeAsync(node.body);
+
+          // Restore environment after iteration
+          this.environment = iterEnv;
+        } else {
+          // For existing variables, just assign in the current scope
+          this.environment.set(variableName, key);
+
+          // Execute loop body
+          result = await this.evaluateNodeAsync(node.body);
+        }
+
+        // If we hit a return statement in a loop, propagate it
+        if (result instanceof ReturnValue) {
+          return result;
+        }
+
+        // If we hit a break statement, exit the loop
+        if (result instanceof BreakValue) {
+          return undefined;
+        }
+
+        // If we hit a continue statement, skip to next iteration
+        if (result instanceof ContinueValue) {
+          continue;
+        }
+      }
+
+      return result;
+    } finally {
+      this.environment = previousEnv;
+    }
+  }
+
   private async evaluateSwitchStatementAsync(
     node: ESTree.SwitchStatement,
   ): Promise<any> {
@@ -2750,13 +2960,17 @@ export class Interpreter {
       const property = await this.evaluateNodeAsync(node.property);
 
       if (Array.isArray(object)) {
-        if (typeof property !== "number") {
+        // Convert string to number if it's a numeric string (for...in gives string indices)
+        const index =
+          typeof property === "string" ? Number(property) : property;
+
+        if (typeof index !== "number" || isNaN(index)) {
           throw new InterpreterError("Array index must be a number");
         }
-        if (property < 0 || property >= object.length) {
+        if (index < 0 || index >= object.length) {
           return undefined;
         }
-        return object[property];
+        return object[index];
       }
 
       if (typeof object === "object" && object !== null) {
