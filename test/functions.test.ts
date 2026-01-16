@@ -126,20 +126,21 @@ describe("Functions", () => {
         add(5)
       `;
       expect(() => interpreter.evaluate(code)).toThrow(
-        "Expected 2 arguments but got 1",
+        "Expected at least 2 arguments but got 1",
       );
     });
 
-    test("throws on wrong argument count - too many", () => {
+    test("allows extra arguments (for compatibility with rest parameters)", () => {
       const code = `
         function add(a, b) {
           return a + b;
         }
         add(5, 10, 15)
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Expected 2 arguments but got 3",
-      );
+      // Extra arguments are now allowed (ignored if no rest parameter)
+      const interpreter = new Interpreter();
+      const result = interpreter.evaluate(code);
+      expect(result).toBe(15);
     });
   });
 

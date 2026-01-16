@@ -78,6 +78,7 @@ class FunctionValue {
     public body: ESTree.BlockStatement,
     public closure: Environment, // Captured environment for closures
     public isAsync: boolean = false,
+    public restParamIndex: number | null = null, // Index where rest parameter starts, or null if no rest param
   ) {}
 }
 
@@ -1441,12 +1442,33 @@ export class Interpreter {
 
     const name = node.id.name;
     const params: string[] = [];
+    let restParamIndex: number | null = null;
 
-    for (const param of node.params) {
-      if (param.type !== "Identifier") {
+    for (let i = 0; i < node.params.length; i++) {
+      const param = node.params[i];
+
+      if (!param) {
+        continue;
+      }
+
+      if (param.type === "RestElement") {
+        // Rest parameter: ...args
+        if (i !== node.params.length - 1) {
+          throw new InterpreterError("Rest parameter must be last");
+        }
+
+        const restElement = param as ESTree.RestElement;
+        if (restElement.argument.type !== "Identifier") {
+          throw new InterpreterError("Rest parameter must be an identifier");
+        }
+
+        restParamIndex = i;
+        params.push((restElement.argument as ESTree.Identifier).name);
+      } else if (param.type === "Identifier") {
+        params.push((param as ESTree.Identifier).name);
+      } else {
         throw new InterpreterError("Destructuring parameters not supported");
       }
-      params.push((param as ESTree.Identifier).name);
     }
 
     if (node.body.type !== "BlockStatement") {
@@ -1459,6 +1481,7 @@ export class Interpreter {
       node.body as ESTree.BlockStatement,
       this.environment,
       node.async || false,
+      restParamIndex,
     );
 
     // Declare the function in the current environment
@@ -1473,12 +1496,33 @@ export class Interpreter {
     }
 
     const params: string[] = [];
+    let restParamIndex: number | null = null;
 
-    for (const param of node.params) {
-      if (param.type !== "Identifier") {
+    for (let i = 0; i < node.params.length; i++) {
+      const param = node.params[i];
+
+      if (!param) {
+        continue;
+      }
+
+      if (param.type === "RestElement") {
+        // Rest parameter: ...args
+        if (i !== node.params.length - 1) {
+          throw new InterpreterError("Rest parameter must be last");
+        }
+
+        const restElement = param as ESTree.RestElement;
+        if (restElement.argument.type !== "Identifier") {
+          throw new InterpreterError("Rest parameter must be an identifier");
+        }
+
+        restParamIndex = i;
+        params.push((restElement.argument as ESTree.Identifier).name);
+      } else if (param.type === "Identifier") {
+        params.push((param as ESTree.Identifier).name);
+      } else {
         throw new InterpreterError("Destructuring parameters not supported");
       }
-      params.push((param as ESTree.Identifier).name);
     }
 
     if (node.body.type !== "BlockStatement") {
@@ -1492,6 +1536,7 @@ export class Interpreter {
       node.body as ESTree.BlockStatement,
       this.environment,
       node.async || false,
+      restParamIndex,
     );
   }
 
@@ -1499,12 +1544,33 @@ export class Interpreter {
     node: ESTree.ArrowFunctionExpression,
   ): any {
     const params: string[] = [];
+    let restParamIndex: number | null = null;
 
-    for (const param of node.params) {
-      if (param.type !== "Identifier") {
+    for (let i = 0; i < node.params.length; i++) {
+      const param = node.params[i];
+
+      if (!param) {
+        continue;
+      }
+
+      if (param.type === "RestElement") {
+        // Rest parameter: ...args
+        if (i !== node.params.length - 1) {
+          throw new InterpreterError("Rest parameter must be last");
+        }
+
+        const restElement = param as ESTree.RestElement;
+        if (restElement.argument.type !== "Identifier") {
+          throw new InterpreterError("Rest parameter must be an identifier");
+        }
+
+        restParamIndex = i;
+        params.push((restElement.argument as ESTree.Identifier).name);
+      } else if (param.type === "Identifier") {
+        params.push((param as ESTree.Identifier).name);
+      } else {
         throw new InterpreterError("Destructuring parameters not supported");
       }
-      params.push((param as ESTree.Identifier).name);
     }
 
     // Arrow functions can have expression body or block body
@@ -1533,6 +1599,7 @@ export class Interpreter {
       body,
       this.environment,
       node.async || false,
+      restParamIndex,
     );
 
     return func;
@@ -1690,8 +1757,23 @@ export class Interpreter {
         // Recursively destructure the nested pattern
         this.destructurePattern(element, elementValue, declare, kind);
       } else if (element.type === "RestElement") {
-        // Rest element: ...rest (not yet implemented)
-        throw new InterpreterError("Rest elements not yet supported");
+        // Rest element: [...rest] - collect remaining array elements
+        if (element.argument.type !== "Identifier") {
+          throw new InterpreterError("Rest element must be an identifier");
+        }
+
+        const restName = (element.argument as ESTree.Identifier).name;
+        // Collect all remaining elements from current position
+        const remainingValues = value.slice(i);
+
+        if (declare) {
+          this.environment.declare(restName, remainingValues, kind!);
+        } else {
+          this.environment.set(restName, remainingValues);
+        }
+
+        // Rest must be last element, so we break
+        break;
       } else {
         // Must be AssignmentPattern (default value: a = 5)
         // TypeScript doesn't narrow this properly due to union type limitations
@@ -1722,8 +1804,18 @@ export class Interpreter {
       throw new InterpreterError(`Cannot destructure non-object value`);
     }
 
-    // Process each property in the pattern
+    // Track which keys have been destructured (needed for rest)
+    const destructuredKeys = new Set<string>();
+    let restElement: ESTree.RestElement | null = null;
+
+    // First pass: Process regular properties and track keys
     for (const property of pattern.properties) {
+      if (property.type === "RestElement") {
+        // Save rest element for later processing (must be processed after all other properties)
+        restElement = property as ESTree.RestElement;
+        continue;
+      }
+
       if (property.type === "Property") {
         // Extract the key (property name in source object)
         let key: string;
@@ -1735,6 +1827,9 @@ export class Interpreter {
           // Static property: {x} or {x: newName} - key is an identifier
           key = (property.key as ESTree.Identifier).name;
         }
+
+        // Track this key as destructured
+        destructuredKeys.add(key);
 
         // Get the value from the source object (undefined if property doesn't exist)
         const propValue = value[key];
@@ -1767,13 +1862,34 @@ export class Interpreter {
             `Unsupported object pattern value: ${target.type}`,
           );
         }
-      } else if (property.type === "RestElement") {
-        // Rest properties: {...rest} (not yet implemented)
-        throw new InterpreterError("Rest properties not yet supported");
       } else {
         throw new InterpreterError(
           `Unsupported object pattern property: ${property.type}`,
         );
+      }
+    }
+
+    // Second pass: Handle rest element if present
+    if (restElement) {
+      if (restElement.argument.type !== "Identifier") {
+        throw new InterpreterError("Rest element must be an identifier");
+      }
+
+      const restName = (restElement.argument as ESTree.Identifier).name;
+      const restObj: Record<string, any> = {};
+
+      // Collect all non-destructured properties
+      for (const [key, val] of Object.entries(value)) {
+        if (!destructuredKeys.has(key)) {
+          validatePropertyName(key); // Security: prevent prototype pollution
+          restObj[key] = val;
+        }
+      }
+
+      if (declare) {
+        this.environment.declare(restName, restObj, kind!);
+      } else {
+        this.environment.set(restName, restObj);
       }
     }
   }
@@ -1871,10 +1987,23 @@ export class Interpreter {
         );
       }
 
-      // Evaluate all arguments
+      // Evaluate all arguments, handling spread
       const args: any[] = [];
       for (const arg of node.arguments) {
-        args.push(this.evaluateNode(arg as ESTree.Expression));
+        if (arg.type === "SpreadElement") {
+          // Spread in call: fn(...arr) - expand array as separate arguments
+          const spreadValue = this.evaluateNode(
+            (arg as ESTree.SpreadElement).argument,
+          );
+          if (!Array.isArray(spreadValue)) {
+            throw new InterpreterError(
+              "Spread syntax in function calls requires an array",
+            );
+          }
+          args.push(...spreadValue);
+        } else {
+          args.push(this.evaluateNode(arg as ESTree.Expression));
+        }
       }
 
       // Call the host function
@@ -1899,16 +2028,34 @@ export class Interpreter {
       );
     }
 
-    // Evaluate all arguments
+    // Evaluate all arguments, handling spread
     const args: any[] = [];
     for (const arg of node.arguments) {
-      args.push(this.evaluateNode(arg as ESTree.Expression));
+      if (arg.type === "SpreadElement") {
+        // Spread in call: fn(...arr) - expand array as separate arguments
+        const spreadValue = this.evaluateNode(
+          (arg as ESTree.SpreadElement).argument,
+        );
+        if (!Array.isArray(spreadValue)) {
+          throw new InterpreterError(
+            "Spread syntax in function calls requires an array",
+          );
+        }
+        args.push(...spreadValue);
+      } else {
+        args.push(this.evaluateNode(arg as ESTree.Expression));
+      }
     }
 
-    // Check argument count
-    if (args.length !== callee.params.length) {
+    // Check argument count (allow extra args if function has rest parameter)
+    const regularParamCount =
+      callee.restParamIndex !== null
+        ? callee.restParamIndex
+        : callee.params.length;
+
+    if (args.length < regularParamCount) {
       throw new InterpreterError(
-        `Expected ${callee.params.length} arguments but got ${args.length}`,
+        `Expected at least ${regularParamCount} arguments but got ${args.length}`,
       );
     }
 
@@ -1920,9 +2067,16 @@ export class Interpreter {
     this.environment = new Environment(callee.closure, thisValue);
 
     try {
-      // Bind parameters to arguments in the new environment
-      for (let i = 0; i < callee.params.length; i++) {
+      // Bind regular parameters to arguments in the new environment
+      for (let i = 0; i < regularParamCount; i++) {
         this.environment.declare(callee.params[i]!, args[i], "let");
+      }
+
+      // Bind rest parameter if present
+      if (callee.restParamIndex !== null) {
+        const restParamName = callee.params[callee.restParamIndex]!;
+        const restArgs = args.slice(callee.restParamIndex);
+        this.environment.declare(restParamName, restArgs, "let");
       }
 
       // Execute the function body
@@ -2503,6 +2657,17 @@ export class Interpreter {
       if (element === null) {
         // Sparse array element (e.g., [1, , 3])
         elements.push(undefined);
+      } else if (element.type === "SpreadElement") {
+        // Spread element: [...arr] - expand array into individual elements
+        const spreadValue = this.evaluateNode(
+          (element as ESTree.SpreadElement).argument,
+        );
+        if (!Array.isArray(spreadValue)) {
+          throw new InterpreterError(
+            "Spread syntax requires an iterable (array)",
+          );
+        }
+        elements.push(...spreadValue);
       } else {
         elements.push(this.evaluateNode(element));
       }
@@ -2515,28 +2680,49 @@ export class Interpreter {
     const obj: Record<string, any> = {};
 
     for (const property of node.properties) {
-      if (property.type !== "Property") {
+      if (property.type === "SpreadElement") {
+        // Spread element: {...obj} - expand object properties
+        const spreadValue = this.evaluateNode(
+          (property as ESTree.SpreadElement).argument,
+        );
+        if (
+          typeof spreadValue !== "object" ||
+          spreadValue === null ||
+          Array.isArray(spreadValue)
+        ) {
+          throw new InterpreterError(
+            "Spread syntax in objects requires an object",
+          );
+        }
+
+        // Merge properties from spread object
+        for (const [key, value] of Object.entries(spreadValue)) {
+          validatePropertyName(key); // Security: prevent prototype pollution
+          obj[key] = value;
+        }
+      } else if (property.type === "Property") {
+        // Regular property
+        // Get the property key
+        let key: string;
+        if (property.key.type === "Identifier") {
+          key = (property.key as ESTree.Identifier).name;
+        } else if (property.key.type === "Literal") {
+          const literal = property.key as ESTree.Literal;
+          key = String(literal.value);
+        } else {
+          throw new InterpreterError("Unsupported property key type");
+        }
+
+        validatePropertyName(key); // Security: prevent prototype pollution
+
+        // Evaluate the property value
+        const value = this.evaluateNode(property.value);
+        obj[key] = value;
+      } else {
         throw new InterpreterError(
-          "Only property nodes are supported in objects",
+          `Unsupported object property type: ${property.type}`,
         );
       }
-
-      // Get the property key
-      let key: string;
-      if (property.key.type === "Identifier") {
-        key = (property.key as ESTree.Identifier).name;
-      } else if (property.key.type === "Literal") {
-        const literal = property.key as ESTree.Literal;
-        key = String(literal.value);
-      } else {
-        throw new InterpreterError("Unsupported property key type");
-      }
-
-      validatePropertyName(key); // Security: prevent prototype pollution
-
-      // Evaluate the property value
-      const value = this.evaluateNode(property.value);
-      obj[key] = value;
     }
 
     return obj;
@@ -2800,7 +2986,20 @@ export class Interpreter {
     if (callee instanceof HostFunctionValue) {
       const args: any[] = [];
       for (const arg of node.arguments) {
-        args.push(await this.evaluateNodeAsync(arg as ESTree.Expression));
+        if (arg.type === "SpreadElement") {
+          // Spread in call: fn(...arr) - expand array as separate arguments
+          const spreadValue = await this.evaluateNodeAsync(
+            (arg as ESTree.SpreadElement).argument,
+          );
+          if (!Array.isArray(spreadValue)) {
+            throw new InterpreterError(
+              "Spread syntax in function calls requires an array",
+            );
+          }
+          args.push(...spreadValue);
+        } else {
+          args.push(await this.evaluateNodeAsync(arg as ESTree.Expression));
+        }
       }
 
       try {
@@ -2824,12 +3023,31 @@ export class Interpreter {
 
     const args: any[] = [];
     for (const arg of node.arguments) {
-      args.push(await this.evaluateNodeAsync(arg as ESTree.Expression));
+      if (arg.type === "SpreadElement") {
+        // Spread in call: fn(...arr) - expand array as separate arguments
+        const spreadValue = await this.evaluateNodeAsync(
+          (arg as ESTree.SpreadElement).argument,
+        );
+        if (!Array.isArray(spreadValue)) {
+          throw new InterpreterError(
+            "Spread syntax in function calls requires an array",
+          );
+        }
+        args.push(...spreadValue);
+      } else {
+        args.push(await this.evaluateNodeAsync(arg as ESTree.Expression));
+      }
     }
 
-    if (args.length !== callee.params.length) {
+    // Check argument count (allow extra args if function has rest parameter)
+    const regularParamCount =
+      callee.restParamIndex !== null
+        ? callee.restParamIndex
+        : callee.params.length;
+
+    if (args.length < regularParamCount) {
       throw new InterpreterError(
-        `Expected ${callee.params.length} arguments but got ${args.length}`,
+        `Expected at least ${regularParamCount} arguments but got ${args.length}`,
       );
     }
 
@@ -2837,8 +3055,16 @@ export class Interpreter {
     this.environment = new Environment(callee.closure, thisValue);
 
     try {
-      for (let i = 0; i < callee.params.length; i++) {
+      // Bind regular parameters to arguments in the new environment
+      for (let i = 0; i < regularParamCount; i++) {
         this.environment.declare(callee.params[i]!, args[i], "let");
+      }
+
+      // Bind rest parameter if present
+      if (callee.restParamIndex !== null) {
+        const restParamName = callee.params[callee.restParamIndex]!;
+        const restArgs = args.slice(callee.restParamIndex);
+        this.environment.declare(restParamName, restArgs, "let");
       }
 
       // If this is an async sandbox function, execute the body and wrap in a promise
@@ -3519,8 +3745,23 @@ export class Interpreter {
           kind,
         );
       } else if (element.type === "RestElement") {
-        // Rest element: ...rest (Phase 2)
-        throw new InterpreterError("Rest elements not yet supported");
+        // Rest element: [...rest] - collect remaining array elements
+        if (element.argument.type !== "Identifier") {
+          throw new InterpreterError("Rest element must be an identifier");
+        }
+
+        const restName = (element.argument as ESTree.Identifier).name;
+        // Collect all remaining elements from current position
+        const remainingValues = value.slice(i);
+
+        if (declare) {
+          this.environment.declare(restName, remainingValues, kind!);
+        } else {
+          this.environment.set(restName, remainingValues);
+        }
+
+        // Rest must be last element, so we break
+        break;
       } else {
         // Must be AssignmentPattern (default value: a = 5)
         // TypeScript doesn't narrow this properly, so we handle it as the else case
@@ -3548,8 +3789,18 @@ export class Interpreter {
       throw new InterpreterError(`Cannot destructure non-object value`);
     }
 
-    // Process each property in the pattern
+    // Track which keys have been destructured (needed for rest)
+    const destructuredKeys = new Set<string>();
+    let restElement: ESTree.RestElement | null = null;
+
+    // First pass: Process regular properties and track keys
     for (const property of pattern.properties) {
+      if (property.type === "RestElement") {
+        // Save rest element for later processing (must be processed after all other properties)
+        restElement = property as ESTree.RestElement;
+        continue;
+      }
+
       if (property.type === "Property") {
         // Extract the key (property name in source object)
         let key: string;
@@ -3561,6 +3812,9 @@ export class Interpreter {
           // Static property: {x} or {x: newName}
           key = (property.key as ESTree.Identifier).name;
         }
+
+        // Track this key as destructured
+        destructuredKeys.add(key);
 
         // Get the value from the source object
         const propValue = value[key];
@@ -3595,13 +3849,34 @@ export class Interpreter {
             `Unsupported object pattern value: ${target.type}`,
           );
         }
-      } else if (property.type === "RestElement") {
-        // Rest properties: {...rest} (Phase 2)
-        throw new InterpreterError("Rest properties not yet supported");
       } else {
         throw new InterpreterError(
           `Unsupported object pattern property: ${property.type}`,
         );
+      }
+    }
+
+    // Second pass: Handle rest element if present
+    if (restElement) {
+      if (restElement.argument.type !== "Identifier") {
+        throw new InterpreterError("Rest element must be an identifier");
+      }
+
+      const restName = (restElement.argument as ESTree.Identifier).name;
+      const restObj: Record<string, any> = {};
+
+      // Collect all non-destructured properties
+      for (const [key, val] of Object.entries(value)) {
+        if (!destructuredKeys.has(key)) {
+          validatePropertyName(key); // Security: prevent prototype pollution
+          restObj[key] = val;
+        }
+      }
+
+      if (declare) {
+        this.environment.declare(restName, restObj, kind!);
+      } else {
+        this.environment.set(restName, restObj);
       }
     }
   }
@@ -3728,6 +4003,17 @@ export class Interpreter {
     for (const element of node.elements) {
       if (element === null) {
         elements.push(undefined);
+      } else if (element.type === "SpreadElement") {
+        // Spread element: [...arr] - expand array into individual elements
+        const spreadValue = await this.evaluateNodeAsync(
+          (element as ESTree.SpreadElement).argument,
+        );
+        if (!Array.isArray(spreadValue)) {
+          throw new InterpreterError(
+            "Spread syntax requires an iterable (array)",
+          );
+        }
+        elements.push(...spreadValue);
       } else {
         elements.push(await this.evaluateNodeAsync(element));
       }
@@ -3742,26 +4028,47 @@ export class Interpreter {
     const obj: Record<string, any> = {};
 
     for (const property of node.properties) {
-      if (property.type !== "Property") {
+      if (property.type === "SpreadElement") {
+        // Spread element: {...obj} - expand object properties
+        const spreadValue = await this.evaluateNodeAsync(
+          (property as ESTree.SpreadElement).argument,
+        );
+        if (
+          typeof spreadValue !== "object" ||
+          spreadValue === null ||
+          Array.isArray(spreadValue)
+        ) {
+          throw new InterpreterError(
+            "Spread syntax in objects requires an object",
+          );
+        }
+
+        // Merge properties from spread object
+        for (const [key, value] of Object.entries(spreadValue)) {
+          validatePropertyName(key); // Security: prevent prototype pollution
+          obj[key] = value;
+        }
+      } else if (property.type === "Property") {
+        // Regular property
+        let key: string;
+        if (property.key.type === "Identifier") {
+          key = (property.key as ESTree.Identifier).name;
+        } else if (property.key.type === "Literal") {
+          const literal = property.key as ESTree.Literal;
+          key = String(literal.value);
+        } else {
+          throw new InterpreterError("Unsupported property key type");
+        }
+
+        validatePropertyName(key);
+
+        const value = await this.evaluateNodeAsync(property.value);
+        obj[key] = value;
+      } else {
         throw new InterpreterError(
-          "Only property nodes are supported in objects",
+          `Unsupported object property type: ${property.type}`,
         );
       }
-
-      let key: string;
-      if (property.key.type === "Identifier") {
-        key = (property.key as ESTree.Identifier).name;
-      } else if (property.key.type === "Literal") {
-        const literal = property.key as ESTree.Literal;
-        key = String(literal.value);
-      } else {
-        throw new InterpreterError("Unsupported property key type");
-      }
-
-      validatePropertyName(key);
-
-      const value = await this.evaluateNodeAsync(property.value);
-      obj[key] = value;
     }
 
     return obj;
