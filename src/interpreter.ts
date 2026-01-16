@@ -327,24 +327,25 @@ export class Interpreter {
       const wrappedValue = ReadOnlyProxy.wrap(value, key);
 
       if (this.environment.has(key)) {
-        // If the variable exists, check if we should override
+        // Variable already exists - decide whether to override
         if (allowOverride) {
-          // Save the original value if it's a constructor global
+          // Save the original value if it's a constructor global being overridden
+          // This allows us to restore it later when per-call globals are cleaned up
           if (trackKeys && key in this.constructorGlobals) {
             this.overriddenConstructorGlobals.set(
               key,
               this.environment.get(key),
             );
           }
-          // Try to force update the global (only works for injected globals)
+          // Try to force update the global (only works for injected globals, not user variables)
           const wasUpdated = this.environment.forceSet(key, wrappedValue);
           if (wasUpdated && trackKeys) {
             this.perCallGlobalKeys.add(key);
           }
         }
-        // If not allowOverride, skip this variable (don't overwrite)
+        // If not allowOverride, skip this variable (don't overwrite user code variables)
       } else {
-        // Variable doesn't exist, declare it as const and mark as global
+        // Variable doesn't exist yet - declare it as const and mark as global
         this.environment.declare(key, wrappedValue, "const", true);
         if (trackKeys) {
           this.perCallGlobalKeys.add(key);
@@ -833,7 +834,7 @@ export class Interpreter {
   }
 
   private evaluateUpdateExpression(node: ESTree.UpdateExpression): any {
-    // UpdateExpression handles ++ and -- operators
+    // UpdateExpression handles ++ and -- operators (both prefix and postfix)
     if (node.argument.type !== "Identifier") {
       throw new InterpreterError(
         "Update expression must operate on an identifier",
@@ -850,6 +851,7 @@ export class Interpreter {
       );
     }
 
+    // Calculate the new value
     let newValue: number;
     switch (node.operator) {
       case "++":
@@ -864,9 +866,11 @@ export class Interpreter {
         );
     }
 
+    // Update the variable with the new value
     this.environment.set(name, newValue);
 
     // Return old value for postfix (i++), new value for prefix (++i)
+    // This distinction is important: let x = i++ returns old value, let x = ++i returns new value
     return node.prefix ? newValue : currentValue;
   }
 
@@ -875,12 +879,14 @@ export class Interpreter {
 
     switch (node.operator) {
       case "&&":
-        // Short-circuit: if left is falsy, return left without evaluating right
+        // Short-circuit evaluation: if left is falsy, return left without evaluating right
+        // This matches JavaScript semantics where && returns the first falsy value or the last value
         if (!left) return left;
         return this.evaluateNode(node.right);
 
       case "||":
-        // Short-circuit: if left is truthy, return left without evaluating right
+        // Short-circuit evaluation: if left is truthy, return left without evaluating right
+        // This matches JavaScript semantics where || returns the first truthy value or the last value
         if (left) return left;
         return this.evaluateNode(node.right);
 
@@ -936,12 +942,12 @@ export class Interpreter {
       }
 
       if (memberExpr.computed) {
-        // Computed property: arr[index] = value
+        // Computed property: arr[index] = value or obj["key"] = value
         const property = this.evaluateNode(memberExpr.property);
 
         if (Array.isArray(object)) {
-          // Array element assignment
-          // Convert string to number if it's a numeric string (for...in gives string indices)
+          // Array element assignment: arr[i] = value
+          // Convert string to number if it's a numeric string (needed because for...in gives string indices)
           const index =
             typeof property === "string" ? Number(property) : property;
 
@@ -951,7 +957,7 @@ export class Interpreter {
           object[index] = value;
           return value;
         } else if (typeof object === "object" && object !== null) {
-          // Object computed property assignment: obj["key"] = value
+          // Object computed property assignment: obj["key"] = value or obj[expr] = value
           const propName = String(property);
           validatePropertyName(propName); // Security: prevent prototype pollution
           object[propName] = value;
@@ -1214,8 +1220,11 @@ export class Interpreter {
       for (let i = 0; i < iterable.length; i++) {
         if (isDeclaration) {
           // For declarations (let/const), create a NEW scope for EACH iteration
-          // This is necessary for const since we can't reassign it
-          // It also matches JavaScript semantics where each iteration gets fresh bindings
+          // This is critical for two reasons:
+          // 1. Allows const loop variables (each iteration gets a fresh immutable binding)
+          // 2. Matches JavaScript semantics where closures capture per-iteration bindings
+          //    Example: for (let i of [1,2,3]) { setTimeout(() => console.log(i)) }
+          //    Each closure sees its own i, not the final value
           const iterEnv = this.environment;
           this.environment = new Environment(iterEnv);
 
@@ -1228,7 +1237,8 @@ export class Interpreter {
           // Restore environment after iteration
           this.environment = iterEnv;
         } else {
-          // For existing variables, just assign in the current scope
+          // For existing variables (for (x of arr)), just reassign in the current scope
+          // No new scope needed since we're updating an existing variable
           this.environment.set(variableName, iterable[i]);
 
           // Execute loop body
@@ -1371,18 +1381,18 @@ export class Interpreter {
     // Evaluate the discriminant (the expression being switched on)
     const discriminant = this.evaluateNode(node.discriminant);
 
-    let matched = false; // Track if we've matched a case (for fall-through)
+    let matched = false; // Track if we've matched a case (enables fall-through behavior)
     let result: any = undefined;
 
-    // Iterate through all cases
+    // Iterate through all cases in order
     for (const switchCase of node.cases) {
       // Check if this case matches (or if we're falling through from a previous match)
       if (!matched) {
         if (switchCase.test === null) {
-          // Default case - always matches
+          // Default case - always matches (can appear anywhere, not just at the end)
           matched = true;
         } else {
-          // Regular case - check if discriminant === test value
+          // Regular case - check if discriminant === test value (uses strict equality)
           const testValue = this.evaluateNode(switchCase.test);
           if (discriminant === testValue) {
             matched = true;
@@ -1395,12 +1405,12 @@ export class Interpreter {
         for (const statement of switchCase.consequent) {
           result = this.evaluateNode(statement);
 
-          // If we hit a return statement, propagate it
+          // If we hit a return statement, propagate it up
           if (result instanceof ReturnValue) {
             return result;
           }
 
-          // If we hit a break statement, exit the switch
+          // If we hit a break statement, exit the switch immediately
           if (result instanceof BreakValue) {
             return undefined;
           }
@@ -1413,7 +1423,7 @@ export class Interpreter {
           }
         }
         // After executing this case's statements, continue to next case (fall-through)
-        // unless we hit a break above
+        // This is JavaScript's default behavior - break is needed to prevent fall-through
       }
     }
 
@@ -1639,6 +1649,8 @@ export class Interpreter {
 
   /**
    * Destructure array pattern: [a, b, c]
+   * Handles array destructuring in variable declarations and assignments
+   * Examples: let [a, b] = [1, 2], [x, [y, z]] = [1, [2, 3]]
    */
   private destructureArrayPattern(
     pattern: ESTree.ArrayPattern,
@@ -1655,10 +1667,11 @@ export class Interpreter {
     for (let i = 0; i < pattern.elements.length; i++) {
       const element = pattern.elements[i];
       if (element === null || element === undefined) {
-        // Hole in array pattern: let [a, , c] = [1, 2, 3]
+        // Hole in array pattern: let [a, , c] = [1, 2, 3] - skip this position
         continue;
       }
 
+      // Get the corresponding value from the array (undefined if out of bounds)
       const elementValue = i < value.length ? value[i] : undefined;
 
       if (element.type === "Identifier") {
@@ -1673,14 +1686,16 @@ export class Interpreter {
         element.type === "ArrayPattern" ||
         element.type === "ObjectPattern"
       ) {
-        // Nested destructuring: [a, [b, c]]
+        // Nested destructuring: [a, [b, c]] or [a, {x, y}]
+        // Recursively destructure the nested pattern
         this.destructurePattern(element, elementValue, declare, kind);
       } else if (element.type === "RestElement") {
-        // Rest element: ...rest (Phase 2)
+        // Rest element: ...rest (not yet implemented)
         throw new InterpreterError("Rest elements not yet supported");
       } else {
         // Must be AssignmentPattern (default value: a = 5)
-        // TypeScript doesn't narrow this properly, so we handle it as the else case
+        // TypeScript doesn't narrow this properly due to union type limitations
+        // So we handle it as the else case with an assertion
         this.handleAssignmentPattern(
           element as unknown as ESTree.AssignmentPattern,
           elementValue,
@@ -1693,6 +1708,8 @@ export class Interpreter {
 
   /**
    * Destructure object pattern: {x, y}
+   * Handles object destructuring in variable declarations and assignments
+   * Examples: let {x, y} = obj, {a: newName, b = 5} = obj
    */
   private destructureObjectPattern(
     pattern: ESTree.ObjectPattern,
@@ -1700,7 +1717,7 @@ export class Interpreter {
     declare: boolean,
     kind?: "let" | "const",
   ): void {
-    // Validate value is an object
+    // Validate value is an object (not null, not array)
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new InterpreterError(`Cannot destructure non-object value`);
     }
@@ -1711,22 +1728,24 @@ export class Interpreter {
         // Extract the key (property name in source object)
         let key: string;
         if (property.computed) {
-          // Computed property: {[expr]: value}
+          // Computed property: {[expr]: value} - evaluate the expression to get the key
           const computedKey = this.evaluateNode(property.key);
           key = String(computedKey);
         } else {
-          // Static property: {x} or {x: newName}
+          // Static property: {x} or {x: newName} - key is an identifier
           key = (property.key as ESTree.Identifier).name;
         }
 
-        // Get the value from the source object
+        // Get the value from the source object (undefined if property doesn't exist)
         const propValue = value[key];
 
-        // Extract the target (where to assign)
+        // Extract the target (where to assign/declare the variable)
         const target = property.value;
 
         if (target.type === "Identifier") {
           // Simple: {x} or {x: newName}
+          // In {x}, both key and target are "x"
+          // In {x: newName}, key is "x" but target is "newName"
           const name = target.name;
           if (declare) {
             this.environment.declare(name, propValue, kind!);
@@ -1734,13 +1753,14 @@ export class Interpreter {
             this.environment.set(name, propValue);
           }
         } else if (target.type === "AssignmentPattern") {
-          // Default value: {x = 5}
+          // Default value: {x = 5} - use 5 if propValue is undefined
           this.handleAssignmentPattern(target, propValue, declare, kind);
         } else if (
           target.type === "ArrayPattern" ||
           target.type === "ObjectPattern"
         ) {
-          // Nested destructuring: {a: {b}}
+          // Nested destructuring: {a: {b}} or {a: [x, y]}
+          // Recursively destructure the nested pattern
           this.destructurePattern(target, propValue, declare, kind);
         } else {
           throw new InterpreterError(
@@ -1748,7 +1768,7 @@ export class Interpreter {
           );
         }
       } else if (property.type === "RestElement") {
-        // Rest properties: {...rest} (Phase 2)
+        // Rest properties: {...rest} (not yet implemented)
         throw new InterpreterError("Rest properties not yet supported");
       } else {
         throw new InterpreterError(
@@ -1760,6 +1780,8 @@ export class Interpreter {
 
   /**
    * Handle assignment pattern (default values): a = 5
+   * Used in destructuring to provide default values when the source value is undefined
+   * Examples: let [a = 1] = [], let {x = 5} = {}
    */
   private handleAssignmentPattern(
     pattern: ESTree.AssignmentPattern,
@@ -1767,7 +1789,8 @@ export class Interpreter {
     declare: boolean,
     kind?: "let" | "const",
   ): void {
-    // Use default if value is undefined
+    // Use default value if the actual value is undefined
+    // Important: only undefined triggers default, not other falsy values like null, 0, ""
     const defaultExpr = pattern.right;
     if (!defaultExpr) {
       throw new InterpreterError(
@@ -1780,6 +1803,7 @@ export class Interpreter {
     const left = pattern.left;
 
     if (left.type === "Identifier") {
+      // Simple identifier with default: a = 5
       const name = left.name;
       if (declare) {
         this.environment.declare(name, finalValue, kind!);
@@ -1787,11 +1811,12 @@ export class Interpreter {
         this.environment.set(name, finalValue);
       }
     } else if (left.type === "ArrayPattern" || left.type === "ObjectPattern") {
-      // Nested pattern with default: [a = [1, 2]]
+      // Nested pattern with default: [a = [1, 2]] or {x = {y: 1}}
+      // Recursively destructure the nested pattern with the final value
       this.destructurePattern(left, finalValue, declare, kind);
     }
     // Note: TypeScript exhaustively checks all valid types above
-    // Any other type would be a parser error, not a runtime case
+    // Any other type would be a parser error from Meriyah, not a runtime case
   }
 
   /**
@@ -2525,13 +2550,15 @@ export class Interpreter {
    * - expressions: Array of expressions to interpolate
    *
    * Pattern: quasi[0] ${expr[0]} quasi[1] ${expr[1]} ... quasi[n]
+   * Example: `Hello ${name}!` = ["Hello ", "!"] + [name]
+   * Note: quasis.length is always expressions.length + 1
    */
   private evaluateTemplateLiteral(node: ESTree.TemplateLiteral): string {
     let result = "";
 
-    // Interleave quasis and expressions
+    // Interleave quasis (static text) and expressions (interpolations)
     for (let i = 0; i < node.quasis.length; i++) {
-      // Add the static text part
+      // Add the static text part (e.g., "Hello " or "!")
       const quasi = node.quasis[i];
       if (!quasi) {
         throw new InterpreterError("Template literal missing quasi element");
@@ -2539,12 +2566,14 @@ export class Interpreter {
       result += quasi.value.cooked;
 
       // Add the interpolated expression (if not the last quasi)
+      // The last quasi has no expression after it
       if (i < node.expressions.length) {
         const expr = node.expressions[i];
         if (!expr) {
           throw new InterpreterError("Template literal missing expression");
         }
         const exprValue = this.evaluateNode(expr);
+        // Coerce to string (matches JavaScript behavior: undefined → "undefined", etc.)
         result += String(exprValue);
       }
     }
