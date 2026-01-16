@@ -1361,9 +1361,9 @@ export class Interpreter {
       const memberExpr = node.callee as ESTree.MemberExpression;
       thisValue = this.evaluateNode(memberExpr.object); // The object becomes 'this'
 
-      // For arrays, use evaluateMemberExpression to get HostFunctionValue wrappers
+      // For arrays and strings, use evaluateMemberExpression to get HostFunctionValue wrappers
       // For other objects, access the property directly
-      if (Array.isArray(thisValue)) {
+      if (Array.isArray(thisValue) || typeof thisValue === "string") {
         callee = this.evaluateMemberExpression(memberExpr);
       } else {
         // Get the method from the object
@@ -1517,6 +1517,15 @@ export class Interpreter {
           return arrayMethod;
         }
         throw new InterpreterError(`Array method '${property}' not supported`);
+      }
+
+      // Handle string methods
+      if (typeof object === "string") {
+        const stringMethod = this.getStringMethod(object, property);
+        if (stringMethod) {
+          return stringMethod;
+        }
+        throw new InterpreterError(`String method '${property}' not supported`);
       }
 
       // Handle object property access
@@ -1776,6 +1785,194 @@ export class Interpreter {
             return false;
           },
           "some",
+          false,
+        );
+
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Get a string method as a HostFunctionValue
+   * Returns null if the method is not supported
+   */
+  private getStringMethod(
+    str: string,
+    methodName: string,
+  ): HostFunctionValue | null {
+    switch (methodName) {
+      // Extraction methods
+      case "substring":
+        return new HostFunctionValue(
+          (start: number, end?: number) => {
+            return str.substring(start, end);
+          },
+          "substring",
+          false,
+        );
+
+      case "slice":
+        return new HostFunctionValue(
+          (start: number, end?: number) => {
+            return str.slice(start, end);
+          },
+          "slice",
+          false,
+        );
+
+      case "charAt":
+        return new HostFunctionValue(
+          (index: number) => {
+            return str.charAt(index);
+          },
+          "charAt",
+          false,
+        );
+
+      // Search methods
+      case "indexOf":
+        return new HostFunctionValue(
+          (searchString: string, position?: number) => {
+            return str.indexOf(searchString, position);
+          },
+          "indexOf",
+          false,
+        );
+
+      case "lastIndexOf":
+        return new HostFunctionValue(
+          (searchString: string, position?: number) => {
+            return str.lastIndexOf(searchString, position);
+          },
+          "lastIndexOf",
+          false,
+        );
+
+      case "includes":
+        return new HostFunctionValue(
+          (searchString: string, position?: number) => {
+            return str.includes(searchString, position);
+          },
+          "includes",
+          false,
+        );
+
+      // Matching methods
+      case "startsWith":
+        return new HostFunctionValue(
+          (searchString: string, position?: number) => {
+            return str.startsWith(searchString, position);
+          },
+          "startsWith",
+          false,
+        );
+
+      case "endsWith":
+        return new HostFunctionValue(
+          (searchString: string, length?: number) => {
+            return str.endsWith(searchString, length);
+          },
+          "endsWith",
+          false,
+        );
+
+      // Case methods
+      case "toUpperCase":
+        return new HostFunctionValue(
+          () => {
+            return str.toUpperCase();
+          },
+          "toUpperCase",
+          false,
+        );
+
+      case "toLowerCase":
+        return new HostFunctionValue(
+          () => {
+            return str.toLowerCase();
+          },
+          "toLowerCase",
+          false,
+        );
+
+      // Trimming methods
+      case "trim":
+        return new HostFunctionValue(
+          () => {
+            return str.trim();
+          },
+          "trim",
+          false,
+        );
+
+      case "trimStart":
+      case "trimLeft":
+        return new HostFunctionValue(
+          () => {
+            return str.trimStart();
+          },
+          "trimStart",
+          false,
+        );
+
+      case "trimEnd":
+      case "trimRight":
+        return new HostFunctionValue(
+          () => {
+            return str.trimEnd();
+          },
+          "trimEnd",
+          false,
+        );
+
+      // Transformation methods
+      case "split":
+        return new HostFunctionValue(
+          (separator?: string | null, limit?: number) => {
+            if (separator === null || separator === undefined) {
+              return [str];
+            }
+            return str.split(separator, limit);
+          },
+          "split",
+          false,
+        );
+
+      case "replace":
+        return new HostFunctionValue(
+          (searchValue: string, replaceValue: string) => {
+            return str.replace(searchValue, replaceValue);
+          },
+          "replace",
+          false,
+        );
+
+      case "repeat":
+        return new HostFunctionValue(
+          (count: number) => {
+            return str.repeat(count);
+          },
+          "repeat",
+          false,
+        );
+
+      // Padding methods
+      case "padStart":
+        return new HostFunctionValue(
+          (targetLength: number, padString?: string) => {
+            return str.padStart(targetLength, padString);
+          },
+          "padStart",
+          false,
+        );
+
+      case "padEnd":
+        return new HostFunctionValue(
+          (targetLength: number, padString?: string) => {
+            return str.padEnd(targetLength, padString);
+          },
+          "padEnd",
           false,
         );
 
@@ -2051,9 +2248,9 @@ export class Interpreter {
       const memberExpr = node.callee as ESTree.MemberExpression;
       thisValue = await this.evaluateNodeAsync(memberExpr.object);
 
-      // For arrays, use evaluateMemberExpressionAsync to get HostFunctionValue wrappers
+      // For arrays and strings, use evaluateMemberExpressionAsync to get HostFunctionValue wrappers
       // For other objects, access the property directly
-      if (Array.isArray(thisValue)) {
+      if (Array.isArray(thisValue) || typeof thisValue === "string") {
         callee = await this.evaluateMemberExpressionAsync(memberExpr);
       } else {
         if (thisValue instanceof HostFunctionValue) {
@@ -2591,6 +2788,15 @@ export class Interpreter {
           return arrayMethod;
         }
         throw new InterpreterError(`Array method '${property}' not supported`);
+      }
+
+      // Handle string methods (reuse sync version since string methods work the same)
+      if (typeof object === "string") {
+        const stringMethod = this.getStringMethod(object, property);
+        if (stringMethod) {
+          return stringMethod;
+        }
+        throw new InterpreterError(`String method '${property}' not supported`);
       }
 
       if (

@@ -136,6 +136,15 @@ Note: `var` is not supported for simplicity and security.
 - **String Concatenation**: Using the `+` operator
 - **String Comparison**: All comparison operators work with strings
 - **String Length**: Access `.length` property
+- **String Methods**: Comprehensive string method support
+  - **Extraction methods**: `substring()`, `slice()`, `charAt()`
+  - **Search methods**: `indexOf()`, `lastIndexOf()`, `includes()`
+  - **Matching methods**: `startsWith()`, `endsWith()`
+  - **Case methods**: `toUpperCase()`, `toLowerCase()`
+  - **Trimming methods**: `trim()`, `trimStart()`, `trimEnd()`
+  - **Transformation methods**: `split()`, `replace()`, `repeat()`
+  - **Padding methods**: `padStart()`, `padEnd()`
+  - **Method chaining**: Methods return strings that can be chained (e.g., `str.trim().toLowerCase().split(",")`)
 
 ### Arrays
 - **Array Literals**: Create arrays with `[1, 2, 3]` syntax
@@ -250,6 +259,40 @@ interpreter.evaluate('x = x + 5');       // 15
 // Strings
 interpreter.evaluate('"Hello" + " " + "World"'); // "Hello World"
 interpreter.evaluate('"Hello".length');           // 5
+
+// String methods - extraction
+interpreter.evaluate('"Hello World".substring(0, 5)'); // "Hello"
+interpreter.evaluate('"Hello World".slice(6)'); // "World"
+interpreter.evaluate('"Hello".charAt(0)'); // "H"
+
+// String methods - search
+interpreter.evaluate('"Hello World".indexOf("o")'); // 4
+interpreter.evaluate('"Hello World".lastIndexOf("o")'); // 7
+interpreter.evaluate('"Hello World".includes("World")'); // true
+
+// String methods - matching
+interpreter.evaluate('"Hello World".startsWith("Hello")'); // true
+interpreter.evaluate('"Hello World".endsWith("World")'); // true
+
+// String methods - case
+interpreter.evaluate('"hello".toUpperCase()'); // "HELLO"
+interpreter.evaluate('"HELLO".toLowerCase()'); // "hello"
+
+// String methods - trimming
+interpreter.evaluate('"  hello  ".trim()'); // "hello"
+interpreter.evaluate('"  hello  ".trimStart()'); // "hello  "
+
+// String methods - transformation
+interpreter.evaluate('"a,b,c".split(",")'); // ["a", "b", "c"]
+interpreter.evaluate('"hello world".replace("world", "there")'); // "hello there"
+interpreter.evaluate('"abc".repeat(3)'); // "abcabcabc"
+
+// String methods - padding
+interpreter.evaluate('"5".padStart(3, "0")'); // "005"
+interpreter.evaluate('"5".padEnd(3, "0")'); // "500"
+
+// String method chaining
+interpreter.evaluate('"  Hello World  ".trim().toLowerCase().replace("world", "there")'); // "hello there"
 
 // Arrays
 interpreter.evaluate('[1, 2, 3][1]');            // 2
@@ -611,7 +654,7 @@ The interpreter throws `InterpreterError` for:
 
 ## Testing
 
-Comprehensive test suite with **1042 tests** across 26 files:
+Comprehensive test suite with **1118 tests** across 27 files:
 
 **Arithmetic Tests (43 tests)**:
 - All supported operators
@@ -883,6 +926,19 @@ Comprehensive test suite with **1042 tests** across 26 files:
 - Async array methods (async host functions in callbacks, evaluateAsync support)
 - Edge cases (empty arrays, undefined values, not found results)
 - Return values and side effects (proper mutation behavior, return types)
+
+**String Methods Tests (76 tests)**:
+- Extraction methods (substring, slice, charAt with various indices)
+- Search methods (indexOf, lastIndexOf, includes with positions)
+- Matching methods (startsWith, endsWith with positions)
+- Case methods (toUpperCase, toLowerCase, immutability)
+- Trimming methods (trim, trimStart, trimEnd with whitespace variations)
+- Transformation methods (split with separators/limits, replace, repeat)
+- Padding methods (padStart, padEnd with custom strings)
+- Method chaining (multiple string methods chained together)
+- Integration with functions and loops (string methods in various contexts)
+- Async string methods (evaluateAsync support)
+- Edge cases (empty strings, not found results, out of bounds)
 
 Run tests with `bun test`.
 
@@ -1342,7 +1398,7 @@ This means it can theoretically compute any computable function, given enough ti
 Potential additions:
 - Labeled statements (labeled break/continue)
 - for...in loops (object property iteration)
-- String methods (substring, indexOf, split, replace, etc.)
+- Math object (Math.floor, Math.ceil, Math.random, etc.)
 - instanceof operator
 - Template literals
 - Rest/spread operators
