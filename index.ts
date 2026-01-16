@@ -684,6 +684,184 @@ console.log("\n--- Async/Await: Async Host Functions ---");
     console.log("Blocked: Math.constructor access ✓");
   }
 
+  console.log("\n--- Try/Catch/Finally: Basic Error Handling ---");
+  const tryCatchInterpreter = new Interpreter();
+
+  console.log("Code: Try/catch with error");
+  const tryCatchResult1 = tryCatchInterpreter.evaluate(`
+    let result = "not executed";
+    try {
+      throw "Something went wrong!";
+      result = "success"; // Not executed
+    } catch (e) {
+      result = "caught error";
+    }
+    result
+  `);
+  console.log("Result:", tryCatchResult1);
+
+  console.log("\nCode: Try/catch without error");
+  const tryCatchResult2 = tryCatchInterpreter.evaluate(`
+    let result2;
+    try {
+      result2 = "success";
+    } catch (e) {
+      result2 = "error";
+    }
+    result2
+  `);
+  console.log("Result:", tryCatchResult2);
+
+  console.log("\n--- Try/Catch/Finally: Finally Block ---");
+  console.log("Code: Finally always executes");
+  const finallyResult = tryCatchInterpreter.evaluate(`
+    let log = [];
+    try {
+      log.push("try");
+      throw "error";
+    } catch (e) {
+      log.push("catch");
+    } finally {
+      log.push("finally");
+    }
+    log
+  `);
+  console.log("Execution order:", finallyResult);
+
+  console.log("\n--- Try/Catch/Finally: Control Flow ---");
+  console.log("Code: Return in try, finally still executes");
+  const returnFinally = tryCatchInterpreter.evaluate(`
+    function test() {
+      let executed = [];
+      try {
+        executed.push("try");
+        return executed;
+      } finally {
+        executed.push("finally");
+      }
+    }
+    test()
+  `);
+  console.log("Result:", returnFinally);
+
+  console.log("\nCode: Finally overrides return");
+  const finallyOverride = tryCatchInterpreter.evaluate(`
+    function testOverride() {
+      try {
+        return "from try";
+      } finally {
+        return "from finally";
+      }
+    }
+    testOverride()
+  `);
+  console.log("Result:", finallyOverride);
+
+  console.log("\n--- Try/Catch/Finally: Nested Try/Catch ---");
+  console.log("Code: Nested error handling");
+  const nestedTry = tryCatchInterpreter.evaluate(`
+    let log2 = [];
+    try {
+      log2.push("outer try");
+      try {
+        log2.push("inner try");
+        throw "inner error";
+      } catch (e) {
+        log2.push("inner catch");
+      }
+      log2.push("after inner");
+    } catch (e) {
+      log2.push("outer catch");
+    }
+    log2
+  `);
+  console.log("Execution order:", nestedTry);
+
+  console.log("\n--- Try/Catch/Finally: Break/Continue in Loops ---");
+  console.log("Code: Break in try block");
+  const breakInTry = tryCatchInterpreter.evaluate(`
+    let i2 = 0;
+    while (i2 < 10) {
+      try {
+        i2++;
+        if (i2 === 5) break;
+      } finally {
+        // Finally executes even with break
+      }
+    }
+    i2
+  `);
+  console.log("Result:", breakInTry);
+
+  console.log("\nCode: Continue in try block");
+  const continueInTry = tryCatchInterpreter.evaluate(`
+    let sum2 = 0;
+    for (let i3 = 0; i3 < 10; i3++) {
+      try {
+        if (i3 % 2 === 0) continue;
+        sum2 = sum2 + i3;
+      } finally {
+        // Finally executes even with continue
+      }
+    }
+    sum2
+  `);
+  console.log("Sum of odd numbers:", continueInTry);
+
+  console.log("\n--- Try/Catch/Finally: Error Objects ---");
+  console.log("Code: Catch and examine error");
+  const errorObject = tryCatchInterpreter.evaluate(`
+    let caughtError;
+    try {
+      throw "My custom error message";
+    } catch (e) {
+      caughtError = e;
+    }
+    caughtError
+  `);
+  console.log("Caught error:", errorObject);
+
+  console.log("\n--- Try/Catch/Finally: Practical Example ---");
+  console.log("Code: Safe division with error handling");
+  const safeDivision = tryCatchInterpreter.evaluate(`
+    function safeDivide(a, b) {
+      let result;
+      try {
+        if (b === 0) {
+          throw "Division by zero";
+        }
+        result = a / b;
+      } catch (e) {
+        result = "Error: " + e;
+      } finally {
+        // Cleanup could happen here
+      }
+      return result;
+    }
+
+    let results = [];
+    results.push(safeDivide(10, 2));
+    results.push(safeDivide(10, 0));
+    results.push(safeDivide(15, 3));
+    results
+  `);
+  console.log("Division results:", safeDivision);
+
+  console.log("\n--- Try/Catch/Finally: Async Error Handling ---");
+  const asyncTryCatch = await tryCatchInterpreter.evaluateAsync(`
+    let log3 = [];
+    try {
+      log3.push("async try");
+      throw "async error";
+    } catch (e) {
+      log3.push("async catch");
+    } finally {
+      log3.push("async finally");
+    }
+    log3
+  `);
+  console.log("Async execution order:", asyncTryCatch);
+
   console.log("\n✅ All demos completed successfully!");
 })().then(() => {
   console.log("\nSupported Features:");
@@ -692,11 +870,15 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("- Update operators (++, --)");
   console.log("- Variables (let/const) with lexical scoping");
   console.log("- Conditionals (if/else)");
-  console.log("- Loops (while, for) with break and continue");
+  console.log(
+    "- Loops (while, for, for...of, for...in) with break and continue",
+  );
   console.log("- Functions (regular and arrow) with closures and recursion");
   console.log("- Arrays and objects with full property access");
   console.log("- Higher-order functions with arrow functions");
   console.log("- Object methods with 'this' keyword binding");
+  console.log("- Try/catch/finally with proper control flow");
+  console.log("- Throw statements for error handling");
   console.log("- Injected globals (constructor and per-call)");
   console.log("- Host functions (call host code from sandbox)");
   console.log(

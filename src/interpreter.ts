@@ -531,6 +531,12 @@ export class Interpreter {
       case "ContinueStatement":
         return this.evaluateContinueStatement(node as ESTree.ContinueStatement);
 
+      case "ThrowStatement":
+        return this.evaluateThrowStatement(node as ESTree.ThrowStatement);
+
+      case "TryStatement":
+        return this.evaluateTryStatement(node as ESTree.TryStatement);
+
       case "CallExpression":
         return this.evaluateCallExpression(node as ESTree.CallExpression);
 
@@ -542,6 +548,9 @@ export class Interpreter {
 
       case "ObjectExpression":
         return this.evaluateObjectExpression(node as ESTree.ObjectExpression);
+
+      case "TemplateLiteral":
+        return this.evaluateTemplateLiteral(node as ESTree.TemplateLiteral);
 
       default:
         throw new InterpreterError(`Unsupported node type: ${node.type}`);
@@ -666,6 +675,16 @@ export class Interpreter {
       case "ContinueStatement":
         return this.evaluateContinueStatement(node as ESTree.ContinueStatement);
 
+      case "ThrowStatement":
+        return await this.evaluateThrowStatementAsync(
+          node as ESTree.ThrowStatement,
+        );
+
+      case "TryStatement":
+        return await this.evaluateTryStatementAsync(
+          node as ESTree.TryStatement,
+        );
+
       case "CallExpression":
         return await this.evaluateCallExpressionAsync(
           node as ESTree.CallExpression,
@@ -684,6 +703,11 @@ export class Interpreter {
       case "ObjectExpression":
         return await this.evaluateObjectExpressionAsync(
           node as ESTree.ObjectExpression,
+        );
+
+      case "TemplateLiteral":
+        return await this.evaluateTemplateLiteralAsync(
+          node as ESTree.TemplateLiteral,
         );
 
       default:
@@ -890,6 +914,15 @@ export class Interpreter {
 
     const value = this.evaluateNode(node.right);
 
+    // Handle destructuring assignments
+    if (
+      node.left.type === "ArrayPattern" ||
+      node.left.type === "ObjectPattern"
+    ) {
+      this.destructurePattern(node.left, value, false);
+      return value;
+    }
+
     // Handle member expression assignment: arr[index] = value or obj.prop = value
     if (node.left.type === "MemberExpression") {
       const memberExpr = node.left as ESTree.MemberExpression;
@@ -969,8 +1002,29 @@ export class Interpreter {
     let lastValue: any = undefined;
 
     for (const declarator of node.declarations) {
+      // Handle destructuring patterns
+      if (
+        declarator.id.type === "ArrayPattern" ||
+        declarator.id.type === "ObjectPattern"
+      ) {
+        // Destructuring declaration
+        if (declarator.init === null) {
+          throw new InterpreterError(
+            "Destructuring declaration must have an initializer",
+          );
+        }
+
+        const value = this.evaluateNode(declarator.init);
+        this.destructurePattern(declarator.id, value, true, kind);
+        lastValue = value;
+        continue;
+      }
+
+      // Handle simple identifier
       if (declarator.id.type !== "Identifier") {
-        throw new InterpreterError("Destructuring is not supported");
+        throw new InterpreterError(
+          `Unsupported declaration pattern: ${declarator.id.type}`,
+        );
       }
 
       const name = (declarator.id as ESTree.Identifier).name;
@@ -1493,6 +1547,251 @@ export class Interpreter {
       );
     }
     return new ContinueValue();
+  }
+
+  /**
+   * Evaluate throw statement: throw expression
+   * Throws an InterpreterError with the evaluated expression
+   */
+  private evaluateThrowStatement(node: ESTree.ThrowStatement): any {
+    const value = this.evaluateNode(node.argument);
+    throw new InterpreterError(`Uncaught ${String(value)}`);
+  }
+
+  /**
+   * Evaluate try/catch/finally statement
+   * Handles exception flow with proper cleanup
+   */
+  private evaluateTryStatement(node: ESTree.TryStatement): any {
+    let tryResult: any = undefined;
+    let caughtError: any = null;
+
+    // Execute try block
+    try {
+      tryResult = this.evaluateBlockStatement(node.block);
+    } catch (error) {
+      caughtError = error;
+
+      // If there's a catch clause, execute it
+      if (node.handler) {
+        // Create new scope for catch block
+        const previousEnvironment = this.environment;
+        this.environment = new Environment(previousEnvironment);
+
+        try {
+          // Bind error to catch parameter if provided
+          if (node.handler.param && node.handler.param.type === "Identifier") {
+            const paramName = (node.handler.param as ESTree.Identifier).name;
+            this.environment.declare(paramName, error, "let");
+          }
+
+          // Execute catch block
+          tryResult = this.evaluateBlockStatement(node.handler.body);
+          caughtError = null; // Error was handled
+        } finally {
+          // Restore environment
+          this.environment = previousEnvironment;
+        }
+      }
+    } finally {
+      // Always execute finally block if present
+      if (node.finalizer) {
+        const finallyResult = this.evaluateBlockStatement(node.finalizer);
+
+        // If finally block has control flow (return/break/continue), it overrides try/catch
+        if (
+          finallyResult instanceof ReturnValue ||
+          finallyResult instanceof BreakValue ||
+          finallyResult instanceof ContinueValue
+        ) {
+          return finallyResult;
+        }
+      }
+    }
+
+    // Re-throw if error wasn't caught
+    if (caughtError !== null) {
+      throw caughtError;
+    }
+
+    return tryResult;
+  }
+
+  /**
+   * Destructure a pattern and assign/declare variables
+   * @param pattern - ArrayPattern or ObjectPattern node
+   * @param value - The value to destructure from
+   * @param declare - If true, declare new variables; if false, assign to existing
+   * @param kind - Variable kind for declarations ("let" or "const")
+   */
+  private destructurePattern(
+    pattern: ESTree.ArrayPattern | ESTree.ObjectPattern,
+    value: any,
+    declare: boolean,
+    kind?: "let" | "const",
+  ): void {
+    if (pattern.type === "ArrayPattern") {
+      this.destructureArrayPattern(pattern, value, declare, kind);
+    } else if (pattern.type === "ObjectPattern") {
+      this.destructureObjectPattern(pattern, value, declare, kind);
+    }
+  }
+
+  /**
+   * Destructure array pattern: [a, b, c]
+   */
+  private destructureArrayPattern(
+    pattern: ESTree.ArrayPattern,
+    value: any,
+    declare: boolean,
+    kind?: "let" | "const",
+  ): void {
+    // Validate value is array-like
+    if (!Array.isArray(value)) {
+      throw new InterpreterError(`Cannot destructure non-array value`);
+    }
+
+    // Process each element in the pattern
+    for (let i = 0; i < pattern.elements.length; i++) {
+      const element = pattern.elements[i];
+      if (element === null || element === undefined) {
+        // Hole in array pattern: let [a, , c] = [1, 2, 3]
+        continue;
+      }
+
+      const elementValue = i < value.length ? value[i] : undefined;
+
+      if (element.type === "Identifier") {
+        // Simple identifier: a
+        const name = element.name;
+        if (declare) {
+          this.environment.declare(name, elementValue, kind!);
+        } else {
+          this.environment.set(name, elementValue);
+        }
+      } else if (
+        element.type === "ArrayPattern" ||
+        element.type === "ObjectPattern"
+      ) {
+        // Nested destructuring: [a, [b, c]]
+        this.destructurePattern(element, elementValue, declare, kind);
+      } else if (element.type === "RestElement") {
+        // Rest element: ...rest (Phase 2)
+        throw new InterpreterError("Rest elements not yet supported");
+      } else {
+        // Must be AssignmentPattern (default value: a = 5)
+        // TypeScript doesn't narrow this properly, so we handle it as the else case
+        this.handleAssignmentPattern(
+          element as unknown as ESTree.AssignmentPattern,
+          elementValue,
+          declare,
+          kind,
+        );
+      }
+    }
+  }
+
+  /**
+   * Destructure object pattern: {x, y}
+   */
+  private destructureObjectPattern(
+    pattern: ESTree.ObjectPattern,
+    value: any,
+    declare: boolean,
+    kind?: "let" | "const",
+  ): void {
+    // Validate value is an object
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new InterpreterError(`Cannot destructure non-object value`);
+    }
+
+    // Process each property in the pattern
+    for (const property of pattern.properties) {
+      if (property.type === "Property") {
+        // Extract the key (property name in source object)
+        let key: string;
+        if (property.computed) {
+          // Computed property: {[expr]: value}
+          const computedKey = this.evaluateNode(property.key);
+          key = String(computedKey);
+        } else {
+          // Static property: {x} or {x: newName}
+          key = (property.key as ESTree.Identifier).name;
+        }
+
+        // Get the value from the source object
+        const propValue = value[key];
+
+        // Extract the target (where to assign)
+        const target = property.value;
+
+        if (target.type === "Identifier") {
+          // Simple: {x} or {x: newName}
+          const name = target.name;
+          if (declare) {
+            this.environment.declare(name, propValue, kind!);
+          } else {
+            this.environment.set(name, propValue);
+          }
+        } else if (target.type === "AssignmentPattern") {
+          // Default value: {x = 5}
+          this.handleAssignmentPattern(target, propValue, declare, kind);
+        } else if (
+          target.type === "ArrayPattern" ||
+          target.type === "ObjectPattern"
+        ) {
+          // Nested destructuring: {a: {b}}
+          this.destructurePattern(target, propValue, declare, kind);
+        } else {
+          throw new InterpreterError(
+            `Unsupported object pattern value: ${target.type}`,
+          );
+        }
+      } else if (property.type === "RestElement") {
+        // Rest properties: {...rest} (Phase 2)
+        throw new InterpreterError("Rest properties not yet supported");
+      } else {
+        throw new InterpreterError(
+          `Unsupported object pattern property: ${property.type}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Handle assignment pattern (default values): a = 5
+   */
+  private handleAssignmentPattern(
+    pattern: ESTree.AssignmentPattern,
+    value: any,
+    declare: boolean,
+    kind?: "let" | "const",
+  ): void {
+    // Use default if value is undefined
+    const defaultExpr = pattern.right;
+    if (!defaultExpr) {
+      throw new InterpreterError(
+        "Assignment pattern must have a default value",
+      );
+    }
+    const finalValue =
+      value === undefined ? this.evaluateNode(defaultExpr) : value;
+
+    const left = pattern.left;
+
+    if (left.type === "Identifier") {
+      const name = left.name;
+      if (declare) {
+        this.environment.declare(name, finalValue, kind!);
+      } else {
+        this.environment.set(name, finalValue);
+      }
+    } else if (left.type === "ArrayPattern" || left.type === "ObjectPattern") {
+      // Nested pattern with default: [a = [1, 2]]
+      this.destructurePattern(left, finalValue, declare, kind);
+    }
+    // Note: TypeScript exhaustively checks all valid types above
+    // Any other type would be a parser error, not a runtime case
   }
 
   /**
@@ -2218,6 +2517,41 @@ export class Interpreter {
     return obj;
   }
 
+  /**
+   * Evaluate template literal: `hello ${name}`
+   *
+   * Template literals consist of:
+   * - quasis: Array of TemplateElement (static text parts)
+   * - expressions: Array of expressions to interpolate
+   *
+   * Pattern: quasi[0] ${expr[0]} quasi[1] ${expr[1]} ... quasi[n]
+   */
+  private evaluateTemplateLiteral(node: ESTree.TemplateLiteral): string {
+    let result = "";
+
+    // Interleave quasis and expressions
+    for (let i = 0; i < node.quasis.length; i++) {
+      // Add the static text part
+      const quasi = node.quasis[i];
+      if (!quasi) {
+        throw new InterpreterError("Template literal missing quasi element");
+      }
+      result += quasi.value.cooked;
+
+      // Add the interpolated expression (if not the last quasi)
+      if (i < node.expressions.length) {
+        const expr = node.expressions[i];
+        if (!expr) {
+          throw new InterpreterError("Template literal missing expression");
+        }
+        const exprValue = this.evaluateNode(expr);
+        result += String(exprValue);
+      }
+    }
+
+    return result;
+  }
+
   // ============================================================================
   // ASYNC EVALUATION METHODS
   // ============================================================================
@@ -2516,6 +2850,15 @@ export class Interpreter {
 
     const value = await this.evaluateNodeAsync(node.right);
 
+    // Handle destructuring assignments
+    if (
+      node.left.type === "ArrayPattern" ||
+      node.left.type === "ObjectPattern"
+    ) {
+      await this.destructurePatternAsync(node.left, value, false);
+      return value;
+    }
+
     if (node.left.type === "MemberExpression") {
       const memberExpr = node.left as ESTree.MemberExpression;
       const object = await this.evaluateNodeAsync(memberExpr.object);
@@ -2590,8 +2933,29 @@ export class Interpreter {
     let lastValue: any = undefined;
 
     for (const declarator of node.declarations) {
+      // Handle destructuring patterns
+      if (
+        declarator.id.type === "ArrayPattern" ||
+        declarator.id.type === "ObjectPattern"
+      ) {
+        // Destructuring declaration
+        if (declarator.init === null) {
+          throw new InterpreterError(
+            "Destructuring declaration must have an initializer",
+          );
+        }
+
+        const value = await this.evaluateNodeAsync(declarator.init);
+        await this.destructurePatternAsync(declarator.id, value, true, kind);
+        lastValue = value;
+        continue;
+      }
+
+      // Handle simple identifier
       if (declarator.id.type !== "Identifier") {
-        throw new InterpreterError("Destructuring is not supported");
+        throw new InterpreterError(
+          `Unsupported declaration pattern: ${declarator.id.type}`,
+        );
       }
 
       const name = (declarator.id as ESTree.Identifier).name;
@@ -2992,6 +3356,263 @@ export class Interpreter {
     return await value;
   }
 
+  /**
+   * Evaluate throw statement (async): throw expression
+   * Throws an InterpreterError with the evaluated expression
+   */
+  private async evaluateThrowStatementAsync(
+    node: ESTree.ThrowStatement,
+  ): Promise<any> {
+    const value = await this.evaluateNodeAsync(node.argument);
+    throw new InterpreterError(`Uncaught ${String(value)}`);
+  }
+
+  /**
+   * Evaluate try/catch/finally statement (async)
+   * Handles exception flow with proper cleanup
+   */
+  private async evaluateTryStatementAsync(
+    node: ESTree.TryStatement,
+  ): Promise<any> {
+    let tryResult: any = undefined;
+    let caughtError: any = null;
+
+    // Execute try block
+    try {
+      tryResult = await this.evaluateBlockStatementAsync(node.block);
+    } catch (error) {
+      caughtError = error;
+
+      // If there's a catch clause, execute it
+      if (node.handler) {
+        // Create new scope for catch block
+        const previousEnvironment = this.environment;
+        this.environment = new Environment(previousEnvironment);
+
+        try {
+          // Bind error to catch parameter if provided
+          if (node.handler.param && node.handler.param.type === "Identifier") {
+            const paramName = (node.handler.param as ESTree.Identifier).name;
+            this.environment.declare(paramName, error, "let");
+          }
+
+          // Execute catch block
+          tryResult = await this.evaluateBlockStatementAsync(node.handler.body);
+          caughtError = null; // Error was handled
+        } finally {
+          // Restore environment
+          this.environment = previousEnvironment;
+        }
+      }
+    } finally {
+      // Always execute finally block if present
+      if (node.finalizer) {
+        const finallyResult = await this.evaluateBlockStatementAsync(
+          node.finalizer,
+        );
+
+        // If finally block has control flow (return/break/continue), it overrides try/catch
+        if (
+          finallyResult instanceof ReturnValue ||
+          finallyResult instanceof BreakValue ||
+          finallyResult instanceof ContinueValue
+        ) {
+          return finallyResult;
+        }
+      }
+    }
+
+    // Re-throw if error wasn't caught
+    if (caughtError !== null) {
+      throw caughtError;
+    }
+
+    return tryResult;
+  }
+
+  /**
+   * Destructure a pattern and assign/declare variables (async)
+   */
+  private async destructurePatternAsync(
+    pattern: ESTree.ArrayPattern | ESTree.ObjectPattern,
+    value: any,
+    declare: boolean,
+    kind?: "let" | "const",
+  ): Promise<void> {
+    if (pattern.type === "ArrayPattern") {
+      await this.destructureArrayPatternAsync(pattern, value, declare, kind);
+    } else if (pattern.type === "ObjectPattern") {
+      await this.destructureObjectPatternAsync(pattern, value, declare, kind);
+    }
+  }
+
+  /**
+   * Destructure array pattern (async): [a, b, c]
+   */
+  private async destructureArrayPatternAsync(
+    pattern: ESTree.ArrayPattern,
+    value: any,
+    declare: boolean,
+    kind?: "let" | "const",
+  ): Promise<void> {
+    // Validate value is array-like
+    if (!Array.isArray(value)) {
+      throw new InterpreterError(`Cannot destructure non-array value`);
+    }
+
+    // Process each element in the pattern
+    for (let i = 0; i < pattern.elements.length; i++) {
+      const element = pattern.elements[i];
+      if (element === null || element === undefined) {
+        // Hole in array pattern: let [a, , c] = [1, 2, 3]
+        continue;
+      }
+
+      const elementValue = i < value.length ? value[i] : undefined;
+
+      if (element.type === "Identifier") {
+        // Simple identifier: a
+        const name = element.name;
+        if (declare) {
+          this.environment.declare(name, elementValue, kind!);
+        } else {
+          this.environment.set(name, elementValue);
+        }
+      } else if (
+        element.type === "ArrayPattern" ||
+        element.type === "ObjectPattern"
+      ) {
+        // Nested destructuring: [a, [b, c]]
+        await this.destructurePatternAsync(
+          element,
+          elementValue,
+          declare,
+          kind,
+        );
+      } else if (element.type === "RestElement") {
+        // Rest element: ...rest (Phase 2)
+        throw new InterpreterError("Rest elements not yet supported");
+      } else {
+        // Must be AssignmentPattern (default value: a = 5)
+        // TypeScript doesn't narrow this properly, so we handle it as the else case
+        await this.handleAssignmentPatternAsync(
+          element as unknown as ESTree.AssignmentPattern,
+          elementValue,
+          declare,
+          kind,
+        );
+      }
+    }
+  }
+
+  /**
+   * Destructure object pattern (async): {x, y}
+   */
+  private async destructureObjectPatternAsync(
+    pattern: ESTree.ObjectPattern,
+    value: any,
+    declare: boolean,
+    kind?: "let" | "const",
+  ): Promise<void> {
+    // Validate value is an object
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new InterpreterError(`Cannot destructure non-object value`);
+    }
+
+    // Process each property in the pattern
+    for (const property of pattern.properties) {
+      if (property.type === "Property") {
+        // Extract the key (property name in source object)
+        let key: string;
+        if (property.computed) {
+          // Computed property: {[expr]: value}
+          const computedKey = await this.evaluateNodeAsync(property.key);
+          key = String(computedKey);
+        } else {
+          // Static property: {x} or {x: newName}
+          key = (property.key as ESTree.Identifier).name;
+        }
+
+        // Get the value from the source object
+        const propValue = value[key];
+
+        // Extract the target (where to assign)
+        const target = property.value;
+
+        if (target.type === "Identifier") {
+          // Simple: {x} or {x: newName}
+          const name = target.name;
+          if (declare) {
+            this.environment.declare(name, propValue, kind!);
+          } else {
+            this.environment.set(name, propValue);
+          }
+        } else if (target.type === "AssignmentPattern") {
+          // Default value: {x = 5}
+          await this.handleAssignmentPatternAsync(
+            target,
+            propValue,
+            declare,
+            kind,
+          );
+        } else if (
+          target.type === "ArrayPattern" ||
+          target.type === "ObjectPattern"
+        ) {
+          // Nested destructuring: {a: {b}}
+          await this.destructurePatternAsync(target, propValue, declare, kind);
+        } else {
+          throw new InterpreterError(
+            `Unsupported object pattern value: ${target.type}`,
+          );
+        }
+      } else if (property.type === "RestElement") {
+        // Rest properties: {...rest} (Phase 2)
+        throw new InterpreterError("Rest properties not yet supported");
+      } else {
+        throw new InterpreterError(
+          `Unsupported object pattern property: ${property.type}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Handle assignment pattern (async) (default values): a = 5
+   */
+  private async handleAssignmentPatternAsync(
+    pattern: ESTree.AssignmentPattern,
+    value: any,
+    declare: boolean,
+    kind?: "let" | "const",
+  ): Promise<void> {
+    // Use default if value is undefined
+    const defaultExpr = pattern.right;
+    if (!defaultExpr) {
+      throw new InterpreterError(
+        "Assignment pattern must have a default value",
+      );
+    }
+    const finalValue =
+      value === undefined ? await this.evaluateNodeAsync(defaultExpr) : value;
+
+    const left = pattern.left;
+
+    if (left.type === "Identifier") {
+      const name = left.name;
+      if (declare) {
+        this.environment.declare(name, finalValue, kind!);
+      } else {
+        this.environment.set(name, finalValue);
+      }
+    } else if (left.type === "ArrayPattern" || left.type === "ObjectPattern") {
+      // Nested pattern with default: [a = [1, 2]]
+      await this.destructurePatternAsync(left, finalValue, declare, kind);
+    }
+    // Note: TypeScript exhaustively checks all valid types above
+    // Any other type would be a parser error, not a runtime case
+  }
+
   private async evaluateMemberExpressionAsync(
     node: ESTree.MemberExpression,
   ): Promise<any> {
@@ -3115,5 +3736,36 @@ export class Interpreter {
     }
 
     return obj;
+  }
+
+  /**
+   * Evaluate template literal (async): `hello ${name}`
+   */
+  private async evaluateTemplateLiteralAsync(
+    node: ESTree.TemplateLiteral,
+  ): Promise<string> {
+    let result = "";
+
+    // Interleave quasis and expressions
+    for (let i = 0; i < node.quasis.length; i++) {
+      // Add the static text part
+      const quasi = node.quasis[i];
+      if (!quasi) {
+        throw new InterpreterError("Template literal missing quasi element");
+      }
+      result += quasi.value.cooked;
+
+      // Add the interpolated expression (if not the last quasi)
+      if (i < node.expressions.length) {
+        const expr = node.expressions[i];
+        if (!expr) {
+          throw new InterpreterError("Template literal missing expression");
+        }
+        const exprValue = await this.evaluateNodeAsync(expr);
+        result += String(exprValue);
+      }
+    }
+
+    return result;
   }
 }
