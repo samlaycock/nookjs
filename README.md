@@ -1018,6 +1018,41 @@ The interpreter supports injecting global variables from the host environment:
 - **Stateful Constructor Globals**: Constructor globals persist in the environment for all subsequent calls
 - **Stateless Per-call Globals**: Per-call globals do not persist - they're cleaned up via `removePerCallGlobals()`
 
+### Global Objects via ReadOnlyProxy
+All injected globals are automatically wrapped with `ReadOnlyProxy` for security and consistency:
+
+**Features:**
+- **Automatic Function Wrapping**: Functions are automatically wrapped as `HostFunctionValue` (both top-level and methods)
+- **Async Function Detection**: Async functions are detected and wrapped with `isAsync: true` flag
+- **Property Access Protection**: Blocks dangerous properties (`__proto__`, `constructor`, `prototype`)
+- **Strict Read-Only**: ALL properties on global objects are read-only and cannot be modified
+- **Recursive Wrapping**: Nested objects are recursively wrapped for consistent protection
+- **Method Binding**: Preserves `this` context when calling methods on wrapped objects
+
+**Supported Global Objects:**
+```javascript
+const interpreter = new Interpreter({
+  globals: {
+    Math,           // Math.floor(4.7), Math.PI, Math.random()
+    console,        // console.log("hello")
+    customAPI: {    // Your own objects with methods
+      getValue() { return 42; }
+    }
+  }
+});
+
+interpreter.evaluate("Math.floor(4.7)");  // 4
+interpreter.evaluate("Math.PI * 2");      // 6.283...
+```
+
+**Property Modification Rules:**
+- **All properties are read-only**: No property modifications allowed on ANY global object
+- **Applies universally**: Both built-in constants (`Math.PI`) and user objects (`obj.count`) are protected
+- **Recursive protection**: Nested objects are automatically wrapped, so `config.level1.level2.value = x` is blocked
+- **Array elements protected**: Cannot modify array elements (e.g., `arr[0] = 10` throws error)
+- **Enforcement**: Read-only status is enforced by the proxy, not by the underlying object's property descriptors
+- **Security-first**: Prevents any mutation of global objects at any depth, ensuring consistent and predictable behavior
+
 ### AST Validation System
 The interpreter supports custom AST validation for security policies:
 - **Validator Function Type**: `(ast: ESTree.Program) => boolean`

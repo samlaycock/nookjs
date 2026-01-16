@@ -15,6 +15,11 @@
 
 import { parseScript } from "meriyah";
 import type { ESTree } from "meriyah";
+import { ReadOnlyProxy } from "./readonly-proxy";
+import { DANGEROUS_PROPERTIES, isDangerousProperty } from "./constants";
+
+// Re-export constants for external use
+export { DANGEROUS_PROPERTIES, isDangerousProperty } from "./constants";
 
 type ASTNode = ESTree.Node;
 
@@ -28,19 +33,8 @@ export class InterpreterError extends Error {
   }
 }
 
-// Security: Dangerous property names that could enable prototype pollution or sandbox escape
-const DANGEROUS_PROPERTIES = [
-  "__proto__",
-  "constructor",
-  "prototype",
-  "__defineGetter__",
-  "__defineSetter__",
-  "__lookupGetter__",
-  "__lookupSetter__",
-];
-
 function validatePropertyName(name: string): void {
-  if (DANGEROUS_PROPERTIES.includes(name)) {
+  if (isDangerousProperty(name)) {
     throw new InterpreterError(
       `Property name '${name}' is not allowed for security reasons`,
     );
@@ -91,12 +85,66 @@ class FunctionValue {
  * Wrapper for host functions (native TypeScript/JavaScript functions passed as globals)
  * Allows calling host functions from sandbox code while preventing property access for security
  */
-class HostFunctionValue {
+export class HostFunctionValue {
   constructor(
     public hostFunc: Function,
     public name: string,
     public isAsync: boolean = false,
-  ) {}
+  ) {
+    // Return a Proxy that blocks property access on host functions
+    // This prevents accessing dangerous properties like .constructor, .apply, etc.
+    return new Proxy(this, {
+      get(target, prop) {
+        // Allow access to our three public properties
+        if (prop === "hostFunc" || prop === "name" || prop === "isAsync") {
+          return target[prop];
+        }
+
+        // Allow Symbol.toStringTag for proper type identification
+        if (prop === Symbol.toStringTag) {
+          return "HostFunctionValue";
+        }
+
+        // Allow .then property access (returns undefined) so await works correctly
+        // When using async/await, JavaScript checks for .then to determine if something is a Promise
+        if (prop === "then") {
+          return undefined;
+        }
+
+        // Allow internal properties needed for instanceof checks
+        // These are accessed by the JavaScript engine, not user code
+        if (typeof prop === "symbol") {
+          return (target as any)[prop];
+        }
+
+        // Block all other property access for security
+        throw new InterpreterError(
+          `Cannot access properties on host functions`,
+        );
+      },
+
+      set() {
+        throw new InterpreterError(`Cannot modify host functions`);
+      },
+
+      has(target, prop) {
+        // Only report our three properties as existing
+        return prop === "hostFunc" || prop === "name" || prop === "isAsync";
+      },
+
+      ownKeys() {
+        // Only expose our three properties
+        return ["hostFunc", "name", "isAsync"];
+      },
+
+      getOwnPropertyDescriptor(target, prop) {
+        if (prop === "hostFunc" || prop === "name" || prop === "isAsync") {
+          return Object.getOwnPropertyDescriptor(target, prop);
+        }
+        return undefined;
+      },
+    }) as any;
+  }
 }
 
 /**
@@ -271,15 +319,12 @@ export class Interpreter {
     trackKeys: boolean = false,
   ): void {
     for (const [key, value] of Object.entries(globals)) {
-      // Wrap host functions in HostFunctionValue to prevent property access
-      const wrappedValue =
-        typeof value === "function"
-          ? new HostFunctionValue(
-              value,
-              key,
-              value.constructor.name === "AsyncFunction",
-            )
-          : value;
+      // Wrap ALL values with ReadOnlyProxy for security and consistency
+      // This handles functions, objects, arrays, and primitives uniformly
+      // - Functions become HostFunctionValue (via proxy)
+      // - Objects get read-only protection and recursive wrapping
+      // - Primitives pass through unchanged
+      const wrappedValue = ReadOnlyProxy.wrap(value, key);
 
       if (this.environment.has(key)) {
         // If the variable exists, check if we should override

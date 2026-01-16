@@ -73,24 +73,26 @@ describe("Injected Globals", () => {
       expect(interpreter.evaluate("numbers.length")).toBe(5);
     });
 
-    it("should allow modifying properties of global objects", () => {
+    it("should block modifying properties of global objects (read-only)", () => {
       const interpreter = new Interpreter({
         globals: {
           obj: { count: 0 },
         },
       });
-      interpreter.evaluate("obj.count = obj.count + 1");
-      expect(interpreter.evaluate("obj.count")).toBe(1);
+      expect(() => {
+        interpreter.evaluate("obj.count = obj.count + 1");
+      }).toThrow("Cannot modify property 'count' on global 'obj'");
     });
 
-    it("should allow modifying elements of global arrays", () => {
+    it("should block modifying elements of global arrays (read-only)", () => {
       const interpreter = new Interpreter({
         globals: {
           arr: [1, 2, 3],
         },
       });
-      interpreter.evaluate("arr[0] = 10");
-      expect(interpreter.evaluate("arr[0]")).toBe(10);
+      expect(() => {
+        interpreter.evaluate("arr[0] = 10");
+      }).toThrow("Cannot modify property '0' on global 'arr'");
     });
 
     it("should work with boolean globals", () => {

@@ -598,6 +598,92 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   `);
   console.log("Await in conditionals:", condAsyncResult);
 
+  console.log("\n--- Global Objects: Math ---");
+  const mathInterpreter = new Interpreter({ globals: { Math } });
+
+  console.log("Code: Math.floor(4.7)");
+  console.log("Result:", mathInterpreter.evaluate("Math.floor(4.7)"));
+
+  console.log("\nCode: Math.PI * 2");
+  console.log("Result:", mathInterpreter.evaluate("Math.PI * 2"));
+
+  console.log("\nCode: Math.sqrt(16)");
+  console.log("Result:", mathInterpreter.evaluate("Math.sqrt(16)"));
+
+  console.log("\nCode: Math.max(10, 20, 5, 15)");
+  console.log("Result:", mathInterpreter.evaluate("Math.max(10, 20, 5, 15)"));
+
+  console.log("\nCode: Using Math in calculations");
+  const circleCalc = mathInterpreter.evaluate(`
+    let radius = 5;
+    let area = Math.PI * Math.pow(radius, 2);
+    Math.round(area)
+  `);
+  console.log("Circle area (rounded):", circleCalc);
+
+  console.log("\n--- Global Objects: console ---");
+  const logs: string[] = [];
+  const mockConsole = {
+    log: (...args: any[]) => {
+      logs.push(args.join(" "));
+    },
+  };
+  const consoleInterpreter = new Interpreter({
+    globals: { console: mockConsole },
+  });
+
+  console.log("Code: console.log in sandbox");
+  consoleInterpreter.evaluate(`
+    console.log("Hello from sandbox!");
+    console.log("Number:", 42);
+  `);
+  console.log("Logged messages:", logs);
+
+  console.log("\n--- Global Objects: Custom API ---");
+  const customAPI = {
+    version: "1.0.0",
+    getValue() {
+      return 42;
+    },
+    calculate(x: number, y: number) {
+      return x * y + 10;
+    },
+  };
+  const apiInterpreter = new Interpreter({ globals: { api: customAPI } });
+
+  console.log("Code: api.getValue()");
+  console.log("Result:", apiInterpreter.evaluate("api.getValue()"));
+
+  console.log("\nCode: api.calculate(5, 3)");
+  console.log("Result:", apiInterpreter.evaluate("api.calculate(5, 3)"));
+
+  console.log("\nCode: api.version");
+  console.log("Result:", apiInterpreter.evaluate("api.version"));
+
+  console.log("\n--- Global Objects: Security ---");
+  const secureInterpreter = new Interpreter({ globals: { Math } });
+
+  try {
+    secureInterpreter.evaluate("Math.PI = 3");
+    console.log("Error: Should have been blocked");
+  } catch (e: any) {
+    console.log("Blocked: Math.PI = 3 (read-only property) ✓");
+  }
+
+  try {
+    secureInterpreter.evaluate("Math.__proto__");
+    console.log("Error: Should have been blocked");
+  } catch (e: any) {
+    console.log("Blocked: Math.__proto__ access ✓");
+  }
+
+  try {
+    secureInterpreter.evaluate("Math.constructor");
+    console.log("Error: Should have been blocked");
+  } catch (e: any) {
+    console.log("Blocked: Math.constructor access ✓");
+  }
+
   console.log("\n✅ All demos completed successfully!");
 })().then(() => {
   console.log("\nSupported Features:");
@@ -613,6 +699,9 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("- Object methods with 'this' keyword binding");
   console.log("- Injected globals (constructor and per-call)");
   console.log("- Host functions (call host code from sandbox)");
+  console.log(
+    "- Global objects (Math, console, custom APIs via ReadOnlyProxy)",
+  );
   console.log("- Async host functions (with evaluateAsync())");
   console.log("- Async/await syntax (async functions and await expressions)");
   console.log("- AST validation (constructor and per-call)");

@@ -446,7 +446,7 @@ describe("Security: Prototype Pollution Prevention", () => {
       expect(interpreter.evaluate("obj.nested.inner")).toBe(42);
     });
 
-    it("should not wrap methods on host objects (only top-level globals)", () => {
+    it("should wrap and allow calling methods on host objects", () => {
       const hostObject = {
         value: 100,
         method: function () {
@@ -457,11 +457,10 @@ describe("Security: Prototype Pollution Prevention", () => {
         globals: { obj: hostObject },
       });
 
-      // Methods on objects are not wrapped as HostFunctionValue
-      // They remain plain functions and cannot be called
-      expect(() => {
-        interpreter.evaluate("obj.method()");
-      }).toThrow("Callee is not a function");
+      // With ReadOnlyProxy architecture, methods on host objects ARE wrapped as HostFunctionValue
+      // This is necessary to support Math.floor(), console.log(), etc.
+      const result = interpreter.evaluate("obj.method()");
+      expect(result).toBe(200);
     });
 
     it("should allow calling interpreter-created functions", () => {
