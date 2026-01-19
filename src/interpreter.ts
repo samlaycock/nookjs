@@ -164,28 +164,70 @@ export class HostFunctionValue {
 class Environment {
   private variables: Map<
     string,
-    { value: any; kind: "let" | "const"; isGlobal?: boolean }
+    { value: any; kind: "let" | "const" | "var"; isGlobal?: boolean }
   > = new Map();
   private parent: Environment | null = null;
   private thisValue: any = undefined;
+  private isFunctionScope: boolean = false;
 
-  constructor(parent: Environment | null = null, thisValue: any = undefined) {
+  constructor(
+    parent: Environment | null = null,
+    thisValue: any = undefined,
+    isFunctionScope: boolean = false,
+  ) {
     this.parent = parent;
     this.thisValue = thisValue;
+    this.isFunctionScope = isFunctionScope;
   }
 
   declare(
     name: string,
     value: any,
-    kind: "let" | "const",
+    kind: "let" | "const" | "var",
     isGlobal: boolean = false,
   ): void {
+    // var allows re-declaration
+    if (kind === "var") {
+      // var is function-scoped, so hoist to nearest function scope or global
+      const targetEnv = this.findVarScope();
+
+      // If variable already exists as var, just update it
+      if (targetEnv.variables.has(name)) {
+        const existing = targetEnv.variables.get(name)!;
+        if (existing.kind === "var") {
+          // Re-declaration with var is allowed, just update the value
+          existing.value = value;
+          return;
+        } else {
+          // Cannot redeclare let/const as var
+          throw new InterpreterError(
+            `Identifier '${name}' has already been declared`,
+          );
+        }
+      }
+
+      // Declare new var in function scope
+      targetEnv.variables.set(name, { value, kind, isGlobal });
+      return;
+    }
+
+    // let and const are block-scoped - check current scope only
     if (this.variables.has(name)) {
       throw new InterpreterError(
         `Variable '${name}' has already been declared`,
       );
     }
     this.variables.set(name, { value, kind, isGlobal });
+  }
+
+  /**
+   * Find the nearest function scope or global scope for var hoisting
+   */
+  private findVarScope(): Environment {
+    if (this.isFunctionScope || this.parent === null) {
+      return this;
+    }
+    return this.parent.findVarScope();
   }
 
   get(name: string): any {
@@ -325,7 +367,7 @@ export type FeatureControl = {
   features: LanguageFeature[];
 };
 
-type InterpreterOptions = {
+export type InterpreterOptions = {
   globals?: Record<string, any>;
   validator?: ASTValidator;
   /**
@@ -336,7 +378,7 @@ type InterpreterOptions = {
   featureControl?: FeatureControl;
 };
 
-type EvaluateOptions = {
+export type EvaluateOptions = {
   globals?: Record<string, any>;
   validator?: ASTValidator;
   /**
@@ -1062,8 +1104,10 @@ export class Interpreter {
    * This core logic is shared between sync and async variable declaration evaluation.
    */
   private validateVariableDeclarationKind(kind: string): void {
-    if (kind === "var") {
-      throw new InterpreterError("var is not supported, use let or const");
+    if (kind !== "let" && kind !== "const" && kind !== "var") {
+      throw new InterpreterError(
+        `Unsupported variable declaration kind: ${kind}`,
+      );
     }
   }
 
@@ -1409,7 +1453,7 @@ export class Interpreter {
     thisValue: any,
   ): any {
     const previousEnvironment = this.environment;
-    this.environment = new Environment(fn.closure, thisValue);
+    this.environment = new Environment(fn.closure, thisValue, true);
 
     try {
       // Bind parameters to arguments
@@ -1442,7 +1486,7 @@ export class Interpreter {
     thisValue: any,
   ): Promise<any> {
     const previousEnvironment = this.environment;
-    this.environment = new Environment(fn.closure, thisValue);
+    this.environment = new Environment(fn.closure, thisValue, true);
 
     try {
       // Bind parameters to arguments
@@ -1770,9 +1814,6 @@ export class Interpreter {
 
     this.validateVariableDeclarationKind(kind);
 
-    // After validation, we know kind is "let" or "const"
-    const validKind = kind as "let" | "const";
-
     let lastValue: any = undefined;
 
     for (const declarator of node.declarations) {
@@ -1789,7 +1830,7 @@ export class Interpreter {
         }
 
         const value = this.evaluateNode(declarator.init);
-        this.destructurePattern(declarator.id, value, true, validKind);
+        this.destructurePattern(declarator.id, value, true, kind);
         lastValue = value;
         continue;
       }
@@ -1806,9 +1847,9 @@ export class Interpreter {
         ? this.evaluateNode(declarator.init)
         : undefined;
 
-      this.validateConstInitializer(declarator, validKind);
+      this.validateConstInitializer(declarator, kind);
 
-      this.environment.declare(name, value, validKind);
+      this.environment.declare(name, value, kind);
       lastValue = value;
     }
 
@@ -3342,7 +3383,7 @@ export class Interpreter {
   ): any {
     // Save and restore environment
     const previousEnvironment = this.environment;
-    this.environment = new Environment(func.closure, thisValue);
+    this.environment = new Environment(func.closure, thisValue, true);
 
     try {
       // Bind parameters
@@ -3775,9 +3816,6 @@ export class Interpreter {
     const kind = node.kind as "let" | "const" | "var";
     this.validateVariableDeclarationKind(kind);
 
-    // After validation, we know kind is "let" or "const"
-    const validKind = kind as "let" | "const";
-
     let lastValue: any = undefined;
 
     for (const declarator of node.declarations) {
@@ -3794,12 +3832,7 @@ export class Interpreter {
         }
 
         const value = await this.evaluateNodeAsync(declarator.init);
-        await this.destructurePatternAsync(
-          declarator.id,
-          value,
-          true,
-          validKind,
-        );
+        await this.destructurePatternAsync(declarator.id, value, true, kind);
         lastValue = value;
         continue;
       }
@@ -3816,9 +3849,9 @@ export class Interpreter {
         ? await this.evaluateNodeAsync(declarator.init)
         : undefined;
 
-      this.validateConstInitializer(declarator, validKind);
+      this.validateConstInitializer(declarator, kind);
 
-      this.environment.declare(name, value, validKind);
+      this.environment.declare(name, value, kind);
       lastValue = value;
     }
 

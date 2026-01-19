@@ -196,15 +196,6 @@ describe("Variables and Assignments", () => {
     });
   });
 
-  describe("var is not supported", () => {
-    test("throws error on var declaration", () => {
-      expect(() => interpreter.evaluate("var x = 5")).toThrow(InterpreterError);
-      expect(() => interpreter.evaluate("var x = 5")).toThrow(
-        "var is not supported",
-      );
-    });
-  });
-
   describe("Integration with Arithmetic", () => {
     test("complex calculation with variables", () => {
       interpreter.evaluate("let a = 10");

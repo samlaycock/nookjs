@@ -31,6 +31,51 @@ The interpreter includes built-in security protections:
 
 **See [SECURITY.md](./SECURITY.md) for detailed security considerations, best practices, and threat model.**
 
+### Feature Control System
+
+The interpreter supports fine-grained feature control to target specific ECMAScript versions:
+
+- **Whitelist Mode**: Enable only specific features (restrictive, everything else disabled)
+- **Blacklist Mode**: Disable specific features (permissive, everything else enabled)
+- **Constructor Configuration**: Set feature control when creating the interpreter (applies to all evaluations)
+- **Per-call Configuration**: Override feature control for individual `evaluate()` calls
+- **30+ Controllable Features**: Including ES5 features (loops, functions, operators) and ES6+ features (arrow functions, async/await, destructuring, etc.)
+- **Version Targeting**: Simulate ES5, ES2015, ES2017, or any ECMAScript version
+- **Error Messages**: Clear error when disabled features are used (e.g., "ArrowFunctions is not enabled")
+
+Example - ES5 only (no modern features):
+```typescript
+const es5Interpreter = new Interpreter({
+  featureControl: {
+    mode: "whitelist",
+    features: ["FunctionDeclarations", "ForStatement", "IfStatement", "VariableDeclarations", ...]
+  }
+});
+```
+
+### ECMAScript Version Presets
+
+Pre-configured presets for different ECMAScript versions (ES5 through ES2024):
+
+- **ES5 (2009)**: Baseline JavaScript - `var`, functions, for/while loops, objects/arrays
+- **ES2015/ES6 (2015)**: Modern JavaScript - `let`/`const`, arrow functions, template literals, destructuring, spread/rest, for-of, Promises
+- **ES2016 (2016)**: Exponentiation operator (`**`), Array.includes
+- **ES2017 (2017)**: **async/await**
+- **ES2018-ES2024**: Progressive enhancements (mostly prototype methods)
+- **ESNext**: All features enabled (latest capabilities)
+
+Usage:
+```typescript
+import { Interpreter } from "./interpreter";
+import { ES5, ES2015, ES2017, ES2020 } from "./presets";
+
+const es5Interp = new Interpreter(ES5);      // Only ES5 features
+const es2015Interp = new Interpreter(ES2015); // ES5 + ES2015 features
+const es2017Interp = new Interpreter(ES2017); // Includes async/await
+```
+
+**Preset Accuracy**: ES5, ES2015-2019, and ES2023-2024 have 90-100% accuracy. See implementation for details on missing features (classes, optional chaining, nullish coalescing).
+
 ### AST Validation
 
 The interpreter supports custom AST validation for security and policy enforcement:
@@ -92,15 +137,18 @@ The interpreter supports custom AST validation for security and policy enforceme
 - Works with all JavaScript values including functions, arrays, and objects
 
 ### Variables
-- **Variable Declarations**: `let` and `const` (with proper immutability)
-- **Variable Assignment**: Reassigning `let` variables
+- **Variable Declarations**: 
+  - `let` - block-scoped, reassignable
+  - `const` - block-scoped, immutable
+  - `var` - function-scoped, allows re-declaration
+- **Variable Assignment**: Reassigning `let` and `var` variables
 - **Variable References**: Using variables in expressions
-- **Block Scoping**: Full lexical scoping - variables in `{ }` blocks are properly scoped
+- **Block Scoping**: `let`/`const` are properly block-scoped in `{ }` blocks
+- **Function Scoping**: `var` is function-scoped (hoists to nearest function or global scope)
 - **Variable Shadowing**: Inner scopes can shadow outer variables
 - **Scope Chain**: Inner blocks can access variables from outer scopes
-- **Error Handling**: Prevents redeclaration, undefined variable access, and const reassignment
-
-Note: `var` is not supported for simplicity and security.
+- **Re-declaration**: `var` allows re-declaration, `let`/`const` do not
+- **Error Handling**: Prevents redeclaration (for let/const), undefined variable access, and const reassignment
 
 ### Control Flow
 - **if Statements**: Execute code conditionally
