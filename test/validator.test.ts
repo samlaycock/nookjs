@@ -252,10 +252,8 @@ describe("AST Validator", () => {
       // Normal code works
       expect(interpreter.evaluate("let x = 10; x + 5")).toBe(15);
 
-      // Code with blocked identifiers fails
-      expect(() => interpreter.evaluate("let eval = 5")).toThrow(
-        "AST validation failed",
-      );
+      // Code with blocked identifiers fails (parseModule throws ParseError in strict mode before validator runs)
+      expect(() => interpreter.evaluate("let eval = 5")).toThrow();
     });
   });
 

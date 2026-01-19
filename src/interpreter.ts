@@ -13,7 +13,7 @@
  * - Control flow: if/else, while, for, for...of, break, continue, return
  */
 
-import { parseScript } from "meriyah";
+import { parseScript, parseModule } from "meriyah";
 import type { ESTree } from "meriyah";
 import { ReadOnlyProxy } from "./readonly-proxy";
 import { isDangerousProperty } from "./constants";
@@ -67,6 +67,17 @@ class ContinueValue {
 }
 
 /**
+ * Marker class to signal a yield expression in a generator
+ * When a generator executes `yield value`, we return YieldValue to pause execution
+ */
+class YieldValue {
+  constructor(
+    public value: any,
+    public delegate: boolean = false, // true for yield*, false for yield
+  ) {}
+}
+
+/**
  * Represents a function defined in the sandbox (interpreted JavaScript)
  * Stores the function's parameters, body AST, and captured closure environment
  *
@@ -79,7 +90,770 @@ class FunctionValue {
     public closure: Environment, // Captured environment for closures
     public isAsync: boolean = false,
     public restParamIndex: number | null = null, // Index where rest parameter starts, or null if no rest param
+    public isGenerator: boolean = false, // true for function* or async function*
   ) {}
+}
+
+/**
+ * Represents a generator instance created by calling a generator function
+ * Implements the iterator protocol with next(), return(), and throw()
+ *
+ * MVP Implementation: For now, we'll create a simple generator that executes
+ * the function body and collects yield points. This is Phase 1 - simple generators
+ * without complex control flow.
+ */
+class GeneratorValue {
+  private state:
+    | "suspended-start"
+    | "suspended-yield"
+    | "executing"
+    | "completed" = "suspended-start";
+  private nativeGenerator: Generator<any, any, any> | null = null;
+
+  constructor(
+    private fn: FunctionValue,
+    private args: any[],
+    private interpreter: Interpreter,
+  ) {}
+
+  /**
+   * Helper to execute a statement in generator context, yielding any yields recursively.
+   * This handles yields that occur deep inside control structures like loops.
+   */
+  private *executeGeneratorStatement(
+    statement: ESTree.Statement,
+  ): Generator<any, any, any> {
+    // Special handling for loop statements - we need to intercept yields inside loops
+    if (statement.type === "ForStatement") {
+      yield* this.executeGeneratorForStatement(
+        statement as ESTree.ForStatement,
+      );
+      return undefined;
+    }
+
+    if (statement.type === "WhileStatement") {
+      yield* this.executeGeneratorWhileStatement(
+        statement as ESTree.WhileStatement,
+      );
+      return undefined;
+    }
+
+    if (statement.type === "DoWhileStatement") {
+      yield* this.executeGeneratorDoWhileStatement(
+        statement as ESTree.DoWhileStatement,
+      );
+      return undefined;
+    }
+
+    // For other statements, evaluate normally
+    const result = this.interpreter.evaluateNode(statement);
+
+    // If we hit a yield, yield it
+    if (result instanceof YieldValue) {
+      yield result.value;
+      return undefined;
+    }
+
+    // If we hit a return, propagate it
+    if (result instanceof ReturnValue) {
+      return result;
+    }
+
+    // Other control flow
+    return result;
+  }
+
+  /**
+   * Execute a for loop in generator context, yielding yields from the body.
+   */
+  private *executeGeneratorForStatement(
+    node: ESTree.ForStatement,
+  ): Generator<any, any, any> {
+    // Create a new environment for the for loop scope
+    const previousEnv = this.interpreter.environment;
+    this.interpreter.environment = new Environment(previousEnv);
+
+    try {
+      // Evaluate the init expression
+      if (node.init) {
+        this.interpreter.evaluateNode(node.init);
+      }
+
+      // Loop while test condition is true
+      while (true) {
+        // Check test condition
+        if (node.test) {
+          const condition = this.interpreter.evaluateNode(node.test);
+          if (!condition) {
+            break;
+          }
+        }
+
+        // Execute loop body - handle BlockStatement specially
+        if (node.body.type === "BlockStatement") {
+          const blockNode = node.body as ESTree.BlockStatement;
+          let shouldBreak = false;
+          let shouldReturn: any = null;
+          let shouldContinue = false;
+
+          // Execute each statement in the block
+          for (const statement of blockNode.body) {
+            const stmtResult = this.interpreter.evaluateNode(statement);
+
+            if (stmtResult instanceof YieldValue) {
+              yield stmtResult.value;
+            } else if (stmtResult instanceof ReturnValue) {
+              shouldReturn = stmtResult;
+              break;
+            } else if (stmtResult instanceof BreakValue) {
+              shouldBreak = true;
+              break;
+            } else if (stmtResult instanceof ContinueValue) {
+              shouldContinue = true;
+              break;
+            }
+          }
+
+          if (shouldReturn) {
+            return shouldReturn;
+          }
+          if (shouldBreak) {
+            break;
+          }
+          if (shouldContinue) {
+            // Continue to update
+          }
+        } else {
+          // Non-block body
+          const bodyResult = this.interpreter.evaluateNode(node.body);
+
+          if (bodyResult instanceof YieldValue) {
+            yield bodyResult.value;
+          } else if (bodyResult instanceof ReturnValue) {
+            return bodyResult;
+          } else if (bodyResult instanceof BreakValue) {
+            break;
+          }
+          // ContinueValue just continues to update
+        }
+
+        // Execute update expression
+        if (node.update) {
+          this.interpreter.evaluateNode(node.update);
+        }
+      }
+
+      return undefined;
+    } finally {
+      this.interpreter.environment = previousEnv;
+    }
+  }
+
+  /**
+   * Execute a while loop in generator context, yielding yields from the body.
+   */
+  private *executeGeneratorWhileStatement(
+    node: ESTree.WhileStatement,
+  ): Generator<any, any, any> {
+    while (true) {
+      // Check test condition
+      const condition = this.interpreter.evaluateNode(node.test);
+      if (!condition) {
+        break;
+      }
+
+      // Execute loop body - handle BlockStatement specially
+      if (node.body.type === "BlockStatement") {
+        const blockNode = node.body as ESTree.BlockStatement;
+        let shouldBreak = false;
+        let shouldReturn: any = null;
+
+        // Execute each statement in the block
+        for (const statement of blockNode.body) {
+          const stmtResult = this.interpreter.evaluateNode(statement);
+
+          if (stmtResult instanceof YieldValue) {
+            yield stmtResult.value;
+          } else if (stmtResult instanceof ReturnValue) {
+            shouldReturn = stmtResult;
+            break;
+          } else if (stmtResult instanceof BreakValue) {
+            shouldBreak = true;
+            break;
+          } else if (stmtResult instanceof ContinueValue) {
+            break; // Break from statement loop, continue while loop
+          }
+        }
+
+        if (shouldReturn) {
+          return shouldReturn;
+        }
+        if (shouldBreak) {
+          break;
+        }
+      } else {
+        // Non-block body
+        const bodyResult = this.interpreter.evaluateNode(node.body);
+
+        if (bodyResult instanceof YieldValue) {
+          yield bodyResult.value;
+        } else if (bodyResult instanceof ReturnValue) {
+          return bodyResult;
+        } else if (bodyResult instanceof BreakValue) {
+          break;
+        }
+        // ContinueValue just continues
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Execute a do-while loop in generator context, yielding yields from the body.
+   */
+  private *executeGeneratorDoWhileStatement(
+    node: ESTree.DoWhileStatement,
+  ): Generator<any, any, any> {
+    do {
+      // Execute loop body - handle BlockStatement specially
+      if (node.body.type === "BlockStatement") {
+        const blockNode = node.body as ESTree.BlockStatement;
+        let shouldBreak = false;
+        let shouldReturn: any = null;
+
+        // Execute each statement in the block
+        for (const statement of blockNode.body) {
+          const stmtResult = this.interpreter.evaluateNode(statement);
+
+          if (stmtResult instanceof YieldValue) {
+            yield stmtResult.value;
+          } else if (stmtResult instanceof ReturnValue) {
+            shouldReturn = stmtResult;
+            break;
+          } else if (stmtResult instanceof BreakValue) {
+            shouldBreak = true;
+            break;
+          } else if (stmtResult instanceof ContinueValue) {
+            break; // Break from statement loop, continue do-while loop
+          }
+        }
+
+        if (shouldReturn) {
+          return shouldReturn;
+        }
+        if (shouldBreak) {
+          break;
+        }
+      } else {
+        // Non-block body
+        const bodyResult = this.interpreter.evaluateNode(node.body);
+
+        if (bodyResult instanceof YieldValue) {
+          yield bodyResult.value;
+        } else if (bodyResult instanceof ReturnValue) {
+          return bodyResult;
+        } else if (bodyResult instanceof BreakValue) {
+          break;
+        }
+        // ContinueValue just continues
+      }
+
+      // Check test condition
+      const condition = this.interpreter.evaluateNode(node.test);
+      if (!condition) {
+        break;
+      }
+    } while (true);
+
+    return undefined;
+  }
+
+  /**
+   * Create a native TypeScript generator that wraps our interpreter execution.
+   * This leverages TS's native generator state management to handle pause/resume.
+   */
+  private *createExecutionGenerator(): Generator<any, any, any> {
+    const previousEnv = this.interpreter.environment;
+    const generatorEnv = new Environment(this.fn.closure, undefined, true);
+    this.interpreter.environment = generatorEnv;
+
+    try {
+      // Bind parameters
+      const regularParamCount =
+        this.fn.restParamIndex !== null
+          ? this.fn.restParamIndex
+          : this.fn.params.length;
+
+      for (let i = 0; i < regularParamCount && i < this.args.length; i++) {
+        generatorEnv.declare(this.fn.params[i]!, this.args[i], "let");
+      }
+
+      if (this.fn.restParamIndex !== null) {
+        const restArgs = this.args.slice(this.fn.restParamIndex);
+        generatorEnv.declare(
+          this.fn.params[this.fn.restParamIndex]!,
+          restArgs,
+          "let",
+        );
+      }
+
+      // Execute each statement in the function body
+      for (const statement of this.fn.body.body) {
+        const result = yield* this.executeGeneratorStatement(statement);
+
+        // If we hit a return, return it
+        if (result instanceof ReturnValue) {
+          return result.value;
+        }
+
+        // Handle control flow signals
+        if (result instanceof BreakValue || result instanceof ContinueValue) {
+          throw new InterpreterError(
+            "Break/continue outside of loop in generator",
+          );
+        }
+      }
+
+      // Implicit return undefined
+      return undefined;
+    } finally {
+      this.interpreter.environment = previousEnv;
+    }
+  }
+
+  next(value?: any): IteratorResult<any> {
+    if (this.state === "completed") {
+      return { done: true, value: undefined };
+    }
+
+    if (this.state === "executing") {
+      throw new InterpreterError("Generator is already executing");
+    }
+
+    try {
+      this.state = "executing";
+
+      // Lazy create the native generator
+      if (!this.nativeGenerator) {
+        this.nativeGenerator = this.createExecutionGenerator();
+      }
+
+      const result = this.nativeGenerator.next(value);
+
+      if (result.done) {
+        this.state = "completed";
+      } else {
+        this.state = "suspended-yield";
+      }
+
+      return result;
+    } catch (e) {
+      this.state = "completed";
+      throw e;
+    }
+  }
+
+  return(value?: any): IteratorResult<any> {
+    this.state = "completed";
+    if (this.nativeGenerator) {
+      return this.nativeGenerator.return?.(value) || { done: true, value };
+    }
+    return { done: true, value };
+  }
+
+  throw(error?: any): IteratorResult<any> {
+    this.state = "completed";
+    if (this.nativeGenerator) {
+      return (
+        this.nativeGenerator.throw?.(error) || { done: true, value: undefined }
+      );
+    }
+    throw error || new Error("Generator throw");
+  }
+}
+
+/**
+ * Represents an async generator instance
+ * Similar to GeneratorValue but returns promises
+ */
+class AsyncGeneratorValue {
+  private state:
+    | "suspended-start"
+    | "suspended-yield"
+    | "executing"
+    | "completed" = "suspended-start";
+  private nativeGenerator: AsyncGenerator<any, any, any> | null = null;
+
+  constructor(
+    private fn: FunctionValue,
+    private args: any[],
+    private interpreter: Interpreter,
+  ) {}
+
+  /**
+   * Helper to execute a statement in async generator context, yielding any yields recursively.
+   */
+  private async *executeGeneratorStatement(
+    statement: ESTree.Statement,
+  ): AsyncGenerator<any, any, any> {
+    // Special handling for loop statements
+    if (statement.type === "ForStatement") {
+      yield* this.executeGeneratorForStatement(
+        statement as ESTree.ForStatement,
+      );
+      return undefined;
+    }
+
+    if (statement.type === "WhileStatement") {
+      yield* this.executeGeneratorWhileStatement(
+        statement as ESTree.WhileStatement,
+      );
+      return undefined;
+    }
+
+    if (statement.type === "DoWhileStatement") {
+      yield* this.executeGeneratorDoWhileStatement(
+        statement as ESTree.DoWhileStatement,
+      );
+      return undefined;
+    }
+
+    // For other statements, evaluate normally
+    const result = await this.interpreter.evaluateNodeAsync(statement);
+
+    // If we hit a yield, yield it
+    if (result instanceof YieldValue) {
+      yield result.value;
+      return undefined;
+    }
+
+    // If we hit a return, propagate it
+    if (result instanceof ReturnValue) {
+      return result;
+    }
+
+    // Other control flow
+    return result;
+  }
+
+  /**
+   * Execute a for loop in async generator context, yielding yields from the body.
+   */
+  private async *executeGeneratorForStatement(
+    node: ESTree.ForStatement,
+  ): AsyncGenerator<any, any, any> {
+    // Create a new environment for the for loop scope
+    const previousEnv = this.interpreter.environment;
+    this.interpreter.environment = new Environment(previousEnv);
+
+    try {
+      // Evaluate the init expression
+      if (node.init) {
+        await this.interpreter.evaluateNodeAsync(node.init);
+      }
+
+      // Loop while test condition is true
+      while (true) {
+        // Check test condition
+        if (node.test) {
+          const condition = await this.interpreter.evaluateNodeAsync(node.test);
+          if (!condition) {
+            break;
+          }
+        }
+
+        // Execute loop body - handle BlockStatement specially
+        if (node.body.type === "BlockStatement") {
+          const blockNode = node.body as ESTree.BlockStatement;
+          let shouldBreak = false;
+          let shouldReturn: any = null;
+          let shouldContinue = false;
+
+          // Execute each statement in the block
+          for (const statement of blockNode.body) {
+            const stmtResult =
+              await this.interpreter.evaluateNodeAsync(statement);
+
+            if (stmtResult instanceof YieldValue) {
+              yield stmtResult.value;
+            } else if (stmtResult instanceof ReturnValue) {
+              shouldReturn = stmtResult;
+              break;
+            } else if (stmtResult instanceof BreakValue) {
+              shouldBreak = true;
+              break;
+            } else if (stmtResult instanceof ContinueValue) {
+              shouldContinue = true;
+              break;
+            }
+          }
+
+          if (shouldReturn) {
+            return shouldReturn;
+          }
+          if (shouldBreak) {
+            break;
+          }
+          if (shouldContinue) {
+            // Continue to update
+          }
+        } else {
+          // Non-block body
+          const bodyResult = await this.interpreter.evaluateNodeAsync(
+            node.body,
+          );
+
+          if (bodyResult instanceof YieldValue) {
+            yield bodyResult.value;
+          } else if (bodyResult instanceof ReturnValue) {
+            return bodyResult;
+          } else if (bodyResult instanceof BreakValue) {
+            break;
+          }
+          // ContinueValue just continues to update
+        }
+
+        // Execute update expression
+        if (node.update) {
+          await this.interpreter.evaluateNodeAsync(node.update);
+        }
+      }
+
+      return undefined;
+    } finally {
+      this.interpreter.environment = previousEnv;
+    }
+  }
+
+  /**
+   * Execute a while loop in async generator context, yielding yields from the body.
+   */
+  private async *executeGeneratorWhileStatement(
+    node: ESTree.WhileStatement,
+  ): AsyncGenerator<any, any, any> {
+    while (true) {
+      // Check test condition
+      const condition = await this.interpreter.evaluateNodeAsync(node.test);
+      if (!condition) {
+        break;
+      }
+
+      // Execute loop body - handle BlockStatement specially
+      if (node.body.type === "BlockStatement") {
+        const blockNode = node.body as ESTree.BlockStatement;
+        let shouldBreak = false;
+        let shouldReturn: any = null;
+
+        // Execute each statement in the block
+        for (const statement of blockNode.body) {
+          const stmtResult =
+            await this.interpreter.evaluateNodeAsync(statement);
+
+          if (stmtResult instanceof YieldValue) {
+            yield stmtResult.value;
+          } else if (stmtResult instanceof ReturnValue) {
+            shouldReturn = stmtResult;
+            break;
+          } else if (stmtResult instanceof BreakValue) {
+            shouldBreak = true;
+            break;
+          } else if (stmtResult instanceof ContinueValue) {
+            break; // Break from statement loop, continue while loop
+          }
+        }
+
+        if (shouldReturn) {
+          return shouldReturn;
+        }
+        if (shouldBreak) {
+          break;
+        }
+      } else {
+        // Non-block body
+        const bodyResult = await this.interpreter.evaluateNodeAsync(node.body);
+
+        if (bodyResult instanceof YieldValue) {
+          yield bodyResult.value;
+        } else if (bodyResult instanceof ReturnValue) {
+          return bodyResult;
+        } else if (bodyResult instanceof BreakValue) {
+          break;
+        }
+        // ContinueValue just continues
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Execute a do-while loop in async generator context, yielding yields from the body.
+   */
+  private async *executeGeneratorDoWhileStatement(
+    node: ESTree.DoWhileStatement,
+  ): AsyncGenerator<any, any, any> {
+    do {
+      // Execute loop body - handle BlockStatement specially
+      if (node.body.type === "BlockStatement") {
+        const blockNode = node.body as ESTree.BlockStatement;
+        let shouldBreak = false;
+        let shouldReturn: any = null;
+
+        // Execute each statement in the block
+        for (const statement of blockNode.body) {
+          const stmtResult =
+            await this.interpreter.evaluateNodeAsync(statement);
+
+          if (stmtResult instanceof YieldValue) {
+            yield stmtResult.value;
+          } else if (stmtResult instanceof ReturnValue) {
+            shouldReturn = stmtResult;
+            break;
+          } else if (stmtResult instanceof BreakValue) {
+            shouldBreak = true;
+            break;
+          } else if (stmtResult instanceof ContinueValue) {
+            break; // Break from statement loop, continue do-while loop
+          }
+        }
+
+        if (shouldReturn) {
+          return shouldReturn;
+        }
+        if (shouldBreak) {
+          break;
+        }
+      } else {
+        // Non-block body
+        const bodyResult = await this.interpreter.evaluateNodeAsync(node.body);
+
+        if (bodyResult instanceof YieldValue) {
+          yield bodyResult.value;
+        } else if (bodyResult instanceof ReturnValue) {
+          return bodyResult;
+        } else if (bodyResult instanceof BreakValue) {
+          break;
+        }
+        // ContinueValue just continues
+      }
+
+      // Check test condition
+      const condition = await this.interpreter.evaluateNodeAsync(node.test);
+      if (!condition) {
+        break;
+      }
+    } while (true);
+
+    return undefined;
+  }
+
+  /**
+   * Create a native TypeScript async generator that wraps our async interpreter execution.
+   */
+  private async *createExecutionGenerator(): AsyncGenerator<any, any, any> {
+    const previousEnv = this.interpreter.environment;
+    const generatorEnv = new Environment(this.fn.closure, undefined, true);
+    this.interpreter.environment = generatorEnv;
+
+    try {
+      // Bind parameters
+      const regularParamCount =
+        this.fn.restParamIndex !== null
+          ? this.fn.restParamIndex
+          : this.fn.params.length;
+
+      for (let i = 0; i < regularParamCount && i < this.args.length; i++) {
+        generatorEnv.declare(this.fn.params[i]!, this.args[i], "let");
+      }
+
+      if (this.fn.restParamIndex !== null) {
+        const restArgs = this.args.slice(this.fn.restParamIndex);
+        generatorEnv.declare(
+          this.fn.params[this.fn.restParamIndex]!,
+          restArgs,
+          "let",
+        );
+      }
+
+      // Execute each statement in the function body
+      for (const statement of this.fn.body.body) {
+        const result = yield* this.executeGeneratorStatement(statement);
+
+        // If we hit a return, return it
+        if (result instanceof ReturnValue) {
+          return result.value;
+        }
+
+        // Handle control flow signals
+        if (result instanceof BreakValue || result instanceof ContinueValue) {
+          throw new InterpreterError(
+            "Break/continue outside of loop in generator",
+          );
+        }
+      }
+
+      // Implicit return undefined
+      return undefined;
+    } finally {
+      this.interpreter.environment = previousEnv;
+    }
+  }
+
+  async next(value?: any): Promise<IteratorResult<any>> {
+    if (this.state === "completed") {
+      return { done: true, value: undefined };
+    }
+
+    if (this.state === "executing") {
+      throw new InterpreterError("Generator is already executing");
+    }
+
+    try {
+      this.state = "executing";
+
+      // Lazy create the native generator
+      if (!this.nativeGenerator) {
+        this.nativeGenerator = this.createExecutionGenerator();
+      }
+
+      const result = await this.nativeGenerator.next(value);
+
+      if (result.done) {
+        this.state = "completed";
+      } else {
+        this.state = "suspended-yield";
+      }
+
+      return result;
+    } catch (e) {
+      this.state = "completed";
+      throw e;
+    }
+  }
+
+  async return(value?: any): Promise<IteratorResult<any>> {
+    this.state = "completed";
+    if (this.nativeGenerator) {
+      return (
+        (await this.nativeGenerator.return?.(value)) || { done: true, value }
+      );
+    }
+    return { done: true, value };
+  }
+
+  async throw(error?: any): Promise<IteratorResult<any>> {
+    this.state = "completed";
+    if (this.nativeGenerator) {
+      return (
+        (await this.nativeGenerator.throw?.(error)) || {
+          done: true,
+          value: undefined,
+        }
+      );
+    }
+    throw error || new Error("Generator throw");
+  }
 }
 
 /**
@@ -549,7 +1323,10 @@ export class Interpreter {
     }
 
     try {
-      const ast = parseScript(code, { module: false });
+      // Use parseModule to support top-level await in async context
+      const ast = parseModule(code, {
+        next: true, // Enable newer JavaScript features like async generators
+      });
 
       // Run validator - per-call validator takes precedence over constructor validator
       const validator = options?.validator || this.constructorValidator;
@@ -587,7 +1364,10 @@ export class Interpreter {
     }
 
     try {
-      const ast = parseScript(code, { module: false });
+      // Use parseModule to support top-level await in async context
+      const ast = parseModule(code, {
+        next: true, // Enable newer JavaScript features like async generators
+      });
 
       // Run validator - per-call validator takes precedence over constructor validator
       const validator = options?.validator || this.constructorValidator;
@@ -702,6 +1482,9 @@ export class Interpreter {
         throw new InterpreterError(
           "Cannot use await in synchronous evaluate(). Use evaluateAsync() instead.",
         );
+
+      case "YieldExpression":
+        return this.evaluateYieldExpression(node as ESTree.YieldExpression);
 
       case "BreakStatement":
         return this.evaluateBreakStatement(node as ESTree.BreakStatement);
@@ -848,6 +1631,11 @@ export class Interpreter {
       case "AwaitExpression":
         return await this.evaluateAwaitExpressionAsync(
           node as ESTree.AwaitExpression,
+        );
+
+      case "YieldExpression":
+        return await this.evaluateYieldExpressionAsync(
+          node as ESTree.YieldExpression,
         );
 
       case "BreakStatement":
@@ -1133,7 +1921,8 @@ export class Interpreter {
     return (
       result instanceof ReturnValue ||
       result instanceof BreakValue ||
-      result instanceof ContinueValue
+      result instanceof ContinueValue ||
+      result instanceof YieldValue
     );
   }
 
@@ -2253,6 +3042,7 @@ export class Interpreter {
       this.environment,
       node.async || false,
       restParamIndex,
+      node.generator || false,
     );
 
     // Declare the function in the current environment
@@ -2320,6 +3110,7 @@ export class Interpreter {
       this.environment,
       node.async || false,
       restParamIndex,
+      node.generator || false,
     );
   }
 
@@ -2763,9 +3554,14 @@ export class Interpreter {
       const memberExpr = node.callee as ESTree.MemberExpression;
       thisValue = this.evaluateNode(memberExpr.object); // The object becomes 'this'
 
-      // For arrays and strings, use evaluateMemberExpression to get HostFunctionValue wrappers
-      // For other objects, access the property directly
-      if (Array.isArray(thisValue) || typeof thisValue === "string") {
+      // For arrays, strings, generators, and async generators, use evaluateMemberExpression
+      // to get HostFunctionValue wrappers
+      if (
+        Array.isArray(thisValue) ||
+        typeof thisValue === "string" ||
+        thisValue instanceof GeneratorValue ||
+        thisValue instanceof AsyncGeneratorValue
+      ) {
         callee = this.evaluateMemberExpression(memberExpr);
       } else {
         // Get the method from the object
@@ -2807,7 +3603,7 @@ export class Interpreter {
     }
 
     // Check if async sandbox function in sync mode
-    if (callee.isAsync) {
+    if (callee.isAsync && !callee.isGenerator) {
       throw new InterpreterError(
         "Cannot call async function in synchronous evaluate(). Use evaluateAsync() instead.",
       );
@@ -2818,6 +3614,16 @@ export class Interpreter {
 
     // Validate argument count
     this.validateFunctionArguments(callee, args);
+
+    // If generator function, return a generator instance
+    if (callee.isGenerator) {
+      if (callee.isAsync) {
+        throw new InterpreterError(
+          "Cannot call async generator in synchronous evaluate(). Use evaluateAsync() instead.",
+        );
+      }
+      return new GeneratorValue(callee, args, this);
+    }
 
     // Execute the sandbox function
     return this.executeSandboxFunction(callee, args, thisValue);
@@ -2900,6 +3706,54 @@ export class Interpreter {
       const length = this.getLengthProperty(object, property);
       if (length !== null) {
         return length;
+      }
+
+      // Handle generator methods (next, return, throw)
+      if (object instanceof GeneratorValue) {
+        if (property === "next") {
+          return new HostFunctionValue(object.next.bind(object), "next", false);
+        }
+        if (property === "return") {
+          return new HostFunctionValue(
+            object.return.bind(object),
+            "return",
+            false,
+          );
+        }
+        if (property === "throw") {
+          return new HostFunctionValue(
+            object.throw.bind(object),
+            "throw",
+            false,
+          );
+        }
+        throw new InterpreterError(
+          `Generator method '${property}' not supported`,
+        );
+      }
+
+      // Handle async generator methods
+      if (object instanceof AsyncGeneratorValue) {
+        if (property === "next") {
+          return new HostFunctionValue(object.next.bind(object), "next", true);
+        }
+        if (property === "return") {
+          return new HostFunctionValue(
+            object.return.bind(object),
+            "return",
+            true,
+          );
+        }
+        if (property === "throw") {
+          return new HostFunctionValue(
+            object.throw.bind(object),
+            "throw",
+            true,
+          );
+        }
+        throw new InterpreterError(
+          `Async generator method '${property}' not supported`,
+        );
       }
 
       // Handle array methods
@@ -3635,9 +4489,14 @@ export class Interpreter {
       const memberExpr = node.callee as ESTree.MemberExpression;
       thisValue = await this.evaluateNodeAsync(memberExpr.object);
 
-      // For arrays and strings, use evaluateMemberExpressionAsync to get HostFunctionValue wrappers
+      // For arrays, strings, and generators, use evaluateMemberExpressionAsync to get HostFunctionValue wrappers
       // For other objects, access the property directly
-      if (Array.isArray(thisValue) || typeof thisValue === "string") {
+      if (
+        Array.isArray(thisValue) ||
+        typeof thisValue === "string" ||
+        thisValue instanceof GeneratorValue ||
+        thisValue instanceof AsyncGeneratorValue
+      ) {
         callee = await this.evaluateMemberExpressionAsync(memberExpr);
       } else {
         if (thisValue instanceof HostFunctionValue) {
@@ -3683,6 +4542,14 @@ export class Interpreter {
 
     // Validate argument count
     this.validateFunctionArguments(callee, args);
+
+    // If generator function, return a generator instance
+    if (callee.isGenerator) {
+      if (callee.isAsync) {
+        return new AsyncGeneratorValue(callee, args, this);
+      }
+      return new GeneratorValue(callee, args, this);
+    }
 
     // Execute the sandbox function (handles both sync and async functions)
     return await this.executeSandboxFunctionAsync(callee, args, thisValue);
@@ -4190,6 +5057,32 @@ export class Interpreter {
   }
 
   /**
+   * Evaluate yield expression (sync): yield value or yield* iterable
+   * Returns a YieldValue signal that will be caught by the generator executor
+   */
+  private evaluateYieldExpression(node: ESTree.YieldExpression): any {
+    // Check if we're inside a generator function
+    // For now, we'll just evaluate and return YieldValue
+    // The generator executor will catch this
+
+    const value = node.argument ? this.evaluateNode(node.argument) : undefined;
+    return new YieldValue(value, node.delegate || false);
+  }
+
+  /**
+   * Evaluate yield expression (async): yield value or yield* iterable
+   * Returns a YieldValue signal that will be caught by the async generator executor
+   */
+  private async evaluateYieldExpressionAsync(
+    node: ESTree.YieldExpression,
+  ): Promise<any> {
+    const value = node.argument
+      ? await this.evaluateNodeAsync(node.argument)
+      : undefined;
+    return new YieldValue(value, node.delegate || false);
+  }
+
+  /**
    * Evaluate throw statement (async): throw expression
    * Throws an InterpreterError with the evaluated expression
    */
@@ -4506,6 +5399,54 @@ export class Interpreter {
       const length = this.getLengthProperty(object, property);
       if (length !== null) {
         return length;
+      }
+
+      // Handle generator methods (next, return, throw)
+      if (object instanceof GeneratorValue) {
+        if (property === "next") {
+          return new HostFunctionValue(object.next.bind(object), "next", false);
+        }
+        if (property === "return") {
+          return new HostFunctionValue(
+            object.return.bind(object),
+            "return",
+            false,
+          );
+        }
+        if (property === "throw") {
+          return new HostFunctionValue(
+            object.throw.bind(object),
+            "throw",
+            false,
+          );
+        }
+        throw new InterpreterError(
+          `Generator method '${property}' not supported`,
+        );
+      }
+
+      // Handle async generator methods
+      if (object instanceof AsyncGeneratorValue) {
+        if (property === "next") {
+          return new HostFunctionValue(object.next.bind(object), "next", true);
+        }
+        if (property === "return") {
+          return new HostFunctionValue(
+            object.return.bind(object),
+            "return",
+            true,
+          );
+        }
+        if (property === "throw") {
+          return new HostFunctionValue(
+            object.throw.bind(object),
+            "throw",
+            true,
+          );
+        }
+        throw new InterpreterError(
+          `Async generator method '${property}' not supported`,
+        );
       }
 
       // Handle array methods (reuse sync version since array methods work the same)
