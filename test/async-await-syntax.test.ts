@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 
 describe("Async/Await Syntax", () => {

@@ -1,5 +1,5 @@
-import { InterpreterError, HostFunctionValue } from "./interpreter";
 import { isDangerousProperty } from "./constants";
+import { InterpreterError, HostFunctionValue } from "./interpreter";
 
 /**
  * ReadOnlyProxy - Wraps global objects to make them read-only and secure
@@ -37,11 +37,7 @@ export class ReadOnlyProxy {
     // wrap it directly as HostFunctionValue instead of proxying it
     if (typeof value === "function") {
       const isAsync = value.constructor.name === "AsyncFunction";
-      return new HostFunctionValue(
-        (...args: any[]) => value(...args),
-        name,
-        isAsync,
-      );
+      return new HostFunctionValue((...args: any[]) => value(...args), name, isAsync);
     }
 
     // Create a proxy that intercepts all operations (for objects like Math, console, etc.)
@@ -49,9 +45,7 @@ export class ReadOnlyProxy {
       get(target, prop, receiver) {
         // Block dangerous properties that could break out of sandbox
         if (isDangerousProperty(prop)) {
-          throw new InterpreterError(
-            `Cannot access ${String(prop)} on global '${name}'`,
-          );
+          throw new InterpreterError(`Cannot access ${String(prop)} on global '${name}'`);
         }
 
         // Get the actual value
@@ -105,9 +99,7 @@ export class ReadOnlyProxy {
 
       // Block setPrototypeOf to prevent prototype chain manipulation
       setPrototypeOf(target) {
-        throw new InterpreterError(
-          `Cannot set prototype of global '${name}' (read-only)`,
-        );
+        throw new InterpreterError(`Cannot set prototype of global '${name}' (read-only)`);
       },
 
       // Block getPrototypeOf to prevent accessing the underlying object's prototype

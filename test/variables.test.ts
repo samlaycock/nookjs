@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
+
 import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Variables and Assignments", () => {
@@ -32,9 +33,7 @@ describe("Variables and Assignments", () => {
 
     test("throws error on duplicate declaration", () => {
       interpreter.evaluate("let x = 5");
-      expect(() => interpreter.evaluate("let x = 10")).toThrow(
-        InterpreterError,
-      );
+      expect(() => interpreter.evaluate("let x = 10")).toThrow(InterpreterError);
       expect(() => interpreter.evaluate("let x = 10")).toThrow(
         "Variable 'x' has already been declared",
       );
@@ -68,9 +67,7 @@ describe("Variables and Assignments", () => {
     test("throws error on const reassignment", () => {
       interpreter.evaluate("const x = 5");
       expect(() => interpreter.evaluate("x = 10")).toThrow(InterpreterError);
-      expect(() => interpreter.evaluate("x = 10")).toThrow(
-        "Cannot assign to const variable 'x'",
-      );
+      expect(() => interpreter.evaluate("x = 10")).toThrow("Cannot assign to const variable 'x'");
     });
 
     test("can use const in expressions", () => {
@@ -80,9 +77,7 @@ describe("Variables and Assignments", () => {
 
     test("throws error on duplicate const declaration", () => {
       interpreter.evaluate("const x = 5");
-      expect(() => interpreter.evaluate("const x = 10")).toThrow(
-        InterpreterError,
-      );
+      expect(() => interpreter.evaluate("const x = 10")).toThrow(InterpreterError);
     });
   });
 
@@ -94,9 +89,7 @@ describe("Variables and Assignments", () => {
 
     test("throws error on assignment to undefined variable", () => {
       expect(() => interpreter.evaluate("x = 5")).toThrow(InterpreterError);
-      expect(() => interpreter.evaluate("x = 5")).toThrow(
-        "Undefined variable 'x'",
-      );
+      expect(() => interpreter.evaluate("x = 5")).toThrow("Undefined variable 'x'");
     });
 
     test("can reference variable in same statement after declaration", () => {
@@ -130,9 +123,7 @@ describe("Variables and Assignments", () => {
     });
 
     test("throws error on invalid assignment target", () => {
-      expect(() => interpreter.evaluate("5 = 10")).toThrow(
-        "Invalid left-hand side in assignment",
-      );
+      expect(() => interpreter.evaluate("5 = 10")).toThrow("Invalid left-hand side in assignment");
     });
   });
 
@@ -176,23 +167,17 @@ describe("Variables and Assignments", () => {
   describe("Variable Shadowing Prevention", () => {
     test("cannot redeclare with let", () => {
       interpreter.evaluate("let x = 5");
-      expect(() => interpreter.evaluate("let x = 10")).toThrow(
-        InterpreterError,
-      );
+      expect(() => interpreter.evaluate("let x = 10")).toThrow(InterpreterError);
     });
 
     test("cannot redeclare with const", () => {
       interpreter.evaluate("const x = 5");
-      expect(() => interpreter.evaluate("const x = 10")).toThrow(
-        InterpreterError,
-      );
+      expect(() => interpreter.evaluate("const x = 10")).toThrow(InterpreterError);
     });
 
     test("cannot mix let and const with same name", () => {
       interpreter.evaluate("let x = 5");
-      expect(() => interpreter.evaluate("const x = 10")).toThrow(
-        InterpreterError,
-      );
+      expect(() => interpreter.evaluate("const x = 10")).toThrow(InterpreterError);
     });
   });
 

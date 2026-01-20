@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+
 import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Try/Catch/Finally", () => {
@@ -282,12 +283,7 @@ describe("Try/Catch/Finally", () => {
         }
         log;
       `);
-      expect(result).toEqual([
-        "outer try",
-        "inner try",
-        "inner catch",
-        "after inner",
-      ]);
+      expect(result).toEqual(["outer try", "inner try", "inner catch", "after inner"]);
     });
 
     it("should propagate uncaught errors to outer catch", () => {
@@ -307,12 +303,7 @@ describe("Try/Catch/Finally", () => {
         }
         log;
       `);
-      expect(result).toEqual([
-        "outer try",
-        "inner try",
-        "inner finally",
-        "outer catch",
-      ]);
+      expect(result).toEqual(["outer try", "inner try", "inner finally", "outer catch"]);
     });
   });
 

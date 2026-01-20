@@ -1,4 +1,5 @@
 import { describe, test, expect } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 
 describe("Generator Functions", () => {

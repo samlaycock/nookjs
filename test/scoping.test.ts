@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
+
 import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Block Scoping", () => {
@@ -28,9 +29,7 @@ describe("Block Scoping", () => {
         x
       `;
       expect(() => interpreter.evaluate(code)).toThrow(InterpreterError);
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Undefined variable 'x'",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'x'");
     });
 
     test("can access outer variable from inner block", () => {
@@ -85,9 +84,7 @@ describe("Block Scoping", () => {
         }
       `;
       expect(() => interpreter.evaluate(code)).toThrow(InterpreterError);
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Cannot assign to const variable",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Cannot assign to const variable");
     });
 
     test("multiple variables in block", () => {
@@ -201,9 +198,7 @@ describe("Block Scoping", () => {
         }
         x
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Undefined variable 'x'",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'x'");
     });
 
     test("else block creates separate scope", () => {
@@ -320,9 +315,7 @@ describe("Block Scoping", () => {
         }
         temp
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Undefined variable 'temp'",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'temp'");
     });
   });
 
@@ -346,9 +339,7 @@ describe("Block Scoping", () => {
           x = 20;
         }
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Cannot assign to const variable",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Cannot assign to const variable");
     });
 
     test("const shadowing outer let", () => {
@@ -492,9 +483,7 @@ describe("Block Scoping", () => {
           let x = 20;
         }
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Variable 'x' has already been declared",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Variable 'x' has already been declared");
     });
 
     test("can redeclare in sibling scope", () => {

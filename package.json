@@ -1,18 +1,24 @@
 {
   "name": "interpreter",
-  "module": "index.ts",
-  "type": "module",
   "private": true,
+  "type": "module",
+  "module": "index.ts",
   "scripts": {
+    "lint": "oxlint . --type-aware",
+    "fmt": "oxfmt .",
     "benchmark": "bun run benchmark.ts"
   },
+  "dependencies": {
+    "meriyah": "7.0.0"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "oxfmt": "0.26.0",
+    "oxlint": "1.41.0",
+    "oxlint-tsgolint": "0.11.1",
+    "tsdown": "0.20.0-beta.4"
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "dependencies": {
-    "meriyah": "^7.0.0"
   }
 }

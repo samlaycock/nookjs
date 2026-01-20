@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
+
 import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Functions", () => {
@@ -125,9 +126,7 @@ describe("Functions", () => {
         }
         add(5)
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Expected at least 2 arguments but got 1",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Expected at least 2 arguments but got 1");
     });
 
     test("allows extra arguments (for compatibility with rest parameters)", () => {
@@ -393,9 +392,7 @@ describe("Functions", () => {
         foo();
         x
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Undefined variable 'x'",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'x'");
     });
 
     test("local variable shadows outer", () => {
@@ -629,9 +626,7 @@ describe("Functions", () => {
 
   describe("Error handling", () => {
     test("calling undefined function throws", () => {
-      expect(() => interpreter.evaluate("foo()")).toThrow(
-        "Undefined variable 'foo'",
-      );
+      expect(() => interpreter.evaluate("foo()")).toThrow("Undefined variable 'foo'");
     });
 
     test("calling non-function throws", () => {
@@ -639,9 +634,7 @@ describe("Functions", () => {
         let x = 5;
         x()
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Callee is not a function",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Callee is not a function");
     });
 
     test("cannot redeclare function", () => {
@@ -653,9 +646,7 @@ describe("Functions", () => {
           return 2;
         }
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Variable 'foo' has already been declared",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Variable 'foo' has already been declared");
     });
   });
 });

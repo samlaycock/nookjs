@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
+
 import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Comparison and Logical Operators", () => {
@@ -253,12 +254,8 @@ describe("Comparison and Logical Operators", () => {
     });
 
     test("nested logical expressions", () => {
-      expect(interpreter.evaluate("(true && true) && (false || true)")).toBe(
-        true,
-      );
-      expect(interpreter.evaluate("(true || false) && (true || false)")).toBe(
-        true,
-      );
+      expect(interpreter.evaluate("(true && true) && (false || true)")).toBe(true);
+      expect(interpreter.evaluate("(true || false) && (true || false)")).toBe(true);
     });
   });
 

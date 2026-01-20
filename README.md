@@ -21,15 +21,87 @@ The interpreter supports injecting global variables and **calling host functions
 
 ### Security Features
 
-The interpreter includes built-in security protections:
+The interpreter is designed to safely execute untrusted JavaScript code in a sandboxed environment.
 
-- **Prototype Pollution Prevention**: Blocks access to dangerous properties like `__proto__`, `constructor`, `prototype`, and legacy getter/setter methods
-- **Sandboxed Execution**: Only whitelisted AST node types are evaluated - no access to `eval`, `Function`, `require`, etc.
-- **Host Function Protection**: Property access blocked on host functions, cannot await host functions directly (prevents sandbox escape)
-- **Reference Isolation**: User code cannot access the host runtime (though globals are passed by reference - users should clone sensitive data)
-- **Comprehensive Security Tests**: 22 dedicated security tests covering async/await protections, prototype pollution, closure security, and more
+**Trust Boundary**: The interpreter establishes a security boundary between:
 
-**See [SECURITY.md](./SECURITY.md) for detailed security considerations, best practices, and threat model.**
+- **Host (Trusted)**: The TypeScript/JavaScript code running the interpreter
+- **Sandbox (Untrusted)**: The JavaScript code being evaluated by the interpreter
+
+**Goal**: Prevent sandbox code from:
+
+1. Accessing the host runtime environment
+2. Modifying global objects or prototypes
+3. Executing arbitrary host code
+4. Escaping the sandbox
+
+#### Built-in Protections
+
+**1. Prototype Pollution Prevention**
+
+The interpreter blocks access to dangerous property names:
+
+```typescript
+// These are blocked for security
+obj.__proto__;
+obj.constructor;
+obj.prototype;
+obj.__defineGetter__;
+obj.__defineSetter__;
+obj.__lookupGetter__;
+obj.__lookupSetter__;
+```
+
+**2. No Built-in Global Access**
+
+Sandbox code does not have access to: `eval`, `Function` constructor, `Promise` constructor, `globalThis` / `window` / `global`, `require` / `import`, or any Node.js/Bun/browser APIs.
+
+**3. Host Function Protection**
+
+Host functions passed as globals are wrapped and protected:
+
+```javascript
+// Host passes: { myFunc: () => "secret" }
+myFunc.name;        // Error: Cannot access properties on host functions
+myFunc.toString();  // Error: Cannot access properties on host functions
+await myFunc;       // Error: Cannot await a host function (must call it)
+```
+
+**4. Whitelisted AST Nodes Only**
+
+Only explicitly supported AST node types are evaluated. Any unsupported node type throws an error.
+
+**5. Async/Await Protections**
+
+Sync mode (`evaluate()`) cannot call async functions or use await, preventing mixing sync/async contexts.
+
+#### What the Interpreter Does NOT Protect Against
+
+**Denial of Service (DoS)**: Infinite loops and memory exhaustion are not prevented. Host should implement timeouts:
+
+```typescript
+const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
+const result = await Promise.race([interpreter.evaluateAsync(untrustedCode), timeout]);
+```
+
+**Reference Leakage**: Globals are passed by reference. Clone objects before passing as globals:
+
+```typescript
+const interpreter = new Interpreter({
+  globals: { state: structuredClone(sharedState) },
+});
+```
+
+**Side Effects via Host Functions**: Host functions have full access to the host environment. Only expose safe, sandboxed host functions with argument validation.
+
+#### Security Best Practices
+
+1. **Minimize Host Function Surface Area**: Only expose what's necessary
+2. **Use AST Validators**: Restrict language features based on use case
+3. **Implement Timeouts**: Protect against infinite loops
+4. **Clone Sensitive Data**: Prevent reference leakage
+5. **Validate Host Function Arguments**: Never trust sandbox input
+6. **Use Per-Call Globals for Isolation**: Isolate per-execution state
 
 ### Feature Control System
 
@@ -44,6 +116,7 @@ The interpreter supports fine-grained feature control to target specific ECMAScr
 - **Error Messages**: Clear error when disabled features are used (e.g., "ArrowFunctions is not enabled")
 
 Example - ES5 only (no modern features):
+
 ```typescript
 const es5Interpreter = new Interpreter({
   featureControl: {
@@ -58,18 +131,19 @@ const es5Interpreter = new Interpreter({
 Pre-configured presets for different ECMAScript versions (ES5 through ES2024):
 
 - **ES5 (2009)**: Baseline JavaScript - `var`, functions, for/while loops, objects/arrays
-- **ES2015/ES6 (2015)**: Modern JavaScript - `let`/`const`, arrow functions, template literals, destructuring, spread/rest, for-of, Promises
+- **ES2015/ES6 (2015)**: Modern JavaScript - `let`/`const`, arrow functions, template literals, destructuring, spread/rest, for-of, generators, Promises
 - **ES2016 (2016)**: Exponentiation operator (`**`), Array.includes
 - **ES2017 (2017)**: **async/await**
 - **ES2018-ES2024**: Progressive enhancements (mostly prototype methods)
 - **ESNext**: All features enabled (latest capabilities)
 
 Usage:
+
 ```typescript
 import { Interpreter } from "./interpreter";
 import { ES5, ES2015, ES2017, ES2020 } from "./presets";
 
-const es5Interp = new Interpreter(ES5);      // Only ES5 features
+const es5Interp = new Interpreter(ES5); // Only ES5 features
 const es2015Interp = new Interpreter(ES2015); // ES5 + ES2015 features
 const es2017Interp = new Interpreter(ES2017); // Includes async/await
 ```
@@ -88,13 +162,15 @@ The interpreter supports custom AST validation for security and policy enforceme
 - **Use Cases**: Restrict loops, limit complexity, block dangerous patterns, enforce read-only operations
 
 ### Literals
+
 - **Numeric Literals**: Integers and floating-point numbers
 - **Boolean Literals**: `true` and `false`
 - **String Literals**: String values with quotes (single or double)
 - **Array Literals**: Arrays with `[]` syntax
 
 ### Arithmetic Operators
-- **Binary Operations**: 
+
+- **Binary Operations**:
   - Addition (`+`) - also works for string concatenation
   - Subtraction (`-`)
   - Multiplication (`*`)
@@ -111,6 +187,7 @@ The interpreter supports custom AST validation for security and policy enforceme
 - **Parentheses**: Support for grouping expressions
 
 ### Comparison Operators
+
 - Strict equality (`===`)
 - Strict inequality (`!==`)
 - Less than (`<`)
@@ -120,24 +197,28 @@ The interpreter supports custom AST validation for security and policy enforceme
 - Works with numbers, strings, and booleans
 
 ### Logical Operators
+
 - Logical AND (`&&`) with short-circuit evaluation
 - Logical OR (`||`) with short-circuit evaluation
 - Logical NOT (`!`)
 
 ### Ternary Operator
+
 - Conditional expression: `condition ? valueIfTrue : valueIfFalse`
 - Short-circuit evaluation (only evaluates chosen branch)
 - Supports nesting: `a ? (b ? x : y) : z`
 - Works in all contexts (variables, functions, loops, etc.)
 
 ### typeof Operator
+
 - Returns a string indicating the type of a value
 - Supported types: `"number"`, `"string"`, `"boolean"`, `"function"`, `"object"`, `"undefined"`
 - Special handling: Does not throw on undefined variables (returns `"undefined"`)
 - Works with all JavaScript values including functions, arrays, and objects
 
 ### Variables
-- **Variable Declarations**: 
+
+- **Variable Declarations**:
   - `let` - block-scoped, reassignable
   - `const` - block-scoped, immutable
   - `var` - function-scoped, allows re-declaration
@@ -151,6 +232,7 @@ The interpreter supports custom AST validation for security and policy enforceme
 - **Error Handling**: Prevents redeclaration (for let/const), undefined variable access, and const reassignment
 
 ### Control Flow
+
 - **if Statements**: Execute code conditionally
 - **if...else Statements**: Choose between two branches
 - **if...else if...else Chains**: Multiple conditional branches
@@ -170,6 +252,7 @@ The interpreter supports custom AST validation for security and policy enforceme
 - **Default case**: Catch-all case when no other cases match
 
 ### Functions
+
 - **Function Declarations**: Define named functions with parameters
 - **Arrow Functions**: Concise function syntax with expression or block body
 - **Function Calls**: Call functions with arguments
@@ -179,8 +262,30 @@ The interpreter supports custom AST validation for security and policy enforceme
 - **Higher-Order Functions**: Functions can be passed as values and called
 - **Expression Body**: Arrow functions with implicit return (`x => x * 2`)
 - **Block Body**: Arrow functions with explicit return (`x => { return x * 2; }`)
+- **Generator Functions**: `function*` syntax with `yield` expressions
+- **Async Generator Functions**: `async function*` for async iteration
+- **Iterator Protocol**: Generator `next()`, `return()`, and `throw()` methods
+- **Generator State Management**: Proper state tracking (suspended-start, suspended-yield, executing, completed)
+- **Yields in Control Flow**: Yields work correctly inside for, while, do-while loops and conditionals
+
+Generator example:
+
+```javascript
+function* counter() {
+  yield 1;
+  yield 2;
+  yield 3;
+}
+
+const g = counter();
+g.next().value; // 1
+g.next().value; // 2
+g.next().value; // 3
+g.next().done;  // true
+```
 
 ### Strings
+
 - **String Literals**: Single or double quoted strings
 - **String Concatenation**: Using the `+` operator
 - **String Comparison**: All comparison operators work with strings
@@ -196,6 +301,7 @@ The interpreter supports custom AST validation for security and policy enforceme
   - **Method chaining**: Methods return strings that can be chained (e.g., `str.trim().toLowerCase().split(",")`)
 
 ### Arrays
+
 - **Array Literals**: Create arrays with `[1, 2, 3]` syntax
 - **Array Indexing**: Access elements with `arr[0]` syntax
 - **Array Assignment**: Modify elements with `arr[i] = value`
@@ -209,6 +315,7 @@ The interpreter supports custom AST validation for security and policy enforceme
   - **Method chaining**: Methods return values that can be chained (e.g., `arr.map().filter().reduce()`)
 
 ### Objects
+
 - **Object Literals**: Create objects with `{ key: value }` syntax
 - **Property Access**: Dot notation (`obj.prop`) and bracket notation (`obj["prop"]`)
 - **Property Assignment**: Add or modify properties (`obj.prop = value`)
@@ -222,7 +329,7 @@ The interpreter supports custom AST validation for security and policy enforceme
 ## Usage
 
 ```typescript
-import { Interpreter } from './interpreter';
+import { Interpreter } from "./interpreter";
 
 const interpreter = new Interpreter();
 
@@ -231,34 +338,34 @@ const interpreterWithGlobals = new Interpreter({
   globals: {
     PI: 3.14159,
     E: 2.71828,
-    MAX_VALUE: 1000
-  }
+    MAX_VALUE: 1000,
+  },
 });
-interpreterWithGlobals.evaluate('PI * 2');  // 6.28318
-interpreterWithGlobals.evaluate('let radius = 5; PI * radius * radius'); // 78.53975
+interpreterWithGlobals.evaluate("PI * 2"); // 6.28318
+interpreterWithGlobals.evaluate("let radius = 5; PI * radius * radius"); // 78.53975
 
 // Injected Globals - Per-call
-interpreter.evaluate('x + y', { globals: { x: 10, y: 20 } }); // 30
+interpreter.evaluate("x + y", { globals: { x: 10, y: 20 } }); // 30
 
 // Injected Globals - Merged
 const mergedInterpreter = new Interpreter({ globals: { x: 10 } });
-mergedInterpreter.evaluate('x + y', { globals: { y: 5 } }); // 15
+mergedInterpreter.evaluate("x + y", { globals: { y: 5 } }); // 15
 
 // Injected Globals - Objects
 const configInterpreter = new Interpreter({
-  globals: {config: { debug: true, maxRetries: 3 }}
+  globals: { config: { debug: true, maxRetries: 3 } },
 });
-configInterpreter.evaluate('config.maxRetries'); // 3
+configInterpreter.evaluate("config.maxRetries"); // 3
 
 // Host Functions - Call functions from host environment
 const interpreterWithFunctions = new Interpreter({
   globals: {
     double: (x: number) => x * 2,
     log: (msg: string) => console.log(msg),
-    random: () => Math.random()
-  }
+    random: () => Math.random(),
+  },
 });
-interpreterWithFunctions.evaluate('double(5)'); // 10
+interpreterWithFunctions.evaluate("double(5)"); // 10
 interpreterWithFunctions.evaluate('log("Hello from sandbox!")'); // Logs to console
 interpreterWithFunctions.evaluate(`
   let value = double(random() * 100);
@@ -266,10 +373,10 @@ interpreterWithFunctions.evaluate(`
 `);
 
 // Host Functions - Per-call
-interpreter.evaluate('calculate(10, 5)', {
+interpreter.evaluate("calculate(10, 5)", {
   globals: {
-    calculate: (a: number, b: number) => a + b
-  }
+    calculate: (a: number, b: number) => a + b,
+  },
 }); // 15
 
 // AST Validator - Constructor
@@ -278,36 +385,36 @@ const noLoopsValidator = (ast) => {
   return !code.includes('"WhileStatement"') && !code.includes('"ForStatement"');
 };
 const safeInterpreter = new Interpreter({ validator: noLoopsValidator });
-safeInterpreter.evaluate('5 + 10'); // 15
-safeInterpreter.evaluate('while (true) {}'); // Error: AST validation failed
+safeInterpreter.evaluate("5 + 10"); // 15
+safeInterpreter.evaluate("while (true) {}"); // Error: AST validation failed
 
 // AST Validator - Per-call
 const readOnlyValidator = (ast) => {
   const code = JSON.stringify(ast);
   return !code.includes('"VariableDeclaration"');
 };
-interpreter.evaluate('10 + 20'); // 30 (no validator)
-interpreter.evaluate('10 + 20', { validator: readOnlyValidator }); // 30 (allowed)
-interpreter.evaluate('let x = 5', { validator: readOnlyValidator }); // Error
+interpreter.evaluate("10 + 20"); // 30 (no validator)
+interpreter.evaluate("10 + 20", { validator: readOnlyValidator }); // 30 (allowed)
+interpreter.evaluate("let x = 5", { validator: readOnlyValidator }); // Error
 
 // AST Validator - Limit program size
 const sizeValidator = (ast) => ast.body.length <= 3;
 const limitedInterpreter = new Interpreter({ validator: sizeValidator });
-limitedInterpreter.evaluate('let x = 1; let y = 2; x + y'); // 3 (allowed)
-limitedInterpreter.evaluate('let a=1; let b=2; let c=3; let d=4;'); // Error
+limitedInterpreter.evaluate("let x = 1; let y = 2; x + y"); // 3 (allowed)
+limitedInterpreter.evaluate("let a=1; let b=2; let c=3; let d=4;"); // Error
 
 // Arithmetic
-interpreter.evaluate('2 + 3');           // 5
-interpreter.evaluate('2 ** 8');          // 256
+interpreter.evaluate("2 + 3"); // 5
+interpreter.evaluate("2 ** 8"); // 256
 
 // Variables
-interpreter.evaluate('let x = 10');      // 10
-interpreter.evaluate('const PI = 3.14'); // 3.14
-interpreter.evaluate('x = x + 5');       // 15
+interpreter.evaluate("let x = 10"); // 10
+interpreter.evaluate("const PI = 3.14"); // 3.14
+interpreter.evaluate("x = x + 5"); // 15
 
 // Strings
 interpreter.evaluate('"Hello" + " " + "World"'); // "Hello World"
-interpreter.evaluate('"Hello".length');           // 5
+interpreter.evaluate('"Hello".length'); // 5
 
 // String methods - extraction
 interpreter.evaluate('"Hello World".substring(0, 5)'); // "Hello"
@@ -344,54 +451,56 @@ interpreter.evaluate('"5".padEnd(3, "0")'); // "500"
 interpreter.evaluate('"  Hello World  ".trim().toLowerCase().replace("world", "there")'); // "hello there"
 
 // Arrays
-interpreter.evaluate('[1, 2, 3][1]');            // 2
-interpreter.evaluate('let arr = [10, 20, 30]; arr.length'); // 3
+interpreter.evaluate("[1, 2, 3][1]"); // 2
+interpreter.evaluate("let arr = [10, 20, 30]; arr.length"); // 3
 
 // Array methods - mutation
-interpreter.evaluate('let arr = [1, 2, 3]; arr.push(4); arr'); // [1, 2, 3, 4]
-interpreter.evaluate('let arr = [1, 2, 3]; arr.pop()'); // 3
-interpreter.evaluate('let arr = [1, 2, 3]; arr.shift()'); // 1
-interpreter.evaluate('let arr = [1, 2, 3]; arr.unshift(0); arr'); // [0, 1, 2, 3]
+interpreter.evaluate("let arr = [1, 2, 3]; arr.push(4); arr"); // [1, 2, 3, 4]
+interpreter.evaluate("let arr = [1, 2, 3]; arr.pop()"); // 3
+interpreter.evaluate("let arr = [1, 2, 3]; arr.shift()"); // 1
+interpreter.evaluate("let arr = [1, 2, 3]; arr.unshift(0); arr"); // [0, 1, 2, 3]
 
 // Array methods - non-mutation
-interpreter.evaluate('[1, 2, 3, 4, 5].slice(1, 3)'); // [2, 3]
-interpreter.evaluate('[1, 2].concat([3, 4])'); // [1, 2, 3, 4]
-interpreter.evaluate('[1, 2, 3].indexOf(2)'); // 1
-interpreter.evaluate('[1, 2, 3].includes(2)'); // true
+interpreter.evaluate("[1, 2, 3, 4, 5].slice(1, 3)"); // [2, 3]
+interpreter.evaluate("[1, 2].concat([3, 4])"); // [1, 2, 3, 4]
+interpreter.evaluate("[1, 2, 3].indexOf(2)"); // 1
+interpreter.evaluate("[1, 2, 3].includes(2)"); // true
 interpreter.evaluate('[1, 2, 3].join("-")'); // "1-2-3"
 
 // Array methods - higher-order
-interpreter.evaluate('[1, 2, 3, 4].map(x => x * 2)'); // [2, 4, 6, 8]
-interpreter.evaluate('[1, 2, 3, 4].filter(x => x > 2)'); // [3, 4]
-interpreter.evaluate('[1, 2, 3, 4].reduce((acc, x) => acc + x, 0)'); // 10
-interpreter.evaluate('[1, 2, 3, 4].find(x => x > 2)'); // 3
-interpreter.evaluate('[1, 2, 3, 4].every(x => x > 0)'); // true
-interpreter.evaluate('[1, 2, 3, 4].some(x => x > 3)'); // true
+interpreter.evaluate("[1, 2, 3, 4].map(x => x * 2)"); // [2, 4, 6, 8]
+interpreter.evaluate("[1, 2, 3, 4].filter(x => x > 2)"); // [3, 4]
+interpreter.evaluate("[1, 2, 3, 4].reduce((acc, x) => acc + x, 0)"); // 10
+interpreter.evaluate("[1, 2, 3, 4].find(x => x > 2)"); // 3
+interpreter.evaluate("[1, 2, 3, 4].every(x => x > 0)"); // true
+interpreter.evaluate("[1, 2, 3, 4].some(x => x > 3)"); // true
 
 // Array method chaining
-interpreter.evaluate('[1, 2, 3, 4].map(x => x * 2).filter(x => x > 4).reduce((acc, x) => acc + x, 0)'); // 14
+interpreter.evaluate(
+  "[1, 2, 3, 4].map(x => x * 2).filter(x => x > 4).reduce((acc, x) => acc + x, 0)",
+); // 14
 
 // Objects
-interpreter.evaluate('let obj = { x: 10, y: 20 }; obj.x'); // 10
+interpreter.evaluate("let obj = { x: 10, y: 20 }; obj.x"); // 10
 interpreter.evaluate('let person = { name: "Alice", age: 30 }; person.name'); // "Alice"
 
 // Comparisons and Logic
-interpreter.evaluate('5 > 3');           // true
-interpreter.evaluate('true && false');   // false
+interpreter.evaluate("5 > 3"); // true
+interpreter.evaluate("true && false"); // false
 
 // Ternary operator
-interpreter.evaluate('let age = 20');
+interpreter.evaluate("let age = 20");
 interpreter.evaluate('age >= 18 ? "adult" : "minor"'); // "adult"
-interpreter.evaluate('let max = 10 > 5 ? 10 : 5'); // 10
+interpreter.evaluate("let max = 10 > 5 ? 10 : 5"); // 10
 
 // typeof operator
-interpreter.evaluate('typeof 42');              // "number"
-interpreter.evaluate('typeof "hello"');         // "string"
-interpreter.evaluate('typeof true');            // "boolean"
-interpreter.evaluate('typeof undefinedVar');    // "undefined" (no error!)
-interpreter.evaluate('let x = 10; typeof x');   // "number"
-interpreter.evaluate('typeof [1, 2, 3]');       // "object"
-interpreter.evaluate('function add(a, b) { return a + b; } typeof add'); // "function"
+interpreter.evaluate("typeof 42"); // "number"
+interpreter.evaluate('typeof "hello"'); // "string"
+interpreter.evaluate("typeof true"); // "boolean"
+interpreter.evaluate("typeof undefinedVar"); // "undefined" (no error!)
+interpreter.evaluate("let x = 10; typeof x"); // "number"
+interpreter.evaluate("typeof [1, 2, 3]"); // "object"
+interpreter.evaluate("function add(a, b) { return a + b; } typeof add"); // "function"
 
 // Conditionals
 interpreter.evaluate(`
@@ -709,6 +818,7 @@ The interpreter works by:
 ## Error Handling
 
 The interpreter throws `InterpreterError` for:
+
 - Unsupported operations or node types
 - Division by zero / Modulo by zero
 - Undefined variable access
@@ -725,12 +835,14 @@ The interpreter throws `InterpreterError` for:
 Comprehensive test suite with **1150 tests** across 28 files:
 
 **Arithmetic Tests (43 tests)**:
+
 - All supported operators
 - Edge cases (division by zero, empty programs)
 - Complex nested expressions
 - Operator precedence
 
 **Variable Tests (39 tests)**:
+
 - `let` and `const` declarations
 - Variable assignment and reassignment
 - Const immutability enforcement
@@ -738,6 +850,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Duplicate declaration prevention
 
 **Comparison & Logical Tests (67 tests)**:
+
 - All comparison operators
 - All logical operators
 - Short-circuit evaluation
@@ -745,6 +858,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Boolean literals and operations
 
 **Conditional Tests (41 tests)**:
+
 - Basic if statements
 - if...else statements
 - if...else if...else chains
@@ -752,6 +866,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Practical patterns
 
 **Loop Tests (37 tests)**:
+
 - Basic while loops
 - Counter and accumulator patterns
 - Loops with conditionals
@@ -760,6 +875,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Practical algorithms (factorial, fibonacci, GCD, etc.)
 
 **For Loop Tests (47 tests)**:
+
 - Basic for loops with increment/decrement
 - For loop scoping and variable shadowing
 - Nested for loops (2 and 3 levels deep)
@@ -770,6 +886,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Practical algorithms (primes, matrices, etc.)
 
 **Scoping Tests (36 tests)**:
+
 - Basic block scoping
 - Nested blocks and shadowing
 - Block scoping with conditionals
@@ -778,6 +895,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Complex scoping scenarios
 
 **Function Tests (49 tests)**:
+
 - Function declarations
 - Function calls with arguments
 - Return statements
@@ -788,6 +906,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Multiple function declarations
 
 **String Tests (53 tests)**:
+
 - String literals
 - String concatenation
 - String comparison
@@ -796,6 +915,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Mixed string operations
 
 **Array Tests (48 tests)**:
+
 - Array literals and creation
 - Array indexing and access
 - Array length property
@@ -807,6 +927,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Edge cases and error handling
 
 **Object Tests (44 tests)**:
+
 - Object literals with various property types
 - Property access (dot and bracket notation)
 - Property assignment and modification
@@ -819,6 +940,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Edge cases
 
 **Break and Continue Tests (33 tests)**:
+
 - Break in while loops
 - Continue in while loops
 - Break in for loops
@@ -831,6 +953,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Complex patterns and edge cases
 
 **Arrow Function Tests (32 tests)**:
+
 - Expression body arrow functions
 - Block body arrow functions
 - Closures with arrow functions
@@ -843,6 +966,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Edge cases and complex patterns
 
 **Object Methods and This Tests (25 tests)**:
+
 - Basic object methods with `this` keyword
 - Methods modifying object properties
 - Methods with parameters
@@ -857,6 +981,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Edge cases with `this` binding
 
 **Injected Globals Tests (51 tests)**:
+
 - Constructor globals - basic access and immutability
 - Constructor globals - objects, arrays, booleans, strings
 - Constructor globals - modifying properties
@@ -869,6 +994,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Practical use cases - math constants, configuration objects, data processing
 
 **AST Validator Tests (18 tests)**:
+
 - Constructor validator - validation applied to all code
 - Per-call validator - validation for specific calls only
 - Validator precedence - per-call overrides constructor
@@ -877,6 +1003,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Error cases - clear error messages, exception handling
 
 **Security Tests (49 tests)**:
+
 - Prototype pollution prevention - blocks `__proto__` access/assignment
 - Constructor access prevention - blocks `constructor` property
 - Prototype property blocking - blocks `prototype` property
@@ -886,6 +1013,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Safe operations verification - normal properties still work
 
 **Host Function Tests (37 tests)**:
+
 - Calling sync host functions with various argument types
 - Returning various types from host functions (objects, arrays, primitives)
 - Host functions with closures and data structures
@@ -896,6 +1024,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Edge cases and mixed host/sandbox functions
 
 **Async Tests (42 tests)**:
+
 - Calling async host functions with evaluateAsync()
 - Awaiting async host function results
 - Async functions with various argument and return types
@@ -910,6 +1039,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Complex async scenarios
 
 **Async/Await Syntax Tests (26 tests)**:
+
 - Async function declarations
 - Async function expressions
 - Async arrow functions (expression and block body)
@@ -923,6 +1053,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Async function return values
 
 **Security Tests (22 tests)**:
+
 - Host function protection (blocking property access, blocking await on host functions)
 - Sandbox function security in async context
 - Prototype pollution prevention (`__proto__`, `constructor`, `prototype`)
@@ -933,6 +1064,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Closure security across async boundaries
 
 **Ternary Operator Tests (34 tests)**:
+
 - Basic ternary expressions (true/false conditions, numbers, strings)
 - Ternary with variables (in condition, in branches, assignment)
 - Nested ternary expressions (in consequent, in alternate, multiple levels)
@@ -945,6 +1077,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Edge cases (short-circuit evaluation, function arguments, array/object literals)
 
 **typeof Operator Tests (40 tests)**:
+
 - Primitive types (number, string, boolean, null, undefined)
 - Complex types (objects, arrays, functions)
 - With variables (declared and undefined)
@@ -957,6 +1090,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Edge cases (undefined variables don't throw, functions return "function", nested typeof)
 
 **for...of Loop Tests (37 tests)**:
+
 - Basic for...of iteration (with let and const)
 - for...of with existing variables
 - Iterating over arrays of objects
@@ -972,6 +1106,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Edge cases (null values, mixed types, function call results)
 
 **for...in Loop Tests (32 tests)**:
+
 - Basic for...in with objects (iterating keys, accessing values)
 - for...in with arrays (iterating indices as strings)
 - for...in with break and continue
@@ -986,6 +1121,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Edge cases (empty objects/arrays, null/undefined, primitives, numeric keys)
 
 **Switch Statement Tests (36 tests)**:
+
 - Basic switch (single case match, string cases, strict equality, booleans)
 - Default case (at end, beginning, middle positions)
 - Fall-through behavior (no break, multiple statements, fall to default, grouped cases)
@@ -1000,6 +1136,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Edge cases (empty switch, only default, null case, computed case values)
 
 **Array Methods Tests (57 tests)**:
+
 - Mutation methods (push, pop, shift, unshift, reverse)
 - Non-mutation methods (slice, concat, indexOf, includes, join)
 - Higher-order methods (map, filter, reduce, find, findIndex, every, some)
@@ -1010,6 +1147,7 @@ Comprehensive test suite with **1150 tests** across 28 files:
 - Return values and side effects (proper mutation behavior, return types)
 
 **String Methods Tests (76 tests)**:
+
 - Extraction methods (substring, slice, charAt with various indices)
 - Search methods (indexOf, lastIndexOf, includes with positions)
 - Matching methods (startsWith, endsWith with positions)
@@ -1027,7 +1165,9 @@ Run tests with `bun test`.
 ## Implementation Details
 
 ### Environment System
+
 Variables are stored in an `Environment` class with full lexical scoping:
+
 - Tracks variable names, values, and kinds (`let` or `const`)
 - Tracks whether variables are injected globals (for override protection)
 - Enforces const immutability
@@ -1040,7 +1180,9 @@ Variables are stored in an `Environment` class with full lexical scoping:
 - **Injected Globals**: Pre-populates root environment with host-provided values
 
 ### Function System
+
 Functions are first-class values with closure support:
+
 - **FunctionValue**: Stores parameters, body, and closure environment
 - **Closure Capture**: Functions capture environment at declaration time
 - **Call Evaluation**: Creates new environment with parameter bindings
@@ -1049,6 +1191,7 @@ Functions are first-class values with closure support:
 - **`this` Binding**: Method calls pass the object as `this` context to the function
 
 ### Control Flow
+
 - **Conditionals**: Evaluate test expression, execute appropriate branch
 - **While Loops**: Re-evaluate condition before each iteration, execute body while truthy
 - **For Loops**: Create new scope, evaluate init/test/update, execute body
@@ -1056,7 +1199,9 @@ Functions are first-class values with closure support:
 - **Returns**: ReturnValue wrapper propagates through blocks, loops, and conditionals
 
 ### Injected Globals System
+
 The interpreter supports injecting global variables from the host environment:
+
 - **Constructor Injection**: Globals passed to `new Interpreter({ globals: { ... } })` are injected into the root environment and persist
 - **Per-call Injection**: Globals passed to `evaluate(code, { globals: { ... } })` are injected before execution and cleaned up after
 - **Merge Strategy**: Per-call globals can temporarily override constructor globals (but not user variables)
@@ -1067,9 +1212,11 @@ The interpreter supports injecting global variables from the host environment:
 - **Stateless Per-call Globals**: Per-call globals do not persist - they're cleaned up via `removePerCallGlobals()`
 
 ### Global Objects via ReadOnlyProxy
+
 All injected globals are automatically wrapped with `ReadOnlyProxy` for security and consistency:
 
 **Features:**
+
 - **Automatic Function Wrapping**: Functions are automatically wrapped as `HostFunctionValue` (both top-level and methods)
 - **Async Function Detection**: Async functions are detected and wrapped with `isAsync: true` flag
 - **Property Access Protection**: Blocks dangerous properties (`__proto__`, `constructor`, `prototype`)
@@ -1078,22 +1225,27 @@ All injected globals are automatically wrapped with `ReadOnlyProxy` for security
 - **Method Binding**: Preserves `this` context when calling methods on wrapped objects
 
 **Supported Global Objects:**
+
 ```javascript
 const interpreter = new Interpreter({
   globals: {
-    Math,           // Math.floor(4.7), Math.PI, Math.random()
-    console,        // console.log("hello")
-    customAPI: {    // Your own objects with methods
-      getValue() { return 42; }
-    }
-  }
+    Math, // Math.floor(4.7), Math.PI, Math.random()
+    console, // console.log("hello")
+    customAPI: {
+      // Your own objects with methods
+      getValue() {
+        return 42;
+      },
+    },
+  },
 });
 
-interpreter.evaluate("Math.floor(4.7)");  // 4
-interpreter.evaluate("Math.PI * 2");      // 6.283...
+interpreter.evaluate("Math.floor(4.7)"); // 4
+interpreter.evaluate("Math.PI * 2"); // 6.283...
 ```
 
 **Property Modification Rules:**
+
 - **All properties are read-only**: No property modifications allowed on ANY global object
 - **Applies universally**: Both built-in constants (`Math.PI`) and user objects (`obj.count`) are protected
 - **Recursive protection**: Nested objects are automatically wrapped, so `config.level1.level2.value = x` is blocked
@@ -1102,7 +1254,9 @@ interpreter.evaluate("Math.PI * 2");      // 6.283...
 - **Security-first**: Prevents any mutation of global objects at any depth, ensuring consistent and predictable behavior
 
 ### AST Validation System
+
 The interpreter supports custom AST validation for security policies:
+
 - **Validator Function Type**: `(ast: ESTree.Program) => boolean`
 - **Constructor Validator**: Stored and applied to every `evaluate()` call
 - **Per-call Validator**: Takes precedence over constructor validator when provided
@@ -1112,11 +1266,14 @@ The interpreter supports custom AST validation for security policies:
 - **Example Validators**: No loops, read-only code, limited AST depth, statement count limits
 
 ### Short-Circuit Evaluation
+
 Logical operators implement proper short-circuit behavior:
+
 - `&&`: Returns first falsy value or last value if all truthy
 - `||`: Returns first truthy value or last value if all falsy
 
 ### Supported AST Nodes
+
 - `Program`
 - `ExpressionStatement`
 - `Literal` (numbers, booleans, strings)
@@ -1261,7 +1418,7 @@ function map(arr, f) {
   return result;
 }
 let nums = [1, 2, 3, 4];
-let squared = map(nums, x => x * x);
+let squared = map(nums, (x) => x * x);
 squared; // [1, 4, 9, 16]
 
 // Filter with arrow function
@@ -1277,7 +1434,7 @@ function filter(arr, pred) {
   return result;
 }
 let numbers = [1, 2, 3, 4, 5, 6];
-let evens = filter(numbers, n => n % 2 === 0);
+let evens = filter(numbers, (n) => n % 2 === 0);
 evens; // [2, 4, 6]
 
 // Point distance calculation
@@ -1294,7 +1451,7 @@ distance(point1, point2); // 25
 let people = [
   { name: "Alice", age: 30 },
   { name: "Bob", age: 25 },
-  { name: "Charlie", age: 35 }
+  { name: "Charlie", age: 35 },
 ];
 let totalAge = 0;
 for (let i = 0; i < people.length; i++) {
@@ -1306,7 +1463,7 @@ totalAge; // 90
 let users = [
   { name: "Alice", active: true },
   { name: "Bob", active: false },
-  { name: "Charlie", active: true }
+  { name: "Charlie", active: true },
 ];
 let activeCount = 0;
 for (let user of users) {
@@ -1321,9 +1478,9 @@ let user = {
   name: "John",
   address: {
     city: "NYC",
-    zip: 10001
+    zip: 10001,
   },
-  scores: [85, 90, 95]
+  scores: [85, 90, 95],
 };
 user.address.city; // "NYC"
 user.scores[1]; // 90
@@ -1332,15 +1489,15 @@ user.scores[1]; // 90
 let cart = {
   items: [],
   total: 0,
-  addItem: function(price) {
+  addItem: function (price) {
     let len = this.items.length;
     this.items[len] = price;
     this.total = this.total + price;
     return this.total;
   },
-  getTotal: function() {
+  getTotal: function () {
     return this.total;
-  }
+  },
 };
 cart.addItem(10);
 cart.addItem(25);
@@ -1349,17 +1506,17 @@ cart.getTotal(); // 35
 // Methods calling other methods
 let calculator = {
   value: 0,
-  add: function(n) {
+  add: function (n) {
     this.value = this.value + n;
     return this;
   },
-  multiply: function(n) {
+  multiply: function (n) {
     this.value = this.value * n;
     return this;
   },
-  getValue: function() {
+  getValue: function () {
     return this.value;
-  }
+  },
 };
 calculator.add(5).multiply(3).getValue(); // 15
 ```
@@ -1376,22 +1533,22 @@ const asyncInterpreter = new Interpreter({
       // Simulate async operation
       return await someAsyncAPI(id);
     },
-    asyncDouble: async (x: number) => x * 2
-  }
+    asyncDouble: async (x: number) => x * 2,
+  },
 });
 
 // Call async host functions (must use evaluateAsync)
-await asyncInterpreter.evaluateAsync('fetchData(42)'); // Returns promise
-await asyncInterpreter.evaluateAsync('asyncDouble(5) + asyncDouble(10)'); // 30
+await asyncInterpreter.evaluateAsync("fetchData(42)"); // Returns promise
+await asyncInterpreter.evaluateAsync("asyncDouble(5) + asyncDouble(10)"); // 30
 
 // Mixing sync and async host functions
 const mixedInterpreter = new Interpreter({
   globals: {
-    syncAdd: (a: number, b: number) => a + b,      // sync function
-    asyncMultiply: async (a: number, b: number) => a * b  // async function
-  }
+    syncAdd: (a: number, b: number) => a + b, // sync function
+    asyncMultiply: async (a: number, b: number) => a * b, // async function
+  },
 });
-await mixedInterpreter.evaluateAsync('asyncMultiply(syncAdd(2, 3), 10)'); // 50
+await mixedInterpreter.evaluateAsync("asyncMultiply(syncAdd(2, 3), 10)"); // 50
 
 // Async functions in control flow
 await asyncInterpreter.evaluateAsync(`
@@ -1419,9 +1576,9 @@ const userInterpreter = new Interpreter({
     asyncGetUser: async (id: number) => ({
       id,
       name: `User${id}`,
-      active: true
-    })
-  }
+      active: true,
+    }),
+  },
 });
 await userInterpreter.evaluateAsync(`
   let user = asyncGetUser(123);
@@ -1474,8 +1631,8 @@ await interpreter.evaluateAsync(`
 // Mixing async sandbox functions with async host functions
 const mixedInterpreter = new Interpreter({
   globals: {
-    asyncFetch: async (id: number) => `Data${id}`
-  }
+    asyncFetch: async (id: number) => `Data${id}`,
+  },
 });
 await mixedInterpreter.evaluateAsync(`
   async function processData(id) {
@@ -1487,6 +1644,7 @@ await mixedInterpreter.evaluateAsync(`
 ```
 
 **Important Notes:**
+
 - **Sync mode** (`evaluate()`): Cannot call async functions or use await. Throws error if you try.
 - **Async mode** (`evaluateAsync()`): Supports both sync AND async functions, `async`/`await` syntax. Returns a Promise.
 - **Async functions**: Can be declared with `async function`, `async () =>`, or `async function() {}` syntax.
@@ -1496,6 +1654,7 @@ await mixedInterpreter.evaluateAsync(`
 ## Turing Completeness
 
 This interpreter is **Turing complete** because it has:
+
 1. **Conditional branching** (if/else statements)
 2. **Arbitrary memory** (variables can store any values)
 3. **Unbounded loops** (while loops + recursion)
@@ -1514,6 +1673,7 @@ This means it can theoretically compute any computable function, given enough ti
 ## Future Extensions
 
 Potential additions:
+
 - Labeled statements (labeled break/continue)
 - Math object (Math.floor, Math.ceil, Math.random, etc.)
 - instanceof operator

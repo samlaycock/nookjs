@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+
 import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("For Loops", () => {
@@ -158,9 +159,7 @@ describe("For Loops", () => {
         i
       `;
       expect(() => interpreter.evaluate(code)).toThrow(InterpreterError);
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Undefined variable 'i'",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'i'");
     });
 
     it("should allow same variable name in sequential for loops", () => {

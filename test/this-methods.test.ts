@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+
 import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("This and Object Methods", () => {

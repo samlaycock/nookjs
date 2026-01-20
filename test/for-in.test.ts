@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 
 describe("for...in Loops", () => {

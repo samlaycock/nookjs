@@ -1,4 +1,5 @@
 import { describe, test, expect } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 import {
   ES5,
@@ -262,9 +263,7 @@ describe("ECMAScript Presets", () => {
     test("includes all ES2016 features", () => {
       const interp = new Interpreter(ES2017);
 
-      expect(interp.evaluate("const add = (a, b) => a + b; add(2, 3);")).toBe(
-        5,
-      );
+      expect(interp.evaluate("const add = (a, b) => a + b; add(2, 3);")).toBe(5);
       expect(interp.evaluate("2 ** 10")).toBe(1024);
     });
   });
@@ -274,14 +273,10 @@ describe("ECMAScript Presets", () => {
       const interp = new Interpreter(ES2018);
 
       // Async/await works
-      await expect(
-        interp.evaluateAsync("async () => 42"),
-      ).resolves.toBeDefined();
+      await expect(interp.evaluateAsync("async () => 42")).resolves.toBeDefined();
 
       // Rest/spread works
-      expect(interp.evaluate("const arr = [1, ...[2, 3]]; arr;")).toEqual([
-        1, 2, 3,
-      ]);
+      expect(interp.evaluate("const arr = [1, ...[2, 3]]; arr;")).toEqual([1, 2, 3]);
     });
 
     test("supports object spread", () => {
@@ -342,9 +337,7 @@ describe("ECMAScript Presets", () => {
 
       // Everything should work
       expect(interp.evaluate("const x = 10; x;")).toBe(10);
-      expect(interp.evaluate("const add = (a, b) => a + b; add(2, 3);")).toBe(
-        5,
-      );
+      expect(interp.evaluate("const add = (a, b) => a + b; add(2, 3);")).toBe(5);
       expect(interp.evaluate("`Hello ${'World'}`")).toBe("Hello World");
       expect(interp.evaluate("const [a] = [42]; a;")).toBe(42);
     });

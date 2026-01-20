@@ -87,17 +87,12 @@ ${result.name}:
  * Format summary statistics
  */
 function formatSummary(results: BenchmarkResult[]): string {
-  const avgSlowdown =
-    results.reduce((sum, r) => sum + r.slowdownFactor, 0) / results.length;
+  const avgSlowdown = results.reduce((sum, r) => sum + r.slowdownFactor, 0) / results.length;
   const minSlowdown = Math.min(...results.map((r) => r.slowdownFactor));
   const maxSlowdown = Math.max(...results.map((r) => r.slowdownFactor));
 
-  const fastest = results.reduce((min, r) =>
-    r.slowdownFactor < min.slowdownFactor ? r : min,
-  );
-  const slowest = results.reduce((max, r) =>
-    r.slowdownFactor > max.slowdownFactor ? r : max,
-  );
+  const fastest = results.reduce((min, r) => (r.slowdownFactor < min.slowdownFactor ? r : min));
+  const slowest = results.reduce((max, r) => (r.slowdownFactor > max.slowdownFactor ? r : max));
 
   return `
 ========================================
@@ -126,9 +121,7 @@ console.log("--- Arithmetic Operations ---");
 
 results.push(benchmark("Simple Addition", "2 + 3", 10000));
 
-results.push(
-  benchmark("Complex Arithmetic", "(10 + 5) * 3 - 8 / 2 + 15 % 4", 10000),
-);
+results.push(benchmark("Complex Arithmetic", "(10 + 5) * 3 - 8 / 2 + 15 % 4", 10000));
 
 results.push(benchmark("Exponentiation", "2 ** 10", 10000));
 
@@ -141,26 +134,14 @@ results.push(benchmark("Variable Declaration", "let x = 42", 10000));
 
 results.push(benchmark("Variable Assignment", "let x = 10; x = 20", 10000));
 
-results.push(
-  benchmark(
-    "Multiple Variables",
-    "let a = 1; let b = 2; let c = 3; a + b + c",
-    10000,
-  ),
-);
+results.push(benchmark("Multiple Variables", "let a = 1; let b = 2; let c = 3; a + b + c", 10000));
 
 results.forEach((r) => console.log(formatResult(r)));
 
 // Control Flow
 console.log("\n--- Control Flow ---");
 
-results.push(
-  benchmark(
-    "Simple If Statement",
-    "let x = 10; if (x > 5) { x = x * 2; }",
-    10000,
-  ),
-);
+results.push(benchmark("Simple If Statement", "let x = 10; if (x > 5) { x = x * 2; }", 10000));
 
 results.push(
   benchmark(
@@ -173,9 +154,7 @@ results.push(
   ),
 );
 
-results.push(
-  benchmark("Ternary Operator", "let x = 10; let y = x > 5 ? 100 : 50", 10000),
-);
+results.push(benchmark("Ternary Operator", "let x = 10; let y = x > 5 ? 100 : 50", 10000));
 
 results.forEach((r) => console.log(formatResult(r)));
 
@@ -223,13 +202,7 @@ results.forEach((r) => console.log(formatResult(r)));
 // Functions
 console.log("\n--- Functions ---");
 
-results.push(
-  benchmark(
-    "Function Declaration",
-    "function add(a, b) { return a + b; }",
-    10000,
-  ),
-);
+results.push(benchmark("Function Declaration", "function add(a, b) { return a + b; }", 10000));
 
 results.push(
   benchmark(
@@ -270,9 +243,7 @@ results.push(
   ),
 );
 
-results.push(
-  benchmark("Arrow Function", "let double = x => x * 2; double(21)", 5000),
-);
+results.push(benchmark("Arrow Function", "let double = x => x * 2; double(21)", 5000));
 
 results.forEach((r) => console.log(formatResult(r)));
 
@@ -281,13 +252,9 @@ console.log("\n--- Arrays ---");
 
 results.push(benchmark("Array Creation", "let arr = [1, 2, 3, 4, 5]", 10000));
 
-results.push(
-  benchmark("Array Access", "let arr = [10, 20, 30]; arr[1]", 10000),
-);
+results.push(benchmark("Array Access", "let arr = [10, 20, 30]; arr[1]", 10000));
 
-results.push(
-  benchmark("Array Assignment", "let arr = [1, 2, 3]; arr[1] = 99", 10000),
-);
+results.push(benchmark("Array Assignment", "let arr = [1, 2, 3]; arr[1] = 99", 10000));
 
 results.push(
   benchmark(
@@ -306,25 +273,11 @@ results.forEach((r) => console.log(formatResult(r)));
 // Objects
 console.log("\n--- Objects ---");
 
-results.push(
-  benchmark("Object Creation", "let obj = { x: 10, y: 20, z: 30 }", 10000),
-);
+results.push(benchmark("Object Creation", "let obj = { x: 10, y: 20, z: 30 }", 10000));
 
-results.push(
-  benchmark(
-    "Object Property Access",
-    "let obj = { x: 10, y: 20 }; obj.x",
-    10000,
-  ),
-);
+results.push(benchmark("Object Property Access", "let obj = { x: 10, y: 20 }; obj.x", 10000));
 
-results.push(
-  benchmark(
-    "Object Property Assignment",
-    "let obj = { x: 10 }; obj.x = 20",
-    10000,
-  ),
-);
+results.push(benchmark("Object Property Assignment", "let obj = { x: 10 }; obj.x = 20", 10000));
 
 results.push(
   benchmark(
@@ -346,9 +299,7 @@ results.forEach((r) => console.log(formatResult(r)));
 // Strings
 console.log("\n--- Strings ---");
 
-results.push(
-  benchmark("String Concatenation", '"hello" + " " + "world"', 10000),
-);
+results.push(benchmark("String Concatenation", '"hello" + " " + "world"', 10000));
 
 results.push(benchmark("String Length", '"hello world".length', 10000));
 

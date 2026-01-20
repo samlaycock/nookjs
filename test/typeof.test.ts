@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 
 describe("typeof Operator", () => {
@@ -111,19 +112,13 @@ describe("typeof Operator", () => {
 
     it("should work with string concatenation", () => {
       const interpreter = new Interpreter();
-      expect(interpreter.evaluate('typeof ("hello" + " world")')).toBe(
-        "string",
-      );
+      expect(interpreter.evaluate('typeof ("hello" + " world")')).toBe("string");
     });
 
     it("should work with ternary expressions", () => {
       const interpreter = new Interpreter();
-      expect(interpreter.evaluate("typeof (true ? 42 : 'string')")).toBe(
-        "number",
-      );
-      expect(interpreter.evaluate('typeof (false ? 42 : "string")')).toBe(
-        "string",
-      );
+      expect(interpreter.evaluate("typeof (true ? 42 : 'string')")).toBe("number");
+      expect(interpreter.evaluate('typeof (false ? 42 : "string")')).toBe("string");
     });
   });
 
@@ -201,9 +196,7 @@ describe("typeof Operator", () => {
     it("should work in ternary expressions", () => {
       const interpreter = new Interpreter();
       interpreter.evaluate("let x = 42");
-      const result = interpreter.evaluate(
-        'typeof x === "number" ? "numeric" : "non-numeric"',
-      );
+      const result = interpreter.evaluate('typeof x === "number" ? "numeric" : "non-numeric"');
       expect(result).toBe("numeric");
     });
   });

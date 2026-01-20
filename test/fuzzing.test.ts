@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 
 /**
@@ -17,12 +18,10 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
   // ============================================================================
 
   // Helper to generate random integers
-  const randomInt = (min: number, max: number) =>
-    Math.floor(Math.random() * (max - min + 1)) + min;
+  const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
   // Helper to generate random floats
-  const randomFloat = (min: number, max: number) =>
-    Math.random() * (max - min) + min;
+  const randomFloat = (min: number, max: number) => Math.random() * (max - min) + min;
 
   // Helper to generate random booleans
   const randomBool = () => Math.random() > 0.5;
@@ -30,12 +29,8 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
   // Helper to generate random strings
   const randomString = (length?: number) => {
     const len = length ?? randomInt(0, 10);
-    const chars =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    return Array.from(
-      { length: len },
-      () => chars[randomInt(0, chars.length - 1)],
-    ).join("");
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    return Array.from({ length: len }, () => chars[randomInt(0, chars.length - 1)]).join("");
   };
 
   // Helper to generate random arrays
@@ -126,8 +121,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
             code += `const arr${j} = ${JSON.stringify(arr)};\n`;
           }
 
-          code +=
-            "[" + arrays.map((_, idx) => `...arr${idx}`).join(", ") + "];";
+          code += "[" + arrays.map((_, idx) => `...arr${idx}`).join(", ") + "];";
 
           const result = interpreter.evaluate(code);
           const expected = arrays.flat();
@@ -258,10 +252,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           const paramCount = randomInt(0, 5);
           const argCount = randomInt(paramCount, paramCount + 5); // Always enough args
 
-          const params = Array.from(
-            { length: paramCount },
-            (_, idx) => `p${idx}`,
-          ).join(", ");
+          const params = Array.from({ length: paramCount }, (_, idx) => `p${idx}`).join(", ");
           const args = randomArray(argCount);
 
           const code = `
@@ -285,10 +276,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           const restPosition = randomInt(0, totalLength - 1);
           const arr = randomArray(totalLength);
 
-          const beforeParams = Array.from(
-            { length: restPosition },
-            (_, idx) => `a${idx}`,
-          );
+          const beforeParams = Array.from({ length: restPosition }, (_, idx) => `a${idx}`);
           const pattern = `[${beforeParams.join(", ")}${beforeParams.length > 0 ? ", " : ""}...rest]`;
 
           const code = `
@@ -400,10 +388,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           const totalArgs = regularCount + restCount;
           const args = randomArray(totalArgs);
 
-          const params = Array.from(
-            { length: regularCount },
-            (_, idx) => `p${idx}`,
-          );
+          const params = Array.from({ length: regularCount }, (_, idx) => `p${idx}`);
           params.push("...rest");
 
           const code = `
@@ -641,12 +626,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     it("should handle random equality checks with different types", () => {
       for (let i = 0; i < 50; i++) {
         const interpreter = new Interpreter();
-        const values = [
-          randomInt(-100, 100),
-          `"${randomString(5)}"`,
-          randomBool(),
-          "null",
-        ];
+        const values = [randomInt(-100, 100), `"${randomString(5)}"`, randomBool(), "null"];
         const a = randomElement(values);
         const b = randomElement(values);
 

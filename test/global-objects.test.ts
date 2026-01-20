@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 
 describe("Global Objects (via ReadOnlyProxy)", () => {
@@ -169,27 +170,21 @@ describe("Global Objects (via ReadOnlyProxy)", () => {
         const interpreter = new Interpreter({ globals: { Math } });
         expect(() => {
           interpreter.evaluate("Math.__proto__");
-        }).toThrow(
-          "Property name '__proto__' is not allowed for security reasons",
-        );
+        }).toThrow("Property name '__proto__' is not allowed for security reasons");
       });
 
       it("should block access to constructor", () => {
         const interpreter = new Interpreter({ globals: { Math } });
         expect(() => {
           interpreter.evaluate("Math.constructor");
-        }).toThrow(
-          "Property name 'constructor' is not allowed for security reasons",
-        );
+        }).toThrow("Property name 'constructor' is not allowed for security reasons");
       });
 
       it("should block access to prototype", () => {
         const interpreter = new Interpreter({ globals: { Math } });
         expect(() => {
           interpreter.evaluate("Math.prototype");
-        }).toThrow(
-          "Property name 'prototype' is not allowed for security reasons",
-        );
+        }).toThrow("Property name 'prototype' is not allowed for security reasons");
       });
     });
   });
@@ -272,9 +267,7 @@ describe("Global Objects (via ReadOnlyProxy)", () => {
         const interpreter = new Interpreter({ globals: { console } });
         expect(() => {
           interpreter.evaluate("console.__proto__");
-        }).toThrow(
-          "Property name '__proto__' is not allowed for security reasons",
-        );
+        }).toThrow("Property name '__proto__' is not allowed for security reasons");
       });
     });
   });
@@ -322,16 +315,12 @@ describe("Global Objects (via ReadOnlyProxy)", () => {
       const interpreter = new Interpreter({ globals: { config } });
 
       // Can read deeply nested properties
-      expect(interpreter.evaluate("config.level1.level2.level3.value")).toBe(
-        42,
-      );
+      expect(interpreter.evaluate("config.level1.level2.level3.value")).toBe(42);
 
       // Cannot modify deeply nested properties
       expect(() => {
         interpreter.evaluate("config.level1.level2.level3.value = 100");
-      }).toThrow(
-        "Cannot modify property 'value' on global 'config.level1.level2.level3'",
-      );
+      }).toThrow("Cannot modify property 'value' on global 'config.level1.level2.level3'");
 
       // Cannot add properties at intermediate levels
       expect(() => {

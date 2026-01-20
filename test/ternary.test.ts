@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 
 describe("Ternary Operator", () => {
@@ -109,9 +110,7 @@ describe("Ternary Operator", () => {
   describe("Ternary with objects and arrays", () => {
     it("should return object from ternary", () => {
       const interpreter = new Interpreter();
-      const result = interpreter.evaluate(
-        'true ? { name: "Alice" } : { name: "Bob" }',
-      );
+      const result = interpreter.evaluate('true ? { name: "Alice" } : { name: "Bob" }');
       expect(result).toEqual({ name: "Alice" });
     });
 
@@ -124,9 +123,7 @@ describe("Ternary Operator", () => {
     it("should access properties on ternary result", () => {
       const interpreter = new Interpreter();
       interpreter.evaluate("let isAdmin = true");
-      const result = interpreter.evaluate(
-        '(isAdmin ? { role: "admin" } : { role: "user" }).role',
-      );
+      const result = interpreter.evaluate('(isAdmin ? { role: "admin" } : { role: "user" }).role');
       expect(result).toBe("admin");
     });
   });
@@ -157,9 +154,7 @@ describe("Ternary Operator", () => {
     it("should handle truthy values correctly", () => {
       const interpreter = new Interpreter();
       expect(interpreter.evaluate("1 ? 'truthy' : 'falsy'")).toBe("truthy");
-      expect(interpreter.evaluate("\"hello\" ? 'truthy' : 'falsy'")).toBe(
-        "truthy",
-      );
+      expect(interpreter.evaluate("\"hello\" ? 'truthy' : 'falsy'")).toBe("truthy");
       interpreter.evaluate("let arr = []");
       expect(interpreter.evaluate("arr ? 'truthy' : 'falsy'")).toBe("truthy");
       interpreter.evaluate("let obj = {}");
@@ -227,14 +222,10 @@ describe("Ternary Operator", () => {
       const interpreter = new Interpreter({
         globals: { asyncDouble, asyncTriple },
       });
-      const result1 = await interpreter.evaluateAsync(
-        "true ? asyncDouble(5) : asyncTriple(5)",
-      );
+      const result1 = await interpreter.evaluateAsync("true ? asyncDouble(5) : asyncTriple(5)");
       expect(result1).toBe(10);
 
-      const result2 = await interpreter.evaluateAsync(
-        "false ? asyncDouble(5) : asyncTriple(5)",
-      );
+      const result2 = await interpreter.evaluateAsync("false ? asyncDouble(5) : asyncTriple(5)");
       expect(result2).toBe(15);
     });
 
@@ -282,16 +273,12 @@ describe("Ternary Operator", () => {
     it("should work with ternary as function argument", () => {
       const interpreter = new Interpreter();
       interpreter.evaluate("function add(a, b) { return a + b; }");
-      expect(interpreter.evaluate("add(true ? 5 : 10, false ? 3 : 7)")).toBe(
-        12,
-      );
+      expect(interpreter.evaluate("add(true ? 5 : 10, false ? 3 : 7)")).toBe(12);
     });
 
     it("should work with ternary in array literal", () => {
       const interpreter = new Interpreter();
-      const result = interpreter.evaluate(
-        "let arr = [true ? 1 : 2, false ? 3 : 4]; arr",
-      );
+      const result = interpreter.evaluate("let arr = [true ? 1 : 2, false ? 3 : 4]; arr");
       expect(result).toEqual([1, 4]);
     });
 

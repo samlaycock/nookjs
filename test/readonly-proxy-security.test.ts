@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 import { ReadOnlyProxy } from "../src/readonly-proxy";
 
@@ -215,9 +216,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         (wrapped as any).newProp = "test";
-      }).toThrow(
-        "Cannot modify property 'newProp' on global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'newProp' on global 'obj' (read-only)");
     });
 
     it("should block deleting properties", () => {
@@ -226,9 +225,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         delete (wrapped as any).value;
-      }).toThrow(
-        "Cannot delete property 'value' from global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot delete property 'value' from global 'obj' (read-only)");
     });
 
     it("should block Object.defineProperty", () => {
@@ -237,9 +234,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         Object.defineProperty(wrapped, "newProp", { value: 100 });
-      }).toThrow(
-        "Cannot define property 'newProp' on global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
     });
 
     it("should block Object.setPrototypeOf", () => {
@@ -269,9 +264,7 @@ describe("ReadOnlyProxy Security", () => {
       // Cannot modify nested values
       expect(() => {
         (wrapped as any).level1.level2.value = 100;
-      }).toThrow(
-        "Cannot modify property 'value' on global 'obj.level1.level2' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'value' on global 'obj.level1.level2' (read-only)");
     });
 
     it("should block __proto__ on nested objects", () => {
@@ -342,9 +335,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         Reflect.defineProperty(wrapped, "newProp", { value: 100 });
-      }).toThrow(
-        "Cannot define property 'newProp' on global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
     });
 
     it("should block Reflect.setPrototypeOf", () => {

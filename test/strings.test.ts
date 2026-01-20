@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
+
 import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Strings", () => {
@@ -88,9 +89,7 @@ describe("Strings", () => {
     });
 
     test("concatenate number with string", () => {
-      expect(interpreter.evaluate('42 + " is the answer"')).toBe(
-        "42 is the answer",
-      );
+      expect(interpreter.evaluate('42 + " is the answer"')).toBe("42 is the answer");
     });
 
     test("build string with multiple concatenations", () => {

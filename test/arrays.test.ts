@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
+
 import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Arrays", () => {
@@ -466,9 +467,7 @@ describe("Arrays", () => {
         let arr = [1, 2, 3];
         arr["hello"]
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Array index must be a number",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Array index must be a number");
     });
 
     test("assigning to non-array throws", () => {
@@ -476,9 +475,7 @@ describe("Arrays", () => {
         let x = 5;
         x[0] = 10
       `;
-      expect(() => interpreter.evaluate(code)).toThrow(
-        "Assignment target is not an array",
-      );
+      expect(() => interpreter.evaluate(code)).toThrow("Assignment target is not an array");
     });
   });
 });

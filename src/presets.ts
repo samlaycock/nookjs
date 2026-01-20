@@ -287,9 +287,7 @@ export const ES2021: InterpreterOptions = {
     // ES2021 additions
     WeakRef: typeof WeakRef !== "undefined" ? WeakRef : undefined,
     FinalizationRegistry:
-      typeof FinalizationRegistry !== "undefined"
-        ? FinalizationRegistry
-        : undefined,
+      typeof FinalizationRegistry !== "undefined" ? FinalizationRegistry : undefined,
   },
 };
 
