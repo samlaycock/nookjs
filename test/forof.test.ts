@@ -471,7 +471,9 @@ describe("for...of Loops", () => {
             // error
           }
         `);
-      }).toThrow("for...of requires an iterable (array)");
+      }).toThrow(
+        "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
+      );
     });
 
     it("should throw error for null iterable", () => {
@@ -482,18 +484,21 @@ describe("for...of Loops", () => {
             // error
           }
         `);
-      }).toThrow("for...of requires an iterable (array)");
+      }).toThrow(
+        "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
+      );
     });
 
-    it("should throw error for string iterable", () => {
+    it("should iterate over string characters", () => {
       const interpreter = new Interpreter();
-      expect(() => {
-        interpreter.evaluate(`
-          for (let x of "hello") {
-            // error
-          }
-        `);
-      }).toThrow("for...of requires an iterable (array)");
+      const result = interpreter.evaluate(`
+        let chars = [];
+        for (let x of "hello") {
+          chars.push(x);
+        }
+        chars;
+      `);
+      expect(result).toEqual(["h", "e", "l", "l", "o"]);
     });
 
     it("should throw error for object iterable", () => {
@@ -505,7 +510,9 @@ describe("for...of Loops", () => {
             // error
           }
         `);
-      }).toThrow("for...of requires an iterable (array)");
+      }).toThrow(
+        "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
+      );
     });
   });
 
