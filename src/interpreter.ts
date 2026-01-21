@@ -65,6 +65,15 @@ class ContinueValue {
 }
 
 /**
+ * Marker class to signal optional chaining short-circuit
+ * When optional chaining encounters null/undefined with ?., we return this to short-circuit
+ * the entire chain expression and return undefined
+ */
+class OptionalChainShortCircuit {
+  // Marker class to signal optional chaining short-circuit
+}
+
+/**
  * Marker class to signal a yield expression in a generator
  * When a generator executes `yield value`, we return YieldValue to pause execution
  */
@@ -2509,6 +2518,9 @@ export class Interpreter {
       case "TemplateLiteral":
         return this.evaluateTemplateLiteral(node as ESTree.TemplateLiteral);
 
+      case "ChainExpression":
+        return this.evaluateChainExpression(node as ESTree.ChainExpression);
+
       default:
         throw new InterpreterError(`Unsupported node type: ${node.type}`);
     }
@@ -2681,6 +2693,11 @@ export class Interpreter {
       case "TemplateLiteral":
         return await this.evaluateTemplateLiteralAsync(
           node as ESTree.TemplateLiteral,
+        );
+
+      case "ChainExpression":
+        return await this.evaluateChainExpressionAsync(
+          node as ESTree.ChainExpression,
         );
 
       default:
@@ -4768,6 +4785,11 @@ export class Interpreter {
       const memberExpr = node.callee as ESTree.MemberExpression;
       thisValue = this.evaluateNode(memberExpr.object); // The object becomes 'this'
 
+      // Handle optional chaining short-circuit propagation
+      if (thisValue instanceof OptionalChainShortCircuit) {
+        return thisValue;
+      }
+
       // For arrays, strings, generators, and async generators, use evaluateMemberExpression
       // to get HostFunctionValue wrappers
       if (
@@ -4778,6 +4800,13 @@ export class Interpreter {
       ) {
         callee = this.evaluateMemberExpression(memberExpr);
       } else {
+        // Handle optional member access: obj?.method()
+        if (
+          memberExpr.optional &&
+          (thisValue === null || thisValue === undefined)
+        ) {
+          return new OptionalChainShortCircuit();
+        }
         // Get the method from the object
         const property = memberExpr.computed
           ? this.evaluateNode(memberExpr.property)
@@ -4787,6 +4816,16 @@ export class Interpreter {
     } else {
       // Regular function call - no 'this' binding
       callee = this.evaluateNode(node.callee);
+    }
+
+    // Handle optional chaining short-circuit propagation from callee
+    if (callee instanceof OptionalChainShortCircuit) {
+      return callee;
+    }
+
+    // Handle optional call: func?.() returns undefined if func is null/undefined
+    if (node.optional && (callee === null || callee === undefined)) {
+      return new OptionalChainShortCircuit();
     }
 
     // Handle host functions
@@ -4891,6 +4930,16 @@ export class Interpreter {
     }
 
     const object = this.evaluateNode(node.object);
+
+    // Handle optional chaining short-circuit propagation
+    if (object instanceof OptionalChainShortCircuit) {
+      return object;
+    }
+
+    // Handle optional chaining: obj?.prop returns undefined if obj is null/undefined
+    if (node.optional && (object === null || object === undefined)) {
+      return new OptionalChainShortCircuit();
+    }
 
     // Block property access on host functions
     this.validateMemberAccess(object);
@@ -5584,6 +5633,22 @@ export class Interpreter {
     return this.buildTemplateLiteralString(node.quasis, expressionValues);
   }
 
+  /**
+   * Evaluate optional chaining expression (obj?.prop, obj?.[key], func?.())
+   * The chain expression wraps member/call expressions that may have optional access.
+   * If any optional access encounters null/undefined, the entire chain returns undefined.
+   */
+  private evaluateChainExpression(node: ESTree.ChainExpression): any {
+    const result = this.evaluateNode(node.expression);
+
+    // If we got a short-circuit marker, the chain should return undefined
+    if (result instanceof OptionalChainShortCircuit) {
+      return undefined;
+    }
+
+    return result;
+  }
+
   // ============================================================================
   // ASYNC EVALUATION METHODS
   // ============================================================================
@@ -5710,6 +5775,11 @@ export class Interpreter {
       const memberExpr = node.callee as ESTree.MemberExpression;
       thisValue = await this.evaluateNodeAsync(memberExpr.object);
 
+      // Handle optional chaining short-circuit propagation
+      if (thisValue instanceof OptionalChainShortCircuit) {
+        return thisValue;
+      }
+
       // For arrays, strings, and generators, use evaluateMemberExpressionAsync to get HostFunctionValue wrappers
       // For other objects, access the property directly
       if (
@@ -5720,6 +5790,14 @@ export class Interpreter {
       ) {
         callee = await this.evaluateMemberExpressionAsync(memberExpr);
       } else {
+        // Handle optional member access: obj?.method()
+        if (
+          memberExpr.optional &&
+          (thisValue === null || thisValue === undefined)
+        ) {
+          return new OptionalChainShortCircuit();
+        }
+
         if (thisValue instanceof HostFunctionValue) {
           throw new InterpreterError(
             "Cannot access properties on host functions",
@@ -5734,6 +5812,16 @@ export class Interpreter {
       }
     } else {
       callee = await this.evaluateNodeAsync(node.callee);
+    }
+
+    // Handle optional chaining short-circuit propagation from callee
+    if (callee instanceof OptionalChainShortCircuit) {
+      return callee;
+    }
+
+    // Handle optional call: func?.() returns undefined if func is null/undefined
+    if (node.optional && (callee === null || callee === undefined)) {
+      return new OptionalChainShortCircuit();
     }
 
     // Handle host functions (sync and async)
@@ -6854,6 +6942,16 @@ export class Interpreter {
 
     const object = await this.evaluateNodeAsync(node.object);
 
+    // Handle optional chaining short-circuit propagation
+    if (object instanceof OptionalChainShortCircuit) {
+      return object;
+    }
+
+    // Handle optional chaining: obj?.prop returns undefined if obj is null/undefined
+    if (node.optional && (object === null || object === undefined)) {
+      return new OptionalChainShortCircuit();
+    }
+
     this.validateMemberAccess(object);
 
     if (node.computed) {
@@ -7052,5 +7150,21 @@ export class Interpreter {
 
     // Build the final string using shared logic
     return this.buildTemplateLiteralString(node.quasis, expressionValues);
+  }
+
+  /**
+   * Async version of evaluateChainExpression for optional chaining
+   */
+  private async evaluateChainExpressionAsync(
+    node: ESTree.ChainExpression,
+  ): Promise<any> {
+    const result = await this.evaluateNodeAsync(node.expression);
+
+    // If we got a short-circuit marker, the chain should return undefined
+    if (result instanceof OptionalChainShortCircuit) {
+      return undefined;
+    }
+
+    return result;
   }
 }
