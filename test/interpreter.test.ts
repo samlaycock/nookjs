@@ -198,7 +198,10 @@ describe("Interpreter", () => {
     });
 
     test("throws on unsupported operator", () => {
-      expect(() => interpreter.evaluate("5 == 3")).toThrow(InterpreterError);
+      // The 'in' operator is not supported
+      expect(() => interpreter.evaluate("'a' in {a: 1}")).toThrow(
+        InterpreterError,
+      );
     });
   });
 });

@@ -2121,7 +2121,20 @@ export class Interpreter {
     this.constructorGlobals = options?.globals || {};
     this.constructorValidator = options?.validator;
     this.constructorFeatureControl = options?.featureControl;
+    // Inject built-in globals that should always be available
+    this.injectBuiltinGlobals();
     this.injectGlobals(this.constructorGlobals);
+  }
+
+  /**
+   * Inject built-in JavaScript globals that should always be available.
+   * These are fundamental language primitives, not host-provided objects.
+   */
+  private injectBuiltinGlobals(): void {
+    // undefined, NaN, and Infinity are fundamental JavaScript globals
+    this.environment.declare("undefined", undefined, "const", true);
+    this.environment.declare("NaN", NaN, "const", true);
+    this.environment.declare("Infinity", Infinity, "const", true);
   }
 
   /**
@@ -2734,11 +2747,16 @@ export class Interpreter {
       case "**":
         return left ** right;
 
-      // Comparison operators
+      // Comparison operators (strict)
       case "===":
         return left === right;
       case "!==":
         return left !== right;
+      // Comparison operators (loose)
+      case "==":
+        return left == right;
+      case "!=":
+        return left != right;
       case "<":
         return left < right;
       case "<=":
@@ -3494,6 +3512,11 @@ export class Interpreter {
         if (left) return left;
         return this.evaluateNode(node.right);
 
+      case "??":
+        // Nullish coalescing: return right only if left is null or undefined
+        if (left !== null && left !== undefined) return left;
+        return this.evaluateNode(node.right);
+
       default:
         throw new InterpreterError(
           `Unsupported logical operator: ${node.operator}`,
@@ -3520,6 +3543,15 @@ export class Interpreter {
   }
 
   private evaluateAssignmentExpression(node: ESTree.AssignmentExpression): any {
+    // Handle logical assignment operators (||=, &&=, ??=) with short-circuit evaluation
+    if (
+      node.operator === "||=" ||
+      node.operator === "&&=" ||
+      node.operator === "??="
+    ) {
+      return this.evaluateLogicalAssignment(node);
+    }
+
     if (node.operator !== "=") {
       throw new InterpreterError(
         `Unsupported assignment operator: ${node.operator}`,
@@ -3604,6 +3636,110 @@ export class Interpreter {
 
     this.environment.set((node.left as ESTree.Identifier).name, value);
     return value;
+  }
+
+  /**
+   * Evaluates logical assignment operators: ||=, &&=, ??=
+   * These operators have short-circuit behavior - they only assign if the condition is met.
+   * - x ||= y: assigns y to x only if x is falsy
+   * - x &&= y: assigns y to x only if x is truthy
+   * - x ??= y: assigns y to x only if x is null or undefined
+   */
+  private evaluateLogicalAssignment(node: ESTree.AssignmentExpression): any {
+    // Get the current value of the left-hand side
+    let currentValue: any;
+
+    if (node.left.type === "Identifier") {
+      currentValue = this.environment.get(
+        (node.left as ESTree.Identifier).name,
+      );
+    } else if (node.left.type === "MemberExpression") {
+      const memberExpr = node.left as ESTree.MemberExpression;
+      const object = this.evaluateNode(memberExpr.object);
+
+      if (object instanceof HostFunctionValue) {
+        throw new InterpreterError(
+          "Cannot access properties on host functions",
+        );
+      }
+
+      if (memberExpr.computed) {
+        const property = this.evaluateNode(memberExpr.property);
+        const propName = Array.isArray(object)
+          ? typeof property === "string"
+            ? Number(property)
+            : property
+          : String(property);
+        currentValue = object[propName];
+      } else {
+        if (memberExpr.property.type !== "Identifier") {
+          throw new InterpreterError("Invalid property access");
+        }
+        const property = (memberExpr.property as ESTree.Identifier).name;
+        validatePropertyName(property);
+        currentValue = object[property];
+      }
+    } else {
+      throw new InterpreterError("Invalid logical assignment target");
+    }
+
+    // Check if we should assign based on the operator and current value
+    let shouldAssign: boolean;
+    switch (node.operator) {
+      case "||=":
+        // Only assign if current value is falsy
+        shouldAssign = !currentValue;
+        break;
+      case "&&=":
+        // Only assign if current value is truthy
+        shouldAssign = !!currentValue;
+        break;
+      case "??=":
+        // Only assign if current value is null or undefined
+        shouldAssign = currentValue === null || currentValue === undefined;
+        break;
+      default:
+        throw new InterpreterError(
+          `Unsupported logical assignment operator: ${node.operator}`,
+        );
+    }
+
+    // Short-circuit: if we shouldn't assign, return the current value without evaluating right
+    if (!shouldAssign) {
+      return currentValue;
+    }
+
+    // Evaluate the right-hand side and assign
+    const newValue = this.evaluateNode(node.right);
+
+    if (node.left.type === "Identifier") {
+      this.environment.set((node.left as ESTree.Identifier).name, newValue);
+    } else if (node.left.type === "MemberExpression") {
+      const memberExpr = node.left as ESTree.MemberExpression;
+      const object = this.evaluateNode(memberExpr.object);
+
+      if (memberExpr.computed) {
+        const property = this.evaluateNode(memberExpr.property);
+        if (Array.isArray(object)) {
+          const index =
+            typeof property === "string" ? Number(property) : property;
+          if (typeof index !== "number" || isNaN(index)) {
+            throw new InterpreterError("Array index must be a number");
+          }
+          object[index] = newValue;
+        } else if (typeof object === "object" && object !== null) {
+          const propName = String(property);
+          validatePropertyName(propName);
+          object[propName] = newValue;
+        }
+      } else {
+        const property = (memberExpr.property as ESTree.Identifier).name;
+        validatePropertyName(property);
+        object[property] = newValue;
+      }
+    }
+
+    return newValue;
   }
 
   private evaluateVariableDeclaration(node: ESTree.VariableDeclaration): any {
@@ -5531,6 +5667,10 @@ export class Interpreter {
       case "||":
         if (left) return left;
         return await this.evaluateNodeAsync(node.right);
+      case "??":
+        // Nullish coalescing: return right only if left is null or undefined
+        if (left !== null && left !== undefined) return left;
+        return await this.evaluateNodeAsync(node.right);
       default:
         throw new InterpreterError(
           `Unsupported logical operator: ${node.operator}`,
@@ -5687,6 +5827,15 @@ export class Interpreter {
   private async evaluateAssignmentExpressionAsync(
     node: ESTree.AssignmentExpression,
   ): Promise<any> {
+    // Handle logical assignment operators (||=, &&=, ??=) with short-circuit evaluation
+    if (
+      node.operator === "||=" ||
+      node.operator === "&&=" ||
+      node.operator === "??="
+    ) {
+      return await this.evaluateLogicalAssignmentAsync(node);
+    }
+
     if (node.operator !== "=") {
       throw new InterpreterError(
         `Unsupported assignment operator: ${node.operator}`,
@@ -5764,6 +5913,105 @@ export class Interpreter {
 
     this.environment.set((node.left as ESTree.Identifier).name, value);
     return value;
+  }
+
+  /**
+   * Async version of evaluateLogicalAssignment for ||=, &&=, ??=
+   */
+  private async evaluateLogicalAssignmentAsync(
+    node: ESTree.AssignmentExpression,
+  ): Promise<any> {
+    // Get the current value of the left-hand side
+    let currentValue: any;
+
+    if (node.left.type === "Identifier") {
+      currentValue = this.environment.get(
+        (node.left as ESTree.Identifier).name,
+      );
+    } else if (node.left.type === "MemberExpression") {
+      const memberExpr = node.left as ESTree.MemberExpression;
+      const object = await this.evaluateNodeAsync(memberExpr.object);
+
+      if (object instanceof HostFunctionValue) {
+        throw new InterpreterError(
+          "Cannot access properties on host functions",
+        );
+      }
+
+      if (memberExpr.computed) {
+        const property = await this.evaluateNodeAsync(memberExpr.property);
+        const propName = Array.isArray(object)
+          ? typeof property === "string"
+            ? Number(property)
+            : property
+          : String(property);
+        currentValue = object[propName];
+      } else {
+        if (memberExpr.property.type !== "Identifier") {
+          throw new InterpreterError("Invalid property access");
+        }
+        const property = (memberExpr.property as ESTree.Identifier).name;
+        validatePropertyName(property);
+        currentValue = object[property];
+      }
+    } else {
+      throw new InterpreterError("Invalid logical assignment target");
+    }
+
+    // Check if we should assign based on the operator and current value
+    let shouldAssign: boolean;
+    switch (node.operator) {
+      case "||=":
+        shouldAssign = !currentValue;
+        break;
+      case "&&=":
+        shouldAssign = !!currentValue;
+        break;
+      case "??=":
+        shouldAssign = currentValue === null || currentValue === undefined;
+        break;
+      default:
+        throw new InterpreterError(
+          `Unsupported logical assignment operator: ${node.operator}`,
+        );
+    }
+
+    // Short-circuit: if we shouldn't assign, return the current value without evaluating right
+    if (!shouldAssign) {
+      return currentValue;
+    }
+
+    // Evaluate the right-hand side and assign
+    const newValue = await this.evaluateNodeAsync(node.right);
+
+    if (node.left.type === "Identifier") {
+      this.environment.set((node.left as ESTree.Identifier).name, newValue);
+    } else if (node.left.type === "MemberExpression") {
+      const memberExpr = node.left as ESTree.MemberExpression;
+      const object = await this.evaluateNodeAsync(memberExpr.object);
+
+      if (memberExpr.computed) {
+        const property = await this.evaluateNodeAsync(memberExpr.property);
+        if (Array.isArray(object)) {
+          const index =
+            typeof property === "string" ? Number(property) : property;
+          if (typeof index !== "number" || isNaN(index)) {
+            throw new InterpreterError("Array index must be a number");
+          }
+          object[index] = newValue;
+        } else if (typeof object === "object" && object !== null) {
+          const propName = String(property);
+          validatePropertyName(propName);
+          object[propName] = newValue;
+        }
+      } else {
+        const property = (memberExpr.property as ESTree.Identifier).name;
+        validatePropertyName(property);
+        object[property] = newValue;
+      }
+    }
+
+    return newValue;
   }
 
   private async evaluateVariableDeclarationAsync(

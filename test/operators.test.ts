@@ -56,6 +56,46 @@ describe("Comparison and Logical Operators", () => {
       interpreter.evaluate("let y = 5");
       expect(interpreter.evaluate("x === y")).toBe(true);
     });
+
+    test("loose equality with same types", () => {
+      expect(interpreter.evaluate("5 == 5")).toBe(true);
+      expect(interpreter.evaluate("5 == 3")).toBe(false);
+      expect(interpreter.evaluate("'hello' == 'hello'")).toBe(true);
+    });
+
+    test("loose equality with type coercion", () => {
+      expect(interpreter.evaluate("5 == '5'")).toBe(true);
+      expect(interpreter.evaluate("0 == ''")).toBe(true);
+      expect(interpreter.evaluate("0 == '0'")).toBe(true);
+      expect(interpreter.evaluate("1 == true")).toBe(true);
+      expect(interpreter.evaluate("0 == false")).toBe(true);
+    });
+
+    test("loose equality with null and undefined", () => {
+      expect(interpreter.evaluate("null == undefined")).toBe(true);
+      expect(interpreter.evaluate("undefined == null")).toBe(true);
+      expect(interpreter.evaluate("null == null")).toBe(true);
+      expect(interpreter.evaluate("undefined == undefined")).toBe(true);
+      expect(interpreter.evaluate("null == 0")).toBe(false);
+      expect(interpreter.evaluate("undefined == 0")).toBe(false);
+    });
+
+    test("loose inequality with same types", () => {
+      expect(interpreter.evaluate("5 != 3")).toBe(true);
+      expect(interpreter.evaluate("5 != 5")).toBe(false);
+    });
+
+    test("loose inequality with type coercion", () => {
+      expect(interpreter.evaluate("5 != '5'")).toBe(false);
+      expect(interpreter.evaluate("5 != '6'")).toBe(true);
+      expect(interpreter.evaluate("1 != true")).toBe(false);
+      expect(interpreter.evaluate("2 != true")).toBe(true);
+    });
+
+    test("loose inequality with null and undefined", () => {
+      expect(interpreter.evaluate("null != undefined")).toBe(false);
+      expect(interpreter.evaluate("null != 0")).toBe(true);
+    });
   });
 
   describe("Comparison Operators - Less Than", () => {
@@ -254,8 +294,12 @@ describe("Comparison and Logical Operators", () => {
     });
 
     test("nested logical expressions", () => {
-      expect(interpreter.evaluate("(true && true) && (false || true)")).toBe(true);
-      expect(interpreter.evaluate("(true || false) && (true || false)")).toBe(true);
+      expect(interpreter.evaluate("(true && true) && (false || true)")).toBe(
+        true,
+      );
+      expect(interpreter.evaluate("(true || false) && (true || false)")).toBe(
+        true,
+      );
     });
   });
 

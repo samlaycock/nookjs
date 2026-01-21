@@ -28,7 +28,9 @@ describe("Injected Globals", () => {
 
     it("should not allow reassigning const globals", () => {
       const interpreter = new Interpreter({ globals: { x: 10 } });
-      expect(() => interpreter.evaluate("x = 20")).toThrow("Cannot assign to const variable 'x'");
+      expect(() => interpreter.evaluate("x = 20")).toThrow(
+        "Cannot assign to const variable 'x'",
+      );
     });
 
     it("should allow using globals in expressions", () => {
@@ -130,12 +132,16 @@ describe("Injected Globals", () => {
   describe("evaluate() options globals", () => {
     it("should access per-call globals", () => {
       const interpreter = new Interpreter();
-      expect(interpreter.evaluate("a + b", { globals: { a: 5, b: 3 } })).toBe(8);
+      expect(interpreter.evaluate("a + b", { globals: { a: 5, b: 3 } })).toBe(
+        8,
+      );
     });
 
     it("should access single per-call global", () => {
       const interpreter = new Interpreter();
-      expect(interpreter.evaluate("value * 2", { globals: { value: 7 } })).toBe(14);
+      expect(interpreter.evaluate("value * 2", { globals: { value: 7 } })).toBe(
+        14,
+      );
     });
 
     it("should use per-call globals in complex expressions", () => {
@@ -470,6 +476,91 @@ describe("Injected Globals", () => {
       });
       const result = interpreter.evaluate("firstName + separator + lastName");
       expect(result).toBe("John Doe");
+    });
+  });
+
+  describe("Built-in globals", () => {
+    it("should have undefined as a built-in global", () => {
+      const interpreter = new Interpreter();
+      expect(interpreter.evaluate("undefined")).toBe(undefined);
+    });
+
+    it("should have NaN as a built-in global", () => {
+      const interpreter = new Interpreter();
+      expect(interpreter.evaluate("NaN")).toBeNaN();
+    });
+
+    it("should have Infinity as a built-in global", () => {
+      const interpreter = new Interpreter();
+      expect(interpreter.evaluate("Infinity")).toBe(Infinity);
+    });
+
+    it("should use undefined in comparisons", () => {
+      const interpreter = new Interpreter();
+      interpreter.evaluate("let x");
+      expect(interpreter.evaluate("x === undefined")).toBe(true);
+      expect(interpreter.evaluate("null === undefined")).toBe(false);
+      expect(interpreter.evaluate("null == undefined")).toBe(true);
+    });
+
+    it("should use undefined in nullish coalescing", () => {
+      const interpreter = new Interpreter();
+      expect(interpreter.evaluate("undefined ?? 'default'")).toBe("default");
+      expect(interpreter.evaluate("null ?? undefined ?? 'final'")).toBe(
+        "final",
+      );
+    });
+
+    it("should use NaN in calculations", () => {
+      const interpreter = new Interpreter();
+      expect(interpreter.evaluate("NaN + 5")).toBeNaN();
+      expect(interpreter.evaluate("NaN * 10")).toBeNaN();
+    });
+
+    it("should use Infinity in calculations", () => {
+      const interpreter = new Interpreter();
+      expect(interpreter.evaluate("Infinity + 100")).toBe(Infinity);
+      expect(interpreter.evaluate("Infinity * 2")).toBe(Infinity);
+      expect(interpreter.evaluate("-Infinity")).toBe(-Infinity);
+      expect(interpreter.evaluate("1 / Infinity")).toBe(0);
+    });
+
+    it("should use Infinity in comparisons", () => {
+      const interpreter = new Interpreter();
+      expect(interpreter.evaluate("Infinity > 999999999")).toBe(true);
+      expect(interpreter.evaluate("-Infinity < -999999999")).toBe(true);
+    });
+
+    it("should not allow reassigning undefined", () => {
+      const interpreter = new Interpreter();
+      expect(() => interpreter.evaluate("undefined = 42")).toThrow(
+        "Cannot assign to const variable 'undefined'",
+      );
+    });
+
+    it("should not allow reassigning NaN", () => {
+      const interpreter = new Interpreter();
+      expect(() => interpreter.evaluate("NaN = 42")).toThrow(
+        "Cannot assign to const variable 'NaN'",
+      );
+    });
+
+    it("should not allow reassigning Infinity", () => {
+      const interpreter = new Interpreter();
+      expect(() => interpreter.evaluate("Infinity = 42")).toThrow(
+        "Cannot assign to const variable 'Infinity'",
+      );
+    });
+
+    it("should have built-in globals available without any configuration", () => {
+      const interpreter = new Interpreter();
+      const result = interpreter.evaluate(`
+        let a = undefined;
+        let b = NaN;
+        let c = Infinity;
+        a === undefined && b !== b && c > 0
+      `);
+      expect(result).toBe(true);
     });
   });
 });
