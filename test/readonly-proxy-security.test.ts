@@ -216,7 +216,9 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         (wrapped as any).newProp = "test";
-      }).toThrow("Cannot modify property 'newProp' on global 'obj' (read-only)");
+      }).toThrow(
+        "Cannot modify property 'newProp' on global 'obj' (read-only)",
+      );
     });
 
     it("should block deleting properties", () => {
@@ -225,7 +227,9 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         delete (wrapped as any).value;
-      }).toThrow("Cannot delete property 'value' from global 'obj' (read-only)");
+      }).toThrow(
+        "Cannot delete property 'value' from global 'obj' (read-only)",
+      );
     });
 
     it("should block Object.defineProperty", () => {
@@ -234,7 +238,9 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         Object.defineProperty(wrapped, "newProp", { value: 100 });
-      }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
+      }).toThrow(
+        "Cannot define property 'newProp' on global 'obj' (read-only)",
+      );
     });
 
     it("should block Object.setPrototypeOf", () => {
@@ -264,7 +270,9 @@ describe("ReadOnlyProxy Security", () => {
       // Cannot modify nested values
       expect(() => {
         (wrapped as any).level1.level2.value = 100;
-      }).toThrow("Cannot modify property 'value' on global 'obj.level1.level2' (read-only)");
+      }).toThrow(
+        "Cannot modify property 'value' on global 'obj.level1.level2' (read-only)",
+      );
     });
 
     it("should block __proto__ on nested objects", () => {
@@ -310,6 +318,110 @@ describe("ReadOnlyProxy Security", () => {
     });
   });
 
+  describe("Symbol access protection", () => {
+    const symbolCases: Array<{ symbol: symbol; name: string }> = [
+      { symbol: Symbol.toStringTag, name: "Symbol(Symbol.toStringTag)" },
+      { symbol: Symbol.toPrimitive, name: "Symbol(Symbol.toPrimitive)" },
+      { symbol: Symbol.hasInstance, name: "Symbol(Symbol.hasInstance)" },
+      { symbol: Symbol.unscopables, name: "Symbol(Symbol.unscopables)" },
+      { symbol: Symbol.species, name: "Symbol(Symbol.species)" },
+      { symbol: Symbol.match, name: "Symbol(Symbol.match)" },
+      { symbol: Symbol.matchAll, name: "Symbol(Symbol.matchAll)" },
+      { symbol: Symbol.replace, name: "Symbol(Symbol.replace)" },
+      { symbol: Symbol.search, name: "Symbol(Symbol.search)" },
+      { symbol: Symbol.split, name: "Symbol(Symbol.split)" },
+      {
+        symbol: Symbol.isConcatSpreadable,
+        name: "Symbol(Symbol.isConcatSpreadable)",
+      },
+    ];
+
+    it("should block Symbol.toStringTag access", () => {
+      const testObj = { value: 42 };
+      const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
+
+      expect(() => {
+        (wrapped as any)[Symbol.toStringTag];
+      }).toThrow("Cannot access Symbol(Symbol.toStringTag) on global 'obj'");
+    });
+
+    it("should block Symbol.toPrimitive access", () => {
+      const testObj = { value: 42 };
+      const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
+
+      expect(() => {
+        (wrapped as any)[Symbol.toPrimitive];
+      }).toThrow("Cannot access Symbol(Symbol.toPrimitive) on global 'obj'");
+    });
+
+    it("should block Symbol.hasInstance access", () => {
+      const testObj = { value: 42 };
+      const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
+
+      expect(() => {
+        (wrapped as any)[Symbol.hasInstance];
+      }).toThrow("Cannot access Symbol(Symbol.hasInstance) on global 'obj'");
+    });
+
+    symbolCases.forEach(({ symbol, name }) => {
+      it(`should block ${name} access`, () => {
+        const testObj = { value: 42 };
+        const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
+
+        expect(() => {
+          (wrapped as any)[symbol];
+        }).toThrow(`Cannot access ${name} on global 'obj'`);
+      });
+    });
+  });
+
+  describe("Iterator wrapping", () => {
+    it("should wrap values yielded by iterators", () => {
+      const arr = [{ secret: "TOP" }];
+      const wrapped = ReadOnlyProxy.wrap(arr, "arr");
+
+      const iterator = (wrapped as any)[Symbol.iterator]();
+      const first = iterator.next().value;
+
+      expect(() => {
+        first.secret = "HACKED";
+      }).toThrow(
+        "Cannot modify property 'secret' on global 'arr[]' (read-only)",
+      );
+    });
+
+    it("should wrap values when iterating inside interpreter", () => {
+      const interpreter = new Interpreter({
+        globals: { arr: [{ secret: "TOP" }] },
+      });
+
+      expect(() => {
+        interpreter.evaluate(`
+          const obj = [...arr][0];
+          obj.secret = "HACKED";
+        `);
+      }).toThrow(
+        "Cannot modify property 'secret' on global 'arr[]' (read-only)",
+      );
+    });
+
+    it("should wrap values yielded by async iterators", async () => {
+      async function* gen() {
+        yield { secret: "TOP" };
+      }
+
+      const wrapped = ReadOnlyProxy.wrap(gen(), "gen");
+      const iterator = (wrapped as any)[Symbol.asyncIterator]();
+      const result = await iterator.next();
+
+      expect(() => {
+        result.value.secret = "HACKED";
+      }).toThrow(
+        "Cannot modify property 'secret' on global 'gen[]' (read-only)",
+      );
+    });
+  });
+
   describe("Reflect API bypass prevention", () => {
     it("should block Reflect.set", () => {
       const testObj = { value: 42 };
@@ -335,7 +447,9 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         Reflect.defineProperty(wrapped, "newProp", { value: 100 });
-      }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
+      }).toThrow(
+        "Cannot define property 'newProp' on global 'obj' (read-only)",
+      );
     });
 
     it("should block Reflect.setPrototypeOf", () => {

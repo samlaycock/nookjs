@@ -48,10 +48,13 @@ describe("Host Functions", () => {
     it("should handle various argument types", () => {
       const interpreter = new Interpreter({
         globals: {
-          combine: (str: string, num: number, bool: boolean) => `${str}-${num}-${bool}`,
+          combine: (str: string, num: number, bool: boolean) =>
+            `${str}-${num}-${bool}`,
         },
       });
-      expect(interpreter.evaluate('combine("hello", 42, true)')).toBe("hello-42-true");
+      expect(interpreter.evaluate('combine("hello", 42, true)')).toBe(
+        "hello-42-true",
+      );
     });
 
     it("should return various types from host functions", () => {
@@ -357,9 +360,8 @@ describe("Host Functions", () => {
           makeMultiplier: (factor: number) => (x: number) => x * factor,
         },
       });
-      // Returns a host function, but can't be called (not wrapped)
-      const result = interpreter.evaluate("makeMultiplier(5)");
-      expect(typeof result).toBe("function");
+      // Returns a wrapped host function that can be called safely
+      expect(interpreter.evaluate("makeMultiplier(5)(2)")).toBe(10);
     });
 
     it("should handle host function with this context", () => {

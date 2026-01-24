@@ -16,7 +16,11 @@
 import { parseModule } from "meriyah";
 import type { ESTree } from "meriyah";
 
-import { isDangerousProperty } from "./constants";
+import {
+  isDangerousProperty,
+  isDangerousSymbol,
+  isForbiddenGlobalName,
+} from "./constants";
 import { ReadOnlyProxy } from "./readonly-proxy";
 
 type ASTNode = ESTree.Node;
@@ -2241,6 +2245,13 @@ export class Interpreter {
     trackKeys: boolean = false,
   ): void {
     for (const [key, value] of Object.entries(globals)) {
+      // Reject high-risk host objects/functions regardless of allowOverride.
+      if (this.isForbiddenGlobal(key, value)) {
+        throw new InterpreterError(
+          `Global '${key}' is not allowed for security reasons`,
+        );
+      }
+
       // Wrap ALL values with ReadOnlyProxy for security and consistency
       // This handles functions, objects, arrays, and primitives uniformly
       // - Functions become HostFunctionValue (via proxy)
@@ -2274,6 +2285,19 @@ export class Interpreter {
         }
       }
     }
+  }
+
+  private isForbiddenGlobal(name: string, value: any): boolean {
+    // Block both by name and by identity to prevent aliasing.
+    if (isForbiddenGlobalName(name)) {
+      return true;
+    }
+    return (
+      value === Function ||
+      value === eval ||
+      value === Proxy ||
+      value === Reflect
+    );
   }
 
   /**
@@ -3083,6 +3107,7 @@ export class Interpreter {
   }
 
   private coerceTemplateValue(value: any): string {
+    // Security-first coercion: avoid calling user-controlled toString/valueOf hooks.
     if (value === null) {
       return "null";
     }
@@ -3349,6 +3374,84 @@ export class Interpreter {
     }
   }
 
+  private validateSymbolProperty(property: any): void {
+    // Block symbol hooks that can alter coercion/dispatch or expose host behavior.
+    if (typeof property === "symbol" && isDangerousSymbol(property)) {
+      throw new InterpreterError(
+        `Symbol '${String(property)}' is not allowed for security reasons`,
+      );
+    }
+  }
+
+  private ensureNoPrototypeAccessForSymbol(
+    object: any,
+    property: symbol,
+  ): void {
+    // Mirror inherited-property checks for symbol keys to prevent prototype probing.
+    if (object === null || typeof object !== "object") {
+      return;
+    }
+    if (Object.getPrototypeOf(object) === null) {
+      return;
+    }
+    if (
+      property in object &&
+      !Object.prototype.hasOwnProperty.call(object, property)
+    ) {
+      throw new InterpreterError(
+        `Access to inherited property '${String(property)}' is not allowed`,
+      );
+    }
+  }
+
+  private ensureNoInternalObjectAccess(object: any): void {
+    // Prevent leaking interpreter internals through property access.
+    if (object instanceof FunctionValue) {
+      throw new InterpreterError("Cannot access properties on functions");
+    }
+    if (
+      object instanceof GeneratorValue ||
+      object instanceof AsyncGeneratorValue
+    ) {
+      throw new InterpreterError("Cannot access internal generator properties");
+    }
+    if (
+      object instanceof ReturnValue ||
+      object instanceof BreakValue ||
+      object instanceof ContinueValue ||
+      object instanceof OptionalChainShortCircuit ||
+      object instanceof YieldValue ||
+      object instanceof Environment
+    ) {
+      throw new InterpreterError("Cannot access internal interpreter state");
+    }
+  }
+
+  private ensureNoInternalObjectMutation(object: any): void {
+    // Prevent mutation of interpreter internals via property assignment.
+    if (object instanceof FunctionValue) {
+      throw new InterpreterError("Cannot assign properties on functions");
+    }
+    if (
+      object instanceof GeneratorValue ||
+      object instanceof AsyncGeneratorValue
+    ) {
+      throw new InterpreterError("Cannot assign properties on generators");
+    }
+    if (
+      object instanceof ReturnValue ||
+      object instanceof BreakValue ||
+      object instanceof ContinueValue ||
+      object instanceof OptionalChainShortCircuit ||
+      object instanceof YieldValue ||
+      object instanceof Environment
+    ) {
+      throw new InterpreterError(
+        "Cannot assign properties on internal objects",
+      );
+    }
+  }
+
   private ensureNoPrototypeAccess(object: any, propName: string): void {
     if (object === null || typeof object !== "object") {
       return;
@@ -3414,6 +3517,13 @@ export class Interpreter {
    * Validates the property name for security.
    */
   private accessObjectProperty(obj: object, property: any): any {
+    // Symbols are validated separately to avoid string coercion surprises.
+    if (typeof property === "symbol") {
+      this.validateSymbolProperty(property);
+      this.ensureNoInternalObjectAccess(obj);
+      this.ensureNoPrototypeAccessForSymbol(obj, property);
+      return (obj as any)[property];
+    }
     const propName = String(property);
     if (
       !this.shouldSkipPropertyValidation(obj) ||
@@ -3421,6 +3531,7 @@ export class Interpreter {
     ) {
       validatePropertyName(propName); // Security: prevent prototype pollution
     }
+    this.ensureNoInternalObjectAccess(obj);
     this.ensureNoPrototypeAccess(obj, propName);
     return (obj as any)[propName];
   }
@@ -3635,6 +3746,7 @@ export class Interpreter {
    * Validates that a value is a valid constructor (FunctionValue or HostFunctionValue).
    */
   private validateConstructor(constructor: any): void {
+    // Only allow sandbox/host functions or class values as constructors.
     if (
       !(
         constructor instanceof FunctionValue ||
@@ -3652,6 +3764,7 @@ export class Interpreter {
    * Otherwise, return the instance.
    */
   private resolveConstructorReturn(result: any, instance: object): any {
+    // Match JS semantics: object return overrides the newly created instance.
     if (typeof result === "object" && result !== null) {
       return result;
     }
@@ -3667,7 +3780,8 @@ export class Interpreter {
     instance: object,
   ): any {
     try {
-      return constructor.hostFunc.apply(instance, args);
+      const result = constructor.hostFunc.apply(instance, args);
+      return ReadOnlyProxy.wrap(result, constructor.name);
     } catch (error: any) {
       throw new InterpreterError(`Constructor threw error: ${error.message}`);
     }
@@ -3685,9 +3799,10 @@ export class Interpreter {
       const result = constructor.hostFunc.apply(instance, args);
       // If async host function, await the result
       if (constructor.isAsync) {
-        return await result;
+        const resolved = await result;
+        return ReadOnlyProxy.wrap(resolved, constructor.name);
       }
-      return result;
+      return ReadOnlyProxy.wrap(result, constructor.name);
     } catch (error: any) {
       throw new InterpreterError(`Constructor threw error: ${error.message}`);
     }
@@ -3703,8 +3818,21 @@ export class Interpreter {
     memberExpr: ESTree.MemberExpression,
     propertyValue: any,
   ): any {
+    this.validateMemberAccess(obj);
     const instanceClass = this.getInstanceClass(obj);
     if (memberExpr.computed) {
+      // Symbols are treated distinctly from string keys for safety.
+      if (typeof propertyValue === "symbol") {
+        this.validateSymbolProperty(propertyValue);
+        if (instanceClass) {
+          throw new InterpreterError("Symbol properties are not supported");
+        }
+        if (typeof obj === "object" && obj !== null) {
+          this.ensureNoInternalObjectAccess(obj);
+          this.ensureNoPrototypeAccessForSymbol(obj, propertyValue);
+        }
+        return obj[propertyValue];
+      }
       const propName = String(propertyValue);
       if (
         !this.shouldSkipPropertyValidation(obj) ||
@@ -3720,6 +3848,7 @@ export class Interpreter {
         );
       }
       if (typeof obj === "object" && obj !== null) {
+        this.ensureNoInternalObjectAccess(obj);
         this.ensureNoPrototypeAccess(obj, propName);
       }
       return obj[propName];
@@ -3743,6 +3872,7 @@ export class Interpreter {
         ) {
           validatePropertyName(property);
         }
+        this.ensureNoInternalObjectAccess(obj);
         this.ensureNoPrototypeAccess(obj, property);
       }
       return obj[property];
@@ -3913,6 +4043,7 @@ export class Interpreter {
           "Cannot assign properties on host functions",
         );
       }
+      this.ensureNoInternalObjectMutation(object);
 
       // Handle private field assignment: this.#field = value
       if (memberExpr.property.type === "PrivateIdentifier") {
@@ -3930,6 +4061,19 @@ export class Interpreter {
         // Computed property: arr[index] = value or obj["key"] = value
         const property = this.evaluateNode(memberExpr.property);
         const instanceClass = this.getInstanceClass(object);
+        if (typeof property === "symbol") {
+          this.validateSymbolProperty(property);
+          if (object instanceof ClassValue || instanceClass) {
+            throw new InterpreterError("Symbol properties are not supported");
+          }
+          if (typeof object === "object" && object !== null) {
+            object[property] = value;
+            return value;
+          }
+          throw new InterpreterError(
+            "Assignment target is not an array or object",
+          );
+        }
 
         if (Array.isArray(object)) {
           // Array element assignment: arr[i] = value
@@ -4049,6 +4193,10 @@ export class Interpreter {
         if (instanceClass) {
           if (memberExpr.computed) {
             const property = this.evaluateNode(memberExpr.property);
+            if (typeof property === "symbol") {
+              this.validateSymbolProperty(property);
+              throw new InterpreterError("Symbol properties are not supported");
+            }
             const propName = String(property);
             validatePropertyName(propName);
             currentValue = this.getInstanceProperty(
@@ -4074,24 +4222,35 @@ export class Interpreter {
               "Cannot access properties on host functions",
             );
           }
+          this.ensureNoInternalObjectAccess(object);
 
           if (memberExpr.computed) {
             const property = this.evaluateNode(memberExpr.property);
-            const propName = Array.isArray(object)
-              ? typeof property === "string"
-                ? Number(property)
-                : property
-              : String(property);
-            if (!Array.isArray(object) && typeof object === "object") {
-              if (
-                !this.shouldSkipPropertyValidation(object) ||
-                this.shouldForcePropertyValidation(propName)
-              ) {
-                validatePropertyName(propName);
+            if (typeof property === "symbol") {
+              this.validateSymbolProperty(property);
+              if (typeof object === "object" && object !== null) {
+                this.ensureNoPrototypeAccessForSymbol(object, property);
+                currentValue = object[property];
+              } else {
+                throw new InterpreterError("Invalid property access");
               }
-              this.ensureNoPrototypeAccess(object, propName);
+            } else {
+              const propName = Array.isArray(object)
+                ? typeof property === "string"
+                  ? Number(property)
+                  : property
+                : String(property);
+              if (!Array.isArray(object) && typeof object === "object") {
+                if (
+                  !this.shouldSkipPropertyValidation(object) ||
+                  this.shouldForcePropertyValidation(propName)
+                ) {
+                  validatePropertyName(propName);
+                }
+                this.ensureNoPrototypeAccess(object, propName);
+              }
+              currentValue = object[propName];
             }
-            currentValue = object[propName];
           } else {
             if (memberExpr.property.type !== "Identifier") {
               throw new InterpreterError("Invalid property access");
@@ -4153,6 +4312,13 @@ export class Interpreter {
 
       const object = this.evaluateNode(memberExpr.object);
 
+      if (object instanceof HostFunctionValue) {
+        throw new InterpreterError(
+          "Cannot assign properties on host functions",
+        );
+      }
+      this.ensureNoInternalObjectMutation(object);
+
       if (memberExpr.property.type === "PrivateIdentifier") {
         if (!this.isFeatureEnabled("PrivateFields")) {
           throw new InterpreterError("PrivateFields is not enabled");
@@ -4166,6 +4332,20 @@ export class Interpreter {
 
       if (memberExpr.computed) {
         const property = this.evaluateNode(memberExpr.property);
+        if (typeof property === "symbol") {
+          this.validateSymbolProperty(property);
+          if (object instanceof ClassValue) {
+            throw new InterpreterError("Symbol properties are not supported");
+          }
+          const instanceClass = this.getInstanceClass(object);
+          if (instanceClass) {
+            throw new InterpreterError("Symbol properties are not supported");
+          }
+          if (typeof object === "object" && object !== null) {
+            object[property] = newValue;
+          }
+          return newValue;
+        }
         if (Array.isArray(object)) {
           const index =
             typeof property === "string" ? Number(property) : property;
@@ -5419,7 +5599,8 @@ export class Interpreter {
 
       // Call the host function
       try {
-        return callee.hostFunc(...args);
+        const result = callee.hostFunc(...args);
+        return ReadOnlyProxy.wrap(result, callee.name);
       } catch (error: any) {
         // If rethrowErrors is true, propagate the error directly (used by generator.throw())
         if (callee.rethrowErrors) {
@@ -5566,6 +5747,10 @@ export class Interpreter {
     if (instanceClass) {
       if (node.computed) {
         const property = this.evaluateNode(node.property);
+        if (typeof property === "symbol") {
+          this.validateSymbolProperty(property);
+          throw new InterpreterError("Symbol properties are not supported");
+        }
         const propName = String(property);
         validatePropertyName(propName);
         return this.getInstanceProperty(
@@ -5595,6 +5780,15 @@ export class Interpreter {
     if (node.computed) {
       // obj[expr] - computed property access (array indexing or object bracket notation)
       const property = this.evaluateNode(node.property);
+      if (typeof property === "symbol") {
+        this.validateSymbolProperty(property);
+        if (typeof object === "object" && object !== null) {
+          return this.accessObjectProperty(object, property);
+        }
+        throw new InterpreterError(
+          "Computed property access requires an array or object",
+        );
+      }
 
       // Handle array indexing
       if (Array.isArray(object)) {
@@ -5621,6 +5815,10 @@ export class Interpreter {
         this.shouldForcePropertyValidation(property)
       ) {
         validatePropertyName(property); // Security: prevent prototype pollution
+      }
+
+      if (object instanceof FunctionValue) {
+        throw new InterpreterError("Cannot access properties on functions");
       }
 
       // Handle .length for strings and arrays
@@ -6549,9 +6747,10 @@ export class Interpreter {
         const result = callee.hostFunc(...args);
         // If async host function, await the promise
         if (callee.isAsync) {
-          return await result;
+          const resolved = await result;
+          return ReadOnlyProxy.wrap(resolved, callee.name);
         }
-        return result;
+        return ReadOnlyProxy.wrap(result, callee.name);
       } catch (error: any) {
         // If rethrowErrors is true, propagate the error directly (used by generator.throw())
         if (callee.rethrowErrors) {
@@ -6691,6 +6890,7 @@ export class Interpreter {
           "Cannot assign properties on host functions",
         );
       }
+      this.ensureNoInternalObjectMutation(object);
 
       if (memberExpr.property.type === "PrivateIdentifier") {
         if (!this.isFeatureEnabled("PrivateFields")) {
@@ -6706,6 +6906,19 @@ export class Interpreter {
       if (memberExpr.computed) {
         const property = await this.evaluateNodeAsync(memberExpr.property);
         const instanceClass = this.getInstanceClass(object);
+        if (typeof property === "symbol") {
+          this.validateSymbolProperty(property);
+          if (object instanceof ClassValue || instanceClass) {
+            throw new InterpreterError("Symbol properties are not supported");
+          }
+          if (typeof object === "object" && object !== null) {
+            object[property] = value;
+            return value;
+          }
+          throw new InterpreterError(
+            "Assignment target is not an array or object",
+          );
+        }
 
         if (Array.isArray(object)) {
           // Convert string to number if it's a numeric string (for...in gives string indices)
@@ -6830,6 +7043,10 @@ export class Interpreter {
         if (instanceClass) {
           if (memberExpr.computed) {
             const property = await this.evaluateNodeAsync(memberExpr.property);
+            if (typeof property === "symbol") {
+              this.validateSymbolProperty(property);
+              throw new InterpreterError("Symbol properties are not supported");
+            }
             const propName = String(property);
             validatePropertyName(propName);
             currentValue = this.getInstanceProperty(
@@ -6855,24 +7072,35 @@ export class Interpreter {
               "Cannot access properties on host functions",
             );
           }
+          this.ensureNoInternalObjectAccess(object);
 
           if (memberExpr.computed) {
             const property = await this.evaluateNodeAsync(memberExpr.property);
-            const propName = Array.isArray(object)
-              ? typeof property === "string"
-                ? Number(property)
-                : property
-              : String(property);
-            if (!Array.isArray(object) && typeof object === "object") {
-              if (
-                !this.shouldSkipPropertyValidation(object) ||
-                this.shouldForcePropertyValidation(propName)
-              ) {
-                validatePropertyName(propName);
+            if (typeof property === "symbol") {
+              this.validateSymbolProperty(property);
+              if (typeof object === "object" && object !== null) {
+                this.ensureNoPrototypeAccessForSymbol(object, property);
+                currentValue = object[property];
+              } else {
+                throw new InterpreterError("Invalid property access");
               }
-              this.ensureNoPrototypeAccess(object, propName);
+            } else {
+              const propName = Array.isArray(object)
+                ? typeof property === "string"
+                  ? Number(property)
+                  : property
+                : String(property);
+              if (!Array.isArray(object) && typeof object === "object") {
+                if (
+                  !this.shouldSkipPropertyValidation(object) ||
+                  this.shouldForcePropertyValidation(propName)
+                ) {
+                  validatePropertyName(propName);
+                }
+                this.ensureNoPrototypeAccess(object, propName);
+              }
+              currentValue = object[propName];
             }
-            currentValue = object[propName];
           } else {
             if (memberExpr.property.type !== "Identifier") {
               throw new InterpreterError("Invalid property access");
@@ -6931,6 +7159,13 @@ export class Interpreter {
 
       const object = await this.evaluateNodeAsync(memberExpr.object);
 
+      if (object instanceof HostFunctionValue) {
+        throw new InterpreterError(
+          "Cannot assign properties on host functions",
+        );
+      }
+      this.ensureNoInternalObjectMutation(object);
+
       if (memberExpr.property.type === "PrivateIdentifier") {
         if (!this.isFeatureEnabled("PrivateFields")) {
           throw new InterpreterError("PrivateFields is not enabled");
@@ -6944,6 +7179,20 @@ export class Interpreter {
 
       if (memberExpr.computed) {
         const property = await this.evaluateNodeAsync(memberExpr.property);
+        if (typeof property === "symbol") {
+          this.validateSymbolProperty(property);
+          if (object instanceof ClassValue) {
+            throw new InterpreterError("Symbol properties are not supported");
+          }
+          const instanceClass = this.getInstanceClass(object);
+          if (instanceClass) {
+            throw new InterpreterError("Symbol properties are not supported");
+          }
+          if (typeof object === "object" && object !== null) {
+            object[property] = newValue;
+          }
+          return newValue;
+        }
         if (Array.isArray(object)) {
           const index =
             typeof property === "string" ? Number(property) : property;
@@ -7878,6 +8127,10 @@ export class Interpreter {
     if (instanceClass) {
       if (node.computed) {
         const property = await this.evaluateNodeAsync(node.property);
+        if (typeof property === "symbol") {
+          this.validateSymbolProperty(property);
+          throw new InterpreterError("Symbol properties are not supported");
+        }
         const propName = String(property);
         validatePropertyName(propName);
         return this.getInstanceProperty(
@@ -7901,6 +8154,15 @@ export class Interpreter {
 
     if (node.computed) {
       const property = await this.evaluateNodeAsync(node.property);
+      if (typeof property === "symbol") {
+        this.validateSymbolProperty(property);
+        if (typeof object === "object" && object !== null) {
+          return this.accessObjectProperty(object, property);
+        }
+        throw new InterpreterError(
+          "Computed property access requires an array or object",
+        );
+      }
 
       if (Array.isArray(object)) {
         return this.accessArrayElement(object, property);
@@ -7921,6 +8183,10 @@ export class Interpreter {
       }
       const property = (node.property as ESTree.Identifier).name;
       validatePropertyName(property);
+
+      if (object instanceof FunctionValue) {
+        throw new InterpreterError("Cannot access properties on functions");
+      }
 
       const length = this.getLengthProperty(object, property);
       if (length !== null) {

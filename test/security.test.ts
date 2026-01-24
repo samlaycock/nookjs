@@ -519,6 +519,135 @@ describe("Security: Prototype Pollution Prevention", () => {
     });
   });
 
+  describe("symbol access blocking", () => {
+    it("should block dangerous symbol access on objects", () => {
+      const sym = Symbol.toStringTag;
+      const interpreter = new Interpreter({
+        globals: { sym },
+      });
+      expect(() => {
+        interpreter.evaluate(`
+          const obj = { a: 1 };
+          obj[sym];
+        `);
+      }).toThrow(
+        "Symbol 'Symbol(Symbol.toStringTag)' is not allowed for security reasons",
+      );
+    });
+
+    it("should block dangerous symbol assignment on objects", () => {
+      const sym = Symbol.toPrimitive;
+      const interpreter = new Interpreter({
+        globals: { sym },
+      });
+      expect(() => {
+        interpreter.evaluate(`
+          const obj = { a: 1 };
+          obj[sym] = 1;
+        `);
+      }).toThrow(
+        "Symbol 'Symbol(Symbol.toPrimitive)' is not allowed for security reasons",
+      );
+    });
+  });
+
+  describe("host function bypass prevention", () => {
+    it("should block access to hostFunc on host functions", () => {
+      const interpreter = new Interpreter({
+        globals: {
+          getData: () => ({ value: 1 }),
+        },
+      });
+
+      expect(() => {
+        interpreter.evaluate("getData.hostFunc");
+      }).toThrow("Cannot access properties on host functions");
+    });
+
+    it("should block calling hostFunc directly", () => {
+      const interpreter = new Interpreter({
+        globals: {
+          getData: () => ({ value: 1 }),
+        },
+      });
+
+      expect(() => {
+        interpreter.evaluate("getData.hostFunc()");
+      }).toThrow("Cannot access properties on host functions");
+    });
+  });
+
+  describe("global sanitization", () => {
+    it("should reject Function constructor in globals", () => {
+      expect(() => {
+        new Interpreter({
+          globals: { Function },
+        });
+      }).toThrow("Global 'Function' is not allowed for security reasons");
+    });
+
+    it("should reject eval in globals", () => {
+      expect(() => {
+        new Interpreter({
+          globals: { eval },
+        });
+      }).toThrow("Global 'eval' is not allowed for security reasons");
+    });
+
+    it("should reject Proxy and Reflect by value even with alias", () => {
+      expect(() => {
+        new Interpreter({
+          globals: { P: Proxy, R: Reflect },
+        });
+      }).toThrow("Global 'P' is not allowed for security reasons");
+    });
+  });
+
+  describe("internal object access protection", () => {
+    it("should block access to FunctionValue internals", () => {
+      const interpreter = new Interpreter();
+      expect(() => {
+        interpreter.evaluate(`
+          function foo() { return 1; }
+          foo.closure
+        `);
+      }).toThrow();
+    });
+
+    it("should block access to Generator internals", () => {
+      const interpreter = new Interpreter();
+      expect(() => {
+        interpreter.evaluate(`
+          function *gen() { yield 1; }
+          const g = gen();
+          g.state
+        `);
+      }).toThrow();
+    });
+  });
+
+  describe("host constructor return isolation", () => {
+    it("should prevent mutation of host object returned from constructor", () => {
+      const hostInstance = { secret: "CONFIDENTIAL" };
+      const interpreter = new Interpreter({
+        globals: {
+          HostCtor: function () {
+            return hostInstance;
+          },
+        },
+      });
+
+      expect(() => {
+        interpreter.evaluate(`
+          const obj = new HostCtor();
+          obj.secret = "HACKED";
+        `);
+      }).toThrow();
+
+      expect(hostInstance.secret).toBe("CONFIDENTIAL");
+    });
+  });
+
   describe("edge cases", () => {
     it("should handle empty property name differently from dangerous ones", () => {
       const interpreter = new Interpreter();

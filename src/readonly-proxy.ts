@@ -12,6 +12,37 @@ import { InterpreterError, HostFunctionValue } from "./interpreter";
  * - Preserves 'this' binding for method calls
  */
 export class ReadOnlyProxy {
+  private static wrapIterator(
+    iterator: Iterator<any> | AsyncIterator<any>,
+    name: string,
+    isAsync: boolean,
+  ): any {
+    return new Proxy(iterator as any, {
+      get(target, prop, receiver) {
+        if (prop === "next") {
+          if (isAsync) {
+            return async (...args: any[]) => {
+              const result = await (target as AsyncIterator<any>).next(...args);
+              if (result && typeof result === "object" && "value" in result) {
+                result.value = ReadOnlyProxy.wrap(result.value, `${name}[]`);
+              }
+              return result;
+            };
+          }
+          return (...args: any[]) => {
+            const result = (target as Iterator<any>).next(...args);
+            if (result && typeof result === "object" && "value" in result) {
+              result.value = ReadOnlyProxy.wrap(result.value, `${name}[]`);
+            }
+            return result;
+          };
+        }
+
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+  }
+
   /**
    * Wrap a value to make it read-only and secure
    * @param value - The value to wrap (object, function, or primitive)
@@ -37,15 +68,34 @@ export class ReadOnlyProxy {
     // wrap it directly as HostFunctionValue instead of proxying it
     if (typeof value === "function") {
       const isAsync = value.constructor.name === "AsyncFunction";
-      return new HostFunctionValue((...args: any[]) => value(...args), name, isAsync);
+      return new HostFunctionValue(
+        (...args: any[]) => value(...args),
+        name,
+        isAsync,
+      );
     }
 
     // Create a proxy that intercepts all operations (for objects like Math, console, etc.)
     return new Proxy(value, {
       get(target, prop, receiver) {
+        if (prop === Symbol.iterator || prop === Symbol.asyncIterator) {
+          const iterator = Reflect.get(target, prop, target);
+          if (typeof iterator === "function") {
+            return () =>
+              ReadOnlyProxy.wrapIterator(
+                iterator.call(target),
+                name,
+                prop === Symbol.asyncIterator,
+              );
+          }
+          return iterator;
+        }
+
         // Block dangerous properties that could break out of sandbox
         if (isDangerousProperty(prop)) {
-          throw new InterpreterError(`Cannot access ${String(prop)} on global '${name}'`);
+          throw new InterpreterError(
+            `Cannot access ${String(prop)} on global '${name}'`,
+          );
         }
 
         // Get the actual value
@@ -99,7 +149,9 @@ export class ReadOnlyProxy {
 
       // Block setPrototypeOf to prevent prototype chain manipulation
       setPrototypeOf(target) {
-        throw new InterpreterError(`Cannot set prototype of global '${name}' (read-only)`);
+        throw new InterpreterError(
+          `Cannot set prototype of global '${name}' (read-only)`,
+        );
       },
 
       // Block getPrototypeOf to prevent accessing the underlying object's prototype
