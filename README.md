@@ -6,6 +6,11 @@ A simple, secure JavaScript interpreter built with TypeScript and Meriyah AST pa
 
 Currently supports:
 
+### Language Feature Docs
+
+See `docs/README.md` for one-page descriptions of each supported `LanguageFeature`,
+including implementation notes and interpreter-specific gotchas.
+
 ### Injected Globals & Host Functions
 
 The interpreter supports injecting global variables and **calling host functions** from the host environment:
@@ -115,7 +120,7 @@ The interpreter supports fine-grained feature control to target specific ECMAScr
 - **Blacklist Mode**: Disable specific features (permissive, everything else enabled)
 - **Constructor Configuration**: Set feature control when creating the interpreter (applies to all evaluations)
 - **Per-call Configuration**: Override feature control for individual `evaluate()` calls
-- **30+ Controllable Features**: Including ES5 features (loops, functions, operators) and ES6+ features (arrow functions, async/await, destructuring, etc.)
+- **30+ Controllable Features**: Including ES5 features (loops, functions, operators) and ES6+ features (arrow functions, generators, async/await, optional chaining, logical assignment, destructuring, etc.)
 - **Version Targeting**: Simulate ES5, ES2015, ES2017, or any ECMAScript version
 - **Error Messages**: Clear error when disabled features are used (e.g., "ArrowFunctions is not enabled")
 

@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 
-import { Interpreter, InterpreterError } from "../src/interpreter";
+import { Interpreter } from "../src/interpreter";
 
 describe("While Loops", () => {
   let interpreter: Interpreter;

@@ -9,7 +9,7 @@ describe("Security: Async/Await Features", () => {
       const interpreter = new Interpreter({
         globals: { hostFunc },
       });
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function test() {
             return await hostFunc;
@@ -38,7 +38,7 @@ describe("Security: Async/Await Features", () => {
       const interpreter = new Interpreter({
         globals: { hostFunc },
       });
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function test() {
             return hostFunc.name;
@@ -93,7 +93,7 @@ describe("Security: Async/Await Features", () => {
   describe("Prototype pollution protection", () => {
     it("should block __proto__ assignment in async", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function pollute() {
             let obj = {};
@@ -107,7 +107,7 @@ describe("Security: Async/Await Features", () => {
 
     it("should block constructor access in async", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function exploit() {
             let obj = {};
@@ -121,7 +121,7 @@ describe("Security: Async/Await Features", () => {
 
     it("should block prototype property in async", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function exploit() {
             let obj = {};
@@ -137,7 +137,7 @@ describe("Security: Async/Await Features", () => {
   describe("Built-in object access", () => {
     it("should not have access to Promise constructor", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function test() {
             return Promise;
@@ -149,7 +149,7 @@ describe("Security: Async/Await Features", () => {
 
     it("should not have access to Function constructor", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function test() {
             return Function;
@@ -161,7 +161,7 @@ describe("Security: Async/Await Features", () => {
 
     it("should not have access to eval", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function test() {
             return eval;
@@ -173,7 +173,7 @@ describe("Security: Async/Await Features", () => {
 
     it("should not have access to globalThis", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function test() {
             return globalThis;
@@ -206,7 +206,7 @@ describe("Security: Async/Await Features", () => {
       });
 
       // Per-call globals should be cleaned up
-      await expect(interpreter.evaluateAsync("external")).rejects.toThrow(
+      return expect(interpreter.evaluateAsync("external")).rejects.toThrow(
         "Undefined variable 'external'",
       );
 
@@ -224,7 +224,7 @@ describe("Security: Async/Await Features", () => {
       const interpreter = new Interpreter({
         globals: { errorHost },
       });
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function test() {
             return await errorHost();
@@ -236,7 +236,7 @@ describe("Security: Async/Await Features", () => {
 
     it("should propagate errors from async sandbox functions", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function throwError() {
             let x = undefinedVariable;
@@ -249,7 +249,7 @@ describe("Security: Async/Await Features", () => {
 
     it("should handle errors in await expressions", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function test() {
             return await nonExistentFunc();
@@ -276,7 +276,7 @@ describe("Security: Async/Await Features", () => {
 
     it("should respect const immutability in async", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           const PI = 3.14;
           async function change() {

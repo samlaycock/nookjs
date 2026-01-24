@@ -20,9 +20,6 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
   // Helper to generate random integers
   const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-  // Helper to generate random floats
-  const randomFloat = (min: number, max: number) => Math.random() * (max - min) + min;
-
   // Helper to generate random booleans
   const randomBool = () => Math.random() > 0.5;
 
@@ -355,7 +352,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           `;
 
           const result = interpreter.evaluate(code);
-          const { key0, ...expected } = obj;
+          const { key0: _key0, ...expected } = obj;
           expect(result).toEqual(expected);
         }
       });
@@ -542,6 +539,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         const code = `${a} ${op} ${b}`;
         const result = interpreter.evaluate(code);
 
+        // eslint-disable-next-line no-eval
         const expected = eval(code);
         if (op === "/") {
           expect(Math.abs(result - expected)).toBeLessThan(0.0001);
@@ -571,6 +569,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
 
         const result = interpreter.evaluate(code);
+        // eslint-disable-next-line no-eval
         const expected = eval(code);
         expect(result).toBe(expected);
       }
@@ -618,6 +617,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
 
         const code = `${a} ${op} ${b}`;
         const result = interpreter.evaluate(code);
+        // eslint-disable-next-line no-eval
         const expected = eval(code);
         expect(result).toBe(expected);
       }
@@ -632,6 +632,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
 
         const code = `${a} === ${b}`;
         const result = interpreter.evaluate(code);
+        // eslint-disable-next-line no-eval
         const expected = eval(code);
         expect(result).toBe(expected);
       }
@@ -661,6 +662,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
 
         const code = `${a} ${op} ${b}`;
         const result = interpreter.evaluate(code);
+        // eslint-disable-next-line no-eval
         const expected = eval(code);
         expect(result).toBe(expected);
       }

@@ -175,7 +175,7 @@ describe("AST Validator", () => {
 
     it("should restrict function complexity", () => {
       const noRecursionValidator = (ast: ESTree.Program) => {
-        const code = JSON.stringify(ast);
+        const _code = JSON.stringify(ast);
         // Simple heuristic: check if function name appears in its own body
         // This is a simplified check - real implementation would need proper traversal
         return true; // Placeholder for complex logic
@@ -293,7 +293,7 @@ describe("AST Validator", () => {
     });
 
     it("should handle validator exceptions gracefully", () => {
-      const throwingValidator = (ast: ESTree.Program) => {
+      const throwingValidator = (_ast: ESTree.Program) => {
         throw new Error("Custom validator error");
       };
 

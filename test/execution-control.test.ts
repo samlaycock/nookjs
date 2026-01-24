@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 
-import { Interpreter, InterpreterError } from "../src/interpreter";
+import { Interpreter } from "../src/interpreter";
 
 describe.skip("Execution Control", () => {
   describe("Timeout", () => {
@@ -55,8 +55,8 @@ describe.skip("Execution Control", () => {
     test("should timeout async evaluation", async () => {
       const interpreter = new Interpreter();
 
-      await expect(async () => {
-        await interpreter.evaluateAsync(
+      return expect(
+        interpreter.evaluateAsync(
           `
           var count = 0;
           while (true) {
@@ -64,8 +64,8 @@ describe.skip("Execution Control", () => {
           }
         `,
           { timeout: 100 },
-        );
-      }).toThrow("Execution timeout");
+        ),
+      ).rejects.toThrow("Execution timeout");
     });
 
     test("should not timeout with no timeout set", () => {
@@ -157,8 +157,8 @@ describe.skip("Execution Control", () => {
       // Abort after a short delay
       setTimeout(() => controller.abort(), 50);
 
-      await expect(async () => {
-        await interpreter.evaluateAsync(
+      return expect(
+        interpreter.evaluateAsync(
           `
           var count = 0;
           while (true) {
@@ -166,8 +166,8 @@ describe.skip("Execution Control", () => {
           }
         `,
           { signal: controller.signal },
-        );
-      }).toThrow("Execution aborted");
+        ),
+      ).rejects.toThrow("Execution aborted");
     });
 
     test("should throw immediately if already aborted", () => {

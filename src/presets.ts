@@ -46,6 +46,7 @@ export const ES5: InterpreterOptions = {
       // Control flow
       "IfStatement",
       "WhileStatement",
+      "DoWhileStatement",
       "ForStatement",
       "ForInStatement",
       "SwitchStatement",
@@ -118,7 +119,7 @@ export const ES5: InterpreterOptions = {
  * - Map, Set, WeakMap, WeakSet
  * - Classes
  * - Modules (not applicable to interpreter)
- * - Generators (not yet supported by interpreter)
+ * - Generators
  */
 export const ES2015: InterpreterOptions = {
   featureControl: {
@@ -136,6 +137,8 @@ export const ES2015: InterpreterOptions = {
       "RestParameters",
       "ForOfStatement",
       "DefaultParameters",
+      "Generators",
+      "YieldExpression",
       "Classes",
     ],
   },
@@ -222,13 +225,16 @@ export const ES2017: InterpreterOptions = {
  *
  * Added:
  * - Rest/spread properties for objects (already supported)
- * - Async iteration (not yet supported)
+ * - Async iteration (supported via async generators and Symbol.asyncIterator)
  * - Promise.finally() (on prototype)
  * - RegExp improvements (on prototype)
  */
 export const ES2018: InterpreterOptions = {
   ...ES2017,
-  // No new language features needed (rest/spread already in ES2015)
+  featureControl: {
+    mode: "whitelist" as const,
+    features: [...(ES2017.featureControl!.features as LanguageFeature[]), "AsyncGenerators"],
+  },
 };
 
 /**
@@ -250,18 +256,21 @@ export const ES2019: InterpreterOptions = {
  * ES2020 (ECMAScript 2020) - June 2020
  *
  * Added:
- * - Nullish coalescing (??) (not yet supported by interpreter)
- * - Optional chaining (?.) (not yet supported by interpreter)
+ * - Nullish coalescing (??) (supported via LogicalOperators)
+ * - Optional chaining (?.)
  * - BigInt (via globals)
  * - Promise.allSettled() (on Promise)
  * - globalThis (via globals)
  * - Dynamic import (not applicable)
  *
- * Note: Nullish coalescing and optional chaining require parser support.
- * The interpreter's parser (Meriyah) supports these, but the evaluator doesn't yet.
+ * Note: Nullish coalescing is included under LogicalOperators in all presets.
  */
 export const ES2020: InterpreterOptions = {
   ...ES2019,
+  featureControl: {
+    mode: "whitelist" as const,
+    features: [...(ES2019.featureControl!.features as LanguageFeature[]), "OptionalChaining"],
+  },
   globals: {
     ...ES2019.globals,
     // ES2020 additions
@@ -278,11 +287,15 @@ export const ES2020: InterpreterOptions = {
  * - Promise.any() (on Promise)
  * - WeakRef (via globals)
  * - FinalizationRegistry (via globals)
- * - Logical assignment operators (||=, &&=, ??=) (not yet supported)
+ * - Logical assignment operators (||=, &&=, ??=)
  * - Numeric separators (parser-level, automatically supported)
  */
 export const ES2021: InterpreterOptions = {
   ...ES2020,
+  featureControl: {
+    mode: "whitelist" as const,
+    features: [...(ES2020.featureControl!.features as LanguageFeature[]), "LogicalAssignment"],
+  },
   globals: {
     ...ES2020.globals,
     // ES2021 additions

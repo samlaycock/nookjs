@@ -323,7 +323,7 @@ console.log("Result:", validatedInterpreter.evaluate("5 + 10"));
 try {
   validatedInterpreter.evaluate("let i = 0; while (i < 5) { i = i + 1; }");
   console.log("Error: Should have been blocked");
-} catch (e) {
+} catch {
   console.log("Blocked: while loop rejected by validator ✓");
 }
 
@@ -344,7 +344,7 @@ console.log(
 try {
   simpleInterpreter.evaluate("let x = 10", { validator: readOnlyValidator });
   console.log("Error: Should have been blocked");
-} catch (e) {
+} catch {
   console.log("Blocked: variable declaration rejected ✓");
 }
 
@@ -359,7 +359,7 @@ console.log("Small program (2 statements):", sizeLimitedInterpreter.evaluate("le
 try {
   sizeLimitedInterpreter.evaluate("let a = 1; let b = 2; let c = 3; let d = 4;");
   console.log("Error: Should have been blocked");
-} catch (e) {
+} catch {
   console.log("Blocked: too many statements ✓");
 }
 
@@ -659,21 +659,21 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   try {
     secureInterpreter.evaluate("Math.PI = 3");
     console.log("Error: Should have been blocked");
-  } catch (e: any) {
+  } catch {
     console.log("Blocked: Math.PI = 3 (read-only property) ✓");
   }
 
   try {
     secureInterpreter.evaluate("Math.__proto__");
     console.log("Error: Should have been blocked");
-  } catch (e: any) {
+  } catch {
     console.log("Blocked: Math.__proto__ access ✓");
   }
 
   try {
     secureInterpreter.evaluate("Math.constructor");
     console.log("Error: Should have been blocked");
-  } catch (e: any) {
+  } catch {
     console.log("Blocked: Math.constructor access ✓");
   }
 
@@ -686,7 +686,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
     try {
       throw "Something went wrong!";
       result = "success"; // Not executed
-    } catch (e) {
+    } catch {
       result = "caught error";
     }
     result
@@ -698,7 +698,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
     let result2;
     try {
       result2 = "success";
-    } catch (e) {
+    } catch {
       result2 = "error";
     }
     result2
@@ -712,7 +712,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
     try {
       log.push("try");
       throw "error";
-    } catch (e) {
+    } catch {
       log.push("catch");
     } finally {
       log.push("finally");
@@ -759,11 +759,11 @@ console.log("\n--- Async/Await: Async Host Functions ---");
       try {
         log2.push("inner try");
         throw "inner error";
-      } catch (e) {
+      } catch {
         log2.push("inner catch");
       }
       log2.push("after inner");
-    } catch (e) {
+    } catch {
       log2.push("outer catch");
     }
     log2
@@ -807,7 +807,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
     let caughtError;
     try {
       throw "My custom error message";
-    } catch (e) {
+    } catch {
       caughtError = e;
     }
     caughtError
@@ -846,7 +846,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
     try {
       log3.push("async try");
       throw "async error";
-    } catch (e) {
+    } catch {
       log3.push("async catch");
     } finally {
       log3.push("async finally");
@@ -856,24 +856,28 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("Async execution order:", asyncTryCatch);
 
   console.log("\n✅ All demos completed successfully!");
-})().then(() => {
-  console.log("\nSupported Features:");
-  console.log("- Numbers, strings, booleans, arrays, objects");
-  console.log("- Arithmetic, comparison, and logical operators");
-  console.log("- Update operators (++, --)");
-  console.log("- Variables (let/const) with lexical scoping");
-  console.log("- Conditionals (if/else)");
-  console.log("- Loops (while, for, for...of, for...in) with break and continue");
-  console.log("- Functions (regular and arrow) with closures and recursion");
-  console.log("- Arrays and objects with full property access");
-  console.log("- Higher-order functions with arrow functions");
-  console.log("- Object methods with 'this' keyword binding");
-  console.log("- Try/catch/finally with proper control flow");
-  console.log("- Throw statements for error handling");
-  console.log("- Injected globals (constructor and per-call)");
-  console.log("- Host functions (call host code from sandbox)");
-  console.log("- Global objects (Math, console, custom APIs via ReadOnlyProxy)");
-  console.log("- Async host functions (with evaluateAsync())");
-  console.log("- Async/await syntax (async functions and await expressions)");
-  console.log("- AST validation (constructor and per-call)");
-});
+})()
+  .then(() => {
+    console.log("\nSupported Features:");
+    console.log("- Numbers, strings, booleans, arrays, objects");
+    console.log("- Arithmetic, comparison, and logical operators");
+    console.log("- Update operators (++, --)");
+    console.log("- Variables (let/const) with lexical scoping");
+    console.log("- Conditionals (if/else)");
+    console.log("- Loops (while, for, for...of, for...in) with break and continue");
+    console.log("- Functions (regular and arrow) with closures and recursion");
+    console.log("- Arrays and objects with full property access");
+    console.log("- Higher-order functions with arrow functions");
+    console.log("- Object methods with 'this' keyword binding");
+    console.log("- Try/catch/finally with proper control flow");
+    console.log("- Throw statements for error handling");
+    console.log("- Injected globals (constructor and per-call)");
+    console.log("- Host functions (call host code from sandbox)");
+    console.log("- Global objects (Math, console, custom APIs via ReadOnlyProxy)");
+    console.log("- Async host functions (with evaluateAsync())");
+    console.log("- Async/await syntax (async functions and await expressions)");
+    console.log("- AST validation (constructor and per-call)");
+  })
+  .catch((error) => {
+    console.error("Demo error:", error);
+  });

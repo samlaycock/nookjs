@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 
-import { Interpreter, InterpreterError } from "../src/interpreter";
+import { Interpreter } from "../src/interpreter";
 
 describe("Break and Continue", () => {
   describe("Break in while loops", () => {

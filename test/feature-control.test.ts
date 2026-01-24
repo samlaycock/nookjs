@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 
-import { Interpreter, InterpreterError } from "../src/interpreter";
+import { Interpreter } from "../src/interpreter";
 
 describe("Feature Control", () => {
   describe("Whitelist Mode", () => {
@@ -214,6 +214,17 @@ describe("Feature Control", () => {
         }).toThrow("ForOfStatement is not enabled");
       });
 
+      test("blocks do-while statement", () => {
+        expect(() => {
+          interpreter.evaluate(`
+            let count = 0;
+            do {
+              count = count + 1;
+            } while (count < 1);
+          `);
+        }).toThrow("DoWhileStatement is not enabled");
+      });
+
       test("blocks arrow functions", () => {
         expect(() => {
           interpreter.evaluate("const add = (a, b) => a + b;");
@@ -260,6 +271,24 @@ describe("Feature Control", () => {
         expect(() => {
           interpreter.evaluate("function foo(x = 10) { return x; }");
         }).toThrow(/DefaultParameters is not enabled|Destructuring parameters not supported/);
+      });
+
+      test("blocks optional chaining", () => {
+        expect(() => {
+          interpreter.evaluate("const obj = null; obj?.value;");
+        }).toThrow("OptionalChaining is not enabled");
+      });
+
+      test("blocks logical assignment", () => {
+        expect(() => {
+          interpreter.evaluate("let x = 0; x ||= 1;");
+        }).toThrow("LogicalAssignment is not enabled");
+      });
+
+      test("blocks generator functions", () => {
+        expect(() => {
+          interpreter.evaluate("function* gen() { yield 1; }");
+        }).toThrow("Generators is not enabled");
       });
     });
 
@@ -460,6 +489,98 @@ describe("Feature Control", () => {
         expect(() => {
           interpreter.evaluate("var x = 10;");
         }).toThrow("VariableDeclarations is not enabled");
+      });
+    });
+
+    describe("Newer Feature Flags", () => {
+      test("allows optional chaining when enabled", () => {
+        const interp = new Interpreter({
+          featureControl: {
+            mode: "whitelist",
+            features: [
+              "VariableDeclarations",
+              "LetConst",
+              "MemberExpression",
+              "CallExpression",
+              "OptionalChaining",
+              "ObjectLiterals",
+            ],
+          },
+        });
+
+        const result = interp.evaluate("const obj = null; obj?.value;");
+        expect(result).toBeUndefined();
+      });
+
+      test("allows logical assignment when enabled", () => {
+        const interp = new Interpreter({
+          featureControl: {
+            mode: "whitelist",
+            features: ["VariableDeclarations", "LetConst", "LogicalAssignment"],
+          },
+        });
+
+        const result = interp.evaluate("let x = 0; x ||= 5; x;");
+        expect(result).toBe(5);
+      });
+
+      test("allows generators when enabled", () => {
+        const interp = new Interpreter({
+          featureControl: {
+            mode: "whitelist",
+            features: [
+              "FunctionExpressions",
+              "VariableDeclarations",
+              "CallExpression",
+              "MemberExpression",
+              "Generators",
+              "YieldExpression",
+            ],
+          },
+        });
+
+        const result = interp.evaluate(`
+          var gen = function*() { yield 1; };
+          var iter = gen();
+          iter.next().value;
+        `);
+        expect(result).toBe(1);
+      });
+
+      test("blocks yield when YieldExpression is disabled", () => {
+        const interp = new Interpreter({
+          featureControl: {
+            mode: "whitelist",
+            features: [
+              "FunctionExpressions",
+              "VariableDeclarations",
+              "CallExpression",
+              "MemberExpression",
+              "Generators",
+            ],
+          },
+        });
+
+        expect(() => {
+          interp.evaluate(`
+            var gen = function*() { yield 1; };
+            var iter = gen();
+            iter.next();
+          `);
+        }).toThrow("YieldExpression is not enabled");
+      });
+
+      test("blocks async generators when disabled", async () => {
+        const interp = new Interpreter({
+          featureControl: {
+            mode: "whitelist",
+            features: ["FunctionDeclarations", "AsyncAwait"],
+          },
+        });
+
+        return expect(interp.evaluateAsync("async function* gen() { yield 1; }")).rejects.toThrow(
+          "AsyncGenerators is not enabled",
+        );
       });
     });
   });

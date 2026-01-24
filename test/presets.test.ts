@@ -225,7 +225,7 @@ describe("ECMAScript Presets", () => {
       const interp = new Interpreter(ES2017);
 
       // Async function declaration
-      await expect(
+      return expect(
         interp.evaluateAsync(`
           async function getData() {
             return 42;
@@ -235,7 +235,7 @@ describe("ECMAScript Presets", () => {
       ).resolves.toBe(42);
 
       // Async arrow function
-      await expect(
+      return expect(
         interp.evaluateAsync(`
           const asyncDouble = async (x) => x * 2;
           asyncDouble(21);
@@ -273,7 +273,7 @@ describe("ECMAScript Presets", () => {
       const interp = new Interpreter(ES2018);
 
       // Async/await works
-      await expect(interp.evaluateAsync("async () => 42")).resolves.toBeDefined();
+      return expect(interp.evaluateAsync("async () => 42")).resolves.toBeDefined();
 
       // Rest/spread works
       expect(interp.evaluate("const arr = [1, ...[2, 3]]; arr;")).toEqual([1, 2, 3]);
@@ -515,6 +515,21 @@ describe("ECMAScript Presets", () => {
       expect(es2017Features).toContain("AsyncAwait");
       expect(es2018Features).toContain("AsyncAwait");
       expect(es2020Features).toContain("AsyncAwait");
+    });
+
+    test("newer features appear in the correct presets", () => {
+      const es5Features = ES5.featureControl!.features as string[];
+      const es2015Features = ES2015.featureControl!.features as string[];
+      const es2018Features = ES2018.featureControl!.features as string[];
+      const es2020Features = ES2020.featureControl!.features as string[];
+      const es2021Features = ES2021.featureControl!.features as string[];
+
+      expect(es5Features).toContain("DoWhileStatement");
+      expect(es2015Features).toContain("Generators");
+      expect(es2015Features).toContain("YieldExpression");
+      expect(es2018Features).toContain("AsyncGenerators");
+      expect(es2020Features).toContain("OptionalChaining");
+      expect(es2021Features).toContain("LogicalAssignment");
     });
   });
 });

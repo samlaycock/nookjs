@@ -46,7 +46,7 @@ describe("evaluateAsync()", () => {
       const interpreter = new Interpreter({
         globals: { asyncError },
       });
-      await expect(interpreter.evaluateAsync("asyncError()")).rejects.toThrow(
+      return expect(interpreter.evaluateAsync("asyncError()")).rejects.toThrow(
         "Host function 'asyncError' threw error: Async error",
       );
     });
@@ -413,36 +413,36 @@ describe("evaluateAsync()", () => {
     it("should clean up per-call globals after async execution", async () => {
       const interpreter = new Interpreter();
       await interpreter.evaluateAsync("let result = x", { globals: { x: 10 } });
-      await expect(interpreter.evaluateAsync("x")).rejects.toThrow("Undefined variable 'x'");
+      return expect(interpreter.evaluateAsync("x")).rejects.toThrow("Undefined variable 'x'");
     });
   });
 
   describe("Error handling in async mode", () => {
     it("should handle errors in async expressions", async () => {
       const interpreter = new Interpreter();
-      await expect(interpreter.evaluateAsync("undefinedVar")).rejects.toThrow(
+      return expect(interpreter.evaluateAsync("undefinedVar")).rejects.toThrow(
         "Undefined variable 'undefinedVar'",
       );
     });
 
     it("should handle errors in async control flow", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
-        if (unknownVar > 5) {
-          let x = 10;
-        }
-      `),
+          if (unknownVar > 5) {
+            let x = 10;
+          }
+        `),
       ).rejects.toThrow("Undefined variable 'unknownVar'");
     });
 
     it("should handle const reassignment errors in async", async () => {
       const interpreter = new Interpreter();
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
-        const PI = 3.14159;
-        PI = 3.14;
-      `),
+          const PI = 3.14159;
+          PI = 3.14;
+        `),
       ).rejects.toThrow("Cannot assign to const variable 'PI'");
     });
   });

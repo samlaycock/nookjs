@@ -46,7 +46,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).__proto__;
+        void (wrapped as any).__proto__;
       }).toThrow("Cannot access __proto__ on global 'obj'");
     });
 
@@ -55,7 +55,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).constructor;
+        void (wrapped as any).constructor;
       }).toThrow("Cannot access constructor on global 'obj'");
     });
 
@@ -64,7 +64,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).prototype;
+        void (wrapped as any).prototype;
       }).toThrow("Cannot access prototype on global 'obj'");
     });
 
@@ -73,7 +73,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).__defineGetter__;
+        void (wrapped as any).__defineGetter__;
       }).toThrow("Cannot access __defineGetter__ on global 'obj'");
     });
 
@@ -82,7 +82,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).__defineSetter__;
+        void (wrapped as any).__defineSetter__;
       }).toThrow("Cannot access __defineSetter__ on global 'obj'");
     });
 
@@ -91,7 +91,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).__lookupGetter__;
+        void (wrapped as any).__lookupGetter__;
       }).toThrow("Cannot access __lookupGetter__ on global 'obj'");
     });
 
@@ -100,7 +100,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).__lookupSetter__;
+        void (wrapped as any).__lookupSetter__;
       }).toThrow("Cannot access __lookupSetter__ on global 'obj'");
     });
 
@@ -109,7 +109,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).valueOf;
+        void (wrapped as any).valueOf;
       }).toThrow("Cannot access valueOf on global 'obj'");
     });
 
@@ -118,7 +118,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).toLocaleString;
+        void (wrapped as any).toLocaleString;
       }).toThrow("Cannot access toLocaleString on global 'obj'");
     });
 
@@ -127,7 +127,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).hasOwnProperty;
+        void (wrapped as any).hasOwnProperty;
       }).toThrow("Cannot access hasOwnProperty on global 'obj'");
     });
 
@@ -136,7 +136,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).isPrototypeOf;
+        void (wrapped as any).isPrototypeOf;
       }).toThrow("Cannot access isPrototypeOf on global 'obj'");
     });
 
@@ -145,7 +145,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).propertyIsEnumerable;
+        void (wrapped as any).propertyIsEnumerable;
       }).toThrow("Cannot access propertyIsEnumerable on global 'obj'");
     });
 
@@ -216,9 +216,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         (wrapped as any).newProp = "test";
-      }).toThrow(
-        "Cannot modify property 'newProp' on global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'newProp' on global 'obj' (read-only)");
     });
 
     it("should block deleting properties", () => {
@@ -227,9 +225,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         delete (wrapped as any).value;
-      }).toThrow(
-        "Cannot delete property 'value' from global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot delete property 'value' from global 'obj' (read-only)");
     });
 
     it("should block Object.defineProperty", () => {
@@ -238,9 +234,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         Object.defineProperty(wrapped, "newProp", { value: 100 });
-      }).toThrow(
-        "Cannot define property 'newProp' on global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
     });
 
     it("should block Object.setPrototypeOf", () => {
@@ -270,9 +264,7 @@ describe("ReadOnlyProxy Security", () => {
       // Cannot modify nested values
       expect(() => {
         (wrapped as any).level1.level2.value = 100;
-      }).toThrow(
-        "Cannot modify property 'value' on global 'obj.level1.level2' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'value' on global 'obj.level1.level2' (read-only)");
     });
 
     it("should block __proto__ on nested objects", () => {
@@ -282,7 +274,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any).nested.__proto__;
+        void (wrapped as any).nested.__proto__;
       }).toThrow("Cannot access __proto__ on global 'obj.nested'");
     });
 
@@ -313,7 +305,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(arr, "arr");
 
       expect(() => {
-        (wrapped as any).__proto__;
+        void (wrapped as any).__proto__;
       }).toThrow("Cannot access __proto__ on global 'arr'");
     });
   });
@@ -341,7 +333,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any)[Symbol.toStringTag];
+        void (wrapped as any)[Symbol.toStringTag];
       }).toThrow("Cannot access Symbol(Symbol.toStringTag) on global 'obj'");
     });
 
@@ -350,7 +342,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any)[Symbol.toPrimitive];
+        void (wrapped as any)[Symbol.toPrimitive];
       }).toThrow("Cannot access Symbol(Symbol.toPrimitive) on global 'obj'");
     });
 
@@ -359,7 +351,7 @@ describe("ReadOnlyProxy Security", () => {
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
       expect(() => {
-        (wrapped as any)[Symbol.hasInstance];
+        void (wrapped as any)[Symbol.hasInstance];
       }).toThrow("Cannot access Symbol(Symbol.hasInstance) on global 'obj'");
     });
 
@@ -369,7 +361,7 @@ describe("ReadOnlyProxy Security", () => {
         const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
         expect(() => {
-          (wrapped as any)[symbol];
+          void (wrapped as any)[symbol];
         }).toThrow(`Cannot access ${name} on global 'obj'`);
       });
     });
@@ -385,9 +377,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         first.secret = "HACKED";
-      }).toThrow(
-        "Cannot modify property 'secret' on global 'arr[]' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'secret' on global 'arr[]' (read-only)");
     });
 
     it("should wrap values when iterating inside interpreter", () => {
@@ -400,9 +390,7 @@ describe("ReadOnlyProxy Security", () => {
           const obj = [...arr][0];
           obj.secret = "HACKED";
         `);
-      }).toThrow(
-        "Cannot modify property 'secret' on global 'arr[]' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'secret' on global 'arr[]' (read-only)");
     });
 
     it("should wrap values yielded by async iterators", async () => {
@@ -416,9 +404,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         result.value.secret = "HACKED";
-      }).toThrow(
-        "Cannot modify property 'secret' on global 'gen[]' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'secret' on global 'gen[]' (read-only)");
     });
   });
 
@@ -447,9 +433,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         Reflect.defineProperty(wrapped, "newProp", { value: 100 });
-      }).toThrow(
-        "Cannot define property 'newProp' on global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
     });
 
     it("should block Reflect.setPrototypeOf", () => {
@@ -477,7 +461,7 @@ describe("ReadOnlyProxy Security", () => {
 
       const propName = "__proto__";
       expect(() => {
-        (wrapped as any)[propName];
+        void (wrapped as any)[propName];
       }).toThrow("Cannot access __proto__ on global 'obj'");
     });
 
@@ -487,7 +471,7 @@ describe("ReadOnlyProxy Security", () => {
 
       const propName = "constructor";
       expect(() => {
-        (wrapped as any)[propName];
+        void (wrapped as any)[propName];
       }).toThrow("Cannot access constructor on global 'obj'");
     });
   });
@@ -499,7 +483,7 @@ describe("ReadOnlyProxy Security", () => {
 
       // valueOf() used to return the unwrapped object, allowing bypass
       expect(() => {
-        (wrapped as any).valueOf;
+        void (wrapped as any).valueOf;
       }).toThrow("Cannot access valueOf on global 'obj'");
     });
 
