@@ -523,7 +523,9 @@ describe("ES6 Classes", () => {
           }
           new Derived();
         `);
-      }).toThrow("Must call super constructor in derived class before accessing 'this'");
+      }).toThrow(
+        "Must call super constructor in derived class before accessing 'this'",
+      );
     });
 
     it("should resolve super in static methods", () => {
@@ -613,6 +615,46 @@ describe("ES6 Classes", () => {
         c.x;
       `);
       expect(result).toBe(42);
+    });
+
+    it("should use object returned from base constructor in derived class", () => {
+      const interpreter = new Interpreter();
+      const result = interpreter.evaluate(`
+        class Base {
+          constructor() {
+            return { base: 1 };
+          }
+        }
+        class Derived extends Base {
+          constructor() {
+            super();
+            this.child = 2;
+          }
+        }
+        const d = new Derived();
+        [d.base, d.child];
+      `);
+      expect(result).toEqual([1, 2]);
+    });
+
+    it("should allow derived constructor to return object", () => {
+      const interpreter = new Interpreter();
+      const result = interpreter.evaluate(`
+        class Base {
+          constructor() {
+            this.base = 1;
+          }
+        }
+        class Derived extends Base {
+          constructor() {
+            super();
+            return { custom: true };
+          }
+        }
+        const d = new Derived();
+        d.custom;
+      `);
+      expect(result).toBe(true);
     });
   });
 

@@ -52,11 +52,15 @@ obj.__lookupGetter__;
 obj.__lookupSetter__;
 ```
 
-**2. No Built-in Global Access**
+**2. Prototype Chain Access Blocked (Strict Mode)**
+
+Sandbox object property access is restricted to own properties only. Inherited prototype properties (e.g., `obj.toString`, `arr.toString`, `fn.call`) are blocked. Arrays and strings still expose supported methods through explicit interpreter shims, and template-literal coercion does not rely on prototype `toString`.
+
+**3. No Built-in Global Access**
 
 Sandbox code does not have access to: `eval`, `Function` constructor, `Promise` constructor, `globalThis` / `window` / `global`, `require` / `import`, or any Node.js/Bun/browser APIs.
 
-**3. Host Function Protection**
+**4. Host Function Protection**
 
 Host functions passed as globals are wrapped and protected:
 
@@ -67,11 +71,11 @@ myFunc.toString(); // Error: Cannot access properties on host functions
 await myFunc; // Error: Cannot await a host function (must call it)
 ```
 
-**4. Whitelisted AST Nodes Only**
+**5. Whitelisted AST Nodes Only**
 
 Only explicitly supported AST node types are evaluated. Any unsupported node type throws an error.
 
-**5. Async/Await Protections**
+**6. Async/Await Protections**
 
 Sync mode (`evaluate()`) cannot call async functions or use await, preventing mixing sync/async contexts.
 

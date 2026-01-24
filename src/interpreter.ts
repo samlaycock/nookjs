@@ -155,6 +155,11 @@ interface SuperBinding {
   readonly isStatic: boolean;
 }
 
+interface ConstructorExecutionResult {
+  result: any;
+  thisValue: any;
+}
+
 /**
  * Type for the evaluator function used by generators.
  * Can be sync (evaluateNode) or async (evaluateNodeAsync).
@@ -2049,6 +2054,14 @@ class Environment {
     // No this value found in the chain
     return undefined;
   }
+
+  setThis(value: any): void {
+    if (this.isFunctionScope || this.parent === null) {
+      this.thisValue = value;
+      return;
+    }
+    this.parent.setThis(value);
+  }
 }
 
 type ASTValidator = (ast: ESTree.Program) => boolean;
@@ -3062,12 +3075,56 @@ export class Interpreter {
       // The last quasi has no expression after it
       if (i < expressionValues.length) {
         const exprValue = expressionValues[i];
-        // Coerce to string (matches JavaScript behavior: undefined → "undefined", etc.)
-        result += String(exprValue);
+        result += this.coerceTemplateValue(exprValue);
       }
     }
 
     return result;
+  }
+
+  private coerceTemplateValue(value: any): string {
+    if (value === null) {
+      return "null";
+    }
+    if (value === undefined) {
+      return "undefined";
+    }
+    if (typeof value === "string") {
+      return value;
+    }
+    if (
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
+      return String(value);
+    }
+    if (typeof value === "symbol") {
+      return value.toString();
+    }
+    if (Array.isArray(value)) {
+      const parts: string[] = [];
+      for (let i = 0; i < value.length; i += 1) {
+        if (Object.prototype.hasOwnProperty.call(value, i)) {
+          const element = value[i];
+          if (element === null || element === undefined) {
+            parts.push("");
+          } else {
+            parts.push(this.coerceTemplateValue(element));
+          }
+        } else {
+          parts.push("");
+        }
+      }
+      return parts.join(",");
+    }
+    if (value instanceof FunctionValue || value instanceof HostFunctionValue) {
+      return "[object Function]";
+    }
+    if (typeof value === "object") {
+      return "[object Object]";
+    }
+    return String(value);
   }
 
   /**
@@ -3292,6 +3349,41 @@ export class Interpreter {
     }
   }
 
+  private ensureNoPrototypeAccess(object: any, propName: string): void {
+    if (object === null || typeof object !== "object") {
+      return;
+    }
+    if (Object.getPrototypeOf(object) === null) {
+      return;
+    }
+    if (
+      propName in object &&
+      !Object.prototype.hasOwnProperty.call(object, propName)
+    ) {
+      throw new InterpreterError(
+        `Access to inherited property '${propName}' is not allowed`,
+      );
+    }
+  }
+
+  private shouldSkipPropertyValidation(object: any): boolean {
+    if (object === null || typeof object !== "object") {
+      return false;
+    }
+    if (this.instanceClassMap.has(object)) {
+      return false;
+    }
+    return Object.getPrototypeOf(object) === null;
+  }
+
+  private shouldForcePropertyValidation(property: string): boolean {
+    return (
+      property === "__proto__" ||
+      property === "constructor" ||
+      property === "prototype"
+    );
+  }
+
   private getInstanceClass(object: any): ClassValue | null {
     if (typeof object !== "object" || object === null) {
       return null;
@@ -3323,7 +3415,13 @@ export class Interpreter {
    */
   private accessObjectProperty(obj: object, property: any): any {
     const propName = String(property);
-    validatePropertyName(propName); // Security: prevent prototype pollution
+    if (
+      !this.shouldSkipPropertyValidation(obj) ||
+      this.shouldForcePropertyValidation(propName)
+    ) {
+      validatePropertyName(propName); // Security: prevent prototype pollution
+    }
+    this.ensureNoPrototypeAccess(obj, propName);
     return (obj as any)[propName];
   }
 
@@ -3608,13 +3706,21 @@ export class Interpreter {
     const instanceClass = this.getInstanceClass(obj);
     if (memberExpr.computed) {
       const propName = String(propertyValue);
-      if (instanceClass) {
+      if (
+        !this.shouldSkipPropertyValidation(obj) ||
+        this.shouldForcePropertyValidation(propName)
+      ) {
         validatePropertyName(propName);
+      }
+      if (instanceClass) {
         return this.getInstanceProperty(
           obj as Record<string, any>,
           instanceClass,
           propName,
         );
+      }
+      if (typeof obj === "object" && obj !== null) {
+        this.ensureNoPrototypeAccess(obj, propName);
       }
       return obj[propName];
     } else {
@@ -3629,6 +3735,15 @@ export class Interpreter {
           instanceClass,
           property,
         );
+      }
+      if (typeof obj === "object" && obj !== null) {
+        if (
+          !this.shouldSkipPropertyValidation(obj) ||
+          this.shouldForcePropertyValidation(property)
+        ) {
+          validatePropertyName(property);
+        }
+        this.ensureNoPrototypeAccess(obj, property);
       }
       return obj[property];
     }
@@ -3967,13 +4082,30 @@ export class Interpreter {
                 ? Number(property)
                 : property
               : String(property);
+            if (!Array.isArray(object) && typeof object === "object") {
+              if (
+                !this.shouldSkipPropertyValidation(object) ||
+                this.shouldForcePropertyValidation(propName)
+              ) {
+                validatePropertyName(propName);
+              }
+              this.ensureNoPrototypeAccess(object, propName);
+            }
             currentValue = object[propName];
           } else {
             if (memberExpr.property.type !== "Identifier") {
               throw new InterpreterError("Invalid property access");
             }
             const property = (memberExpr.property as ESTree.Identifier).name;
-            validatePropertyName(property);
+            if (
+              !this.shouldSkipPropertyValidation(object) ||
+              this.shouldForcePropertyValidation(property)
+            ) {
+              validatePropertyName(property);
+            }
+            if (typeof object === "object") {
+              this.ensureNoPrototypeAccess(object, property);
+            }
             currentValue = object[property];
           }
         }
@@ -5181,12 +5313,21 @@ export class Interpreter {
         );
       }
       const args = this.evaluateArguments(node.arguments);
-      this.executeSuperConstructorCall(
+      const newThis = this.executeSuperConstructorCall(
         args,
         this.currentSuperBinding.thisValue,
         this.currentSuperBinding.currentClass,
       );
-      return undefined;
+      if (newThis !== this.currentSuperBinding.thisValue) {
+        this.currentSuperBinding = {
+          parentClass: this.currentSuperBinding.parentClass,
+          thisValue: newThis,
+          currentClass: this.currentSuperBinding.currentClass,
+          isStatic: this.currentSuperBinding.isStatic,
+        };
+        this.environment.setThis(newThis);
+      }
+      return newThis;
     }
 
     // Determine if this is a method call (obj.method()) or regular call
@@ -5438,7 +5579,12 @@ export class Interpreter {
         throw new InterpreterError("Invalid property access");
       }
       const property = (node.property as ESTree.Identifier).name;
-      validatePropertyName(property);
+      if (
+        !this.shouldSkipPropertyValidation(object) ||
+        this.shouldForcePropertyValidation(property)
+      ) {
+        validatePropertyName(property);
+      }
       return this.getInstanceProperty(
         object as Record<string, any>,
         instanceClass,
@@ -5470,7 +5616,12 @@ export class Interpreter {
         throw new InterpreterError("Invalid property access");
       }
       const property = (node.property as ESTree.Identifier).name;
-      validatePropertyName(property); // Security: prevent prototype pollution
+      if (
+        !this.shouldSkipPropertyValidation(object) ||
+        this.shouldForcePropertyValidation(property)
+      ) {
+        validatePropertyName(property); // Security: prevent prototype pollution
+      }
 
       // Handle .length for strings and arrays
       const length = this.getLengthProperty(object, property);
@@ -5554,6 +5705,7 @@ export class Interpreter {
         object !== null &&
         !Array.isArray(object)
       ) {
+        this.ensureNoPrototypeAccess(object, property);
         return object[property];
       }
 
@@ -6294,12 +6446,21 @@ export class Interpreter {
         );
       }
       const args = await this.evaluateArgumentsAsync(node.arguments);
-      await this.executeSuperConstructorCallAsync(
+      const newThis = await this.executeSuperConstructorCallAsync(
         args,
         this.currentSuperBinding.thisValue,
         this.currentSuperBinding.currentClass,
       );
-      return undefined;
+      if (newThis !== this.currentSuperBinding.thisValue) {
+        this.currentSuperBinding = {
+          parentClass: this.currentSuperBinding.parentClass,
+          thisValue: newThis,
+          currentClass: this.currentSuperBinding.currentClass,
+          isStatic: this.currentSuperBinding.isStatic,
+        };
+        this.environment.setThis(newThis);
+      }
+      return newThis;
     }
 
     let thisValue: any = undefined;
@@ -6702,13 +6863,30 @@ export class Interpreter {
                 ? Number(property)
                 : property
               : String(property);
+            if (!Array.isArray(object) && typeof object === "object") {
+              if (
+                !this.shouldSkipPropertyValidation(object) ||
+                this.shouldForcePropertyValidation(propName)
+              ) {
+                validatePropertyName(propName);
+              }
+              this.ensureNoPrototypeAccess(object, propName);
+            }
             currentValue = object[propName];
           } else {
             if (memberExpr.property.type !== "Identifier") {
               throw new InterpreterError("Invalid property access");
             }
             const property = (memberExpr.property as ESTree.Identifier).name;
-            validatePropertyName(property);
+            if (
+              !this.shouldSkipPropertyValidation(object) ||
+              this.shouldForcePropertyValidation(property)
+            ) {
+              validatePropertyName(property);
+            }
+            if (typeof object === "object") {
+              this.ensureNoPrototypeAccess(object, property);
+            }
             currentValue = object[property];
           }
         }
@@ -7824,6 +8002,7 @@ export class Interpreter {
         object !== null &&
         !Array.isArray(object)
       ) {
+        this.ensureNoPrototypeAccess(object, property);
         return object[property];
       }
 
@@ -8713,7 +8892,7 @@ export class Interpreter {
     argNodes: ESTree.Expression[],
   ): any {
     // Create instance object
-    const instance: Record<string, any> = {};
+    let instance: Record<string, any> = Object.create(null);
     this.instanceClassMap.set(instance, classValue);
 
     // Evaluate arguments
@@ -8725,20 +8904,21 @@ export class Interpreter {
 
     // Execute constructor if there is one
     if (constructor) {
-      const result = this.executeClassConstructorBody(
+      const { result, thisValue } = this.executeClassConstructorBody(
         constructor,
         definingClass,
         instance,
         args,
       );
-
+      const finalInstance = thisValue ?? instance;
       if (result instanceof ReturnValue) {
-        return this.resolveConstructorReturn(result.value, instance);
+        return this.resolveConstructorReturn(result.value, finalInstance);
       }
+      return finalInstance;
     } else if (classValue.parentClass) {
       this.thisInitStack.push(false);
       try {
-        this.executeSuperConstructorCall(args, instance, classValue);
+        instance = this.executeSuperConstructorCall(args, instance, classValue);
         const isInitialized =
           this.thisInitStack[this.thisInitStack.length - 1] ?? true;
         if (!isInitialized) {
@@ -8763,7 +8943,7 @@ export class Interpreter {
     classValue: ClassValue,
     argNodes: ESTree.Expression[],
   ): Promise<any> {
-    const instance: Record<string, any> = {};
+    let instance: Record<string, any> = Object.create(null);
     this.instanceClassMap.set(instance, classValue);
 
     const args = await this.evaluateArgumentsAsync(argNodes);
@@ -8772,20 +8952,25 @@ export class Interpreter {
       this.findClassConstructor(classValue);
 
     if (constructor) {
-      const result = await this.executeClassConstructorBodyAsync(
+      const { result, thisValue } = await this.executeClassConstructorBodyAsync(
         constructor,
         definingClass,
         instance,
         args,
       );
-
+      const finalInstance = thisValue ?? instance;
       if (result instanceof ReturnValue) {
-        return this.resolveConstructorReturn(result.value, instance);
+        return this.resolveConstructorReturn(result.value, finalInstance);
       }
+      return finalInstance;
     } else if (classValue.parentClass) {
       this.thisInitStack.push(false);
       try {
-        await this.executeSuperConstructorCallAsync(args, instance, classValue);
+        instance = await this.executeSuperConstructorCallAsync(
+          args,
+          instance,
+          classValue,
+        );
         const isInitialized =
           this.thisInitStack[this.thisInitStack.length - 1] ?? true;
         if (!isInitialized) {
@@ -9070,7 +9255,7 @@ export class Interpreter {
     args: any[],
     instance: any,
     currentClass: ClassValue,
-  ): void {
+  ): any {
     const parentClass = currentClass.parentClass;
     if (!parentClass) {
       throw new InterpreterError(
@@ -9092,17 +9277,30 @@ export class Interpreter {
     const { constructor: parentConstructor, definingClass } =
       this.findClassConstructor(parentClass);
 
+    let currentInstance = instance;
+
     if (parentConstructor) {
-      this.executeClassConstructorBody(
+      const { result, thisValue } = this.executeClassConstructorBody(
         parentConstructor,
         definingClass,
         instance,
         args,
       );
+      currentInstance = thisValue ?? instance;
+      if (result instanceof ReturnValue) {
+        currentInstance = this.resolveConstructorReturn(
+          result.value,
+          currentInstance,
+        );
+      }
     } else if (parentClass.parentClass) {
       this.thisInitStack.push(false);
       try {
-        this.executeSuperConstructorCall(args, instance, parentClass);
+        currentInstance = this.executeSuperConstructorCall(
+          args,
+          instance,
+          parentClass,
+        );
         const isInitialized =
           this.thisInitStack[this.thisInitStack.length - 1] ?? true;
         if (!isInitialized) {
@@ -9114,14 +9312,15 @@ export class Interpreter {
         this.thisInitStack.pop();
       }
     } else {
-      this.initializeInstanceFieldsForClass(instance, parentClass);
+      this.initializeInstanceFieldsForClass(currentInstance, parentClass);
     }
 
     if (this.thisInitStack.length > 0) {
       this.thisInitStack[this.thisInitStack.length - 1] = true;
     }
 
-    this.initializeInstanceFieldsForClass(instance, currentClass);
+    this.initializeInstanceFieldsForClass(currentInstance, currentClass);
+    return currentInstance;
   }
 
   /**
@@ -9131,7 +9330,7 @@ export class Interpreter {
     args: any[],
     instance: any,
     currentClass: ClassValue,
-  ): Promise<void> {
+  ): Promise<any> {
     const parentClass = currentClass.parentClass;
     if (!parentClass) {
       throw new InterpreterError(
@@ -9153,17 +9352,26 @@ export class Interpreter {
     const { constructor: parentConstructor, definingClass } =
       this.findClassConstructor(parentClass);
 
+    let currentInstance = instance;
+
     if (parentConstructor) {
-      await this.executeClassConstructorBodyAsync(
+      const { result, thisValue } = await this.executeClassConstructorBodyAsync(
         parentConstructor,
         definingClass,
         instance,
         args,
       );
+      currentInstance = thisValue ?? instance;
+      if (result instanceof ReturnValue) {
+        currentInstance = this.resolveConstructorReturn(
+          result.value,
+          currentInstance,
+        );
+      }
     } else if (parentClass.parentClass) {
       this.thisInitStack.push(false);
       try {
-        await this.executeSuperConstructorCallAsync(
+        currentInstance = await this.executeSuperConstructorCallAsync(
           args,
           instance,
           parentClass,
@@ -9179,14 +9387,21 @@ export class Interpreter {
         this.thisInitStack.pop();
       }
     } else {
-      await this.initializeInstanceFieldsForClassAsync(instance, parentClass);
+      await this.initializeInstanceFieldsForClassAsync(
+        currentInstance,
+        parentClass,
+      );
     }
 
     if (this.thisInitStack.length > 0) {
       this.thisInitStack[this.thisInitStack.length - 1] = true;
     }
 
-    await this.initializeInstanceFieldsForClassAsync(instance, currentClass);
+    await this.initializeInstanceFieldsForClassAsync(
+      currentInstance,
+      currentClass,
+    );
+    return currentInstance;
   }
 
   private executeClassConstructorBody(
@@ -9194,7 +9409,7 @@ export class Interpreter {
     definingClass: ClassValue,
     instance: any,
     args: any[],
-  ): any {
+  ): ConstructorExecutionResult {
     const previousEnvironment = this.environment;
     const previousSuperBinding = this.currentSuperBinding;
     const isDerived = !!definingClass.parentClass;
@@ -9224,7 +9439,7 @@ export class Interpreter {
           );
         }
       }
-      return result;
+      return { result, thisValue: this.environment.getThis() };
     } finally {
       this.environment = previousEnvironment;
       this.currentSuperBinding = previousSuperBinding;
@@ -9238,7 +9453,7 @@ export class Interpreter {
     definingClass: ClassValue,
     instance: any,
     args: any[],
-  ): Promise<any> {
+  ): Promise<ConstructorExecutionResult> {
     const previousEnvironment = this.environment;
     const previousSuperBinding = this.currentSuperBinding;
     const isDerived = !!definingClass.parentClass;
@@ -9271,7 +9486,7 @@ export class Interpreter {
           );
         }
       }
-      return result;
+      return { result, thisValue: this.environment.getThis() };
     } finally {
       this.environment = previousEnvironment;
       this.currentSuperBinding = previousSuperBinding;
