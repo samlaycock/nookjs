@@ -1,4 +1,5 @@
 After making a change to the codebase:
+
 - Ensure all tests pass.
 - Run `bun fmt` to format the code.
 - Run `bun lint` to check for linting issues.

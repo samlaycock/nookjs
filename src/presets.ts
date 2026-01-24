@@ -116,7 +116,7 @@ export const ES5: InterpreterOptions = {
  * - Promises
  * - Symbol
  * - Map, Set, WeakMap, WeakSet
- * - Classes (not yet supported by interpreter)
+ * - Classes
  * - Modules (not applicable to interpreter)
  * - Generators (not yet supported by interpreter)
  */
@@ -136,6 +136,7 @@ export const ES2015: InterpreterOptions = {
       "RestParameters",
       "ForOfStatement",
       "DefaultParameters",
+      "Classes",
     ],
   },
   globals: {
@@ -296,9 +297,9 @@ export const ES2021: InterpreterOptions = {
  *
  * Added:
  * - Top-level await (module-level, not applicable)
- * - Class fields (not yet supported by interpreter)
- * - Private methods and fields (not yet supported)
- * - Static initialization blocks (not yet supported)
+ * - Class fields (public instance and static fields)
+ * - Private methods and fields (#privateField, #privateMethod)
+ * - Static initialization blocks (static { })
  * - RegExp match indices (on RegExp)
  * - Array.prototype.at() (on prototype)
  * - Object.hasOwn() (on Object)
@@ -306,7 +307,15 @@ export const ES2021: InterpreterOptions = {
  */
 export const ES2022: InterpreterOptions = {
   ...ES2021,
-  // No new language features at interpreter level
+  featureControl: {
+    mode: "whitelist" as const,
+    features: [
+      ...(ES2021.featureControl!.features as LanguageFeature[]),
+      "ClassFields",
+      "PrivateFields",
+      "StaticBlocks",
+    ],
+  },
 };
 
 /**

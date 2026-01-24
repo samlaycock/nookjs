@@ -98,7 +98,61 @@ class FunctionValue {
     public isAsync: boolean = false,
     public restParamIndex: number | null = null, // Index where rest parameter starts, or null if no rest param
     public isGenerator: boolean = false, // true for function* or async function*
+    public defaultValues: Map<number, ESTree.Expression> = new Map(), // Default values for parameters by index
+    public homeClass: ClassValue | null = null, // Class this method belongs to (for super binding)
+    public homeIsStatic: boolean = false, // Whether the method is static
   ) {}
+}
+
+/**
+ * Represents a class field initializer (for instance fields)
+ * Stores the field name and initializer AST node for lazy evaluation at instantiation
+ */
+interface ClassFieldInitializer {
+  name: string;
+  initializer: ESTree.Expression | null;
+  computed: boolean;
+  keyNode: ESTree.Expression | ESTree.PrivateIdentifier | null;
+  isPrivate: boolean;
+}
+
+/**
+ * Represents a class defined in the sandbox (interpreted JavaScript)
+ * Stores the class's constructor, methods, static members, and parent class
+ */
+class ClassValue {
+  // WeakMap to store private instance field values per instance
+  // Key is the instance object, value is a Map of private field name -> value
+  public privateFieldStorage: WeakMap<object, Map<string, any>> = new WeakMap();
+
+  constructor(
+    public name: string | null,
+    public constructorMethod: FunctionValue | null,
+    public instanceMethods: Map<string, FunctionValue>,
+    public staticMethods: Map<string, FunctionValue>,
+    public instanceGetters: Map<string, FunctionValue>,
+    public instanceSetters: Map<string, FunctionValue>,
+    public staticGetters: Map<string, FunctionValue>,
+    public staticSetters: Map<string, FunctionValue>,
+    public parentClass: ClassValue | null,
+    public closure: Environment,
+    public instanceFields: ClassFieldInitializer[] = [], // Instance field initializers (evaluated at instantiation)
+    public staticFields: Map<string, any> = new Map(), // Static field values (evaluated at class definition)
+    public privateInstanceMethods: Map<string, FunctionValue> = new Map(), // Private instance methods
+    public privateStaticMethods: Map<string, FunctionValue> = new Map(), // Private static methods
+    public privateStaticFields: Map<string, any> = new Map(), // Private static field values
+  ) {}
+}
+
+/**
+ * Tracks super context for method calls within a class
+ * Stored during class method execution to enable super.method() calls
+ */
+interface SuperBinding {
+  readonly parentClass: ClassValue | null;
+  readonly thisValue: any;
+  readonly currentClass: ClassValue;
+  readonly isStatic: boolean;
 }
 
 /**
@@ -182,6 +236,7 @@ class GeneratorValue {
     private fn: FunctionValue,
     private args: any[],
     private interpreter: Interpreter,
+    private thisValue: any,
   ) {}
 
   /**
@@ -873,7 +928,7 @@ class GeneratorValue {
    */
   private *createExecutionGenerator(): Generator<any, any, any> {
     const previousEnv = this.interpreter.environment;
-    const generatorEnv = new Environment(this.fn.closure, undefined, true);
+    const generatorEnv = new Environment(this.fn.closure, this.thisValue, true);
     this.interpreter.environment = generatorEnv;
 
     try {
@@ -960,6 +1015,7 @@ class AsyncGeneratorValue {
     private fn: FunctionValue,
     private args: any[],
     private interpreter: Interpreter,
+    private thisValue: any,
   ) {}
 
   /**
@@ -1670,7 +1726,7 @@ class AsyncGeneratorValue {
    */
   private async *createExecutionGenerator(): AsyncGenerator<any, any, any> {
     const previousEnv = this.interpreter.environment;
-    const generatorEnv = new Environment(this.fn.closure, undefined, true);
+    const generatorEnv = new Environment(this.fn.closure, this.thisValue, true);
     this.interpreter.environment = generatorEnv;
 
     try {
@@ -2036,7 +2092,11 @@ export type LanguageFeature =
   | "ForOfStatement"
   | "DefaultParameters"
   | "AsyncAwait" // async functions and await expressions
-  | "UpdateExpression"; // ++ and -- operators
+  | "UpdateExpression" // ++ and -- operators
+  | "Classes" // ES6 class declarations and expressions
+  | "ClassFields" // ES2022 class fields (public instance and static fields)
+  | "PrivateFields" // ES2022 private class fields (#privateField)
+  | "StaticBlocks"; // ES2022 static initialization blocks (static { })
 
 /**
  * Feature control modes for the interpreter
@@ -2124,6 +2184,12 @@ export class Interpreter {
   public yieldCurrentIndex: number = 0;
   // Store received values for each yield (by index) so we can replay them during re-evaluation
   public yieldReceivedValues: any[] = [];
+
+  // Track super binding context during class method execution
+  private currentSuperBinding: SuperBinding | null = null;
+  private instanceClassMap: WeakMap<object, ClassValue> = new WeakMap();
+  private thisInitStack: boolean[] = [];
+  private constructorStack: ClassValue[] = [];
 
   constructor(options?: InterpreterOptions) {
     this.environment = new Environment();
@@ -2521,6 +2587,15 @@ export class Interpreter {
       case "ChainExpression":
         return this.evaluateChainExpression(node as ESTree.ChainExpression);
 
+      case "ClassDeclaration":
+        return this.evaluateClassDeclaration(node as ESTree.ClassDeclaration);
+
+      case "ClassExpression":
+        return this.evaluateClassExpression(node as ESTree.ClassExpression);
+
+      case "Super":
+        return this.evaluateSuper();
+
       default:
         throw new InterpreterError(`Unsupported node type: ${node.type}`);
     }
@@ -2700,6 +2775,19 @@ export class Interpreter {
           node as ESTree.ChainExpression,
         );
 
+      case "ClassDeclaration":
+        return await this.evaluateClassDeclarationAsync(
+          node as ESTree.ClassDeclaration,
+        );
+
+      case "ClassExpression":
+        return await this.evaluateClassExpressionAsync(
+          node as ESTree.ClassExpression,
+        );
+
+      case "Super":
+        return this.evaluateSuper();
+
       default:
         throw new InterpreterError(`Unsupported node type: ${node.type}`);
     }
@@ -2729,6 +2817,16 @@ export class Interpreter {
   private evaluateThisExpression(node: ESTree.ThisExpression): any {
     if (!this.isFeatureEnabled("ThisExpression")) {
       throw new InterpreterError("ThisExpression is not enabled");
+    }
+
+    if (this.thisInitStack.length > 0) {
+      const isInitialized =
+        this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+      if (!isInitialized) {
+        throw new InterpreterError(
+          "Must call super constructor in derived class before accessing 'this'",
+        );
+      }
     }
 
     return this.environment.getThis();
@@ -2816,6 +2914,9 @@ export class Interpreter {
     if (value instanceof HostFunctionValue) {
       return "function";
     }
+    if (value instanceof ClassValue) {
+      return "function"; // Classes are functions in JavaScript
+    }
     return typeof value;
   }
 
@@ -2854,16 +2955,55 @@ export class Interpreter {
 
   /**
    * Binds function parameters to argument values in the current environment.
-   * Handles both regular parameters and rest parameters.
+   * Handles regular parameters, rest parameters, and default parameter values.
    * This core logic is shared between sync and async function calls.
    */
   private bindFunctionParameters(fn: FunctionValue, args: any[]): void {
     const regularParamCount =
       fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
 
-    // Bind regular parameters
+    // Bind regular parameters (with default value support)
     for (let i = 0; i < regularParamCount; i++) {
-      this.environment.declare(fn.params[i]!, args[i], "let");
+      let value = args[i];
+
+      // If value is undefined and we have a default, evaluate it
+      if (value === undefined && fn.defaultValues.has(i)) {
+        const defaultExpr = fn.defaultValues.get(i)!;
+        value = this.evaluateNode(defaultExpr);
+      }
+
+      this.environment.declare(fn.params[i]!, value, "let");
+    }
+
+    // Bind rest parameter if present
+    if (fn.restParamIndex !== null) {
+      const restParamName = fn.params[fn.restParamIndex]!;
+      const restArgs = args.slice(fn.restParamIndex);
+      this.environment.declare(restParamName, restArgs, "let");
+    }
+  }
+
+  /**
+   * Async version of bindFunctionParameters that can evaluate async default values.
+   */
+  private async bindFunctionParametersAsync(
+    fn: FunctionValue,
+    args: any[],
+  ): Promise<void> {
+    const regularParamCount =
+      fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
+
+    // Bind regular parameters (with default value support)
+    for (let i = 0; i < regularParamCount; i++) {
+      let value = args[i];
+
+      // If value is undefined and we have a default, evaluate it
+      if (value === undefined && fn.defaultValues.has(i)) {
+        const defaultExpr = fn.defaultValues.get(i)!;
+        value = await this.evaluateNodeAsync(defaultExpr);
+      }
+
+      this.environment.declare(fn.params[i]!, value, "let");
     }
 
     // Bind rest parameter if present
@@ -2876,16 +3016,24 @@ export class Interpreter {
 
   /**
    * Validates that a function has received the minimum required arguments.
-   * Throws if too few arguments are provided.
+   * Throws if too few arguments are provided (excluding parameters with defaults).
    * This core logic is shared between sync and async function calls.
    */
   private validateFunctionArguments(fn: FunctionValue, args: any[]): void {
     const regularParamCount =
       fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
 
-    if (args.length < regularParamCount) {
+    // Count required parameters (those without default values)
+    let requiredParamCount = 0;
+    for (let i = 0; i < regularParamCount; i++) {
+      if (!fn.defaultValues.has(i)) {
+        requiredParamCount = i + 1; // Last required parameter position + 1
+      }
+    }
+
+    if (args.length < requiredParamCount) {
       throw new InterpreterError(
-        `Expected at least ${regularParamCount} arguments but got ${args.length}`,
+        `Expected at least ${requiredParamCount} arguments but got ${args.length}`,
       );
     }
   }
@@ -3144,6 +3292,13 @@ export class Interpreter {
     }
   }
 
+  private getInstanceClass(object: any): ClassValue | null {
+    if (typeof object !== "object" || object === null) {
+      return null;
+    }
+    return this.instanceClassMap.get(object) ?? null;
+  }
+
   /**
    * Accesses an array element by index.
    * Handles numeric strings (for...in gives string indices).
@@ -3301,9 +3456,19 @@ export class Interpreter {
     thisValue: any,
   ): any {
     const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
     this.environment = new Environment(fn.closure, thisValue, true);
 
     try {
+      if (fn.homeClass) {
+        this.currentSuperBinding = {
+          parentClass: fn.homeClass.parentClass,
+          thisValue,
+          currentClass: fn.homeClass,
+          isStatic: fn.homeIsStatic,
+        };
+      }
+
       // Bind parameters to arguments
       this.bindFunctionParameters(fn, args);
 
@@ -3320,6 +3485,7 @@ export class Interpreter {
     } finally {
       // Restore the previous environment (exit function scope)
       this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
     }
   }
 
@@ -3334,11 +3500,21 @@ export class Interpreter {
     thisValue: any,
   ): Promise<any> {
     const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
     this.environment = new Environment(fn.closure, thisValue, true);
 
     try {
-      // Bind parameters to arguments
-      this.bindFunctionParameters(fn, args);
+      if (fn.homeClass) {
+        this.currentSuperBinding = {
+          parentClass: fn.homeClass.parentClass,
+          thisValue,
+          currentClass: fn.homeClass,
+          isStatic: fn.homeIsStatic,
+        };
+      }
+
+      // Bind parameters to arguments (use async version to handle async default values)
+      await this.bindFunctionParametersAsync(fn, args);
 
       // Execute the function body
       const result = await this.evaluateNodeAsync(fn.body);
@@ -3353,6 +3529,7 @@ export class Interpreter {
     } finally {
       // Restore the previous environment (exit function scope)
       this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
     }
   }
 
@@ -3363,10 +3540,11 @@ export class Interpreter {
     if (
       !(
         constructor instanceof FunctionValue ||
-        constructor instanceof HostFunctionValue
+        constructor instanceof HostFunctionValue ||
+        constructor instanceof ClassValue
       )
     ) {
-      throw new InterpreterError("Constructor must be a function");
+      throw new InterpreterError("Constructor must be a function or class");
     }
   }
 
@@ -3427,13 +3605,31 @@ export class Interpreter {
     memberExpr: ESTree.MemberExpression,
     propertyValue: any,
   ): any {
+    const instanceClass = this.getInstanceClass(obj);
     if (memberExpr.computed) {
-      return obj[String(propertyValue)];
+      const propName = String(propertyValue);
+      if (instanceClass) {
+        validatePropertyName(propName);
+        return this.getInstanceProperty(
+          obj as Record<string, any>,
+          instanceClass,
+          propName,
+        );
+      }
+      return obj[propName];
     } else {
       if (memberExpr.property.type !== "Identifier") {
         throw new InterpreterError("Invalid method access");
       }
       const property = (memberExpr.property as ESTree.Identifier).name;
+      if (instanceClass) {
+        validatePropertyName(property);
+        return this.getInstanceProperty(
+          obj as Record<string, any>,
+          instanceClass,
+          property,
+        );
+      }
       return obj[property];
     }
   }
@@ -3589,6 +3785,11 @@ export class Interpreter {
     // Handle member expression assignment: arr[index] = value or obj.prop = value
     if (node.left.type === "MemberExpression") {
       const memberExpr = node.left as ESTree.MemberExpression;
+
+      if (memberExpr.object.type === "Super") {
+        return this.assignSuperMember(memberExpr, value);
+      }
+
       const object = this.evaluateNode(memberExpr.object);
 
       // Block property assignment on host functions
@@ -3598,9 +3799,22 @@ export class Interpreter {
         );
       }
 
+      // Handle private field assignment: this.#field = value
+      if (memberExpr.property.type === "PrivateIdentifier") {
+        if (!this.isFeatureEnabled("PrivateFields")) {
+          throw new InterpreterError("PrivateFields is not enabled");
+        }
+        return this.assignPrivateField(
+          object,
+          (memberExpr.property as ESTree.PrivateIdentifier).name,
+          value,
+        );
+      }
+
       if (memberExpr.computed) {
         // Computed property: arr[index] = value or obj["key"] = value
         const property = this.evaluateNode(memberExpr.property);
+        const instanceClass = this.getInstanceClass(object);
 
         if (Array.isArray(object)) {
           // Array element assignment: arr[i] = value
@@ -3613,6 +3827,18 @@ export class Interpreter {
           }
           object[index] = value;
           return value;
+        } else if (object instanceof ClassValue) {
+          const propName = String(property);
+          return this.assignClassStaticMember(object, propName, value);
+        } else if (instanceClass) {
+          const propName = String(property);
+          validatePropertyName(propName);
+          return this.assignInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            propName,
+            value,
+          );
         } else if (typeof object === "object" && object !== null) {
           // Object computed property assignment: obj["key"] = value or obj[expr] = value
           const propName = String(property);
@@ -3632,6 +3858,20 @@ export class Interpreter {
 
         const property = (memberExpr.property as ESTree.Identifier).name;
         validatePropertyName(property); // Security: prevent prototype pollution
+
+        if (object instanceof ClassValue) {
+          return this.assignClassStaticMember(object, property, value);
+        }
+
+        const instanceClass = this.getInstanceClass(object);
+        if (instanceClass) {
+          return this.assignInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            property,
+            value,
+          );
+        }
 
         if (
           typeof object === "object" &&
@@ -3672,29 +3912,71 @@ export class Interpreter {
       );
     } else if (node.left.type === "MemberExpression") {
       const memberExpr = node.left as ESTree.MemberExpression;
-      const object = this.evaluateNode(memberExpr.object);
+      const object =
+        memberExpr.object.type === "Super"
+          ? this.evaluateSuperMemberAccess(memberExpr)
+          : this.evaluateNode(memberExpr.object);
 
-      if (object instanceof HostFunctionValue) {
-        throw new InterpreterError(
-          "Cannot access properties on host functions",
-        );
-      }
-
-      if (memberExpr.computed) {
-        const property = this.evaluateNode(memberExpr.property);
-        const propName = Array.isArray(object)
-          ? typeof property === "string"
-            ? Number(property)
-            : property
-          : String(property);
-        currentValue = object[propName];
-      } else {
-        if (memberExpr.property.type !== "Identifier") {
-          throw new InterpreterError("Invalid property access");
+      if (memberExpr.object.type === "Super") {
+        currentValue = object;
+      } else if (memberExpr.property.type === "PrivateIdentifier") {
+        if (!this.isFeatureEnabled("PrivateFields")) {
+          throw new InterpreterError("PrivateFields is not enabled");
         }
-        const property = (memberExpr.property as ESTree.Identifier).name;
-        validatePropertyName(property);
-        currentValue = object[property];
+        currentValue = this.accessPrivateField(
+          object,
+          (memberExpr.property as ESTree.PrivateIdentifier).name,
+        );
+      } else if (object instanceof ClassValue) {
+        currentValue = this.accessClassStaticMember(object, memberExpr);
+      } else {
+        const instanceClass = this.getInstanceClass(object);
+        if (instanceClass) {
+          if (memberExpr.computed) {
+            const property = this.evaluateNode(memberExpr.property);
+            const propName = String(property);
+            validatePropertyName(propName);
+            currentValue = this.getInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              propName,
+            );
+          } else {
+            if (memberExpr.property.type !== "Identifier") {
+              throw new InterpreterError("Invalid property access");
+            }
+            const property = (memberExpr.property as ESTree.Identifier).name;
+            validatePropertyName(property);
+            currentValue = this.getInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              property,
+            );
+          }
+        } else {
+          if (object instanceof HostFunctionValue) {
+            throw new InterpreterError(
+              "Cannot access properties on host functions",
+            );
+          }
+
+          if (memberExpr.computed) {
+            const property = this.evaluateNode(memberExpr.property);
+            const propName = Array.isArray(object)
+              ? typeof property === "string"
+                ? Number(property)
+                : property
+              : String(property);
+            currentValue = object[propName];
+          } else {
+            if (memberExpr.property.type !== "Identifier") {
+              throw new InterpreterError("Invalid property access");
+            }
+            const property = (memberExpr.property as ESTree.Identifier).name;
+            validatePropertyName(property);
+            currentValue = object[property];
+          }
+        }
       }
     } else {
       throw new InterpreterError("Invalid logical assignment target");
@@ -3733,7 +4015,22 @@ export class Interpreter {
       this.environment.set((node.left as ESTree.Identifier).name, newValue);
     } else if (node.left.type === "MemberExpression") {
       const memberExpr = node.left as ESTree.MemberExpression;
+      if (memberExpr.object.type === "Super") {
+        return this.assignSuperMember(memberExpr, newValue);
+      }
+
       const object = this.evaluateNode(memberExpr.object);
+
+      if (memberExpr.property.type === "PrivateIdentifier") {
+        if (!this.isFeatureEnabled("PrivateFields")) {
+          throw new InterpreterError("PrivateFields is not enabled");
+        }
+        return this.assignPrivateField(
+          object,
+          (memberExpr.property as ESTree.PrivateIdentifier).name,
+          newValue,
+        );
+      }
 
       if (memberExpr.computed) {
         const property = this.evaluateNode(memberExpr.property);
@@ -3744,14 +4041,41 @@ export class Interpreter {
             throw new InterpreterError("Array index must be a number");
           }
           object[index] = newValue;
-        } else if (typeof object === "object" && object !== null) {
+        } else if (object instanceof ClassValue) {
           const propName = String(property);
-          validatePropertyName(propName);
-          object[propName] = newValue;
+          return this.assignClassStaticMember(object, propName, newValue);
+        } else {
+          const instanceClass = this.getInstanceClass(object);
+          if (instanceClass) {
+            const propName = String(property);
+            validatePropertyName(propName);
+            return this.assignInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              propName,
+              newValue,
+            );
+          } else if (typeof object === "object" && object !== null) {
+            const propName = String(property);
+            validatePropertyName(propName);
+            object[propName] = newValue;
+          }
         }
       } else {
         const property = (memberExpr.property as ESTree.Identifier).name;
         validatePropertyName(property);
+        if (object instanceof ClassValue) {
+          return this.assignClassStaticMember(object, property, newValue);
+        }
+        const instanceClass = this.getInstanceClass(object);
+        if (instanceClass) {
+          return this.assignInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            property,
+            newValue,
+          );
+        }
         object[property] = newValue;
       }
     }
@@ -4230,6 +4554,7 @@ export class Interpreter {
     const name = node.id.name;
     const params: string[] = [];
     let restParamIndex: number | null = null;
+    const defaultValues = new Map<number, ESTree.Expression>();
 
     for (let i = 0; i < node.params.length; i++) {
       const param = node.params[i];
@@ -4257,6 +4582,23 @@ export class Interpreter {
         params.push((restElement.argument as ESTree.Identifier).name);
       } else if (param.type === "Identifier") {
         params.push((param as ESTree.Identifier).name);
+      } else if (param.type === "AssignmentPattern") {
+        // Default parameter: a = 5
+        if (!this.isFeatureEnabled("DefaultParameters")) {
+          throw new InterpreterError("DefaultParameters is not enabled");
+        }
+
+        const assignmentPattern = param as ESTree.AssignmentPattern;
+        if (assignmentPattern.left.type !== "Identifier") {
+          throw new InterpreterError(
+            "Destructuring in default parameters is not supported",
+          );
+        }
+
+        params.push((assignmentPattern.left as ESTree.Identifier).name);
+        if (assignmentPattern.right) {
+          defaultValues.set(i, assignmentPattern.right);
+        }
       } else {
         throw new InterpreterError("Destructuring parameters not supported");
       }
@@ -4274,6 +4616,7 @@ export class Interpreter {
       node.async || false,
       restParamIndex,
       node.generator || false,
+      defaultValues,
     );
 
     // Declare the function in the current environment
@@ -4297,6 +4640,7 @@ export class Interpreter {
 
     const params: string[] = [];
     let restParamIndex: number | null = null;
+    const defaultValues = new Map<number, ESTree.Expression>();
 
     for (let i = 0; i < node.params.length; i++) {
       const param = node.params[i];
@@ -4324,6 +4668,23 @@ export class Interpreter {
         params.push((restElement.argument as ESTree.Identifier).name);
       } else if (param.type === "Identifier") {
         params.push((param as ESTree.Identifier).name);
+      } else if (param.type === "AssignmentPattern") {
+        // Default parameter: a = 5
+        if (!this.isFeatureEnabled("DefaultParameters")) {
+          throw new InterpreterError("DefaultParameters is not enabled");
+        }
+
+        const assignmentPattern = param as ESTree.AssignmentPattern;
+        if (assignmentPattern.left.type !== "Identifier") {
+          throw new InterpreterError(
+            "Destructuring in default parameters is not supported",
+          );
+        }
+
+        params.push((assignmentPattern.left as ESTree.Identifier).name);
+        if (assignmentPattern.right) {
+          defaultValues.set(i, assignmentPattern.right);
+        }
       } else {
         throw new InterpreterError("Destructuring parameters not supported");
       }
@@ -4342,6 +4703,7 @@ export class Interpreter {
       node.async || false,
       restParamIndex,
       node.generator || false,
+      defaultValues,
     );
   }
 
@@ -4358,6 +4720,7 @@ export class Interpreter {
 
     const params: string[] = [];
     let restParamIndex: number | null = null;
+    const defaultValues = new Map<number, ESTree.Expression>();
 
     for (let i = 0; i < node.params.length; i++) {
       const param = node.params[i];
@@ -4385,6 +4748,23 @@ export class Interpreter {
         params.push((restElement.argument as ESTree.Identifier).name);
       } else if (param.type === "Identifier") {
         params.push((param as ESTree.Identifier).name);
+      } else if (param.type === "AssignmentPattern") {
+        // Default parameter: a = 5
+        if (!this.isFeatureEnabled("DefaultParameters")) {
+          throw new InterpreterError("DefaultParameters is not enabled");
+        }
+
+        const assignmentPattern = param as ESTree.AssignmentPattern;
+        if (assignmentPattern.left.type !== "Identifier") {
+          throw new InterpreterError(
+            "Destructuring in default parameters is not supported",
+          );
+        }
+
+        params.push((assignmentPattern.left as ESTree.Identifier).name);
+        if (assignmentPattern.right) {
+          defaultValues.set(i, assignmentPattern.right);
+        }
       } else {
         throw new InterpreterError("Destructuring parameters not supported");
       }
@@ -4417,6 +4797,8 @@ export class Interpreter {
       this.environment,
       node.async || false,
       restParamIndex,
+      false, // arrow functions are not generators
+      defaultValues,
     );
 
     return func;
@@ -4776,6 +5158,37 @@ export class Interpreter {
       throw new InterpreterError("CallExpression is not enabled");
     }
 
+    // Handle super() constructor call
+    if (node.callee.type === "Super") {
+      if (!this.currentSuperBinding) {
+        throw new InterpreterError(
+          "'super' keyword is only valid inside a class",
+        );
+      }
+      if (this.currentSuperBinding.isStatic) {
+        throw new InterpreterError(
+          "'super' constructor call is only valid inside a derived class constructor",
+        );
+      }
+      const currentConstructor =
+        this.constructorStack[this.constructorStack.length - 1] ?? null;
+      if (
+        !currentConstructor ||
+        currentConstructor !== this.currentSuperBinding.currentClass
+      ) {
+        throw new InterpreterError(
+          "'super' constructor call is only valid inside a derived class constructor",
+        );
+      }
+      const args = this.evaluateArguments(node.arguments);
+      this.executeSuperConstructorCall(
+        args,
+        this.currentSuperBinding.thisValue,
+        this.currentSuperBinding.currentClass,
+      );
+      return undefined;
+    }
+
     // Determine if this is a method call (obj.method()) or regular call
     let thisValue: any = undefined;
     let callee: any;
@@ -4783,23 +5196,34 @@ export class Interpreter {
     if (node.callee.type === "MemberExpression") {
       // Method call: obj.method() - need to bind 'this'
       const memberExpr = node.callee as ESTree.MemberExpression;
-      thisValue = this.evaluateNode(memberExpr.object); // The object becomes 'this'
+
+      // Handle super.method() calls specially
+      if (memberExpr.object.type === "Super") {
+        // Get the bound super method
+        callee = this.evaluateSuperMemberAccess(memberExpr);
+        // super methods use the current instance as 'this'
+        thisValue = this.currentSuperBinding?.thisValue;
+      } else {
+        thisValue = this.evaluateNode(memberExpr.object); // The object becomes 'this'
+      }
 
       // Handle optional chaining short-circuit propagation
       if (thisValue instanceof OptionalChainShortCircuit) {
         return thisValue;
       }
 
-      // For arrays, strings, generators, and async generators, use evaluateMemberExpression
-      // to get HostFunctionValue wrappers
+      // For arrays, strings, generators, async generators, and classes, use evaluateMemberExpression
+      // to get proper wrappers/static methods
       if (
-        Array.isArray(thisValue) ||
-        typeof thisValue === "string" ||
-        thisValue instanceof GeneratorValue ||
-        thisValue instanceof AsyncGeneratorValue
+        memberExpr.object.type !== "Super" &&
+        (Array.isArray(thisValue) ||
+          typeof thisValue === "string" ||
+          thisValue instanceof GeneratorValue ||
+          thisValue instanceof AsyncGeneratorValue ||
+          thisValue instanceof ClassValue)
       ) {
         callee = this.evaluateMemberExpression(memberExpr);
-      } else {
+      } else if (memberExpr.object.type !== "Super") {
         // Handle optional member access: obj?.method()
         if (
           memberExpr.optional &&
@@ -4807,11 +5231,23 @@ export class Interpreter {
         ) {
           return new OptionalChainShortCircuit();
         }
-        // Get the method from the object
-        const property = memberExpr.computed
-          ? this.evaluateNode(memberExpr.property)
-          : null;
-        callee = this.getObjectProperty(thisValue, memberExpr, property);
+
+        // Handle private method call: this.#method()
+        if (memberExpr.property.type === "PrivateIdentifier") {
+          if (!this.isFeatureEnabled("PrivateFields")) {
+            throw new InterpreterError("PrivateFields is not enabled");
+          }
+          callee = this.accessPrivateField(
+            thisValue,
+            (memberExpr.property as ESTree.PrivateIdentifier).name,
+          );
+        } else {
+          // Get the method from the object
+          const property = memberExpr.computed
+            ? this.evaluateNode(memberExpr.property)
+            : null;
+          callee = this.getObjectProperty(thisValue, memberExpr, property);
+        }
       }
     } else {
       // Regular function call - no 'this' binding
@@ -4854,6 +5290,18 @@ export class Interpreter {
       }
     }
 
+    // Handle native JavaScript functions (e.g., bound class methods)
+    if (typeof callee === "function") {
+      const args = this.evaluateArguments(node.arguments);
+      return callee(...args);
+    }
+
+    if (callee instanceof ClassValue) {
+      throw new InterpreterError(
+        "Class constructor cannot be invoked without 'new'",
+      );
+    }
+
     // Handle sandbox functions
     if (!(callee instanceof FunctionValue)) {
       throw new InterpreterError("Callee is not a function");
@@ -4879,7 +5327,7 @@ export class Interpreter {
           "Cannot call async generator in synchronous evaluate(). Use evaluateAsync() instead.",
         );
       }
-      return new GeneratorValue(callee, args, this);
+      return new GeneratorValue(callee, args, this, thisValue);
     }
 
     // Execute the sandbox function
@@ -4897,13 +5345,21 @@ export class Interpreter {
     // 2. Validate constructor is callable
     this.validateConstructor(constructor);
 
-    // 3. Create new instance object
+    // 3. Handle ClassValue - use instantiateClass
+    if (constructor instanceof ClassValue) {
+      return this.instantiateClass(
+        constructor,
+        node.arguments as ESTree.Expression[],
+      );
+    }
+
+    // 4. Create new instance object
     const instance: Record<string, any> = {};
 
-    // 4. Evaluate arguments
+    // 5. Evaluate arguments
     const args = this.evaluateArguments(node.arguments);
 
-    // 5. Call constructor based on type
+    // 6. Call constructor based on type
     let result: any;
 
     if (constructor instanceof HostFunctionValue) {
@@ -4920,13 +5376,18 @@ export class Interpreter {
       result = this.executeSandboxFunction(callee, args, instance);
     }
 
-    // 6. Return object or constructor's returned object
+    // 7. Return object or constructor's returned object
     return this.resolveConstructorReturn(result, instance);
   }
 
   private evaluateMemberExpression(node: ESTree.MemberExpression): any {
     if (!this.isFeatureEnabled("MemberExpression")) {
       throw new InterpreterError("MemberExpression is not enabled");
+    }
+
+    // Handle super.method() or super.property access
+    if (node.object.type === "Super") {
+      return this.evaluateSuperMemberAccess(node);
     }
 
     const object = this.evaluateNode(node.object);
@@ -4943,6 +5404,47 @@ export class Interpreter {
 
     // Block property access on host functions
     this.validateMemberAccess(object);
+
+    // Handle private field access (must check before ClassValue handling)
+    if (node.property.type === "PrivateIdentifier") {
+      if (!this.isFeatureEnabled("PrivateFields")) {
+        throw new InterpreterError("PrivateFields is not enabled");
+      }
+      return this.accessPrivateField(
+        object,
+        (node.property as ESTree.PrivateIdentifier).name,
+      );
+    }
+
+    // Handle static member access on classes
+    if (object instanceof ClassValue) {
+      return this.accessClassStaticMember(object, node);
+    }
+
+    const instanceClass = this.getInstanceClass(object);
+    if (instanceClass) {
+      if (node.computed) {
+        const property = this.evaluateNode(node.property);
+        const propName = String(property);
+        validatePropertyName(propName);
+        return this.getInstanceProperty(
+          object as Record<string, any>,
+          instanceClass,
+          propName,
+        );
+      }
+
+      if (node.property.type !== "Identifier") {
+        throw new InterpreterError("Invalid property access");
+      }
+      const property = (node.property as ESTree.Identifier).name;
+      validatePropertyName(property);
+      return this.getInstanceProperty(
+        object as Record<string, any>,
+        instanceClass,
+        property,
+      );
+    }
 
     if (node.computed) {
       // obj[expr] - computed property access (array indexing or object bracket notation)
@@ -4963,6 +5465,7 @@ export class Interpreter {
       );
     } else {
       // obj.prop - direct property access
+      // Note: PrivateIdentifier is handled earlier in the function
       if (node.property.type !== "Identifier") {
         throw new InterpreterError("Invalid property access");
       }
@@ -5768,28 +6271,70 @@ export class Interpreter {
       throw new InterpreterError("CallExpression is not enabled");
     }
 
+    // Handle super() constructor call
+    if (node.callee.type === "Super") {
+      if (!this.currentSuperBinding) {
+        throw new InterpreterError(
+          "'super' keyword is only valid inside a class",
+        );
+      }
+      if (this.currentSuperBinding.isStatic) {
+        throw new InterpreterError(
+          "'super' constructor call is only valid inside a derived class constructor",
+        );
+      }
+      const currentConstructor =
+        this.constructorStack[this.constructorStack.length - 1] ?? null;
+      if (
+        !currentConstructor ||
+        currentConstructor !== this.currentSuperBinding.currentClass
+      ) {
+        throw new InterpreterError(
+          "'super' constructor call is only valid inside a derived class constructor",
+        );
+      }
+      const args = await this.evaluateArgumentsAsync(node.arguments);
+      await this.executeSuperConstructorCallAsync(
+        args,
+        this.currentSuperBinding.thisValue,
+        this.currentSuperBinding.currentClass,
+      );
+      return undefined;
+    }
+
     let thisValue: any = undefined;
     let callee: any;
 
     if (node.callee.type === "MemberExpression") {
       const memberExpr = node.callee as ESTree.MemberExpression;
-      thisValue = await this.evaluateNodeAsync(memberExpr.object);
+
+      // Handle super.method() calls specially
+      if (memberExpr.object.type === "Super") {
+        // Get the bound super method
+        callee = this.evaluateSuperMemberAccess(memberExpr);
+        // super methods use the current instance as 'this'
+        thisValue = this.currentSuperBinding?.thisValue;
+      } else {
+        thisValue = await this.evaluateNodeAsync(memberExpr.object);
+      }
 
       // Handle optional chaining short-circuit propagation
       if (thisValue instanceof OptionalChainShortCircuit) {
         return thisValue;
       }
 
-      // For arrays, strings, and generators, use evaluateMemberExpressionAsync to get HostFunctionValue wrappers
-      // For other objects, access the property directly
+      // For arrays, strings, generators, async generators, and classes, use evaluateMemberExpressionAsync
+      // to get proper wrappers/static methods
       if (
-        Array.isArray(thisValue) ||
-        typeof thisValue === "string" ||
-        thisValue instanceof GeneratorValue ||
-        thisValue instanceof AsyncGeneratorValue
+        memberExpr.object.type !== "Super" &&
+        (Array.isArray(thisValue) ||
+          typeof thisValue === "string" ||
+          thisValue instanceof GeneratorValue ||
+          thisValue instanceof AsyncGeneratorValue ||
+          thisValue instanceof ClassValue)
       ) {
         callee = await this.evaluateMemberExpressionAsync(memberExpr);
-      } else {
+      } else if (memberExpr.object.type !== "Super") {
         // Handle optional member access: obj?.method()
         if (
           memberExpr.optional &&
@@ -5804,11 +6349,22 @@ export class Interpreter {
           );
         }
 
-        // Get the method from the object
-        const property = memberExpr.computed
-          ? await this.evaluateNodeAsync(memberExpr.property)
-          : null;
-        callee = this.getObjectProperty(thisValue, memberExpr, property);
+        // Handle private method call: this.#method()
+        if (memberExpr.property.type === "PrivateIdentifier") {
+          if (!this.isFeatureEnabled("PrivateFields")) {
+            throw new InterpreterError("PrivateFields is not enabled");
+          }
+          callee = this.accessPrivateField(
+            thisValue,
+            (memberExpr.property as ESTree.PrivateIdentifier).name,
+          );
+        } else {
+          // Get the method from the object
+          const property = memberExpr.computed
+            ? await this.evaluateNodeAsync(memberExpr.property)
+            : null;
+          callee = this.getObjectProperty(thisValue, memberExpr, property);
+        }
       }
     } else {
       callee = await this.evaluateNodeAsync(node.callee);
@@ -5846,6 +6402,18 @@ export class Interpreter {
       }
     }
 
+    // Handle native JavaScript functions (e.g., bound class methods)
+    if (typeof callee === "function") {
+      const args = await this.evaluateArgumentsAsync(node.arguments);
+      return await callee(...args);
+    }
+
+    if (callee instanceof ClassValue) {
+      throw new InterpreterError(
+        "Class constructor cannot be invoked without 'new'",
+      );
+    }
+
     // Handle sandbox functions
     if (!(callee instanceof FunctionValue)) {
       throw new InterpreterError("Callee is not a function");
@@ -5859,9 +6427,9 @@ export class Interpreter {
     // If generator function, return a generator instance
     if (callee.isGenerator) {
       if (callee.isAsync) {
-        return new AsyncGeneratorValue(callee, args, this);
+        return new AsyncGeneratorValue(callee, args, this, thisValue);
       }
-      return new GeneratorValue(callee, args, this);
+      return new GeneratorValue(callee, args, this, thisValue);
     }
 
     // Execute the sandbox function (handles both sync and async functions)
@@ -5881,13 +6449,21 @@ export class Interpreter {
     // 2. Validate constructor is callable
     this.validateConstructor(constructor);
 
-    // 3. Create new instance object
+    // 3. Handle ClassValue - use instantiateClassAsync
+    if (constructor instanceof ClassValue) {
+      return await this.instantiateClassAsync(
+        constructor,
+        node.arguments as ESTree.Expression[],
+      );
+    }
+
+    // 4. Create new instance object
     const instance: Record<string, any> = {};
 
-    // 4. Evaluate arguments
+    // 5. Evaluate arguments
     const args = await this.evaluateArgumentsAsync(node.arguments);
 
-    // 5. Call constructor based on type
+    // 6. Call constructor based on type
     let result: any;
 
     if (constructor instanceof HostFunctionValue) {
@@ -5908,7 +6484,7 @@ export class Interpreter {
       result = await this.executeSandboxFunctionAsync(callee, args, instance);
     }
 
-    // 6. Return object or constructor's returned object
+    // 7. Return object or constructor's returned object
     return this.resolveConstructorReturn(result, instance);
   }
 
@@ -5943,6 +6519,10 @@ export class Interpreter {
 
     if (node.left.type === "MemberExpression") {
       const memberExpr = node.left as ESTree.MemberExpression;
+      if (memberExpr.object.type === "Super") {
+        return await this.assignSuperMemberAsync(memberExpr, value);
+      }
+
       const object = await this.evaluateNodeAsync(memberExpr.object);
 
       if (object instanceof HostFunctionValue) {
@@ -5951,8 +6531,20 @@ export class Interpreter {
         );
       }
 
+      if (memberExpr.property.type === "PrivateIdentifier") {
+        if (!this.isFeatureEnabled("PrivateFields")) {
+          throw new InterpreterError("PrivateFields is not enabled");
+        }
+        return this.assignPrivateField(
+          object,
+          (memberExpr.property as ESTree.PrivateIdentifier).name,
+          value,
+        );
+      }
+
       if (memberExpr.computed) {
         const property = await this.evaluateNodeAsync(memberExpr.property);
+        const instanceClass = this.getInstanceClass(object);
 
         if (Array.isArray(object)) {
           // Convert string to number if it's a numeric string (for...in gives string indices)
@@ -5964,6 +6556,22 @@ export class Interpreter {
           }
           object[index] = value;
           return value;
+        } else if (object instanceof ClassValue) {
+          const propName = String(property);
+          return await this.assignClassStaticMemberAsync(
+            object,
+            propName,
+            value,
+          );
+        } else if (instanceClass) {
+          const propName = String(property);
+          validatePropertyName(propName);
+          return this.assignInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            propName,
+            value,
+          );
         } else if (typeof object === "object" && object !== null) {
           const propName = String(property);
           validatePropertyName(propName);
@@ -5981,6 +6589,24 @@ export class Interpreter {
 
         const property = (memberExpr.property as ESTree.Identifier).name;
         validatePropertyName(property);
+
+        if (object instanceof ClassValue) {
+          return await this.assignClassStaticMemberAsync(
+            object,
+            property,
+            value,
+          );
+        }
+
+        const instanceClass = this.getInstanceClass(object);
+        if (instanceClass) {
+          return this.assignInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            property,
+            value,
+          );
+        }
 
         if (
           typeof object === "object" &&
@@ -6018,29 +6644,74 @@ export class Interpreter {
       );
     } else if (node.left.type === "MemberExpression") {
       const memberExpr = node.left as ESTree.MemberExpression;
-      const object = await this.evaluateNodeAsync(memberExpr.object);
+      const object =
+        memberExpr.object.type === "Super"
+          ? this.evaluateSuperMemberAccess(memberExpr)
+          : await this.evaluateNodeAsync(memberExpr.object);
 
-      if (object instanceof HostFunctionValue) {
-        throw new InterpreterError(
-          "Cannot access properties on host functions",
-        );
-      }
-
-      if (memberExpr.computed) {
-        const property = await this.evaluateNodeAsync(memberExpr.property);
-        const propName = Array.isArray(object)
-          ? typeof property === "string"
-            ? Number(property)
-            : property
-          : String(property);
-        currentValue = object[propName];
-      } else {
-        if (memberExpr.property.type !== "Identifier") {
-          throw new InterpreterError("Invalid property access");
+      if (memberExpr.object.type === "Super") {
+        currentValue = object;
+      } else if (memberExpr.property.type === "PrivateIdentifier") {
+        if (!this.isFeatureEnabled("PrivateFields")) {
+          throw new InterpreterError("PrivateFields is not enabled");
         }
-        const property = (memberExpr.property as ESTree.Identifier).name;
-        validatePropertyName(property);
-        currentValue = object[property];
+        currentValue = this.accessPrivateField(
+          object,
+          (memberExpr.property as ESTree.PrivateIdentifier).name,
+        );
+      } else if (object instanceof ClassValue) {
+        currentValue = await this.accessClassStaticMemberAsync(
+          object,
+          memberExpr,
+        );
+      } else {
+        const instanceClass = this.getInstanceClass(object);
+        if (instanceClass) {
+          if (memberExpr.computed) {
+            const property = await this.evaluateNodeAsync(memberExpr.property);
+            const propName = String(property);
+            validatePropertyName(propName);
+            currentValue = this.getInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              propName,
+            );
+          } else {
+            if (memberExpr.property.type !== "Identifier") {
+              throw new InterpreterError("Invalid property access");
+            }
+            const property = (memberExpr.property as ESTree.Identifier).name;
+            validatePropertyName(property);
+            currentValue = this.getInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              property,
+            );
+          }
+        } else {
+          if (object instanceof HostFunctionValue) {
+            throw new InterpreterError(
+              "Cannot access properties on host functions",
+            );
+          }
+
+          if (memberExpr.computed) {
+            const property = await this.evaluateNodeAsync(memberExpr.property);
+            const propName = Array.isArray(object)
+              ? typeof property === "string"
+                ? Number(property)
+                : property
+              : String(property);
+            currentValue = object[propName];
+          } else {
+            if (memberExpr.property.type !== "Identifier") {
+              throw new InterpreterError("Invalid property access");
+            }
+            const property = (memberExpr.property as ESTree.Identifier).name;
+            validatePropertyName(property);
+            currentValue = object[property];
+          }
+        }
       }
     } else {
       throw new InterpreterError("Invalid logical assignment target");
@@ -6076,7 +6747,22 @@ export class Interpreter {
       this.environment.set((node.left as ESTree.Identifier).name, newValue);
     } else if (node.left.type === "MemberExpression") {
       const memberExpr = node.left as ESTree.MemberExpression;
+      if (memberExpr.object.type === "Super") {
+        return await this.assignSuperMemberAsync(memberExpr, newValue);
+      }
+
       const object = await this.evaluateNodeAsync(memberExpr.object);
+
+      if (memberExpr.property.type === "PrivateIdentifier") {
+        if (!this.isFeatureEnabled("PrivateFields")) {
+          throw new InterpreterError("PrivateFields is not enabled");
+        }
+        return this.assignPrivateField(
+          object,
+          (memberExpr.property as ESTree.PrivateIdentifier).name,
+          newValue,
+        );
+      }
 
       if (memberExpr.computed) {
         const property = await this.evaluateNodeAsync(memberExpr.property);
@@ -6087,14 +6773,49 @@ export class Interpreter {
             throw new InterpreterError("Array index must be a number");
           }
           object[index] = newValue;
-        } else if (typeof object === "object" && object !== null) {
+        } else if (object instanceof ClassValue) {
           const propName = String(property);
-          validatePropertyName(propName);
-          object[propName] = newValue;
+          return await this.assignClassStaticMemberAsync(
+            object,
+            propName,
+            newValue,
+          );
+        } else {
+          const instanceClass = this.getInstanceClass(object);
+          if (instanceClass) {
+            const propName = String(property);
+            validatePropertyName(propName);
+            return this.assignInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              propName,
+              newValue,
+            );
+          } else if (typeof object === "object" && object !== null) {
+            const propName = String(property);
+            validatePropertyName(propName);
+            object[propName] = newValue;
+          }
         }
       } else {
         const property = (memberExpr.property as ESTree.Identifier).name;
         validatePropertyName(property);
+        if (object instanceof ClassValue) {
+          return await this.assignClassStaticMemberAsync(
+            object,
+            property,
+            newValue,
+          );
+        }
+        const instanceClass = this.getInstanceClass(object);
+        if (instanceClass) {
+          return this.assignInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            property,
+            newValue,
+          );
+        }
         object[property] = newValue;
       }
     }
@@ -6940,6 +7661,11 @@ export class Interpreter {
       throw new InterpreterError("MemberExpression is not enabled");
     }
 
+    // Handle super.method() or super.property access
+    if (node.object.type === "Super") {
+      return this.evaluateSuperMemberAccess(node);
+    }
+
     const object = await this.evaluateNodeAsync(node.object);
 
     // Handle optional chaining short-circuit propagation
@@ -6953,6 +7679,47 @@ export class Interpreter {
     }
 
     this.validateMemberAccess(object);
+
+    // Handle private field access (must check before ClassValue handling)
+    if (node.property.type === "PrivateIdentifier") {
+      if (!this.isFeatureEnabled("PrivateFields")) {
+        throw new InterpreterError("PrivateFields is not enabled");
+      }
+      return this.accessPrivateField(
+        object,
+        (node.property as ESTree.PrivateIdentifier).name,
+      );
+    }
+
+    // Handle static member access on classes
+    if (object instanceof ClassValue) {
+      return this.accessClassStaticMember(object, node);
+    }
+
+    const instanceClass = this.getInstanceClass(object);
+    if (instanceClass) {
+      if (node.computed) {
+        const property = await this.evaluateNodeAsync(node.property);
+        const propName = String(property);
+        validatePropertyName(propName);
+        return this.getInstanceProperty(
+          object as Record<string, any>,
+          instanceClass,
+          propName,
+        );
+      }
+
+      if (node.property.type !== "Identifier") {
+        throw new InterpreterError("Invalid property access");
+      }
+      const property = (node.property as ESTree.Identifier).name;
+      validatePropertyName(property);
+      return this.getInstanceProperty(
+        object as Record<string, any>,
+        instanceClass,
+        property,
+      );
+    }
 
     if (node.computed) {
       const property = await this.evaluateNodeAsync(node.property);
@@ -6969,6 +7736,8 @@ export class Interpreter {
         "Computed property access requires an array or object",
       );
     } else {
+      // obj.prop - direct property access
+      // Note: PrivateIdentifier is handled earlier in the function
       if (node.property.type !== "Identifier") {
         throw new InterpreterError("Invalid property access");
       }
@@ -7166,5 +7935,1970 @@ export class Interpreter {
     }
 
     return result;
+  }
+
+  // ============================================================================
+  // CLASS SUPPORT (ES6)
+  // ============================================================================
+
+  /**
+   * Evaluate a class declaration: class Foo { }
+   * Binds the class to the environment and returns undefined.
+   */
+  private evaluateClassDeclaration(node: ESTree.ClassDeclaration): undefined {
+    if (!this.isFeatureEnabled("Classes")) {
+      throw new InterpreterError("Classes is not enabled");
+    }
+
+    const classValue = this.buildClassValue(node);
+
+    // For declarations, bind to the environment
+    if (node.id) {
+      this.environment.declare(node.id.name, classValue, "let");
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Async version of evaluateClassDeclaration
+   */
+  private async evaluateClassDeclarationAsync(
+    node: ESTree.ClassDeclaration,
+  ): Promise<undefined> {
+    if (!this.isFeatureEnabled("Classes")) {
+      throw new InterpreterError("Classes is not enabled");
+    }
+
+    const classValue = await this.buildClassValueAsync(node);
+
+    if (node.id) {
+      this.environment.declare(node.id.name, classValue, "let");
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Evaluate a class expression: const Foo = class { }
+   * Returns the ClassValue.
+   */
+  private evaluateClassExpression(node: ESTree.ClassExpression): ClassValue {
+    if (!this.isFeatureEnabled("Classes")) {
+      throw new InterpreterError("Classes is not enabled");
+    }
+
+    return this.buildClassValue(node);
+  }
+
+  /**
+   * Async version of evaluateClassExpression
+   */
+  private async evaluateClassExpressionAsync(
+    node: ESTree.ClassExpression,
+  ): Promise<ClassValue> {
+    if (!this.isFeatureEnabled("Classes")) {
+      throw new InterpreterError("Classes is not enabled");
+    }
+
+    return await this.buildClassValueAsync(node);
+  }
+
+  /**
+   * Handle the super keyword.
+   * Returns a marker that CallExpression/MemberExpression can detect.
+   */
+  private evaluateSuper(): SuperBinding {
+    if (!this.currentSuperBinding) {
+      throw new InterpreterError(
+        "'super' keyword is only valid inside a class",
+      );
+    }
+
+    return this.currentSuperBinding;
+  }
+
+  /**
+   * Build a ClassValue from a class declaration or expression AST node.
+   */
+  private buildClassValue(
+    node: ESTree.ClassDeclaration | ESTree.ClassExpression,
+  ): ClassValue {
+    // Evaluate superclass if present
+    let parentClass: ClassValue | null = null;
+    if (node.superClass) {
+      const superValue = this.evaluateNode(node.superClass);
+      if (!(superValue instanceof ClassValue)) {
+        throw new InterpreterError(
+          "Class extends clause requires a class constructor",
+        );
+      }
+      parentClass = superValue;
+    }
+
+    return this.processClassBody(node, parentClass);
+  }
+
+  /**
+   * Async version of buildClassValue
+   */
+  private async buildClassValueAsync(
+    node: ESTree.ClassDeclaration | ESTree.ClassExpression,
+  ): Promise<ClassValue> {
+    let parentClass: ClassValue | null = null;
+    if (node.superClass) {
+      const superValue = await this.evaluateNodeAsync(node.superClass);
+      if (!(superValue instanceof ClassValue)) {
+        throw new InterpreterError(
+          "Class extends clause requires a class constructor",
+        );
+      }
+      parentClass = superValue;
+    }
+
+    return await this.processClassBodyAsync(node, parentClass);
+  }
+
+  /**
+   * Process the class body and create maps of methods, getters, setters.
+   */
+  private processClassBody(
+    node: ESTree.ClassDeclaration | ESTree.ClassExpression,
+    parentClass: ClassValue | null,
+  ): ClassValue {
+    const instanceMethods = new Map<string, FunctionValue>();
+    const staticMethods = new Map<string, FunctionValue>();
+    const instanceGetters = new Map<string, FunctionValue>();
+    const instanceSetters = new Map<string, FunctionValue>();
+    const staticGetters = new Map<string, FunctionValue>();
+    const staticSetters = new Map<string, FunctionValue>();
+    const instanceFields: ClassFieldInitializer[] = [];
+    const staticFields = new Map<string, any>();
+    const privateInstanceMethods = new Map<string, FunctionValue>();
+    const privateStaticMethods = new Map<string, FunctionValue>();
+    const privateStaticFields = new Map<string, any>();
+    let constructorMethod: FunctionValue | null = null;
+
+    const previousEnvironment = this.environment;
+    const classEnv = new Environment(this.environment);
+    const className = node.id?.name ?? null;
+
+    const classValue = new ClassValue(
+      className,
+      null,
+      instanceMethods,
+      staticMethods,
+      instanceGetters,
+      instanceSetters,
+      staticGetters,
+      staticSetters,
+      parentClass,
+      classEnv,
+      instanceFields,
+      staticFields,
+      privateInstanceMethods,
+      privateStaticMethods,
+      privateStaticFields,
+    );
+
+    if (className) {
+      classEnv.declare(className, classValue, "const");
+    }
+
+    this.environment = classEnv;
+
+    try {
+      for (const element of node.body.body) {
+        if (element.type === "MethodDefinition") {
+          const methodDef = element as ESTree.MethodDefinition;
+          const isPrivate = methodDef.key?.type === "PrivateIdentifier";
+
+          if (isPrivate) {
+            if (!this.isFeatureEnabled("PrivateFields")) {
+              throw new InterpreterError("PrivateFields is not enabled");
+            }
+
+            const methodName = (methodDef.key as ESTree.PrivateIdentifier).name;
+            const funcValue = this.createMethodFunction(
+              methodDef.value as ESTree.FunctionExpression,
+            );
+
+            if (methodDef.static) {
+              privateStaticMethods.set(methodName, funcValue);
+            } else {
+              privateInstanceMethods.set(methodName, funcValue);
+            }
+          } else {
+            const methodName = this.extractClassMethodName(methodDef);
+
+            if (methodDef.kind !== "constructor") {
+              validatePropertyName(methodName);
+            }
+
+            const funcValue = this.createMethodFunction(
+              methodDef.value as ESTree.FunctionExpression,
+            );
+
+            if (methodDef.kind === "constructor") {
+              constructorMethod = funcValue;
+            } else if (methodDef.kind === "get") {
+              if (methodDef.static) {
+                staticMethods.delete(methodName);
+                staticGetters.set(methodName, funcValue);
+              } else {
+                instanceMethods.delete(methodName);
+                instanceGetters.set(methodName, funcValue);
+              }
+            } else if (methodDef.kind === "set") {
+              if (methodDef.static) {
+                staticMethods.delete(methodName);
+                staticSetters.set(methodName, funcValue);
+              } else {
+                instanceMethods.delete(methodName);
+                instanceSetters.set(methodName, funcValue);
+              }
+            } else {
+              if (methodDef.static) {
+                staticGetters.delete(methodName);
+                staticSetters.delete(methodName);
+                staticMethods.set(methodName, funcValue);
+              } else {
+                instanceGetters.delete(methodName);
+                instanceSetters.delete(methodName);
+                instanceMethods.set(methodName, funcValue);
+              }
+            }
+          }
+        } else if (element.type === "PropertyDefinition") {
+          const propDef = element as ESTree.PropertyDefinition;
+          const isPrivate = propDef.key?.type === "PrivateIdentifier";
+
+          if (isPrivate) {
+            if (!this.isFeatureEnabled("PrivateFields")) {
+              throw new InterpreterError("PrivateFields is not enabled");
+            }
+
+            const fieldName = (propDef.key as ESTree.PrivateIdentifier).name;
+
+            if (propDef.static) {
+              const value = propDef.value
+                ? this.evaluateStaticFieldInitializer(classValue, propDef.value)
+                : undefined;
+              privateStaticFields.set(fieldName, value);
+            } else {
+              instanceFields.push({
+                name: fieldName,
+                initializer: propDef.value,
+                computed: false,
+                keyNode: propDef.key,
+                isPrivate: true,
+              });
+            }
+          } else {
+            if (!this.isFeatureEnabled("ClassFields")) {
+              throw new InterpreterError("ClassFields is not enabled");
+            }
+
+            const fieldName = this.extractPropertyDefinitionName(propDef);
+
+            validatePropertyName(fieldName);
+
+            if (propDef.static) {
+              const value = propDef.value
+                ? this.evaluateStaticFieldInitializer(classValue, propDef.value)
+                : undefined;
+              staticFields.set(fieldName, value);
+            } else {
+              instanceFields.push({
+                name: fieldName,
+                initializer: propDef.value,
+                computed: propDef.computed,
+                keyNode: propDef.key,
+                isPrivate: false,
+              });
+            }
+          }
+        } else if (element.type === "StaticBlock") {
+          if (!this.isFeatureEnabled("StaticBlocks")) {
+            throw new InterpreterError("StaticBlocks is not enabled");
+          }
+          this.executeStaticBlock(element as ESTree.StaticBlock, classValue);
+        }
+      }
+    } finally {
+      this.environment = previousEnvironment;
+    }
+
+    classValue.constructorMethod = constructorMethod;
+    this.tagClassMethods(classValue);
+
+    return classValue;
+  }
+
+  /**
+   * Async version of processClassBody.
+   */
+  private async processClassBodyAsync(
+    node: ESTree.ClassDeclaration | ESTree.ClassExpression,
+    parentClass: ClassValue | null,
+  ): Promise<ClassValue> {
+    const instanceMethods = new Map<string, FunctionValue>();
+    const staticMethods = new Map<string, FunctionValue>();
+    const instanceGetters = new Map<string, FunctionValue>();
+    const instanceSetters = new Map<string, FunctionValue>();
+    const staticGetters = new Map<string, FunctionValue>();
+    const staticSetters = new Map<string, FunctionValue>();
+    const instanceFields: ClassFieldInitializer[] = [];
+    const staticFields = new Map<string, any>();
+    const privateInstanceMethods = new Map<string, FunctionValue>();
+    const privateStaticMethods = new Map<string, FunctionValue>();
+    const privateStaticFields = new Map<string, any>();
+    let constructorMethod: FunctionValue | null = null;
+
+    const previousEnvironment = this.environment;
+    const classEnv = new Environment(this.environment);
+    const className = node.id?.name ?? null;
+
+    const classValue = new ClassValue(
+      className,
+      null,
+      instanceMethods,
+      staticMethods,
+      instanceGetters,
+      instanceSetters,
+      staticGetters,
+      staticSetters,
+      parentClass,
+      classEnv,
+      instanceFields,
+      staticFields,
+      privateInstanceMethods,
+      privateStaticMethods,
+      privateStaticFields,
+    );
+
+    if (className) {
+      classEnv.declare(className, classValue, "const");
+    }
+
+    this.environment = classEnv;
+
+    try {
+      for (const element of node.body.body) {
+        if (element.type === "MethodDefinition") {
+          const methodDef = element as ESTree.MethodDefinition;
+          const isPrivate = methodDef.key?.type === "PrivateIdentifier";
+
+          if (isPrivate) {
+            if (!this.isFeatureEnabled("PrivateFields")) {
+              throw new InterpreterError("PrivateFields is not enabled");
+            }
+
+            const methodName = (methodDef.key as ESTree.PrivateIdentifier).name;
+            const funcValue = this.createMethodFunction(
+              methodDef.value as ESTree.FunctionExpression,
+            );
+
+            if (methodDef.static) {
+              privateStaticMethods.set(methodName, funcValue);
+            } else {
+              privateInstanceMethods.set(methodName, funcValue);
+            }
+          } else {
+            const methodName =
+              await this.extractClassMethodNameAsync(methodDef);
+
+            if (methodDef.kind !== "constructor") {
+              validatePropertyName(methodName);
+            }
+
+            const funcValue = this.createMethodFunction(
+              methodDef.value as ESTree.FunctionExpression,
+            );
+
+            if (methodDef.kind === "constructor") {
+              constructorMethod = funcValue;
+            } else if (methodDef.kind === "get") {
+              if (methodDef.static) {
+                staticMethods.delete(methodName);
+                staticGetters.set(methodName, funcValue);
+              } else {
+                instanceMethods.delete(methodName);
+                instanceGetters.set(methodName, funcValue);
+              }
+            } else if (methodDef.kind === "set") {
+              if (methodDef.static) {
+                staticMethods.delete(methodName);
+                staticSetters.set(methodName, funcValue);
+              } else {
+                instanceMethods.delete(methodName);
+                instanceSetters.set(methodName, funcValue);
+              }
+            } else {
+              if (methodDef.static) {
+                staticGetters.delete(methodName);
+                staticSetters.delete(methodName);
+                staticMethods.set(methodName, funcValue);
+              } else {
+                instanceGetters.delete(methodName);
+                instanceSetters.delete(methodName);
+                instanceMethods.set(methodName, funcValue);
+              }
+            }
+          }
+        } else if (element.type === "PropertyDefinition") {
+          const propDef = element as ESTree.PropertyDefinition;
+          const isPrivate = propDef.key?.type === "PrivateIdentifier";
+
+          if (isPrivate) {
+            if (!this.isFeatureEnabled("PrivateFields")) {
+              throw new InterpreterError("PrivateFields is not enabled");
+            }
+
+            const fieldName = (propDef.key as ESTree.PrivateIdentifier).name;
+
+            if (propDef.static) {
+              const value = propDef.value
+                ? await this.evaluateStaticFieldInitializerAsync(
+                    classValue,
+                    propDef.value,
+                  )
+                : undefined;
+              privateStaticFields.set(fieldName, value);
+            } else {
+              instanceFields.push({
+                name: fieldName,
+                initializer: propDef.value,
+                computed: false,
+                keyNode: propDef.key,
+                isPrivate: true,
+              });
+            }
+          } else {
+            if (!this.isFeatureEnabled("ClassFields")) {
+              throw new InterpreterError("ClassFields is not enabled");
+            }
+
+            const fieldName =
+              await this.extractPropertyDefinitionNameAsync(propDef);
+
+            validatePropertyName(fieldName);
+
+            if (propDef.static) {
+              const value = propDef.value
+                ? await this.evaluateStaticFieldInitializerAsync(
+                    classValue,
+                    propDef.value,
+                  )
+                : undefined;
+              staticFields.set(fieldName, value);
+            } else {
+              instanceFields.push({
+                name: fieldName,
+                initializer: propDef.value,
+                computed: propDef.computed,
+                keyNode: propDef.key,
+                isPrivate: false,
+              });
+            }
+          }
+        } else if (element.type === "StaticBlock") {
+          if (!this.isFeatureEnabled("StaticBlocks")) {
+            throw new InterpreterError("StaticBlocks is not enabled");
+          }
+          await this.executeStaticBlockAsync(
+            element as ESTree.StaticBlock,
+            classValue,
+          );
+        }
+      }
+    } finally {
+      this.environment = previousEnvironment;
+    }
+
+    classValue.constructorMethod = constructorMethod;
+    this.tagClassMethods(classValue);
+
+    return classValue;
+  }
+
+  /**
+   * Execute a static initialization block in the context of the class.
+   * Static blocks have access to the class via 'this' and can access private static members.
+   */
+  private executeStaticBlock(
+    block: ESTree.StaticBlock,
+    classValue: ClassValue,
+  ): void {
+    const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
+
+    // Create environment with 'this' as the class itself
+    this.environment = new Environment(classValue.closure, classValue, true);
+
+    // Set super binding for private static field access
+    this.currentSuperBinding = {
+      parentClass: classValue.parentClass,
+      thisValue: classValue,
+      currentClass: classValue,
+      isStatic: true,
+    };
+
+    try {
+      // Execute all statements in the static block
+      for (const statement of block.body) {
+        const result = this.evaluateNode(statement);
+        // Static blocks don't return values, but we need to handle control flow
+        if (result instanceof ReturnValue) {
+          throw new InterpreterError(
+            "Return statement is not allowed in static initialization block",
+          );
+        }
+      }
+    } finally {
+      this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
+    }
+  }
+
+  private evaluateStaticFieldInitializer(
+    classValue: ClassValue,
+    initializer: ESTree.Expression,
+  ): any {
+    const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
+
+    this.environment = new Environment(classValue.closure, classValue, true);
+    this.currentSuperBinding = {
+      parentClass: classValue.parentClass,
+      thisValue: classValue,
+      currentClass: classValue,
+      isStatic: true,
+    };
+
+    try {
+      return this.evaluateNode(initializer);
+    } finally {
+      this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
+    }
+  }
+
+  /**
+   * Async version of executeStaticBlock.
+   */
+  private async executeStaticBlockAsync(
+    block: ESTree.StaticBlock,
+    classValue: ClassValue,
+  ): Promise<void> {
+    const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
+
+    this.environment = new Environment(classValue.closure, classValue, true);
+    this.currentSuperBinding = {
+      parentClass: classValue.parentClass,
+      thisValue: classValue,
+      currentClass: classValue,
+      isStatic: true,
+    };
+
+    try {
+      for (const statement of block.body) {
+        const result = await this.evaluateNodeAsync(statement);
+        if (result instanceof ReturnValue) {
+          throw new InterpreterError(
+            "Return statement is not allowed in static initialization block",
+          );
+        }
+      }
+    } finally {
+      this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
+    }
+  }
+
+  private async evaluateStaticFieldInitializerAsync(
+    classValue: ClassValue,
+    initializer: ESTree.Expression,
+  ): Promise<any> {
+    const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
+
+    this.environment = new Environment(classValue.closure, classValue, true);
+    this.currentSuperBinding = {
+      parentClass: classValue.parentClass,
+      thisValue: classValue,
+      currentClass: classValue,
+      isStatic: true,
+    };
+
+    try {
+      return await this.evaluateNodeAsync(initializer);
+    } finally {
+      this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
+    }
+  }
+
+  /**
+   * Extract method name from a MethodDefinition, handling computed properties.
+   */
+  private extractClassMethodName(methodDef: ESTree.MethodDefinition): string {
+    if (methodDef.key === null) {
+      throw new InterpreterError("Method key is null");
+    }
+    if (methodDef.computed) {
+      // Computed property: [expr]() { }
+      const keyValue = this.evaluateNode(methodDef.key);
+      return String(keyValue);
+    } else if (methodDef.key.type === "Identifier") {
+      return (methodDef.key as ESTree.Identifier).name;
+    } else if (methodDef.key.type === "Literal") {
+      return String((methodDef.key as ESTree.Literal).value);
+    }
+    throw new InterpreterError("Unsupported method key type");
+  }
+
+  /**
+   * Async version of extractClassMethodName.
+   */
+  private async extractClassMethodNameAsync(
+    methodDef: ESTree.MethodDefinition,
+  ): Promise<string> {
+    if (methodDef.key === null) {
+      throw new InterpreterError("Method key is null");
+    }
+    if (methodDef.computed) {
+      const keyValue = await this.evaluateNodeAsync(methodDef.key);
+      return String(keyValue);
+    } else if (methodDef.key.type === "Identifier") {
+      return (methodDef.key as ESTree.Identifier).name;
+    } else if (methodDef.key.type === "Literal") {
+      return String((methodDef.key as ESTree.Literal).value);
+    }
+    throw new InterpreterError("Unsupported method key type");
+  }
+
+  /**
+   * Extract field name from a PropertyDefinition, handling computed properties.
+   */
+  private extractPropertyDefinitionName(
+    propDef: ESTree.PropertyDefinition,
+  ): string {
+    if (propDef.key === null) {
+      throw new InterpreterError("Property definition key is null");
+    }
+    if (propDef.computed) {
+      // Computed property: [expr] = value
+      const keyValue = this.evaluateNode(propDef.key as ESTree.Expression);
+      return String(keyValue);
+    } else if (propDef.key.type === "Identifier") {
+      return (propDef.key as ESTree.Identifier).name;
+    } else if (propDef.key.type === "Literal") {
+      return String((propDef.key as ESTree.Literal).value);
+    }
+    throw new InterpreterError("Unsupported property definition key type");
+  }
+
+  /**
+   * Async version of extractPropertyDefinitionName.
+   */
+  private async extractPropertyDefinitionNameAsync(
+    propDef: ESTree.PropertyDefinition,
+  ): Promise<string> {
+    if (propDef.key === null) {
+      throw new InterpreterError("Property definition key is null");
+    }
+    if (propDef.computed) {
+      const keyValue = await this.evaluateNodeAsync(
+        propDef.key as ESTree.Expression,
+      );
+      return String(keyValue);
+    } else if (propDef.key.type === "Identifier") {
+      return (propDef.key as ESTree.Identifier).name;
+    } else if (propDef.key.type === "Literal") {
+      return String((propDef.key as ESTree.Literal).value);
+    }
+    throw new InterpreterError("Unsupported property definition key type");
+  }
+
+  /**
+   * Create a FunctionValue from a method's FunctionExpression.
+   */
+  private createMethodFunction(func: ESTree.FunctionExpression): FunctionValue {
+    const params: string[] = [];
+    let restParamIndex: number | null = null;
+    const defaultValues = new Map<number, ESTree.Expression>();
+
+    for (let i = 0; i < func.params.length; i++) {
+      const param = func.params[i]!;
+      if (param.type === "Identifier") {
+        params.push(param.name);
+      } else if (param.type === "RestElement") {
+        if (param.argument.type !== "Identifier") {
+          throw new InterpreterError(
+            "Rest parameter must be a simple identifier",
+          );
+        }
+        params.push((param.argument as ESTree.Identifier).name);
+        restParamIndex = i;
+      } else if (param.type === "AssignmentPattern") {
+        // Default parameter - extract name and store default value
+        if (param.left.type !== "Identifier") {
+          throw new InterpreterError(
+            "Destructuring in default parameters is not supported",
+          );
+        }
+        params.push((param.left as ESTree.Identifier).name);
+        if (param.right) {
+          defaultValues.set(i, param.right);
+        }
+      } else {
+        throw new InterpreterError(`Unsupported parameter type: ${param.type}`);
+      }
+    }
+
+    // Make sure the body is a BlockStatement (methods should always have one)
+    if (!func.body || func.body.type !== "BlockStatement") {
+      throw new InterpreterError("Method body must be a block statement");
+    }
+
+    return new FunctionValue(
+      params,
+      func.body as ESTree.BlockStatement,
+      this.environment,
+      func.async ?? false,
+      restParamIndex,
+      func.generator ?? false,
+      defaultValues,
+    );
+  }
+
+  private tagClassMethods(classValue: ClassValue): void {
+    if (classValue.constructorMethod) {
+      classValue.constructorMethod.homeClass = classValue;
+      classValue.constructorMethod.homeIsStatic = false;
+    }
+
+    this.tagClassMethodMap(classValue.instanceMethods, classValue, false);
+    this.tagClassMethodMap(classValue.instanceGetters, classValue, false);
+    this.tagClassMethodMap(classValue.instanceSetters, classValue, false);
+    this.tagClassMethodMap(classValue.staticMethods, classValue, true);
+    this.tagClassMethodMap(classValue.staticGetters, classValue, true);
+    this.tagClassMethodMap(classValue.staticSetters, classValue, true);
+    this.tagClassMethodMap(
+      classValue.privateInstanceMethods,
+      classValue,
+      false,
+    );
+    this.tagClassMethodMap(classValue.privateStaticMethods, classValue, true);
+  }
+
+  private tagClassMethodMap(
+    methods: Map<string, FunctionValue>,
+    classValue: ClassValue,
+    isStatic: boolean,
+  ): void {
+    for (const func of methods.values()) {
+      func.homeClass = classValue;
+      func.homeIsStatic = isStatic;
+    }
+  }
+
+  /**
+   * Instantiate a class by creating an instance and running the constructor.
+   */
+  private instantiateClass(
+    classValue: ClassValue,
+    argNodes: ESTree.Expression[],
+  ): any {
+    // Create instance object
+    const instance: Record<string, any> = {};
+    this.instanceClassMap.set(instance, classValue);
+
+    // Evaluate arguments
+    const args = this.evaluateArguments(argNodes);
+
+    // Find the constructor to call (could be inherited)
+    const { constructor, definingClass } =
+      this.findClassConstructor(classValue);
+
+    // Execute constructor if there is one
+    if (constructor) {
+      const result = this.executeClassConstructorBody(
+        constructor,
+        definingClass,
+        instance,
+        args,
+      );
+
+      if (result instanceof ReturnValue) {
+        return this.resolveConstructorReturn(result.value, instance);
+      }
+    } else if (classValue.parentClass) {
+      this.thisInitStack.push(false);
+      try {
+        this.executeSuperConstructorCall(args, instance, classValue);
+        const isInitialized =
+          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        if (!isInitialized) {
+          throw new InterpreterError(
+            "Derived class constructor must call super() before returning",
+          );
+        }
+      } finally {
+        this.thisInitStack.pop();
+      }
+    } else {
+      this.initializeInstanceFieldsForClass(instance, classValue);
+    }
+
+    return instance;
+  }
+
+  /**
+   * Async version of instantiateClass
+   */
+  private async instantiateClassAsync(
+    classValue: ClassValue,
+    argNodes: ESTree.Expression[],
+  ): Promise<any> {
+    const instance: Record<string, any> = {};
+    this.instanceClassMap.set(instance, classValue);
+
+    const args = await this.evaluateArgumentsAsync(argNodes);
+
+    const { constructor, definingClass } =
+      this.findClassConstructor(classValue);
+
+    if (constructor) {
+      const result = await this.executeClassConstructorBodyAsync(
+        constructor,
+        definingClass,
+        instance,
+        args,
+      );
+
+      if (result instanceof ReturnValue) {
+        return this.resolveConstructorReturn(result.value, instance);
+      }
+    } else if (classValue.parentClass) {
+      this.thisInitStack.push(false);
+      try {
+        await this.executeSuperConstructorCallAsync(args, instance, classValue);
+        const isInitialized =
+          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        if (!isInitialized) {
+          throw new InterpreterError(
+            "Derived class constructor must call super() before returning",
+          );
+        }
+      } finally {
+        this.thisInitStack.pop();
+      }
+    } else {
+      await this.initializeInstanceFieldsForClassAsync(instance, classValue);
+    }
+
+    return instance;
+  }
+
+  /**
+   * Find the constructor for a class, walking up the inheritance chain if needed.
+   * Returns the constructor and the class that defines it.
+   */
+  private findClassConstructor(classValue: ClassValue): {
+    constructor: FunctionValue | null;
+    definingClass: ClassValue;
+  } {
+    let current: ClassValue | null = classValue;
+    while (current) {
+      if (current.constructorMethod) {
+        return {
+          constructor: current.constructorMethod,
+          definingClass: current,
+        };
+      }
+      current = current.parentClass;
+    }
+    return { constructor: null, definingClass: classValue };
+  }
+
+  /**
+   * Set up instance methods, getters, and setters on an instance object.
+   * Walks the inheritance chain (parent first) so child methods override parent methods.
+   */
+  private setupInstanceMethods(
+    instance: Record<string, any>,
+    classValue: ClassValue,
+  ): void {
+    // Build inheritance chain (root first)
+    const classChain: ClassValue[] = [];
+    let current: ClassValue | null = classValue;
+    while (current) {
+      classChain.unshift(current);
+      current = current.parentClass;
+    }
+
+    for (const cls of classChain) {
+      // Add instance methods
+      for (const [name, func] of cls.instanceMethods) {
+        instance[name] = this.createBoundClassMethod(func, instance, cls);
+      }
+
+      // Add getters/setters via Object.defineProperty
+      const processedProps = new Set<string>();
+
+      for (const [name, getter] of cls.instanceGetters) {
+        const setter = cls.instanceSetters.get(name);
+        processedProps.add(name);
+
+        Object.defineProperty(instance, name, {
+          get: () => this.executeClassMethod(getter, instance, cls, []),
+          set: setter
+            ? (value: any) =>
+                this.executeClassMethod(setter, instance, cls, [value])
+            : undefined,
+          enumerable: true,
+          configurable: true,
+        });
+      }
+
+      // Handle setters without corresponding getters
+      for (const [name, setter] of cls.instanceSetters) {
+        if (!processedProps.has(name)) {
+          Object.defineProperty(instance, name, {
+            get: undefined,
+            set: (value: any) =>
+              this.executeClassMethod(setter, instance, cls, [value]),
+            enumerable: true,
+            configurable: true,
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Initialize instance fields on an instance object.
+   * Walks the inheritance chain (parent first) so child fields can override parent fields.
+   */
+  private initializeInstanceFields(
+    instance: Record<string, any>,
+    classValue: ClassValue,
+  ): void {
+    // Build inheritance chain (root first)
+    const classChain: ClassValue[] = [];
+    let current: ClassValue | null = classValue;
+    while (current) {
+      classChain.unshift(current);
+      current = current.parentClass;
+    }
+
+    // Initialize fields in order: parent first, then child
+    for (const cls of classChain) {
+      this.initializeInstanceFieldsForClass(instance, cls);
+    }
+  }
+
+  private initializeInstanceFieldsForClass(
+    instance: Record<string, any>,
+    classValue: ClassValue,
+  ): void {
+    const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
+    this.environment = new Environment(classValue.closure, instance, true);
+    this.currentSuperBinding = {
+      parentClass: classValue.parentClass,
+      thisValue: instance,
+      currentClass: classValue,
+      isStatic: false,
+    };
+
+    try {
+      for (const field of classValue.instanceFields) {
+        const value = field.initializer
+          ? this.evaluateNode(field.initializer)
+          : undefined;
+
+        if (field.isPrivate) {
+          let privateFields = classValue.privateFieldStorage.get(instance);
+          if (!privateFields) {
+            privateFields = new Map<string, any>();
+            classValue.privateFieldStorage.set(instance, privateFields);
+          }
+          privateFields.set(field.name, value);
+        } else {
+          let fieldName = field.name;
+          if (field.computed && field.keyNode) {
+            fieldName = String(
+              this.evaluateNode(field.keyNode as ESTree.Expression),
+            );
+          }
+          instance[fieldName] = value;
+        }
+      }
+    } finally {
+      this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
+    }
+  }
+
+  /**
+   * Async version of initializeInstanceFields.
+   */
+  private async initializeInstanceFieldsAsync(
+    instance: Record<string, any>,
+    classValue: ClassValue,
+  ): Promise<void> {
+    // Build inheritance chain (root first)
+    const classChain: ClassValue[] = [];
+    let current: ClassValue | null = classValue;
+    while (current) {
+      classChain.unshift(current);
+      current = current.parentClass;
+    }
+
+    // Initialize fields in order: parent first, then child
+    for (const cls of classChain) {
+      await this.initializeInstanceFieldsForClassAsync(instance, cls);
+    }
+  }
+
+  private async initializeInstanceFieldsForClassAsync(
+    instance: Record<string, any>,
+    classValue: ClassValue,
+  ): Promise<void> {
+    const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
+    this.environment = new Environment(classValue.closure, instance, true);
+    this.currentSuperBinding = {
+      parentClass: classValue.parentClass,
+      thisValue: instance,
+      currentClass: classValue,
+      isStatic: false,
+    };
+
+    try {
+      for (const field of classValue.instanceFields) {
+        const value = field.initializer
+          ? await this.evaluateNodeAsync(field.initializer)
+          : undefined;
+
+        if (field.isPrivate) {
+          let privateFields = classValue.privateFieldStorage.get(instance);
+          if (!privateFields) {
+            privateFields = new Map<string, any>();
+            classValue.privateFieldStorage.set(instance, privateFields);
+          }
+          privateFields.set(field.name, value);
+        } else {
+          let fieldName = field.name;
+          if (field.computed && field.keyNode) {
+            fieldName = String(
+              await this.evaluateNodeAsync(field.keyNode as ESTree.Expression),
+            );
+          }
+          instance[fieldName] = value;
+        }
+      }
+    } finally {
+      this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
+    }
+  }
+
+  /**
+   * Create a bound class method that captures this and super context.
+   */
+  private createBoundClassMethod(
+    func: FunctionValue,
+    instance: any,
+    definingClass: ClassValue,
+  ): (...args: any[]) => any {
+    const interpreter = this;
+
+    // Return a callable function that binds the right context
+    return (...args: any[]) => {
+      return interpreter.executeClassMethod(
+        func,
+        instance,
+        definingClass,
+        args,
+      );
+    };
+  }
+
+  /**
+   * Execute a class method with proper this and super binding.
+   */
+  private executeClassMethod(
+    func: FunctionValue,
+    instance: any,
+    definingClass: ClassValue,
+    args: any[],
+  ): any {
+    const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
+
+    this.environment = new Environment(func.closure, instance, true);
+    this.currentSuperBinding = {
+      parentClass: definingClass.parentClass,
+      thisValue: instance,
+      currentClass: definingClass,
+      isStatic: func.homeIsStatic,
+    };
+
+    try {
+      this.bindFunctionParameters(func, args);
+      const result = this.evaluateNode(func.body);
+
+      if (result instanceof ReturnValue) {
+        return result.value;
+      }
+      return undefined;
+    } finally {
+      this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
+    }
+  }
+
+  /**
+   * Execute super() constructor call.
+   */
+  private executeSuperConstructorCall(
+    args: any[],
+    instance: any,
+    currentClass: ClassValue,
+  ): void {
+    const parentClass = currentClass.parentClass;
+    if (!parentClass) {
+      throw new InterpreterError(
+        "'super' constructor call requires a parent class",
+      );
+    }
+
+    // Note: Instance methods are already set up in instantiateClass
+    // We only need to execute the parent constructor here
+
+    if (this.thisInitStack.length > 0) {
+      const isInitialized =
+        this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+      if (isInitialized) {
+        throw new InterpreterError("super() has already been called");
+      }
+    }
+
+    const { constructor: parentConstructor, definingClass } =
+      this.findClassConstructor(parentClass);
+
+    if (parentConstructor) {
+      this.executeClassConstructorBody(
+        parentConstructor,
+        definingClass,
+        instance,
+        args,
+      );
+    } else if (parentClass.parentClass) {
+      this.thisInitStack.push(false);
+      try {
+        this.executeSuperConstructorCall(args, instance, parentClass);
+        const isInitialized =
+          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        if (!isInitialized) {
+          throw new InterpreterError(
+            "Derived class constructor must call super() before returning",
+          );
+        }
+      } finally {
+        this.thisInitStack.pop();
+      }
+    } else {
+      this.initializeInstanceFieldsForClass(instance, parentClass);
+    }
+
+    if (this.thisInitStack.length > 0) {
+      this.thisInitStack[this.thisInitStack.length - 1] = true;
+    }
+
+    this.initializeInstanceFieldsForClass(instance, currentClass);
+  }
+
+  /**
+   * Async version of executeSuperConstructorCall.
+   */
+  private async executeSuperConstructorCallAsync(
+    args: any[],
+    instance: any,
+    currentClass: ClassValue,
+  ): Promise<void> {
+    const parentClass = currentClass.parentClass;
+    if (!parentClass) {
+      throw new InterpreterError(
+        "'super' constructor call requires a parent class",
+      );
+    }
+
+    // Note: Instance methods are already set up in instantiateClassAsync
+    // We only need to execute the parent constructor here
+
+    if (this.thisInitStack.length > 0) {
+      const isInitialized =
+        this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+      if (isInitialized) {
+        throw new InterpreterError("super() has already been called");
+      }
+    }
+
+    const { constructor: parentConstructor, definingClass } =
+      this.findClassConstructor(parentClass);
+
+    if (parentConstructor) {
+      await this.executeClassConstructorBodyAsync(
+        parentConstructor,
+        definingClass,
+        instance,
+        args,
+      );
+    } else if (parentClass.parentClass) {
+      this.thisInitStack.push(false);
+      try {
+        await this.executeSuperConstructorCallAsync(
+          args,
+          instance,
+          parentClass,
+        );
+        const isInitialized =
+          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        if (!isInitialized) {
+          throw new InterpreterError(
+            "Derived class constructor must call super() before returning",
+          );
+        }
+      } finally {
+        this.thisInitStack.pop();
+      }
+    } else {
+      await this.initializeInstanceFieldsForClassAsync(instance, parentClass);
+    }
+
+    if (this.thisInitStack.length > 0) {
+      this.thisInitStack[this.thisInitStack.length - 1] = true;
+    }
+
+    await this.initializeInstanceFieldsForClassAsync(instance, currentClass);
+  }
+
+  private executeClassConstructorBody(
+    constructor: FunctionValue,
+    definingClass: ClassValue,
+    instance: any,
+    args: any[],
+  ): any {
+    const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
+    const isDerived = !!definingClass.parentClass;
+
+    this.thisInitStack.push(!isDerived);
+    this.constructorStack.push(definingClass);
+    this.environment = new Environment(constructor.closure, instance, true);
+    this.currentSuperBinding = {
+      parentClass: definingClass.parentClass,
+      thisValue: instance,
+      currentClass: definingClass,
+      isStatic: false,
+    };
+
+    try {
+      this.bindFunctionParameters(constructor, args);
+      if (!isDerived) {
+        this.initializeInstanceFieldsForClass(instance, definingClass);
+      }
+      const result = this.evaluateNode(constructor.body);
+      if (isDerived) {
+        const isInitialized =
+          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        if (!isInitialized) {
+          throw new InterpreterError(
+            "Derived class constructor must call super() before returning",
+          );
+        }
+      }
+      return result;
+    } finally {
+      this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
+      this.thisInitStack.pop();
+      this.constructorStack.pop();
+    }
+  }
+
+  private async executeClassConstructorBodyAsync(
+    constructor: FunctionValue,
+    definingClass: ClassValue,
+    instance: any,
+    args: any[],
+  ): Promise<any> {
+    const previousEnvironment = this.environment;
+    const previousSuperBinding = this.currentSuperBinding;
+    const isDerived = !!definingClass.parentClass;
+
+    this.thisInitStack.push(!isDerived);
+    this.constructorStack.push(definingClass);
+    this.environment = new Environment(constructor.closure, instance, true);
+    this.currentSuperBinding = {
+      parentClass: definingClass.parentClass,
+      thisValue: instance,
+      currentClass: definingClass,
+      isStatic: false,
+    };
+
+    try {
+      await this.bindFunctionParametersAsync(constructor, args);
+      if (!isDerived) {
+        await this.initializeInstanceFieldsForClassAsync(
+          instance,
+          definingClass,
+        );
+      }
+      const result = await this.evaluateNodeAsync(constructor.body);
+      if (isDerived) {
+        const isInitialized =
+          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        if (!isInitialized) {
+          throw new InterpreterError(
+            "Derived class constructor must call super() before returning",
+          );
+        }
+      }
+      return result;
+    } finally {
+      this.environment = previousEnvironment;
+      this.currentSuperBinding = previousSuperBinding;
+      this.thisInitStack.pop();
+      this.constructorStack.pop();
+    }
+  }
+
+  /**
+   * Look up a method in the parent class chain for super.method() calls.
+   */
+  private lookupSuperMethod(
+    superBinding: SuperBinding,
+    methodName: string,
+  ): { method: FunctionValue; definingClass: ClassValue } | null {
+    let current = superBinding.parentClass;
+    while (current) {
+      const method = current.instanceMethods.get(methodName);
+      if (method) {
+        return { method, definingClass: current };
+      }
+      current = current.parentClass;
+    }
+    return null;
+  }
+
+  private lookupInstanceMethod(
+    classValue: ClassValue,
+    methodName: string,
+  ): { method: FunctionValue; definingClass: ClassValue } | null {
+    let current: ClassValue | null = classValue;
+    while (current) {
+      const method = current.instanceMethods.get(methodName);
+      if (method) {
+        return { method, definingClass: current };
+      }
+      current = current.parentClass;
+    }
+    return null;
+  }
+
+  /**
+   * Look up a getter in the parent class chain for super.property access.
+   */
+  private lookupSuperGetter(
+    superBinding: SuperBinding,
+    propertyName: string,
+  ): { getter: FunctionValue; definingClass: ClassValue } | null {
+    let current = superBinding.parentClass;
+    while (current) {
+      const getter = current.instanceGetters.get(propertyName);
+      if (getter) {
+        return { getter, definingClass: current };
+      }
+      current = current.parentClass;
+    }
+    return null;
+  }
+
+  private lookupInstanceGetter(
+    classValue: ClassValue,
+    propertyName: string,
+  ): { getter: FunctionValue; definingClass: ClassValue } | null {
+    let current: ClassValue | null = classValue;
+    while (current) {
+      const getter = current.instanceGetters.get(propertyName);
+      if (getter) {
+        return { getter, definingClass: current };
+      }
+      current = current.parentClass;
+    }
+    return null;
+  }
+
+  /**
+   * Look up a setter in the parent class chain for super.property = value.
+   */
+  private lookupSuperSetter(
+    superBinding: SuperBinding,
+    propertyName: string,
+  ): { setter: FunctionValue; definingClass: ClassValue } | null {
+    let current = superBinding.parentClass;
+    while (current) {
+      const setter = current.instanceSetters.get(propertyName);
+      if (setter) {
+        return { setter, definingClass: current };
+      }
+      current = current.parentClass;
+    }
+    return null;
+  }
+
+  private lookupInstanceSetter(
+    classValue: ClassValue,
+    propertyName: string,
+  ): { setter: FunctionValue; definingClass: ClassValue } | null {
+    let current: ClassValue | null = classValue;
+    while (current) {
+      const setter = current.instanceSetters.get(propertyName);
+      if (setter) {
+        return { setter, definingClass: current };
+      }
+      current = current.parentClass;
+    }
+    return null;
+  }
+
+  private lookupSuperStaticMethod(
+    superBinding: SuperBinding,
+    methodName: string,
+  ): { method: FunctionValue; definingClass: ClassValue } | null {
+    let current = superBinding.parentClass;
+    while (current) {
+      const method = current.staticMethods.get(methodName);
+      if (method) {
+        return { method, definingClass: current };
+      }
+      current = current.parentClass;
+    }
+    return null;
+  }
+
+  private lookupSuperStaticGetter(
+    superBinding: SuperBinding,
+    propertyName: string,
+  ): { getter: FunctionValue; definingClass: ClassValue } | null {
+    let current = superBinding.parentClass;
+    while (current) {
+      const getter = current.staticGetters.get(propertyName);
+      if (getter) {
+        return { getter, definingClass: current };
+      }
+      current = current.parentClass;
+    }
+    return null;
+  }
+
+  private lookupSuperStaticSetter(
+    superBinding: SuperBinding,
+    propertyName: string,
+  ): { setter: FunctionValue; definingClass: ClassValue } | null {
+    let current = superBinding.parentClass;
+    while (current) {
+      const setter = current.staticSetters.get(propertyName);
+      if (setter) {
+        return { setter, definingClass: current };
+      }
+      current = current.parentClass;
+    }
+    return null;
+  }
+
+  private getInstanceProperty(
+    instance: Record<string, any>,
+    classValue: ClassValue,
+    propertyName: string,
+  ): any {
+    if (Object.prototype.hasOwnProperty.call(instance, propertyName)) {
+      return instance[propertyName];
+    }
+
+    const getterResult = this.lookupInstanceGetter(classValue, propertyName);
+    if (getterResult) {
+      return this.executeClassMethod(
+        getterResult.getter,
+        instance,
+        getterResult.definingClass,
+        [],
+      );
+    }
+
+    const methodResult = this.lookupInstanceMethod(classValue, propertyName);
+    if (methodResult) {
+      return methodResult.method;
+    }
+
+    return undefined;
+  }
+
+  private assignInstanceProperty(
+    instance: Record<string, any>,
+    classValue: ClassValue,
+    propertyName: string,
+    value: any,
+  ): any {
+    const setterResult = this.lookupInstanceSetter(classValue, propertyName);
+    if (setterResult) {
+      this.executeClassMethod(
+        setterResult.setter,
+        instance,
+        setterResult.definingClass,
+        [value],
+      );
+      return value;
+    }
+
+    instance[propertyName] = value;
+    return value;
+  }
+
+  /**
+   * Access a static member (method, getter, or setter) on a class.
+   */
+  private accessClassStaticMember(
+    classValue: ClassValue,
+    node: ESTree.MemberExpression,
+  ): any {
+    const propertyName = node.computed
+      ? String(this.evaluateNode(node.property))
+      : (node.property as ESTree.Identifier).name;
+
+    validatePropertyName(propertyName);
+
+    // Check for static method
+    const method = classValue.staticMethods.get(propertyName);
+    if (method) {
+      return method;
+    }
+
+    // Check for static getter
+    const getter = classValue.staticGetters.get(propertyName);
+    if (getter) {
+      return this.executeClassMethod(getter, classValue, classValue, []);
+    }
+
+    // Check for static field
+    if (classValue.staticFields.has(propertyName)) {
+      return classValue.staticFields.get(propertyName);
+    }
+
+    // Property not found
+    return undefined;
+  }
+
+  /**
+   * Async version of accessClassStaticMember.
+   */
+  private async accessClassStaticMemberAsync(
+    classValue: ClassValue,
+    node: ESTree.MemberExpression,
+  ): Promise<any> {
+    const propertyName = node.computed
+      ? String(await this.evaluateNodeAsync(node.property))
+      : (node.property as ESTree.Identifier).name;
+
+    validatePropertyName(propertyName);
+
+    const method = classValue.staticMethods.get(propertyName);
+    if (method) {
+      return method;
+    }
+
+    const getter = classValue.staticGetters.get(propertyName);
+    if (getter) {
+      return this.executeClassMethod(getter, classValue, classValue, []);
+    }
+
+    if (classValue.staticFields.has(propertyName)) {
+      return classValue.staticFields.get(propertyName);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Assign a value to a static class member.
+   */
+  private assignClassStaticMember(
+    classValue: ClassValue,
+    propertyName: string,
+    value: any,
+  ): any {
+    validatePropertyName(propertyName);
+
+    const setter = classValue.staticSetters.get(propertyName);
+    if (setter) {
+      this.executeClassMethod(setter, classValue, classValue, [value]);
+      return value;
+    }
+
+    classValue.staticFields.set(propertyName, value);
+    return value;
+  }
+
+  /**
+   * Async version of assignClassStaticMember.
+   */
+  private async assignClassStaticMemberAsync(
+    classValue: ClassValue,
+    propertyName: string,
+    value: any,
+  ): Promise<any> {
+    validatePropertyName(propertyName);
+
+    const setter = classValue.staticSetters.get(propertyName);
+    if (setter) {
+      this.executeClassMethod(setter, classValue, classValue, [value]);
+      return value;
+    }
+
+    classValue.staticFields.set(propertyName, value);
+    return value;
+  }
+
+  /**
+   * Assign a value to a super member.
+   */
+  private assignSuperMember(node: ESTree.MemberExpression, value: any): any {
+    if (!this.currentSuperBinding) {
+      throw new InterpreterError(
+        "'super' keyword is only valid inside a class",
+      );
+    }
+
+    if (!this.currentSuperBinding.parentClass) {
+      throw new InterpreterError(
+        "'super' member assignment requires a parent class",
+      );
+    }
+
+    if (node.property.type === "PrivateIdentifier") {
+      throw new InterpreterError("Private fields are not accessible via super");
+    }
+
+    const propertyName = node.computed
+      ? String(this.evaluateNode(node.property))
+      : (node.property as ESTree.Identifier).name;
+
+    validatePropertyName(propertyName);
+
+    if (this.currentSuperBinding.isStatic) {
+      const setterResult = this.lookupSuperStaticSetter(
+        this.currentSuperBinding,
+        propertyName,
+      );
+
+      if (setterResult) {
+        const { setter, definingClass } = setterResult;
+        this.executeClassMethod(
+          setter,
+          this.currentSuperBinding.thisValue,
+          definingClass,
+          [value],
+        );
+        return value;
+      }
+
+      const receiver = this.currentSuperBinding.thisValue;
+      if (receiver instanceof ClassValue) {
+        return this.assignClassStaticMember(receiver, propertyName, value);
+      }
+    } else {
+      const setterResult = this.lookupSuperSetter(
+        this.currentSuperBinding,
+        propertyName,
+      );
+
+      if (setterResult) {
+        const { setter, definingClass } = setterResult;
+        this.executeClassMethod(
+          setter,
+          this.currentSuperBinding.thisValue,
+          definingClass,
+          [value],
+        );
+        return value;
+      }
+
+      const instance = this.currentSuperBinding.thisValue;
+      if (typeof instance === "object" && instance !== null) {
+        instance[propertyName] = value;
+        return value;
+      }
+    }
+
+    throw new InterpreterError("Cannot assign property to non-object");
+  }
+
+  /**
+   * Async version of assignSuperMember.
+   */
+  private async assignSuperMemberAsync(
+    node: ESTree.MemberExpression,
+    value: any,
+  ): Promise<any> {
+    if (!this.currentSuperBinding) {
+      throw new InterpreterError(
+        "'super' keyword is only valid inside a class",
+      );
+    }
+
+    if (!this.currentSuperBinding.parentClass) {
+      throw new InterpreterError(
+        "'super' member assignment requires a parent class",
+      );
+    }
+
+    if (node.property.type === "PrivateIdentifier") {
+      throw new InterpreterError("Private fields are not accessible via super");
+    }
+
+    const propertyName = node.computed
+      ? String(await this.evaluateNodeAsync(node.property))
+      : (node.property as ESTree.Identifier).name;
+
+    validatePropertyName(propertyName);
+
+    if (this.currentSuperBinding.isStatic) {
+      const setterResult = this.lookupSuperStaticSetter(
+        this.currentSuperBinding,
+        propertyName,
+      );
+
+      if (setterResult) {
+        const { setter, definingClass } = setterResult;
+        this.executeClassMethod(
+          setter,
+          this.currentSuperBinding.thisValue,
+          definingClass,
+          [value],
+        );
+        return value;
+      }
+
+      const receiver = this.currentSuperBinding.thisValue;
+      if (receiver instanceof ClassValue) {
+        return await this.assignClassStaticMemberAsync(
+          receiver,
+          propertyName,
+          value,
+        );
+      }
+    } else {
+      const setterResult = this.lookupSuperSetter(
+        this.currentSuperBinding,
+        propertyName,
+      );
+
+      if (setterResult) {
+        const { setter, definingClass } = setterResult;
+        this.executeClassMethod(
+          setter,
+          this.currentSuperBinding.thisValue,
+          definingClass,
+          [value],
+        );
+        return value;
+      }
+
+      const instance = this.currentSuperBinding.thisValue;
+      if (typeof instance === "object" && instance !== null) {
+        instance[propertyName] = value;
+        return value;
+      }
+    }
+
+    throw new InterpreterError("Cannot assign property to non-object");
+  }
+
+  /**
+   * Access a private field on an object.
+   * Private fields are stored in the ClassValue's WeakMap, not on the instance itself.
+   * We need to find the class in the current context that has this private field.
+   */
+  private accessPrivateField(object: any, fieldName: string): any {
+    if (typeof object !== "object" || object === null) {
+      throw new InterpreterError(
+        `Cannot access private field #${fieldName} on non-object`,
+      );
+    }
+
+    // We need to know which class context we're in to access private fields
+    // The currentSuperBinding tells us which class we're executing in
+    if (!this.currentSuperBinding) {
+      throw new InterpreterError(
+        `Cannot access private field #${fieldName} outside of class`,
+      );
+    }
+
+    const currentClass = this.currentSuperBinding.currentClass;
+
+    // Check if accessing static private members (when object is a ClassValue)
+    if (object instanceof ClassValue) {
+      // Check static private fields
+      if (currentClass.privateStaticFields.has(fieldName)) {
+        return currentClass.privateStaticFields.get(fieldName);
+      }
+
+      // Check private static methods
+      const privateStaticMethod =
+        currentClass.privateStaticMethods.get(fieldName);
+      if (privateStaticMethod) {
+        return privateStaticMethod;
+      }
+
+      throw new InterpreterError(`Private field #${fieldName} is not defined`);
+    }
+
+    // Check instance private fields
+    const privateFields = currentClass.privateFieldStorage.get(object);
+    if (privateFields && privateFields.has(fieldName)) {
+      return privateFields.get(fieldName);
+    }
+
+    // Check private instance methods
+    const privateMethod = currentClass.privateInstanceMethods.get(fieldName);
+    if (privateMethod) {
+      return privateMethod;
+    }
+
+    throw new InterpreterError(`Private field #${fieldName} is not defined`);
+  }
+
+  /**
+   * Assign a value to a private field on an object.
+   * Private fields are stored in the ClassValue's WeakMap.
+   */
+  private assignPrivateField(object: any, fieldName: string, value: any): any {
+    if (typeof object !== "object" || object === null) {
+      throw new InterpreterError(
+        `Cannot assign to private field #${fieldName} on non-object`,
+      );
+    }
+
+    if (!this.currentSuperBinding) {
+      throw new InterpreterError(
+        `Cannot assign to private field #${fieldName} outside of class`,
+      );
+    }
+
+    const currentClass = this.currentSuperBinding.currentClass;
+
+    // Check if this is an instance private field
+    const privateFields = currentClass.privateFieldStorage.get(object);
+    if (privateFields && privateFields.has(fieldName)) {
+      privateFields.set(fieldName, value);
+      return value;
+    }
+
+    // Check if this is a static private field
+    if (currentClass.privateStaticFields.has(fieldName)) {
+      currentClass.privateStaticFields.set(fieldName, value);
+      return value;
+    }
+
+    throw new InterpreterError(`Private field #${fieldName} is not defined`);
+  }
+
+  /**
+   * Evaluate super.method or super.property access.
+   * Returns a bound method or executes a getter.
+   */
+  private evaluateSuperMemberAccess(node: ESTree.MemberExpression): any {
+    if (!this.currentSuperBinding) {
+      throw new InterpreterError(
+        "'super' keyword is only valid inside a class",
+      );
+    }
+
+    if (!this.currentSuperBinding.parentClass) {
+      throw new InterpreterError(
+        "'super' member access requires a parent class",
+      );
+    }
+
+    // Get the property name
+    const propertyName = node.computed
+      ? String(this.evaluateNode(node.property))
+      : (node.property as ESTree.Identifier).name;
+
+    validatePropertyName(propertyName);
+
+    // First check for a method
+    if (this.currentSuperBinding.isStatic) {
+      const methodResult = this.lookupSuperStaticMethod(
+        this.currentSuperBinding,
+        propertyName,
+      );
+      if (methodResult) {
+        return methodResult.method;
+      }
+
+      const getterResult = this.lookupSuperStaticGetter(
+        this.currentSuperBinding,
+        propertyName,
+      );
+      if (getterResult) {
+        const { getter, definingClass } = getterResult;
+        return this.executeClassMethod(
+          getter,
+          this.currentSuperBinding.thisValue,
+          definingClass,
+          [],
+        );
+      }
+
+      let current: ClassValue | null = this.currentSuperBinding.parentClass;
+      while (current) {
+        if (current.staticFields.has(propertyName)) {
+          return current.staticFields.get(propertyName);
+        }
+        current = current.parentClass;
+      }
+    } else {
+      const methodResult = this.lookupSuperMethod(
+        this.currentSuperBinding,
+        propertyName,
+      );
+      if (methodResult) {
+        return methodResult.method;
+      }
+
+      const getterResult = this.lookupSuperGetter(
+        this.currentSuperBinding,
+        propertyName,
+      );
+      if (getterResult) {
+        const { getter, definingClass } = getterResult;
+        return this.executeClassMethod(
+          getter,
+          this.currentSuperBinding.thisValue,
+          definingClass,
+          [],
+        );
+      }
+    }
+
+    return undefined;
   }
 }

@@ -742,12 +742,7 @@ describe("Generator Functions", () => {
         g.return();
         log;
       `);
-      expect(result).toEqual([
-        "outer-try",
-        "inner-try",
-        "inner-finally",
-        "outer-finally",
-      ]);
+      expect(result).toEqual(["outer-try", "inner-try", "inner-finally", "outer-finally"]);
     });
 
     test("async return() executes finally block", async () => {
@@ -1024,12 +1019,7 @@ describe("Generator Functions", () => {
         log.push('value: ' + g.throw(new Error('injected')).value);  // caught, yields 2
         log;
       `);
-      expect(result).toEqual([
-        "value: 1",
-        "caught: injected",
-        "finally",
-        "value: 2",
-      ]);
+      expect(result).toEqual(["value: 1", "caught: injected", "finally", "value: 2"]);
     });
 
     test("async generator throw() basic", async () => {

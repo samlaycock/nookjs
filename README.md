@@ -62,9 +62,9 @@ Host functions passed as globals are wrapped and protected:
 
 ```javascript
 // Host passes: { myFunc: () => "secret" }
-myFunc.name;        // Error: Cannot access properties on host functions
-myFunc.toString();  // Error: Cannot access properties on host functions
-await myFunc;       // Error: Cannot await a host function (must call it)
+myFunc.name; // Error: Cannot access properties on host functions
+myFunc.toString(); // Error: Cannot access properties on host functions
+await myFunc; // Error: Cannot await a host function (must call it)
 ```
 
 **4. Whitelisted AST Nodes Only**
@@ -281,7 +281,7 @@ const g = counter();
 g.next().value; // 1
 g.next().value; // 2
 g.next().value; // 3
-g.next().done;  // true
+g.next().done; // true
 ```
 
 ### Strings

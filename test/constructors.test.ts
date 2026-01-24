@@ -328,19 +328,18 @@ describe("Constructors with new keyword", () => {
       expect(result).toEqual([1, [2, 3, 4, 5]]);
     });
 
-    // Note: Default parameters are not yet supported by the interpreter
-    // it("should support default parameters", () => {
-    //   const interpreter = new Interpreter();
-    //   const result = interpreter.evaluate(`
-    //     function Defaults(a = 10, b = 20) {
-    //       this.a = a;
-    //       this.b = b;
-    //     }
-    //     const obj = new Defaults();
-    //     [obj.a, obj.b];
-    //   `);
-    //   expect(result).toEqual([10, 20]);
-    // });
+    it("should support default parameters", () => {
+      const interpreter = new Interpreter();
+      const result = interpreter.evaluate(`
+        function Defaults(a = 10, b = 20) {
+          this.a = a;
+          this.b = b;
+        }
+        const obj = new Defaults();
+        [obj.a, obj.b];
+      `);
+      expect(result).toEqual([10, 20]);
+    });
 
     it("should support mixed spread and regular arguments", () => {
       const interpreter = new Interpreter();

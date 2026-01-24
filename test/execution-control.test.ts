@@ -38,8 +38,7 @@ describe.skip("Execution Control", () => {
     test("should work with async evaluation", async () => {
       const interpreter = new Interpreter({
         globals: {
-          asyncOp: async () =>
-            new Promise((resolve) => setTimeout(() => resolve(42), 10)),
+          asyncOp: async () => new Promise((resolve) => setTimeout(() => resolve(42), 10)),
         },
       });
 
@@ -139,8 +138,7 @@ describe.skip("Execution Control", () => {
     test("should work with async evaluation", async () => {
       const interpreter = new Interpreter({
         globals: {
-          asyncOp: async () =>
-            new Promise((resolve) => setTimeout(() => resolve(42), 10)),
+          asyncOp: async () => new Promise((resolve) => setTimeout(() => resolve(42), 10)),
         },
       });
       const controller = new AbortController();

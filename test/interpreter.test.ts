@@ -199,9 +199,7 @@ describe("Interpreter", () => {
 
     test("throws on unsupported operator", () => {
       // The 'in' operator is not supported
-      expect(() => interpreter.evaluate("'a' in {a: 1}")).toThrow(
-        InterpreterError,
-      );
+      expect(() => interpreter.evaluate("'a' in {a: 1}")).toThrow(InterpreterError);
     });
   });
 });

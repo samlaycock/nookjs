@@ -28,9 +28,7 @@ describe("Injected Globals", () => {
 
     it("should not allow reassigning const globals", () => {
       const interpreter = new Interpreter({ globals: { x: 10 } });
-      expect(() => interpreter.evaluate("x = 20")).toThrow(
-        "Cannot assign to const variable 'x'",
-      );
+      expect(() => interpreter.evaluate("x = 20")).toThrow("Cannot assign to const variable 'x'");
     });
 
     it("should allow using globals in expressions", () => {
@@ -132,16 +130,12 @@ describe("Injected Globals", () => {
   describe("evaluate() options globals", () => {
     it("should access per-call globals", () => {
       const interpreter = new Interpreter();
-      expect(interpreter.evaluate("a + b", { globals: { a: 5, b: 3 } })).toBe(
-        8,
-      );
+      expect(interpreter.evaluate("a + b", { globals: { a: 5, b: 3 } })).toBe(8);
     });
 
     it("should access single per-call global", () => {
       const interpreter = new Interpreter();
-      expect(interpreter.evaluate("value * 2", { globals: { value: 7 } })).toBe(
-        14,
-      );
+      expect(interpreter.evaluate("value * 2", { globals: { value: 7 } })).toBe(14);
     });
 
     it("should use per-call globals in complex expressions", () => {
@@ -506,9 +500,7 @@ describe("Injected Globals", () => {
     it("should use undefined in nullish coalescing", () => {
       const interpreter = new Interpreter();
       expect(interpreter.evaluate("undefined ?? 'default'")).toBe("default");
-      expect(interpreter.evaluate("null ?? undefined ?? 'final'")).toBe(
-        "final",
-      );
+      expect(interpreter.evaluate("null ?? undefined ?? 'final'")).toBe("final");
     });
 
     it("should use NaN in calculations", () => {

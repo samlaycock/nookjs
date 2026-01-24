@@ -44,12 +44,8 @@ describe("Logical Assignment Operators", () => {
     });
 
     test("chains correctly", () => {
-      expect(interpreter.evaluate("null ?? undefined ?? 'final'")).toBe(
-        "final",
-      );
-      expect(interpreter.evaluate("null ?? 'middle' ?? 'final'")).toBe(
-        "middle",
-      );
+      expect(interpreter.evaluate("null ?? undefined ?? 'final'")).toBe("final");
+      expect(interpreter.evaluate("null ?? 'middle' ?? 'final'")).toBe("middle");
     });
 
     test("works with variables", () => {
@@ -98,9 +94,7 @@ describe("Logical Assignment Operators", () => {
 
     test("short-circuits when truthy", () => {
       interpreter.evaluate("let counter = 0");
-      interpreter.evaluate(
-        "let getValue = function() { counter = counter + 1; return 'new'; }",
-      );
+      interpreter.evaluate("let getValue = function() { counter = counter + 1; return 'new'; }");
       interpreter.evaluate("let x = 'existing'");
       interpreter.evaluate("x ||= getValue()");
       expect(interpreter.evaluate("counter")).toBe(0);
@@ -175,9 +169,7 @@ describe("Logical Assignment Operators", () => {
 
     test("short-circuits when falsy", () => {
       interpreter.evaluate("let counter = 0");
-      interpreter.evaluate(
-        "let getValue = function() { counter = counter + 1; return 'new'; }",
-      );
+      interpreter.evaluate("let getValue = function() { counter = counter + 1; return 'new'; }");
       interpreter.evaluate("let x = null");
       interpreter.evaluate("x &&= getValue()");
       expect(interpreter.evaluate("counter")).toBe(0);
@@ -258,9 +250,7 @@ describe("Logical Assignment Operators", () => {
 
     test("short-circuits when not nullish", () => {
       interpreter.evaluate("let counter = 0");
-      interpreter.evaluate(
-        "let getValue = function() { counter = counter + 1; return 'new'; }",
-      );
+      interpreter.evaluate("let getValue = function() { counter = counter + 1; return 'new'; }");
       interpreter.evaluate("let x = 0"); // falsy but not nullish
       interpreter.evaluate("x ??= getValue()");
       expect(interpreter.evaluate("counter")).toBe(0);
@@ -321,12 +311,8 @@ describe("Logical Assignment Operators", () => {
           return cache[key];
         }
       `);
-      interpreter.evaluate(
-        "let result1 = getOrCompute('a', function() { return 42; })",
-      );
-      interpreter.evaluate(
-        "let result2 = getOrCompute('a', function() { return 99; })",
-      );
+      interpreter.evaluate("let result1 = getOrCompute('a', function() { return 42; })");
+      interpreter.evaluate("let result2 = getOrCompute('a', function() { return 99; })");
       expect(interpreter.evaluate("result1")).toBe(42);
       expect(interpreter.evaluate("result2")).toBe(42);
     });

@@ -111,9 +111,7 @@ describe("Optional Chaining", () => {
     });
 
     test("passes arguments correctly", () => {
-      interpreter.evaluate(
-        "let obj = { add: function(a, b) { return a + b; } }",
-      );
+      interpreter.evaluate("let obj = { add: function(a, b) { return a + b; } }");
       expect(interpreter.evaluate("obj.add?.(2, 3)")).toBe(5);
     });
   });
@@ -237,15 +235,9 @@ describe("Optional Chaining", () => {
           }
         }
       `);
-      expect(
-        interpreter.evaluate("response?.data?.users?.[0]?.profile?.age"),
-      ).toBe(30);
-      expect(
-        interpreter.evaluate("response?.data?.users?.[1]?.profile?.age"),
-      ).toBe(undefined);
-      expect(
-        interpreter.evaluate("response?.data?.users?.[2]?.profile?.age"),
-      ).toBe(undefined);
+      expect(interpreter.evaluate("response?.data?.users?.[0]?.profile?.age")).toBe(30);
+      expect(interpreter.evaluate("response?.data?.users?.[1]?.profile?.age")).toBe(undefined);
+      expect(interpreter.evaluate("response?.data?.users?.[2]?.profile?.age")).toBe(undefined);
     });
   });
 });
