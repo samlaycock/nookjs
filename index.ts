@@ -1,10 +1,12 @@
 import { Interpreter } from "./src/interpreter";
 
+const ts = String.raw;
+
 console.log("🚀 JavaScript Interpreter Demo\n");
 
 console.log("--- Arrow Functions: Expression Body ---");
 const arrowExpr = new Interpreter();
-const arrowExprCode = `
+const arrowExprCode = ts`
   let double = x => x * 2;
   let add = (a, b) => a + b;
   double(5) + add(3, 7)
@@ -14,7 +16,7 @@ console.log("Result:", arrowExpr.evaluate(arrowExprCode));
 
 console.log("\n--- Arrow Functions: Block Body ---");
 const arrowBlock = new Interpreter();
-const arrowBlockCode = `
+const arrowBlockCode = ts`
   let factorial = n => {
     let result = 1;
     for (let i = 1; i <= n; i++) {
@@ -29,7 +31,7 @@ console.log("Result:", arrowBlock.evaluate(arrowBlockCode));
 
 console.log("\n--- Arrow Functions: Higher-Order Functions ---");
 const arrowHigherOrder = new Interpreter();
-const arrowHigherOrderCode = `
+const arrowHigherOrderCode = ts`
   function map(arr, f) {
     let result = [];
     for (let i = 0; i < arr.length; i++) {
@@ -46,7 +48,7 @@ console.log("Result:", arrowHigherOrder.evaluate(arrowHigherOrderCode));
 
 console.log("\n--- Arrow Functions: Closures ---");
 const arrowClosure = new Interpreter();
-const arrowClosureCode = `
+const arrowClosureCode = ts`
   let makeAdder = x => y => x + y;
   let add10 = makeAdder(10);
   add10(5)
@@ -56,7 +58,7 @@ console.log("Result:", arrowClosure.evaluate(arrowClosureCode));
 
 console.log("\n--- Arrow Functions: Filter Array ---");
 const arrowFilter = new Interpreter();
-const arrowFilterCode = `
+const arrowFilterCode = ts`
   function filter(arr, pred) {
     let result = [];
     let j = 0;
@@ -77,7 +79,7 @@ console.log("Result:", arrowFilter.evaluate(arrowFilterCode));
 
 console.log("\n--- Break and Continue ---");
 const breakContinue = new Interpreter();
-const breakContinueCode = `
+const breakContinueCode = ts`
   let sum = 0;
   for (let i = 0; i < 20; i++) {
     if (i > 15) {
@@ -95,7 +97,7 @@ console.log("Result:", breakContinue.evaluate(breakContinueCode));
 
 console.log("\n--- Objects: Array of Objects ---");
 const objArray = new Interpreter();
-const objArrayCode = `
+const objArrayCode = ts`
   let people = [
     { name: "Alice", age: 30 },
     { name: "Bob", age: 25 },
@@ -112,7 +114,7 @@ console.log("Result:", objArray.evaluate(objArrayCode));
 
 console.log("\n--- For Loop: Count Primes ---");
 const countPrimes = new Interpreter();
-const countPrimesCode = `
+const countPrimesCode = ts`
   let isPrime = n => {
     if (n <= 1) {
       return 0;
@@ -142,7 +144,7 @@ console.log("Result:", countPrimes.evaluate(countPrimesCode));
 
 console.log("\n--- Factorial (Recursive Arrow Function) ---");
 const factorial = new Interpreter();
-const factCode = `
+const factCode = ts`
   let factorial = n => {
     if (n <= 1) {
       return 1;
@@ -156,7 +158,7 @@ console.log("factorial(6) =", factorial.evaluate(factCode));
 
 console.log("\n--- Fibonacci (Iterative) ---");
 const fibonacci = new Interpreter();
-const fibCode = `
+const fibCode = ts`
   let fib = n => {
     if (n <= 1) {
       return n;
@@ -178,7 +180,7 @@ console.log("fib(10) =", fibonacci.evaluate(fibCode));
 
 console.log("\n--- Object Methods and 'this' Keyword ---");
 const objectMethods = new Interpreter();
-const objectMethodsCode = `
+const objectMethodsCode = ts`
   let counter = {
     count: 0,
     increment: function() {
@@ -204,7 +206,7 @@ console.log("Result:", objectMethods.evaluate(objectMethodsCode));
 
 console.log("\n--- Object Methods: Rectangle ---");
 const rectangle = new Interpreter();
-const rectangleCode = `
+const rectangleCode = ts`
   let rect = {
     width: 10,
     height: 5,
@@ -228,7 +230,7 @@ console.log("Result:", rectangle.evaluate(rectangleCode));
 
 console.log("\n--- Object Methods: Shopping Cart ---");
 const shoppingCart = new Interpreter();
-const shoppingCartCode = `
+const shoppingCartCode = ts`
   let cart = {
     items: [],
     total: 0,
@@ -262,7 +264,7 @@ const interpreterWithGlobals = new Interpreter({
   },
 });
 
-const circleArea = interpreterWithGlobals.evaluate(`
+const circleArea = interpreterWithGlobals.evaluate(ts`
   let radius = 10;
   PI * radius * radius
 `);
@@ -271,7 +273,7 @@ console.log("Result:", circleArea);
 
 console.log("\n--- Injected Globals: Per-call ---");
 const interpreterForGlobals = new Interpreter();
-const perCallResult = interpreterForGlobals.evaluate("multiplier * value", {
+const perCallResult = interpreterForGlobals.evaluate(ts`multiplier * value`, {
   globals: { multiplier: 5, value: 20 },
 });
 console.log("Code: multiplier * value with per-call globals");
@@ -279,7 +281,7 @@ console.log("Result:", perCallResult);
 
 console.log("\n--- Injected Globals: Merged ---");
 const interpreterMerged = new Interpreter({ globals: { x: 10 } });
-const mergedResult = interpreterMerged.evaluate("x + y + z", {
+const mergedResult = interpreterMerged.evaluate(ts`x + y + z`, {
   globals: { y: 20, z: 30 },
 });
 console.log("Code: x + y + z with constructor x=10 and per-call y=20, z=30");
@@ -296,7 +298,7 @@ const interpreterWithConfig = new Interpreter({
   },
 });
 
-const configResult = interpreterWithConfig.evaluate(`
+const configResult = interpreterWithConfig.evaluate(ts`
   let retries = 0;
   while (retries < config.maxRetries) {
     retries = retries + 1;
@@ -318,10 +320,10 @@ const validatedInterpreter = new Interpreter({
 });
 
 console.log("Code: 5 + 10 (no loops)");
-console.log("Result:", validatedInterpreter.evaluate("5 + 10"));
+console.log("Result:", validatedInterpreter.evaluate(ts`5 + 10`));
 
 try {
-  validatedInterpreter.evaluate("let i = 0; while (i < 5) { i = i + 1; }");
+  validatedInterpreter.evaluate(ts`let i = 0; while (i < 5) { i = i + 1; }`);
   console.log("Error: Should have been blocked");
 } catch {
   console.log("Blocked: while loop rejected by validator ✓");
@@ -335,14 +337,14 @@ const readOnlyValidator = (ast: any) => {
   return !code.includes('"VariableDeclaration"');
 };
 
-console.log("Normal call:", simpleInterpreter.evaluate("10 + 20"));
+console.log("Normal call:", simpleInterpreter.evaluate(ts`10 + 20`));
 console.log(
   "With validator:",
-  simpleInterpreter.evaluate("5 * 3", { validator: readOnlyValidator }),
+  simpleInterpreter.evaluate(ts`5 * 3`, { validator: readOnlyValidator }),
 );
 
 try {
-  simpleInterpreter.evaluate("let x = 10", { validator: readOnlyValidator });
+  simpleInterpreter.evaluate(ts`let x = 10`, { validator: readOnlyValidator });
   console.log("Error: Should have been blocked");
 } catch {
   console.log("Blocked: variable declaration rejected ✓");
@@ -354,10 +356,13 @@ const sizeValidator = (ast: any) => {
 };
 
 const sizeLimitedInterpreter = new Interpreter({ validator: sizeValidator });
-console.log("Small program (2 statements):", sizeLimitedInterpreter.evaluate("let x = 5; x + 10"));
+console.log(
+  "Small program (2 statements):",
+  sizeLimitedInterpreter.evaluate(ts`let x = 5; x + 10`),
+);
 
 try {
-  sizeLimitedInterpreter.evaluate("let a = 1; let b = 2; let c = 3; let d = 4;");
+  sizeLimitedInterpreter.evaluate(ts`let a = 1; let b = 2; let c = 3; let d = 4;`);
   console.log("Error: Should have been blocked");
 } catch {
   console.log("Blocked: too many statements ✓");
@@ -374,13 +379,13 @@ const interpreterWithHostFunctions = new Interpreter({
 });
 
 console.log("Code: Calling host functions from sandbox");
-const hostResult1 = interpreterWithHostFunctions.evaluate("double(5)");
+const hostResult1 = interpreterWithHostFunctions.evaluate(ts`double(5)`);
 console.log("double(5):", hostResult1);
 
-const hostResult2 = interpreterWithHostFunctions.evaluate("add(3, 7)");
+const hostResult2 = interpreterWithHostFunctions.evaluate(ts`add(3, 7)`);
 console.log("add(3, 7):", hostResult2);
 
-interpreterWithHostFunctions.evaluate(`
+interpreterWithHostFunctions.evaluate(ts`
   log("Hello from sandbox!");
   log("Calculated: " + add(double(5), 3));
 `);
@@ -388,7 +393,7 @@ console.log("Logged messages:", results);
 
 console.log("\n--- Host Functions: Per-call Globals ---");
 const perCallInterpreter = new Interpreter();
-const hostPerCallResult = perCallInterpreter.evaluate("multiply(4, 5)", {
+const hostPerCallResult = perCallInterpreter.evaluate(ts`multiply(4, 5)`, {
   globals: {
     multiply: (a: number, b: number) => a * b,
   },
@@ -401,7 +406,7 @@ const mixedInterpreter = new Interpreter({
     hostDouble: (x: number) => x * 2,
   },
 });
-const mixedResult = mixedInterpreter.evaluate(`
+const mixedResult = mixedInterpreter.evaluate(ts`
   function sandboxTriple(x) {
     return x * 3;
   }
@@ -424,11 +429,11 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   });
 
   console.log("Code: Calling async host function");
-  const asyncResult1 = await asyncInterpreter.evaluateAsync("fetchData(42)");
+  const asyncResult1 = await asyncInterpreter.evaluateAsync(ts`fetchData(42)`);
   console.log("fetchData(42):", asyncResult1);
 
   console.log("\nCode: Async arithmetic");
-  const asyncResult2 = await asyncInterpreter.evaluateAsync("asyncDouble(5) + asyncDouble(10)");
+  const asyncResult2 = await asyncInterpreter.evaluateAsync(ts`asyncDouble(5) + asyncDouble(10)`);
   console.log("asyncDouble(5) + asyncDouble(10):", asyncResult2);
 
   console.log("\n--- Async/Await: Complex Async Operations ---");
@@ -448,14 +453,14 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   });
 
   console.log("Code: Async function returning object");
-  const user = await complexAsyncInterpreter.evaluateAsync(`
+  const user = await complexAsyncInterpreter.evaluateAsync(ts`
     let user = asyncGetUser(123);
     user.name
   `);
   console.log("User name:", user);
 
   console.log("\nCode: Nested async calls");
-  const calculated = await complexAsyncInterpreter.evaluateAsync(`
+  const calculated = await complexAsyncInterpreter.evaluateAsync(ts`
     asyncCalculate(5, asyncCalculate(2, 3))
   `);
   console.log("asyncCalculate(5, asyncCalculate(2, 3)):", calculated);
@@ -468,7 +473,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   });
 
   console.log("Code: Async function in loop");
-  const loopResult = await asyncLoopInterpreter.evaluateAsync(`
+  const loopResult = await asyncLoopInterpreter.evaluateAsync(ts`
     let sum = 0;
     for (let i = 0; i < 5; i++) {
       sum = sum + asyncIncrement(i);
@@ -478,7 +483,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("Sum with async increments:", loopResult);
 
   console.log("\nCode: Async function in conditional");
-  const condResult = await asyncLoopInterpreter.evaluateAsync(`
+  const condResult = await asyncLoopInterpreter.evaluateAsync(ts`
     let result;
     if (asyncIncrement(5) > 5) {
       result = "greater";
@@ -498,7 +503,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   });
 
   console.log("Code: Mixing sync and async host functions");
-  const mixedResult = await mixedAsyncInterpreter.evaluateAsync(`
+  const mixedResult = await mixedAsyncInterpreter.evaluateAsync(ts`
     asyncMultiply(syncAdd(2, 3), syncAdd(4, 6))
   `);
   console.log("asyncMultiply(syncAdd(2, 3), syncAdd(4, 6)):", mixedResult);
@@ -507,7 +512,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   const sandboxAsyncInterpreter = new Interpreter();
 
   console.log("Code: Async function with await");
-  const sandboxResult1 = await sandboxAsyncInterpreter.evaluateAsync(`
+  const sandboxResult1 = await sandboxAsyncInterpreter.evaluateAsync(ts`
     async function getData() {
       return 42;
     }
@@ -520,7 +525,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("Async function with await:", sandboxResult1);
 
   console.log("\nCode: Nested async/await");
-  const sandboxResult2 = await sandboxAsyncInterpreter.evaluateAsync(`
+  const sandboxResult2 = await sandboxAsyncInterpreter.evaluateAsync(ts`
     async function fetchUser(id) {
       return { id: id, name: "User" + id, active: true };
     }
@@ -538,7 +543,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
       asyncFetch: async (id: number) => `Data${id}`,
     },
   });
-  const sandboxResult3 = await mixedSandboxInterpreter.evaluateAsync(`
+  const sandboxResult3 = await mixedSandboxInterpreter.evaluateAsync(ts`
     async function processData(id) {
       let data = await asyncFetch(id);
       return data + " processed";
@@ -548,7 +553,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("Async sandbox with host functions:", sandboxResult3);
 
   console.log("\nCode: Async arrow functions");
-  const arrowAsyncResult = await sandboxAsyncInterpreter.evaluateAsync(`
+  const arrowAsyncResult = await sandboxAsyncInterpreter.evaluateAsync(ts`
     let asyncDouble = async (x) => x * 2;
     let asyncProcess = async (x) => {
       let doubled = await asyncDouble(x);
@@ -560,7 +565,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
 
   console.log("\n--- Async/Await: Control Flow ---");
   console.log("Code: Await in loops");
-  const loopAsyncResult = await mixedSandboxInterpreter.evaluateAsync(`
+  const loopAsyncResult = await mixedSandboxInterpreter.evaluateAsync(ts`
     async function increment(x) {
       return x + 1;
     }
@@ -576,7 +581,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("Await in loops:", loopAsyncResult);
 
   console.log("\nCode: Await in conditionals");
-  const condAsyncResult = await mixedSandboxInterpreter.evaluateAsync(`
+  const condAsyncResult = await mixedSandboxInterpreter.evaluateAsync(ts`
     async function check(x) {
       return x > 10;
     }
@@ -595,19 +600,19 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   const mathInterpreter = new Interpreter({ globals: { Math } });
 
   console.log("Code: Math.floor(4.7)");
-  console.log("Result:", mathInterpreter.evaluate("Math.floor(4.7)"));
+  console.log("Result:", mathInterpreter.evaluate(ts`Math.floor(4.7)`));
 
   console.log("\nCode: Math.PI * 2");
-  console.log("Result:", mathInterpreter.evaluate("Math.PI * 2"));
+  console.log("Result:", mathInterpreter.evaluate(ts`Math.PI * 2`));
 
   console.log("\nCode: Math.sqrt(16)");
-  console.log("Result:", mathInterpreter.evaluate("Math.sqrt(16)"));
+  console.log("Result:", mathInterpreter.evaluate(ts`Math.sqrt(16)`));
 
   console.log("\nCode: Math.max(10, 20, 5, 15)");
-  console.log("Result:", mathInterpreter.evaluate("Math.max(10, 20, 5, 15)"));
+  console.log("Result:", mathInterpreter.evaluate(ts`Math.max(10, 20, 5, 15)`));
 
   console.log("\nCode: Using Math in calculations");
-  const circleCalc = mathInterpreter.evaluate(`
+  const circleCalc = mathInterpreter.evaluate(ts`
     let radius = 5;
     let area = Math.PI * Math.pow(radius, 2);
     Math.round(area)
@@ -626,7 +631,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   });
 
   console.log("Code: console.log in sandbox");
-  consoleInterpreter.evaluate(`
+  consoleInterpreter.evaluate(ts`
     console.log("Hello from sandbox!");
     console.log("Number:", 42);
   `);
@@ -645,33 +650,33 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   const apiInterpreter = new Interpreter({ globals: { api: customAPI } });
 
   console.log("Code: api.getValue()");
-  console.log("Result:", apiInterpreter.evaluate("api.getValue()"));
+  console.log("Result:", apiInterpreter.evaluate(ts`api.getValue()`));
 
   console.log("\nCode: api.calculate(5, 3)");
-  console.log("Result:", apiInterpreter.evaluate("api.calculate(5, 3)"));
+  console.log("Result:", apiInterpreter.evaluate(ts`api.calculate(5, 3)`));
 
   console.log("\nCode: api.version");
-  console.log("Result:", apiInterpreter.evaluate("api.version"));
+  console.log("Result:", apiInterpreter.evaluate(ts`api.version`));
 
   console.log("\n--- Global Objects: Security ---");
   const secureInterpreter = new Interpreter({ globals: { Math } });
 
   try {
-    secureInterpreter.evaluate("Math.PI = 3");
+    secureInterpreter.evaluate(ts`Math.PI = 3`);
     console.log("Error: Should have been blocked");
   } catch {
     console.log("Blocked: Math.PI = 3 (read-only property) ✓");
   }
 
   try {
-    secureInterpreter.evaluate("Math.__proto__");
+    secureInterpreter.evaluate(ts`Math.__proto__`);
     console.log("Error: Should have been blocked");
   } catch {
     console.log("Blocked: Math.__proto__ access ✓");
   }
 
   try {
-    secureInterpreter.evaluate("Math.constructor");
+    secureInterpreter.evaluate(ts`Math.constructor`);
     console.log("Error: Should have been blocked");
   } catch {
     console.log("Blocked: Math.constructor access ✓");
@@ -681,7 +686,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   const tryCatchInterpreter = new Interpreter();
 
   console.log("Code: Try/catch with error");
-  const tryCatchResult1 = tryCatchInterpreter.evaluate(`
+  const tryCatchResult1 = tryCatchInterpreter.evaluate(ts`
     let result = "not executed";
     try {
       throw "Something went wrong!";
@@ -694,7 +699,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("Result:", tryCatchResult1);
 
   console.log("\nCode: Try/catch without error");
-  const tryCatchResult2 = tryCatchInterpreter.evaluate(`
+  const tryCatchResult2 = tryCatchInterpreter.evaluate(ts`
     let result2;
     try {
       result2 = "success";
@@ -707,7 +712,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
 
   console.log("\n--- Try/Catch/Finally: Finally Block ---");
   console.log("Code: Finally always executes");
-  const finallyResult = tryCatchInterpreter.evaluate(`
+  const finallyResult = tryCatchInterpreter.evaluate(ts`
     let log = [];
     try {
       log.push("try");
@@ -723,7 +728,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
 
   console.log("\n--- Try/Catch/Finally: Control Flow ---");
   console.log("Code: Return in try, finally still executes");
-  const returnFinally = tryCatchInterpreter.evaluate(`
+  const returnFinally = tryCatchInterpreter.evaluate(ts`
     function test() {
       let executed = [];
       try {
@@ -738,7 +743,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("Result:", returnFinally);
 
   console.log("\nCode: Finally overrides return");
-  const finallyOverride = tryCatchInterpreter.evaluate(`
+  const finallyOverride = tryCatchInterpreter.evaluate(ts`
     function testOverride() {
       try {
         return "from try";
@@ -752,7 +757,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
 
   console.log("\n--- Try/Catch/Finally: Nested Try/Catch ---");
   console.log("Code: Nested error handling");
-  const nestedTry = tryCatchInterpreter.evaluate(`
+  const nestedTry = tryCatchInterpreter.evaluate(ts`
     let log2 = [];
     try {
       log2.push("outer try");
@@ -772,7 +777,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
 
   console.log("\n--- Try/Catch/Finally: Break/Continue in Loops ---");
   console.log("Code: Break in try block");
-  const breakInTry = tryCatchInterpreter.evaluate(`
+  const breakInTry = tryCatchInterpreter.evaluate(ts`
     let i2 = 0;
     while (i2 < 10) {
       try {
@@ -787,7 +792,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("Result:", breakInTry);
 
   console.log("\nCode: Continue in try block");
-  const continueInTry = tryCatchInterpreter.evaluate(`
+  const continueInTry = tryCatchInterpreter.evaluate(ts`
     let sum2 = 0;
     for (let i3 = 0; i3 < 10; i3++) {
       try {
@@ -803,7 +808,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
 
   console.log("\n--- Try/Catch/Finally: Error Objects ---");
   console.log("Code: Catch and examine error");
-  const errorObject = tryCatchInterpreter.evaluate(`
+  const errorObject = tryCatchInterpreter.evaluate(ts`
     let caughtError;
     try {
       throw "My custom error message";
@@ -816,7 +821,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
 
   console.log("\n--- Try/Catch/Finally: Practical Example ---");
   console.log("Code: Safe division with error handling");
-  const safeDivision = tryCatchInterpreter.evaluate(`
+  const safeDivision = tryCatchInterpreter.evaluate(ts`
     function safeDivide(a, b) {
       let result;
       try {
@@ -841,7 +846,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("Division results:", safeDivision);
 
   console.log("\n--- Try/Catch/Finally: Async Error Handling ---");
-  const asyncTryCatch = await tryCatchInterpreter.evaluateAsync(`
+  const asyncTryCatch = await tryCatchInterpreter.evaluateAsync(ts`
     let log3 = [];
     try {
       log3.push("async try");
