@@ -57,9 +57,7 @@ describe("AST Parser", () => {
       expect(forIn.type).toBe("ForInStatement");
       const forInExisting = parseFirstStatement("for (k in obj) {}");
       expect(forInExisting.type).toBe("ForInStatement");
-      expect((forInExisting as ESTree.ForInStatement).left.type).toBe(
-        "Identifier",
-      );
+      expect((forInExisting as ESTree.ForInStatement).left.type).toBe("Identifier");
       const forOf = parseFirstStatement("for (let v of arr) {}");
       expect(forOf.type).toBe("ForOfStatement");
     });
@@ -78,9 +76,7 @@ describe("AST Parser", () => {
     });
 
     it("parses switch/case/default", () => {
-      const stmt = parseFirstStatement(
-        "switch (x) { case 1: x; break; default: x; }",
-      );
+      const stmt = parseFirstStatement("switch (x) { case 1: x; break; default: x; }");
       expect(stmt.type).toBe("SwitchStatement");
       const sw = stmt as ESTree.SwitchStatement;
       expect(sw.cases.length).toBe(2);
@@ -113,9 +109,7 @@ describe("AST Parser", () => {
     it("parses throw/try/catch/finally", () => {
       const thr = parseFirstStatement("throw new Error('x');");
       expect(thr.type).toBe("ThrowStatement");
-      const tri = parseFirstStatement(
-        "try { x; } catch (e) { y; } finally { z; }",
-      );
+      const tri = parseFirstStatement("try { x; } catch (e) { y; } finally { z; }");
       expect(tri.type).toBe("TryStatement");
       const triNode = tri as ESTree.TryStatement;
       expect(triNode.handler?.param?.type).toBe("Identifier");
@@ -259,15 +253,11 @@ describe("AST Parser", () => {
       `);
       expect(stmt.type).toBe("ClassDeclaration");
       const cls = stmt as ESTree.ClassDeclaration;
-      expect(
-        cls.body.body.some((node) => node.type === "PropertyDefinition"),
-      ).toBe(true);
+      expect(cls.body.body.some((node) => node.type === "PropertyDefinition")).toBe(true);
     });
 
     it("drops type and interface declarations", () => {
-      const ast = parseModule(
-        "type Foo = { a: number }; interface Bar { b: string } let x = 1;",
-      );
+      const ast = parseModule("type Foo = { a: number }; interface Bar { b: string } let x = 1;");
       expect(ast.body.length).toBe(1);
       expect(ast.body[0]?.type).toBe("VariableDeclaration");
     });
@@ -296,9 +286,7 @@ describe("AST Parser", () => {
       const decl = stmt as ESTree.VariableDeclaration;
       const pattern = decl.declarations[0]?.id as ESTree.ObjectPattern;
       expect(pattern.type).toBe("ObjectPattern");
-      expect(pattern.properties.some((p) => p.type === "RestElement")).toBe(
-        true,
-      );
+      expect(pattern.properties.some((p) => p.type === "RestElement")).toBe(true);
     });
 
     it("parses array pattern destructuring", () => {
@@ -306,9 +294,7 @@ describe("AST Parser", () => {
       const decl = stmt as ESTree.VariableDeclaration;
       const pattern = decl.declarations[0]?.id as ESTree.ArrayPattern;
       expect(pattern.type).toBe("ArrayPattern");
-      expect(pattern.elements.some((e) => e?.type === "RestElement")).toBe(
-        true,
-      );
+      expect(pattern.elements.some((e) => e?.type === "RestElement")).toBe(true);
     });
 
     it("parses template literals", () => {
@@ -337,9 +323,7 @@ describe("AST Parser", () => {
       expect(cls.superClass?.type).toBe("Identifier");
       const body = cls.body.body;
       expect(body.some((node) => node.type === "MethodDefinition")).toBe(true);
-      expect(body.some((node) => node.type === "PropertyDefinition")).toBe(
-        true,
-      );
+      expect(body.some((node) => node.type === "PropertyDefinition")).toBe(true);
       expect(body.some((node) => node.type === "StaticBlock")).toBe(true);
     });
 
