@@ -354,15 +354,10 @@ const sizeValidator = (ast: any) => {
 };
 
 const sizeLimitedInterpreter = new Interpreter({ validator: sizeValidator });
-console.log(
-  "Small program (2 statements):",
-  sizeLimitedInterpreter.evaluate("let x = 5; x + 10"),
-);
+console.log("Small program (2 statements):", sizeLimitedInterpreter.evaluate("let x = 5; x + 10"));
 
 try {
-  sizeLimitedInterpreter.evaluate(
-    "let a = 1; let b = 2; let c = 3; let d = 4;",
-  );
+  sizeLimitedInterpreter.evaluate("let a = 1; let b = 2; let c = 3; let d = 4;");
   console.log("Error: Should have been blocked");
 } catch {
   console.log("Blocked: too many statements ✓");
@@ -433,9 +428,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
   console.log("fetchData(42):", asyncResult1);
 
   console.log("\nCode: Async arithmetic");
-  const asyncResult2 = await asyncInterpreter.evaluateAsync(
-    "asyncDouble(5) + asyncDouble(10)",
-  );
+  const asyncResult2 = await asyncInterpreter.evaluateAsync("asyncDouble(5) + asyncDouble(10)");
   console.log("asyncDouble(5) + asyncDouble(10):", asyncResult2);
 
   console.log("\n--- Async/Await: Complex Async Operations ---");
@@ -871,9 +864,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
     console.log("- Update operators (++, --)");
     console.log("- Variables (let/const) with lexical scoping");
     console.log("- Conditionals (if/else)");
-    console.log(
-      "- Loops (while, for, for...of, for...in) with break and continue",
-    );
+    console.log("- Loops (while, for, for...of, for...in) with break and continue");
     console.log("- Functions (regular and arrow) with closures and recursion");
     console.log("- Arrays and objects with full property access");
     console.log("- Higher-order functions with arrow functions");
@@ -882,9 +873,7 @@ console.log("\n--- Async/Await: Async Host Functions ---");
     console.log("- Throw statements for error handling");
     console.log("- Injected globals (constructor and per-call)");
     console.log("- Host functions (call host code from sandbox)");
-    console.log(
-      "- Global objects (Math, console, custom APIs via ReadOnlyProxy)",
-    );
+    console.log("- Global objects (Math, console, custom APIs via ReadOnlyProxy)");
     console.log("- Async host functions (with evaluateAsync())");
     console.log("- Async/await syntax (async functions and await expressions)");
     console.log("- AST validation (constructor and per-call)");

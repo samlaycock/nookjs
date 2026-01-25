@@ -1,6 +1,6 @@
 # JavaScript Interpreter
 
-A simple, secure JavaScript interpreter built with TypeScript and a zero-dependency custom AST parser. This interpreter evaluates a subset of JavaScript, supporting mathematical operations, variables, boolean logic, control flow, functions, strings, and arrays.
+A simple, secure JavaScript interpreter built with TypeScript and a zero-dependency custom AST parser. This interpreter evaluates a subset of JavaScript, supporting mathematical operations, variables, boolean logic, control flow, functions, strings, and arrays. It also accepts TypeScript-style type annotations that are stripped at parse time (types-as-comments).
 
 ## Features
 
@@ -10,6 +10,25 @@ Currently supports:
 
 See `docs/README.md` for one-page descriptions of each supported `LanguageFeature`,
 including implementation notes and interpreter-specific gotchas.
+
+### TypeScript Annotations (Stripped)
+
+The parser accepts TypeScript-style annotations and removes them from the AST, so runtime behavior matches plain JavaScript. This is the same model as TC39 “Types as Comments” and Node’s `--experimental-strip-types`.
+
+Supported (stripped):
+
+- Variable/parameter/property type annotations
+- Function return types
+- `as` assertions
+- Optional (`?`) and definite assignment (`!`) markers
+- `implements` clauses
+- `type` and `interface` declarations (parsed and dropped)
+
+Not supported:
+
+- TSX/JSX
+- `enum` / `namespace`
+- `import` / `export` (not allowed in the interpreter)
 
 ### Injected Globals & Host Functions
 

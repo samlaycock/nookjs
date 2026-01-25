@@ -8,12 +8,29 @@ This interpreter ships with a zero-dependency JavaScript parser implemented in `
 - Output: ESTree nodes used by the evaluator and validators.
 - Performance: zero allocations per token (numeric token kinds + current/lookahead fields).
 - Simplicity: single-pass recursive descent with small, explicit helpers.
+- TypeScript annotations are accepted and stripped (types-as-comments).
 
 ## Tokenizer
 
 - The tokenizer tracks `current` and `lookahead` token fields instead of allocating token objects.
 - `snapshot()`/`restore()` support limited backtracking (used for arrow lookahead).
 - Minimal string and template escape handling; full Unicode escape support is intentionally limited.
+
+## TypeScript Annotations (Stripped)
+
+Type syntax is parsed and discarded so runtime behavior matches plain JavaScript. This covers:
+
+- Variable/parameter/property annotations and function return types
+- `as` assertions
+- Optional (`?`) and definite assignment (`!`) markers
+- `implements` clauses
+- `type` and `interface` declarations (parsed and dropped)
+
+Deliberately unsupported:
+
+- TSX/JSX
+- `enum` / `namespace`
+- `import` / `export` (not allowed in the interpreter)
 
 ## Expression Parsing
 
@@ -46,4 +63,3 @@ This interpreter ships with a zero-dependency JavaScript parser implemented in `
 ## Profiling
 
 - `parseModuleWithProfile()` returns parse timings and token counts.
-
