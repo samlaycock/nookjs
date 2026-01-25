@@ -2161,6 +2161,7 @@ export class Interpreter {
   // Track super binding context during class method execution
   private currentSuperBinding: SuperBinding | null = null;
   private instanceClassMap: WeakMap<object, ClassValue> = new WeakMap();
+  private arrayMethodCache: WeakMap<any[], Map<string, HostFunctionValue>> = new WeakMap();
   private thisInitStack: boolean[] = [];
   private constructorStack: ClassValue[] = [];
 
@@ -5622,6 +5623,26 @@ export class Interpreter {
    * Returns null if the method is not supported
    */
   private getArrayMethod(arr: any[], methodName: string): HostFunctionValue | null {
+    // Cache per array instance to avoid re-allocating HostFunctionValue wrappers.
+    let cache = this.arrayMethodCache.get(arr);
+    if (!cache) {
+      cache = new Map();
+      this.arrayMethodCache.set(arr, cache);
+    }
+
+    const cached = cache.get(methodName);
+    if (cached) {
+      return cached;
+    }
+
+    const method = this.buildArrayMethod(arr, methodName);
+    if (method) {
+      cache.set(methodName, method);
+    }
+    return method;
+  }
+
+  private buildArrayMethod(arr: any[], methodName: string): HostFunctionValue | null {
     switch (methodName) {
       // Mutation methods
       case "push":
