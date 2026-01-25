@@ -19,6 +19,7 @@
     "build": "tsdown",
     "benchmark": "bun run benchmark.ts",
     "benchmark:parse": "bun run benchmark-parse.ts",
+    "benchmark:parse:micro": "bun run benchmark-parse-micro.ts",
     "benchmark:parse:profile": "bun run benchmark-parse-profile.ts"
   },
   "devDependencies": {
