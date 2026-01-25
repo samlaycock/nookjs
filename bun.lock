@@ -4,11 +4,9 @@
   "workspaces": {
     "": {
       "name": "interpreter",
-      "dependencies": {
-        "meriyah": "7.0.0",
-      },
       "devDependencies": {
         "@types/bun": "latest",
+        "meriyah": "7.0.0",
         "oxfmt": "0.26.0",
         "oxlint": "1.41.0",
         "oxlint-tsgolint": "0.11.1",

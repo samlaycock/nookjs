@@ -13,9 +13,9 @@
  * - Control flow: if/else, while, for, for...of, break, continue, return
  */
 
-import { parseModule } from "meriyah";
-import type { ESTree } from "meriyah";
+import type { ESTree } from "./ast";
 
+import { parseModule } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
 import { ReadOnlyProxy } from "./readonly-proxy";
 
@@ -4531,7 +4531,7 @@ export class Interpreter {
 
           // Continue is not valid in switch (only in loops)
           if (result instanceof ContinueValue) {
-            throw new InterpreterError("Continue statement not allowed in switch statement");
+            throw new InterpreterError("Illegal continue statement");
           }
         }
         // After executing this case's statements, continue to next case (fall-through)
@@ -5077,7 +5077,8 @@ export class Interpreter {
           throw new InterpreterError(`Unsupported object pattern value: ${target.type}`);
         }
       } else {
-        throw new InterpreterError(`Unsupported object pattern property: ${property.type}`);
+        const propertyType = (property as ESTree.Node).type;
+        throw new InterpreterError(`Unsupported object pattern property: ${propertyType}`);
       }
     }
 
@@ -6029,7 +6030,8 @@ export class Interpreter {
         const value = this.evaluateNode(property.value);
         obj[key] = value;
       } else {
-        throw new InterpreterError(`Unsupported object property type: ${property.type}`);
+        const propertyType = (property as ESTree.Node).type;
+        throw new InterpreterError(`Unsupported object property type: ${propertyType}`);
       }
     }
 
@@ -7155,7 +7157,7 @@ export class Interpreter {
           }
 
           if (result instanceof ContinueValue) {
-            throw new InterpreterError("Continue statement not allowed in switch statement");
+            throw new InterpreterError("Illegal continue statement");
           }
         }
       }
@@ -7479,7 +7481,8 @@ export class Interpreter {
           throw new InterpreterError(`Unsupported object pattern value: ${target.type}`);
         }
       } else {
-        throw new InterpreterError(`Unsupported object pattern property: ${property.type}`);
+        const propertyType = (property as ESTree.Node).type;
+        throw new InterpreterError(`Unsupported object pattern property: ${propertyType}`);
       }
     }
 
@@ -7739,7 +7742,8 @@ export class Interpreter {
         const value = await this.evaluateNodeAsync(property.value);
         obj[key] = value;
       } else {
-        throw new InterpreterError(`Unsupported object property type: ${property.type}`);
+        const propertyType = (property as ESTree.Node).type;
+        throw new InterpreterError(`Unsupported object property type: ${propertyType}`);
       }
     }
 

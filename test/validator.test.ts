@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 
-import type { ESTree } from "meriyah";
+import type { ESTree } from "../src/ast";
 
 import { Interpreter } from "../src/interpreter";
 

@@ -32,6 +32,7 @@ function benchmark(
 ): BenchmarkResult {
   // Warm up both systems
   new Interpreter({ globals }).evaluate(code);
+  // eslint-disable-next-line no-eval
   eval(code);
 
   // Benchmark interpreter - create new interpreter for each iteration to avoid state pollution
@@ -46,6 +47,7 @@ function benchmark(
   // Benchmark native
   const nativeStart = performance.now();
   for (let i = 0; i < iterations; i++) {
+    // eslint-disable-next-line no-eval
     eval(code);
   }
   const nativeEnd = performance.now();

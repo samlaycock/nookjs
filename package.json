@@ -17,13 +17,13 @@
     "fmt": "oxfmt .",
     "typecheck": "tsc --noEmit",
     "build": "tsdown",
-    "benchmark": "bun run benchmark.ts"
-  },
-  "dependencies": {
-    "meriyah": "7.0.0"
+    "benchmark": "bun run benchmark.ts",
+    "benchmark:parse": "bun run benchmark-parse.ts",
+    "benchmark:parse:profile": "bun run benchmark-parse-profile.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "meriyah": "7.0.0",
     "oxfmt": "0.26.0",
     "oxlint": "1.41.0",
     "oxlint-tsgolint": "0.11.1",

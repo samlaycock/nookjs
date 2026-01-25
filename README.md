@@ -1,6 +1,6 @@
 # JavaScript Interpreter
 
-A simple, secure JavaScript interpreter built with TypeScript and Meriyah AST parser. This interpreter evaluates a subset of JavaScript, supporting mathematical operations, variables, boolean logic, control flow, functions, strings, and arrays.
+A simple, secure JavaScript interpreter built with TypeScript and a zero-dependency custom AST parser. This interpreter evaluates a subset of JavaScript, supporting mathematical operations, variables, boolean logic, control flow, functions, strings, and arrays.
 
 ## Features
 
@@ -812,11 +812,15 @@ bun run index.ts
 bun test
 ```
 
+## Dependencies
+
+This project has **zero runtime dependencies**. The parser is implemented in `src/ast.ts`.
+
 ## Architecture
 
 The interpreter works by:
 
-1. **Parsing**: Uses Meriyah to parse JavaScript code into an AST
+1. **Parsing**: Uses the built-in zero-dependency parser in `src/ast.ts` to parse JavaScript into an ESTree-compatible AST
 2. **Evaluation**: Walks the AST recursively, evaluating each node
 3. **Environment**: Maintains variable scope with proper `let`/`const` semantics and closures
 4. **Control Flow**: Evaluates conditions and loops, executing appropriate branches
@@ -836,7 +840,7 @@ The interpreter throws `InterpreterError` for:
 - Assignment to undefined variables
 - Invalid function calls
 - Invalid array operations
-- Invalid syntax (via Meriyah's ParseError)
+- Invalid syntax (via the built-in parser's ParseError)
 - Security violations (accessing `__proto__`, `constructor`, etc.)
 
 ## Testing
