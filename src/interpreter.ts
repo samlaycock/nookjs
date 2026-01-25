@@ -2162,6 +2162,10 @@ export class Interpreter {
   private currentSuperBinding: SuperBinding | null = null;
   private instanceClassMap: WeakMap<object, ClassValue> = new WeakMap();
   private arrayMethodCache: WeakMap<any[], Map<string, HostFunctionValue>> = new WeakMap();
+  private generatorMethodCache: WeakMap<GeneratorValue, Map<string, HostFunctionValue>> =
+    new WeakMap();
+  private asyncGeneratorMethodCache: WeakMap<AsyncGeneratorValue, Map<string, HostFunctionValue>> =
+    new WeakMap();
   private thisInitStack: boolean[] = [];
   private constructorStack: ClassValue[] = [];
 
@@ -5562,30 +5566,18 @@ export class Interpreter {
 
       // Handle generator methods (next, return, throw)
       if (object instanceof GeneratorValue) {
-        if (property === "next") {
-          return new HostFunctionValue(object.next.bind(object), "next", false);
-        }
-        if (property === "return") {
-          return new HostFunctionValue(object.return.bind(object), "return", false);
-        }
-        if (property === "throw") {
-          // rethrowErrors: true - errors from throw() should propagate directly
-          return new HostFunctionValue(object.throw.bind(object), "throw", false, true);
+        const method = this.getGeneratorMethod(object, property);
+        if (method) {
+          return method;
         }
         throw new InterpreterError(`Generator method '${property}' not supported`);
       }
 
       // Handle async generator methods
       if (object instanceof AsyncGeneratorValue) {
-        if (property === "next") {
-          return new HostFunctionValue(object.next.bind(object), "next", true);
-        }
-        if (property === "return") {
-          return new HostFunctionValue(object.return.bind(object), "return", true);
-        }
-        if (property === "throw") {
-          // rethrowErrors: true - errors from throw() should propagate directly
-          return new HostFunctionValue(object.throw.bind(object), "throw", true, true);
+        const method = this.getAsyncGeneratorMethod(object, property);
+        if (method) {
+          return method;
         }
         throw new InterpreterError(`Async generator method '${property}' not supported`);
       }
@@ -5640,6 +5632,84 @@ export class Interpreter {
       cache.set(methodName, method);
     }
     return method;
+  }
+
+  private getGeneratorMethod(
+    generator: GeneratorValue,
+    methodName: string,
+  ): HostFunctionValue | null {
+    let cache = this.generatorMethodCache.get(generator);
+    if (!cache) {
+      cache = new Map();
+      this.generatorMethodCache.set(generator, cache);
+    }
+
+    const cached = cache.get(methodName);
+    if (cached) {
+      return cached;
+    }
+
+    const method = this.buildGeneratorMethod(generator, methodName);
+    if (method) {
+      cache.set(methodName, method);
+    }
+    return method;
+  }
+
+  private buildGeneratorMethod(
+    generator: GeneratorValue,
+    methodName: string,
+  ): HostFunctionValue | null {
+    switch (methodName) {
+      case "next":
+        return new HostFunctionValue(generator.next.bind(generator), "next", false);
+      case "return":
+        return new HostFunctionValue(generator.return.bind(generator), "return", false);
+      case "throw":
+        // rethrowErrors: true - errors from throw() should propagate directly
+        return new HostFunctionValue(generator.throw.bind(generator), "throw", false, true);
+      default:
+        return null;
+    }
+  }
+
+  private getAsyncGeneratorMethod(
+    generator: AsyncGeneratorValue,
+    methodName: string,
+  ): HostFunctionValue | null {
+    let cache = this.asyncGeneratorMethodCache.get(generator);
+    if (!cache) {
+      cache = new Map();
+      this.asyncGeneratorMethodCache.set(generator, cache);
+    }
+
+    const cached = cache.get(methodName);
+    if (cached) {
+      return cached;
+    }
+
+    const method = this.buildAsyncGeneratorMethod(generator, methodName);
+    if (method) {
+      cache.set(methodName, method);
+    }
+    return method;
+  }
+
+  private buildAsyncGeneratorMethod(
+    generator: AsyncGeneratorValue,
+    methodName: string,
+  ): HostFunctionValue | null {
+    switch (methodName) {
+      case "next":
+        return new HostFunctionValue(generator.next.bind(generator), "next", true);
+      case "return":
+        return new HostFunctionValue(generator.return.bind(generator), "return", true);
+      case "throw":
+        // rethrowErrors: true - errors from throw() should propagate directly
+        return new HostFunctionValue(generator.throw.bind(generator), "throw", true, true);
+      default:
+        return null;
+    }
   }
 
   private buildArrayMethod(arr: any[], methodName: string): HostFunctionValue | null {
@@ -7691,30 +7761,18 @@ export class Interpreter {
 
       // Handle generator methods (next, return, throw)
       if (object instanceof GeneratorValue) {
-        if (property === "next") {
-          return new HostFunctionValue(object.next.bind(object), "next", false);
-        }
-        if (property === "return") {
-          return new HostFunctionValue(object.return.bind(object), "return", false);
-        }
-        if (property === "throw") {
-          // rethrowErrors: true - errors from throw() should propagate directly
-          return new HostFunctionValue(object.throw.bind(object), "throw", false, true);
+        const method = this.getGeneratorMethod(object, property);
+        if (method) {
+          return method;
         }
         throw new InterpreterError(`Generator method '${property}' not supported`);
       }
 
       // Handle async generator methods
       if (object instanceof AsyncGeneratorValue) {
-        if (property === "next") {
-          return new HostFunctionValue(object.next.bind(object), "next", true);
-        }
-        if (property === "return") {
-          return new HostFunctionValue(object.return.bind(object), "return", true);
-        }
-        if (property === "throw") {
-          // rethrowErrors: true - errors from throw() should propagate directly
-          return new HostFunctionValue(object.throw.bind(object), "throw", true, true);
+        const method = this.getAsyncGeneratorMethod(object, property);
+        if (method) {
+          return method;
         }
         throw new InterpreterError(`Async generator method '${property}' not supported`);
       }
