@@ -71,6 +71,9 @@ class OptionalChainShortCircuit {
   // Marker class to signal optional chaining short-circuit
 }
 
+// Reuse a single marker instance to avoid per-chain allocations.
+const OPTIONAL_CHAIN_SHORT_CIRCUIT = new OptionalChainShortCircuit();
+
 /**
  * Marker class to signal a yield expression in a generator
  * When a generator executes `yield value`, we return YieldValue to pause execution
@@ -3338,7 +3341,7 @@ export class Interpreter {
       this.ensureNoPrototypeAccessForSymbol(obj, property);
       return (obj as any)[property];
     }
-    const propName = String(property);
+    const propName = typeof property === "string" ? property : String(property);
     if (!this.shouldSkipPropertyValidation(obj) || this.shouldForcePropertyValidation(propName)) {
       validatePropertyName(propName); // Security: prevent prototype pollution
     }
@@ -3409,10 +3412,32 @@ export class Interpreter {
    * Shared logic between evaluateCallExpression and evaluateNewExpression.
    */
   private evaluateArguments(args: ESTree.CallExpression["arguments"]): any[] {
+    const count = args.length;
+    if (count === 0) {
+      return [];
+    }
+
+    let hasSpread = false;
+    for (let i = 0; i < count; i++) {
+      if (args[i]?.type === "SpreadElement") {
+        hasSpread = true;
+        break;
+      }
+    }
+
+    if (!hasSpread) {
+      const evaluatedArgs = Array.from({ length: count });
+      for (let i = 0; i < count; i++) {
+        evaluatedArgs[i] = this.evaluateNode(args[i] as ESTree.Expression);
+      }
+      return evaluatedArgs;
+    }
+
     const evaluatedArgs: any[] = [];
-    for (const arg of args) {
-      if (arg.type === "SpreadElement") {
-        // Spread in call: fn(...arr) - expand array as separate arguments
+    for (let i = 0; i < count; i++) {
+      const arg = args[i];
+      if (arg?.type === "SpreadElement") {
+        // Spread in call: fn(...arr) - expand array as separate arguments.
         if (!this.isFeatureEnabled("SpreadOperator")) {
           throw new InterpreterError("SpreadOperator is not enabled");
         }
@@ -3421,7 +3446,10 @@ export class Interpreter {
         if (!Array.isArray(spreadValue)) {
           throw new InterpreterError("Spread syntax in function calls requires an array");
         }
-        evaluatedArgs.push(...spreadValue);
+        // Avoid push(...spreadValue) to sidestep argument count limits on large arrays.
+        for (let j = 0; j < spreadValue.length; j++) {
+          evaluatedArgs.push(spreadValue[j]);
+        }
       } else {
         evaluatedArgs.push(this.evaluateNode(arg as ESTree.Expression));
       }
@@ -3434,10 +3462,32 @@ export class Interpreter {
    * Shared logic between evaluateCallExpressionAsync and evaluateNewExpressionAsync.
    */
   private async evaluateArgumentsAsync(args: ESTree.CallExpression["arguments"]): Promise<any[]> {
+    const count = args.length;
+    if (count === 0) {
+      return [];
+    }
+
+    let hasSpread = false;
+    for (let i = 0; i < count; i++) {
+      if (args[i]?.type === "SpreadElement") {
+        hasSpread = true;
+        break;
+      }
+    }
+
+    if (!hasSpread) {
+      const evaluatedArgs = Array.from({ length: count });
+      for (let i = 0; i < count; i++) {
+        evaluatedArgs[i] = await this.evaluateNodeAsync(args[i] as ESTree.Expression);
+      }
+      return evaluatedArgs;
+    }
+
     const evaluatedArgs: any[] = [];
-    for (const arg of args) {
-      if (arg.type === "SpreadElement") {
-        // Spread in call: fn(...arr) - expand array as separate arguments
+    for (let i = 0; i < count; i++) {
+      const arg = args[i];
+      if (arg?.type === "SpreadElement") {
+        // Spread in call: fn(...arr) - expand array as separate arguments.
         if (!this.isFeatureEnabled("SpreadOperator")) {
           throw new InterpreterError("SpreadOperator is not enabled");
         }
@@ -3446,7 +3496,10 @@ export class Interpreter {
         if (!Array.isArray(spreadValue)) {
           throw new InterpreterError("Spread syntax in function calls requires an array");
         }
-        evaluatedArgs.push(...spreadValue);
+        // Avoid push(...spreadValue) to sidestep argument count limits on large arrays.
+        for (let j = 0; j < spreadValue.length; j++) {
+          evaluatedArgs.push(spreadValue[j]);
+        }
       } else {
         evaluatedArgs.push(await this.evaluateNodeAsync(arg as ESTree.Expression));
       }
@@ -5260,42 +5313,9 @@ export class Interpreter {
         thisValue = this.evaluateNode(memberExpr.object); // The object becomes 'this'
       }
 
-      // Handle optional chaining short-circuit propagation
-      if (thisValue instanceof OptionalChainShortCircuit) {
-        return thisValue;
-      }
-
-      // For arrays, strings, generators, async generators, and classes, use evaluateMemberExpression
-      // to get proper wrappers/static methods
-      if (
-        memberExpr.object.type !== "Super" &&
-        (Array.isArray(thisValue) ||
-          typeof thisValue === "string" ||
-          thisValue instanceof GeneratorValue ||
-          thisValue instanceof AsyncGeneratorValue ||
-          thisValue instanceof ClassValue)
-      ) {
-        callee = this.evaluateMemberExpression(memberExpr);
-      } else if (memberExpr.object.type !== "Super") {
-        // Handle optional member access: obj?.method()
-        if (memberExpr.optional && (thisValue === null || thisValue === undefined)) {
-          return new OptionalChainShortCircuit();
-        }
-
-        // Handle private method call: this.#method()
-        if (memberExpr.property.type === "PrivateIdentifier") {
-          if (!this.isFeatureEnabled("PrivateFields")) {
-            throw new InterpreterError("PrivateFields is not enabled");
-          }
-          callee = this.accessPrivateField(
-            thisValue,
-            (memberExpr.property as ESTree.PrivateIdentifier).name,
-          );
-        } else {
-          // Get the method from the object
-          const property = memberExpr.computed ? this.evaluateNode(memberExpr.property) : null;
-          callee = this.getObjectProperty(thisValue, memberExpr, property);
-        }
+      // Resolve the member value using the already-evaluated object to avoid double evaluation.
+      if (memberExpr.object.type !== "Super") {
+        callee = this.resolveMemberExpressionValue(memberExpr, thisValue);
       }
     } else {
       // Regular function call - no 'this' binding
@@ -5309,7 +5329,7 @@ export class Interpreter {
 
     // Handle optional call: func?.() returns undefined if func is null/undefined
     if (node.optional && (callee === null || callee === undefined)) {
-      return new OptionalChainShortCircuit();
+      return OPTIONAL_CHAIN_SHORT_CIRCUIT;
     }
 
     // Handle host functions
@@ -5439,15 +5459,16 @@ export class Interpreter {
     }
 
     const object = this.evaluateNode(node.object);
+    return this.resolveMemberExpressionValue(node, object);
+  }
 
-    // Handle optional chaining short-circuit propagation
+  private resolveMemberExpressionValue(node: ESTree.MemberExpression, object: any): any {
+    // Preserve optional chaining short-circuit semantics.
     if (object instanceof OptionalChainShortCircuit) {
       return object;
     }
-
-    // Handle optional chaining: obj?.prop returns undefined if obj is null/undefined
     if (node.optional && (object === null || object === undefined)) {
-      return new OptionalChainShortCircuit();
+      return OPTIONAL_CHAIN_SHORT_CIRCUIT;
     }
 
     // Block property access on host functions
@@ -6292,48 +6313,9 @@ export class Interpreter {
         thisValue = await this.evaluateNodeAsync(memberExpr.object);
       }
 
-      // Handle optional chaining short-circuit propagation
-      if (thisValue instanceof OptionalChainShortCircuit) {
-        return thisValue;
-      }
-
-      // For arrays, strings, generators, async generators, and classes, use evaluateMemberExpressionAsync
-      // to get proper wrappers/static methods
-      if (
-        memberExpr.object.type !== "Super" &&
-        (Array.isArray(thisValue) ||
-          typeof thisValue === "string" ||
-          thisValue instanceof GeneratorValue ||
-          thisValue instanceof AsyncGeneratorValue ||
-          thisValue instanceof ClassValue)
-      ) {
-        callee = await this.evaluateMemberExpressionAsync(memberExpr);
-      } else if (memberExpr.object.type !== "Super") {
-        // Handle optional member access: obj?.method()
-        if (memberExpr.optional && (thisValue === null || thisValue === undefined)) {
-          return new OptionalChainShortCircuit();
-        }
-
-        if (thisValue instanceof HostFunctionValue) {
-          throw new InterpreterError("Cannot access properties on host functions");
-        }
-
-        // Handle private method call: this.#method()
-        if (memberExpr.property.type === "PrivateIdentifier") {
-          if (!this.isFeatureEnabled("PrivateFields")) {
-            throw new InterpreterError("PrivateFields is not enabled");
-          }
-          callee = this.accessPrivateField(
-            thisValue,
-            (memberExpr.property as ESTree.PrivateIdentifier).name,
-          );
-        } else {
-          // Get the method from the object
-          const property = memberExpr.computed
-            ? await this.evaluateNodeAsync(memberExpr.property)
-            : null;
-          callee = this.getObjectProperty(thisValue, memberExpr, property);
-        }
+      // Resolve the member value using the already-evaluated object to avoid double evaluation.
+      if (memberExpr.object.type !== "Super") {
+        callee = await this.resolveMemberExpressionValueAsync(memberExpr, thisValue);
       }
     } else {
       callee = await this.evaluateNodeAsync(node.callee);
@@ -6346,7 +6328,7 @@ export class Interpreter {
 
     // Handle optional call: func?.() returns undefined if func is null/undefined
     if (node.optional && (callee === null || callee === undefined)) {
-      return new OptionalChainShortCircuit();
+      return OPTIONAL_CHAIN_SHORT_CIRCUIT;
     }
 
     // Handle host functions (sync and async)
@@ -7598,15 +7580,19 @@ export class Interpreter {
     }
 
     const object = await this.evaluateNodeAsync(node.object);
+    return this.resolveMemberExpressionValueAsync(node, object);
+  }
 
-    // Handle optional chaining short-circuit propagation
+  private async resolveMemberExpressionValueAsync(
+    node: ESTree.MemberExpression,
+    object: any,
+  ): Promise<any> {
+    // Preserve optional chaining short-circuit semantics.
     if (object instanceof OptionalChainShortCircuit) {
       return object;
     }
-
-    // Handle optional chaining: obj?.prop returns undefined if obj is null/undefined
     if (node.optional && (object === null || object === undefined)) {
-      return new OptionalChainShortCircuit();
+      return OPTIONAL_CHAIN_SHORT_CIRCUIT;
     }
 
     this.validateMemberAccess(object);
