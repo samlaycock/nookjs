@@ -1,3 +1,4 @@
+// Placeholder for API parity with external parsers and future hooks.
 interface ParseOptions {
   readonly next?: boolean;
   readonly profile?: boolean;
@@ -63,7 +64,12 @@ export namespace ESTree {
     | ChainExpression
     | ClassExpression;
 
-  export type Pattern = Identifier | ObjectPattern | ArrayPattern | AssignmentPattern | RestElement;
+  export type Pattern =
+    | Identifier
+    | ObjectPattern
+    | ArrayPattern
+    | AssignmentPattern
+    | RestElement;
 
   export interface Identifier extends Node {
     readonly type: "Identifier";
@@ -410,6 +416,7 @@ export namespace ESTree {
   }
 }
 
+// Numeric token kinds to avoid per-token object allocations.
 const TOKEN = {
   EOF: 0,
   Identifier: 1,
@@ -462,7 +469,17 @@ const KEYWORDS = new Set([
   "typeof",
 ]);
 
-const ASSIGNMENT_OPERATORS = new Set(["=", "||=", "&&=", "??=", "+=", "-=", "*=", "/=", "%="]);
+const ASSIGNMENT_OPERATORS = new Set([
+  "=",
+  "||=",
+  "&&=",
+  "??=",
+  "+=",
+  "-=",
+  "*=",
+  "/=",
+  "%=",
+]);
 
 const BINARY_OPERATORS = new Set([
   "+",
@@ -505,7 +522,10 @@ class Tokenizer {
   private hasLookahead = false;
   private readonly profiler?: { tokens: number; tokenizeMs: number };
 
-  constructor(input: string, profiler?: { tokens: number; tokenizeMs: number }) {
+  constructor(
+    input: string,
+    profiler?: { tokens: number; tokenizeMs: number },
+  ) {
     this.input = input;
     this.profiler = profiler;
   }
@@ -555,6 +575,7 @@ class Tokenizer {
     return this.currentLineBreakBefore;
   }
 
+  // Save enough lexer state to allow parser backtracking (e.g. arrow lookahead).
   snapshot(): {
     index: number;
     currentType: TokenType;
@@ -577,6 +598,7 @@ class Tokenizer {
     };
   }
 
+  // Restore a snapshot taken by snapshot().
   restore(snapshot: {
     index: number;
     currentType: TokenType;
@@ -597,6 +619,7 @@ class Tokenizer {
     this.hasLookahead = snapshot.hasLookahead;
   }
 
+  // Reads a template element, returning raw/cooked values and tail flag.
   readTemplateElement(): { raw: string; cooked: string; tail: boolean } {
     const start = this.index;
     const state = { raw: "", cooked: "" };
@@ -625,6 +648,7 @@ class Tokenizer {
     throw new ParseError("Unterminated template literal starting at " + start);
   }
 
+  // Minimal escape handling for templates; leaves full unicode parsing to future.
   private readEscapeSequence(): { raw: string; cooked: string } {
     const start = this.index;
     this.index += 1;
@@ -671,13 +695,18 @@ class Tokenizer {
 
     if (this.isIdentifierStart(code)) {
       const ident = this.readIdentifier();
-      const type: TokenType = KEYWORDS.has(ident) ? TOKEN.Keyword : TOKEN.Identifier;
+      const type: TokenType = KEYWORDS.has(ident)
+        ? TOKEN.Keyword
+        : TOKEN.Identifier;
       this.setToken(setCurrent, type, ident, lineBreakBefore);
       this.recordToken(start);
       return;
     }
 
-    if (code === 35 && this.isIdentifierStart(this.input.charCodeAt(this.index + 1))) {
+    if (
+      code === 35 &&
+      this.isIdentifierStart(this.input.charCodeAt(this.index + 1))
+    ) {
       this.index += 1;
       const name = this.readIdentifier();
       this.setToken(setCurrent, TOKEN.PrivateIdentifier, name, lineBreakBefore);
@@ -686,13 +715,23 @@ class Tokenizer {
     }
 
     if (this.isDigit(code)) {
-      this.setToken(setCurrent, TOKEN.Number, this.readNumber(), lineBreakBefore);
+      this.setToken(
+        setCurrent,
+        TOKEN.Number,
+        this.readNumber(),
+        lineBreakBefore,
+      );
       this.recordToken(start);
       return;
     }
 
     if (code === 39 || code === 34) {
-      this.setToken(setCurrent, TOKEN.String, this.readString(ch), lineBreakBefore);
+      this.setToken(
+        setCurrent,
+        TOKEN.String,
+        this.readString(ch),
+        lineBreakBefore,
+      );
       this.recordToken(start);
       return;
     }
@@ -758,7 +797,10 @@ class Tokenizer {
       }
       if (ch === "/" && this.input[this.index + 1] === "/") {
         this.index += 2;
-        while (this.index < this.input.length && this.input[this.index] !== "\n") {
+        while (
+          this.index < this.input.length &&
+          this.input[this.index] !== "\n"
+        ) {
           this.index += 1;
         }
         continue;
@@ -766,7 +808,10 @@ class Tokenizer {
       if (ch === "/" && this.input[this.index + 1] === "*") {
         this.index += 2;
         while (this.index < this.input.length) {
-          if (this.input[this.index] === "*" && this.input[this.index + 1] === "/") {
+          if (
+            this.input[this.index] === "*" &&
+            this.input[this.index + 1] === "/"
+          ) {
             this.index += 2;
             break;
           }
@@ -797,7 +842,10 @@ class Tokenizer {
 
   private readNumber(): string {
     const start = this.index;
-    if (this.input.charCodeAt(this.index) === 48 && this.index + 1 < this.input.length) {
+    if (
+      this.input.charCodeAt(this.index) === 48 &&
+      this.index + 1 < this.input.length
+    ) {
       const prefix = this.input.charCodeAt(this.index + 1);
       if (prefix === 120 || prefix === 88) {
         this.index += 2;
@@ -856,7 +904,10 @@ class Tokenizer {
 
     switch (code) {
       case 46: // .
-        if (this.input.charCodeAt(start + 1) === 46 && this.input.charCodeAt(start + 2) === 46) {
+        if (
+          this.input.charCodeAt(start + 1) === 46 &&
+          this.input.charCodeAt(start + 2) === 46
+        ) {
           this.index += 3;
           return "...";
         }
@@ -928,7 +979,10 @@ class Tokenizer {
           this.index += 2;
           return "<=";
         }
-        if (this.input.charCodeAt(start + 1) === 60 && this.input.charCodeAt(start + 2) === 61) {
+        if (
+          this.input.charCodeAt(start + 1) === 60 &&
+          this.input.charCodeAt(start + 2) === 61
+        ) {
           this.index += 3;
           return "<<=";
         }
@@ -939,7 +993,10 @@ class Tokenizer {
           this.index += 2;
           return ">=";
         }
-        if (this.input.charCodeAt(start + 1) === 62 && this.input.charCodeAt(start + 2) === 61) {
+        if (
+          this.input.charCodeAt(start + 1) === 62 &&
+          this.input.charCodeAt(start + 2) === 61
+        ) {
           this.index += 3;
           return ">>=";
         }
@@ -1033,7 +1090,10 @@ class Tokenizer {
   }
 
   private readWhile(predicate: (code: number) => boolean): void {
-    while (this.index < this.input.length && predicate(this.input.charCodeAt(this.index))) {
+    while (
+      this.index < this.input.length &&
+      predicate(this.input.charCodeAt(this.index))
+    ) {
       this.index += 1;
     }
   }
@@ -1043,11 +1103,20 @@ class Tokenizer {
   }
 
   private isHexDigit(code: number): boolean {
-    return (code >= 48 && code <= 57) || (code >= 97 && code <= 102) || (code >= 65 && code <= 70);
+    return (
+      (code >= 48 && code <= 57) ||
+      (code >= 97 && code <= 102) ||
+      (code >= 65 && code <= 70)
+    );
   }
 
   private isIdentifierStart(code: number): boolean {
-    return (code >= 97 && code <= 122) || (code >= 65 && code <= 90) || code === 95 || code === 36;
+    return (
+      (code >= 97 && code <= 122) ||
+      (code >= 65 && code <= 90) ||
+      code === 95 ||
+      code === 36
+    );
   }
 
   private isIdentifierPart(code: number): boolean {
@@ -1131,7 +1200,11 @@ class Parser {
     if (this.matchKeyword("class")) {
       return this.parseClassDeclaration();
     }
-    if (this.matchKeyword("let") || this.matchKeyword("const") || this.matchKeyword("var")) {
+    if (
+      this.matchKeyword("let") ||
+      this.matchKeyword("const") ||
+      this.matchKeyword("var")
+    ) {
       return this.parseVariableDeclaration(false);
     }
     return this.parseExpressionStatement();
@@ -1159,7 +1232,9 @@ class Parser {
     const test = this.parseExpression();
     this.expectPunctuator(")");
     const consequent = this.parseStatement();
-    const alternate = this.matchKeyword("else") ? (this.next(), this.parseStatement()) : null;
+    const alternate = this.matchKeyword("else")
+      ? (this.next(), this.parseStatement())
+      : null;
     return { type: "IfStatement", test, consequent, alternate };
   }
 
@@ -1183,7 +1258,10 @@ class Parser {
     return { type: "DoWhileStatement", body, test };
   }
 
-  private parseForStatement(): ESTree.ForStatement | ESTree.ForOfStatement | ESTree.ForInStatement {
+  private parseForStatement():
+    | ESTree.ForStatement
+    | ESTree.ForOfStatement
+    | ESTree.ForInStatement {
     this.expectKeyword("for");
     this.expectPunctuator("(");
 
@@ -1197,7 +1275,11 @@ class Parser {
       return { type: "ForStatement", init: null, test, update, body };
     }
 
-    if (this.matchKeyword("let") || this.matchKeyword("const") || this.matchKeyword("var")) {
+    if (
+      this.matchKeyword("let") ||
+      this.matchKeyword("const") ||
+      this.matchKeyword("var")
+    ) {
       const declaration = this.parseVariableDeclaration(true);
       if (this.matchKeyword("of")) {
         this.expectKeyword("of");
@@ -1233,6 +1315,7 @@ class Parser {
       return { type: "ForStatement", init: declaration, test, update, body };
     }
 
+    // Disallow "in" so `for (x in obj)` is parsed as ForInStatement.
     const initExpression = this.parseExpression(false);
 
     if (this.matchKeyword("of")) {
@@ -1324,7 +1407,11 @@ class Parser {
 
   private parseReturnStatement(): ESTree.ReturnStatement {
     this.expectKeyword("return");
-    if (this.matchPunctuator(";") || this.match(TOKEN.EOF) || this.currentLineBreakBefore) {
+    if (
+      this.matchPunctuator(";") ||
+      this.match(TOKEN.EOF) ||
+      this.currentLineBreakBefore
+    ) {
       this.consumeSemicolon();
       return { type: "ReturnStatement", argument: null };
     }
@@ -1480,7 +1567,9 @@ class Parser {
   private parseClassDeclaration(): ESTree.ClassDeclaration {
     this.expectKeyword("class");
     const id = this.match(TOKEN.Identifier) ? this.parseIdentifier() : null;
-    const superClass = this.matchKeyword("extends") ? (this.next(), this.parseExpression()) : null;
+    const superClass = this.matchKeyword("extends")
+      ? (this.next(), this.parseExpression())
+      : null;
     const body = this.parseClassBody();
     return { type: "ClassDeclaration", id, superClass, body };
   }
@@ -1488,15 +1577,20 @@ class Parser {
   private parseClassExpression(): ESTree.ClassExpression {
     this.expectKeyword("class");
     const id = this.match(TOKEN.Identifier) ? this.parseIdentifier() : null;
-    const superClass = this.matchKeyword("extends") ? (this.next(), this.parseExpression()) : null;
+    const superClass = this.matchKeyword("extends")
+      ? (this.next(), this.parseExpression())
+      : null;
     const body = this.parseClassBody();
     return { type: "ClassExpression", id, superClass, body };
   }
 
   private parseClassBody(): ESTree.ClassBody {
     this.expectPunctuator("{");
-    const elements: (ESTree.MethodDefinition | ESTree.PropertyDefinition | ESTree.StaticBlock)[] =
-      [];
+    const elements: (
+      | ESTree.MethodDefinition
+      | ESTree.PropertyDefinition
+      | ESTree.StaticBlock
+    )[] = [];
     while (!this.matchPunctuator("}")) {
       if (this.consumePunctuator(";")) {
         continue;
@@ -1507,7 +1601,9 @@ class Parser {
         elements.push({ type: "StaticBlock", body: block.body });
         continue;
       }
-      const isStatic = this.matchKeyword("static") ? (this.next(), true) : false;
+      const isStatic = this.matchKeyword("static")
+        ? (this.next(), true)
+        : false;
       const element = this.parseClassElement(isStatic);
       elements.push(element);
     }
@@ -1542,7 +1638,12 @@ class Parser {
     const keyResult = this.parsePropertyKey();
     const { key, computed } = keyResult;
 
-    if (flags.kind === "method" && !flags.generator && !flags.async && !isStatic) {
+    if (
+      flags.kind === "method" &&
+      !flags.generator &&
+      !flags.async &&
+      !isStatic
+    ) {
       if (key.type === "Identifier" && key.name === "constructor") {
         flags.kind = "constructor";
       }
@@ -1560,7 +1661,9 @@ class Parser {
       };
     }
 
-    const value = this.matchPunctuator("=") ? (this.next(), this.parseExpression()) : null;
+    const value = this.matchPunctuator("=")
+      ? (this.next(), this.parseExpression())
+      : null;
     this.consumeSemicolon();
     return {
       type: "PropertyDefinition",
@@ -1571,7 +1674,10 @@ class Parser {
     };
   }
 
-  private parseMethodFunction(asyncFlag: boolean, generator: boolean): ESTree.FunctionExpression {
+  private parseMethodFunction(
+    asyncFlag: boolean,
+    generator: boolean,
+  ): ESTree.FunctionExpression {
     const prevFunction = this.inFunction;
     const prevGenerator = this.inGenerator;
     const prevAsync = this.inAsync;
@@ -1598,14 +1704,18 @@ class Parser {
     };
   }
 
-  private parseVariableDeclaration(isForInit: boolean): ESTree.VariableDeclaration {
+  private parseVariableDeclaration(
+    isForInit: boolean,
+  ): ESTree.VariableDeclaration {
     const kind = this.currentValue as "let" | "const" | "var";
     this.next();
     const declarations: ESTree.VariableDeclarator[] = [];
 
     while (true) {
       const id = this.parseBindingPattern();
-      const init = this.matchPunctuator("=") ? (this.next(), this.parseExpression()) : null;
+      const init = this.matchPunctuator("=")
+        ? (this.next(), this.parseExpression())
+        : null;
       declarations.push({ type: "VariableDeclarator", id, init });
       if (!this.consumePunctuator(",")) {
         break;
@@ -1629,6 +1739,7 @@ class Parser {
     return this.parseAssignmentExpression(allowIn);
   }
 
+  // Try arrow parsing first since it shares a prefix with grouping/expressions.
   private parseAssignmentExpression(allowIn = true): ESTree.Expression {
     const arrow = this.tryParseArrowFunction();
     if (arrow) {
@@ -1667,7 +1778,11 @@ class Parser {
     return this.parseLogicalPrecedence(0, allowIn);
   }
 
-  private parseLogicalPrecedence(minPrecedence: number, allowIn: boolean): ESTree.Expression {
+  // Precedence-climbing for logical operators (&& > ||/??).
+  private parseLogicalPrecedence(
+    minPrecedence: number,
+    allowIn: boolean,
+  ): ESTree.Expression {
     const state = { left: this.parseBinaryExpression(allowIn) };
     while (true) {
       const operator = this.currentValue;
@@ -1694,7 +1809,11 @@ class Parser {
     return this.parseBinaryPrecedence(0, allowIn);
   }
 
-  private parseBinaryPrecedence(minPrecedence: number, allowIn: boolean): ESTree.Expression {
+  // Precedence-climbing for binary operators, with optional "in" suppression.
+  private parseBinaryPrecedence(
+    minPrecedence: number,
+    allowIn: boolean,
+  ): ESTree.Expression {
     const state = { left: this.parseExponentExpression() };
     while (true) {
       const operator = this.currentValue;
@@ -1751,7 +1870,9 @@ class Parser {
     if (this.matchKeyword("yield") && this.inGenerator) {
       this.next();
       const delegate = this.consumePunctuator("*");
-      const argument = this.shouldParseYieldArgument() ? this.parseAssignmentExpression() : null;
+      const argument = this.shouldParseYieldArgument()
+        ? this.parseAssignmentExpression()
+        : null;
       return { type: "YieldExpression", argument, delegate };
     }
 
@@ -1776,6 +1897,7 @@ class Parser {
     return expression;
   }
 
+  // Builds member/call chains and wraps optional chains in ChainExpression.
   private parseLeftHandSideExpression(): ESTree.Expression {
     const state = { expression: this.parseNewExpression() };
     const chainState = { usedOptional: false };
@@ -1883,7 +2005,11 @@ class Parser {
       const identifier = this.parseIdentifier();
       return identifier;
     }
-    if (this.matchKeyword("true") || this.matchKeyword("false") || this.matchKeyword("null")) {
+    if (
+      this.matchKeyword("true") ||
+      this.matchKeyword("false") ||
+      this.matchKeyword("null")
+    ) {
       const value = this.currentValue;
       this.next();
       return {
@@ -2023,7 +2149,9 @@ class Parser {
     const key = keyResult.key;
     const computed = keyResult.computed;
     if (key.type === "PrivateIdentifier") {
-      throw new ParseError("Private identifiers are not valid in object literals");
+      throw new ParseError(
+        "Private identifiers are not valid in object literals",
+      );
     }
 
     if (this.matchPunctuator("(")) {
@@ -2176,7 +2304,9 @@ class Parser {
     const key = keyResult.key;
     const computed = keyResult.computed;
     if (key.type === "PrivateIdentifier") {
-      throw new ParseError("Private identifiers are not valid in object patterns");
+      throw new ParseError(
+        "Private identifiers are not valid in object patterns",
+      );
     }
 
     if (this.consumePunctuator(":")) {
@@ -2292,7 +2422,10 @@ class Parser {
       this.next();
       return { type: "Identifier", name };
     }
-    if (this.match(TOKEN.Keyword) && this.isIdentifierKeyword(this.currentValue)) {
+    if (
+      this.match(TOKEN.Keyword) &&
+      this.isIdentifierKeyword(this.currentValue)
+    ) {
       const name = this.currentValue;
       this.next();
       return { type: "Identifier", name };
@@ -2353,7 +2486,9 @@ class Parser {
       }
       if (this.matchPunctuator("(")) {
         this.next();
-        const params = this.matchPunctuator(")") ? [] : this.parseFunctionParams();
+        const params = this.matchPunctuator(")")
+          ? []
+          : this.parseFunctionParams();
         this.expectPunctuator(")");
         if (this.consumePunctuator("=>")) {
           return params;
@@ -2385,7 +2520,9 @@ class Parser {
     throw new ParseError("Invalid left-hand side in assignment");
   }
 
-  private convertArrayExpressionToPattern(expression: ESTree.ArrayExpression): ESTree.ArrayPattern {
+  private convertArrayExpressionToPattern(
+    expression: ESTree.ArrayExpression,
+  ): ESTree.ArrayPattern {
     const elements = expression.elements.map((element) => {
       if (!element) {
         return null;
@@ -2413,7 +2550,9 @@ class Parser {
         continue;
       }
       if (property.type === "Property") {
-        const value = this.normalizePatternElement(property.value as ESTree.Expression);
+        const value = this.normalizePatternElement(
+          property.value as ESTree.Expression,
+        );
         properties.push({
           type: "Property",
           key: property.key,
@@ -2428,7 +2567,9 @@ class Parser {
     return { type: "ObjectPattern", properties };
   }
 
-  private normalizePatternElement(element: ESTree.Expression | ESTree.Pattern): ESTree.Pattern {
+  private normalizePatternElement(
+    element: ESTree.Expression | ESTree.Pattern,
+  ): ESTree.Pattern {
     if (this.isAssignablePattern(element)) {
       return element as ESTree.Pattern;
     }
@@ -2441,7 +2582,9 @@ class Parser {
     throw new ParseError("Invalid destructuring pattern");
   }
 
-  private isAssignablePattern(node: ESTree.Expression | ESTree.Pattern): boolean {
+  private isAssignablePattern(
+    node: ESTree.Expression | ESTree.Pattern,
+  ): boolean {
     return (
       node.type === "Identifier" ||
       node.type === "ArrayPattern" ||
@@ -2462,7 +2605,11 @@ class Parser {
   }
 
   private shouldParseYieldArgument(): boolean {
-    if (this.matchPunctuator(";") || this.matchPunctuator(")") || this.matchPunctuator("}")) {
+    if (
+      this.matchPunctuator(";") ||
+      this.matchPunctuator(")") ||
+      this.matchPunctuator("}")
+    ) {
       return false;
     }
     if (this.currentLineBreakBefore) {
@@ -2538,7 +2685,10 @@ class Parser {
   }
 
   private peekKeyword(value: string): boolean {
-    return this.tokenizer.peekType() === TOKEN.Keyword && this.tokenizer.peekValue() === value;
+    return (
+      this.tokenizer.peekType() === TOKEN.Keyword &&
+      this.tokenizer.peekValue() === value
+    );
   }
 
   private matchPunctuator(value: string): boolean {
@@ -2546,7 +2696,10 @@ class Parser {
   }
 
   private peekPunctuator(value: string): boolean {
-    return this.tokenizer.peekType() === TOKEN.Punctuator && this.tokenizer.peekValue() === value;
+    return (
+      this.tokenizer.peekType() === TOKEN.Punctuator &&
+      this.tokenizer.peekValue() === value
+    );
   }
 
   private peek(type: TokenType): boolean {
@@ -2643,7 +2796,10 @@ class Parser {
   }
 }
 
-export function parseModule(input: string, _options: ParseOptions = {}): ESTree.Program {
+export function parseModule(
+  input: string,
+  _options: ParseOptions = {},
+): ESTree.Program {
   const parser = new Parser(input, true);
   return parser.parseProgram();
 }
