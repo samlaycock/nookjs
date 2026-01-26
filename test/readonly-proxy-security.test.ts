@@ -220,9 +220,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         (wrapped as any).newProp = "test";
-      }).toThrow(
-        "Cannot modify property 'newProp' on global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'newProp' on global 'obj' (read-only)");
     });
 
     it("should block deleting properties", () => {
@@ -231,9 +229,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         delete (wrapped as any).value;
-      }).toThrow(
-        "Cannot delete property 'value' from global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot delete property 'value' from global 'obj' (read-only)");
     });
 
     it("should block Object.defineProperty", () => {
@@ -242,9 +238,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         Object.defineProperty(wrapped, "newProp", { value: 100 });
-      }).toThrow(
-        "Cannot define property 'newProp' on global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
     });
 
     it("should block Object.setPrototypeOf", () => {
@@ -274,9 +268,7 @@ describe("ReadOnlyProxy Security", () => {
       // Cannot modify nested values
       expect(() => {
         (wrapped as any).level1.level2.value = 100;
-      }).toThrow(
-        "Cannot modify property 'value' on global 'obj.level1.level2' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'value' on global 'obj.level1.level2' (read-only)");
     });
 
     it("should block __proto__ on nested objects", () => {
@@ -390,9 +382,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         first.secret = "HACKED";
-      }).toThrow(
-        "Cannot modify property 'secret' on global 'arr[]' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'secret' on global 'arr[]' (read-only)");
     });
 
     it("should wrap values when iterating inside interpreter", () => {
@@ -405,9 +395,7 @@ describe("ReadOnlyProxy Security", () => {
           const obj = [...arr][0];
           obj.secret = "HACKED";
         `);
-      }).toThrow(
-        "Cannot modify property 'secret' on global 'arr[]' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'secret' on global 'arr[]' (read-only)");
     });
 
     it("should wrap values yielded by async iterators", async () => {
@@ -421,9 +409,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         result.value.secret = "HACKED";
-      }).toThrow(
-        "Cannot modify property 'secret' on global 'gen[]' (read-only)",
-      );
+      }).toThrow("Cannot modify property 'secret' on global 'gen[]' (read-only)");
     });
   });
 
@@ -452,9 +438,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         Reflect.defineProperty(wrapped, "newProp", { value: 100 });
-      }).toThrow(
-        "Cannot define property 'newProp' on global 'obj' (read-only)",
-      );
+      }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
     });
 
     it("should block Reflect.setPrototypeOf", () => {

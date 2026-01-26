@@ -1,12 +1,10 @@
 import { describe, it, expect } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 import {
   preset,
   ES5,
-  ES2015,
-  ES2017,
   ES2022,
-  ESNext,
   FetchAPI,
   ConsoleAPI,
   TimersAPI,
@@ -60,10 +58,7 @@ describe("preset() function", () => {
       expect(result.featureControl?.features).toContain("WhileStatement");
       expect(result.featureControl?.features).toContain("ForStatement");
       // Should deduplicate
-      expect(
-        result.featureControl?.features.filter((f) => f === "IfStatement")
-          .length,
-      ).toBe(1);
+      expect(result.featureControl?.features.filter((f) => f === "IfStatement").length).toBe(1);
     });
 
     it("should union features when both are blacklists", () => {
@@ -130,13 +125,10 @@ describe("preset() function", () => {
 
   describe("validator merging", () => {
     it("should use the last validator", () => {
-      const validator1 = { validate: () => {} };
-      const validator2 = { validate: () => {} };
+      const validator1 = (() => true) as any;
+      const validator2 = (() => true) as any;
 
-      const result = preset(
-        { validator: validator1 as any },
-        { validator: validator2 as any },
-      );
+      const result = preset({ validator: validator1 }, { validator: validator2 });
 
       expect(result.validator).toBe(validator2);
     });
@@ -213,9 +205,7 @@ describe("Addon Presets", () => {
       const logs: any[] = [];
       const mockConsole = { log: (...args: any[]) => logs.push(args) };
 
-      const interpreter = new Interpreter(
-        preset(ES2022, { globals: { console: mockConsole } }),
-      );
+      const interpreter = new Interpreter(preset(ES2022, { globals: { console: mockConsole } }));
       interpreter.evaluate(`console.log('hello', 42)`);
 
       expect(logs).toEqual([["hello", 42]]);
@@ -337,8 +327,6 @@ describe("Integration: Full preset combinations", () => {
       }),
     );
 
-    await expect(interpreter.evaluateAsync("throwError()")).rejects.toThrow(
-      "secret",
-    );
+    return expect(interpreter.evaluateAsync("throwError()")).rejects.toThrow("secret");
   });
 });

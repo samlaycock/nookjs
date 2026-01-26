@@ -303,7 +303,7 @@ describe("Host Constructors", () => {
         },
       });
 
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function test() {
             return await new Promise((resolve, reject) => {
@@ -339,7 +339,7 @@ describe("Host Constructors", () => {
         },
       });
 
-      await expect(
+      return expect(
         interpreter.evaluateAsync(`
           async function test() {
             return await Promise.reject(new Error('rejected'));

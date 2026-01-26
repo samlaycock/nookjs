@@ -225,10 +225,7 @@ export const ES2018: InterpreterOptions = {
   ...ES2017,
   featureControl: {
     mode: "whitelist" as const,
-    features: [
-      ...(ES2017.featureControl!.features as LanguageFeature[]),
-      "AsyncGenerators",
-    ],
+    features: [...(ES2017.featureControl!.features as LanguageFeature[]), "AsyncGenerators"],
   },
 };
 
@@ -264,10 +261,7 @@ export const ES2020: InterpreterOptions = {
   ...ES2019,
   featureControl: {
     mode: "whitelist" as const,
-    features: [
-      ...(ES2019.featureControl!.features as LanguageFeature[]),
-      "OptionalChaining",
-    ],
+    features: [...(ES2019.featureControl!.features as LanguageFeature[]), "OptionalChaining"],
   },
   globals: {
     ...ES2019.globals,
@@ -292,19 +286,14 @@ export const ES2021: InterpreterOptions = {
   ...ES2020,
   featureControl: {
     mode: "whitelist" as const,
-    features: [
-      ...(ES2020.featureControl!.features as LanguageFeature[]),
-      "LogicalAssignment",
-    ],
+    features: [...(ES2020.featureControl!.features as LanguageFeature[]), "LogicalAssignment"],
   },
   globals: {
     ...ES2020.globals,
     // ES2021 additions
     WeakRef: typeof WeakRef !== "undefined" ? WeakRef : undefined,
     FinalizationRegistry:
-      typeof FinalizationRegistry !== "undefined"
-        ? FinalizationRegistry
-        : undefined,
+      typeof FinalizationRegistry !== "undefined" ? FinalizationRegistry : undefined,
   },
 };
 
@@ -470,10 +459,7 @@ export function preset(
         };
       } else {
         // Merge feature controls
-        result.featureControl = mergeFeatureControls(
-          result.featureControl,
-          p.featureControl,
-        );
+        result.featureControl = mergeFeatureControls(result.featureControl, p.featureControl);
       }
     }
 

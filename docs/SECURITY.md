@@ -17,14 +17,16 @@ The interpreter accepts a `security` option with the following settings:
 
 ```typescript
 const interpreter = new Interpreter({
-  globals: { /* ... */ },
+  globals: {
+    /* ... */
+  },
   security: {
     // Sanitize error stack traces to remove host file paths (default: true)
     sanitizeErrors: true,
-    
+
     // Hide original error messages from host functions (default: true)
     hideHostErrorMessages: true,
-  }
+  },
 });
 ```
 
@@ -33,6 +35,7 @@ const interpreter = new Interpreter({
 When enabled, error stack traces are sanitized to remove host file paths. This prevents untrusted code from learning about the host environment's file structure.
 
 **Before sanitization:**
+
 ```
 Error: test
     at executeHostConstructor (/Users/dev/project/src/interpreter.ts:4122:30)
@@ -40,6 +43,7 @@ Error: test
 ```
 
 **After sanitization:**
+
 ```
 Error: test
     at executeHostConstructor ([native code])
@@ -51,11 +55,13 @@ Error: test
 When enabled, error messages from host functions are replaced with a generic message. This is useful when host functions might throw errors containing sensitive information.
 
 **Without hiding:**
+
 ```
 Host function 'readFile' threw error: ENOENT: no such file, open '/etc/passwd'
 ```
 
 **With hiding:**
+
 ```
 Host function 'readFile' threw error: [error details hidden]
 ```
@@ -66,22 +72,22 @@ Host function 'readFile' threw error: [error details hidden]
 
 The following properties are blocked on all wrapped host objects:
 
-| Category | Properties |
-|----------|------------|
-| Prototype chain | `__proto__`, `constructor`, `prototype` |
-| Legacy methods | `__defineGetter__`, `__defineSetter__`, `__lookupGetter__`, `__lookupSetter__` |
-| Object.prototype | `toString`, `toLocaleString`, `hasOwnProperty`, `isPrototypeOf`, `propertyIsEnumerable` |
-| Function.prototype | `apply`, `call`, `bind`, `arguments`, `caller` |
+| Category           | Properties                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| Prototype chain    | `__proto__`, `constructor`, `prototype`                                                 |
+| Legacy methods     | `__defineGetter__`, `__defineSetter__`, `__lookupGetter__`, `__lookupSetter__`          |
+| Object.prototype   | `toString`, `toLocaleString`, `hasOwnProperty`, `isPrototypeOf`, `propertyIsEnumerable` |
+| Function.prototype | `apply`, `call`, `bind`, `arguments`, `caller`                                          |
 
 ### Dangerous Symbols
 
-| Symbol | Reason |
-|--------|--------|
-| `Symbol.toStringTag` | Could leak type information |
-| `Symbol.hasInstance` | Could manipulate instanceof checks |
-| `Symbol.species` | Could inject malicious constructors |
-| `Symbol.toPrimitive` | Returns `undefined` (not blocked) to enable arithmetic |
-| `Symbol.match/replace/search/split` | Could manipulate string operations |
+| Symbol                              | Reason                                                 |
+| ----------------------------------- | ------------------------------------------------------ |
+| `Symbol.toStringTag`                | Could leak type information                            |
+| `Symbol.hasInstance`                | Could manipulate instanceof checks                     |
+| `Symbol.species`                    | Could inject malicious constructors                    |
+| `Symbol.toPrimitive`                | Returns `undefined` (not blocked) to enable arithmetic |
+| `Symbol.match/replace/search/split` | Could manipulate string operations                     |
 
 ### Forbidden Globals
 
@@ -98,6 +104,7 @@ These cannot be injected as globals:
 ### Functions
 
 Host functions are wrapped in `HostFunctionValue` which:
+
 - Allows calling the function
 - Blocks access to dangerous properties
 - Allows access to static methods (e.g., `Promise.resolve`, `Array.isArray`)
@@ -106,6 +113,7 @@ Host functions are wrapped in `HostFunctionValue` which:
 ### Objects
 
 Host objects are wrapped in a `ReadOnlyProxy` which:
+
 - Returns `null` for `getPrototypeOf()` (hides prototype chain)
 - Blocks `set`, `deleteProperty`, `defineProperty`, `setPrototypeOf`
 - Blocks access to dangerous properties
@@ -134,6 +142,7 @@ Promise objects are passed through `ReadOnlyProxy.wrap()` without wrapping. This
 3. If `.then` becomes a `HostFunctionValue`, the native Promise resolution fails
 
 **Implications:**
+
 - Sandbox code can call native Promise methods directly
 - Promise values are resolved/rejected through standard interfaces
 - This is considered an acceptable trade-off for async/await support
@@ -147,6 +156,7 @@ By default, host error messages are hidden from the sandbox. If you need to see 
 ## Security Testing
 
 The interpreter includes comprehensive security tests in:
+
 - `test/readonly-proxy-security.test.ts` - Tests for ReadOnlyProxy protections
 - `test/security.test.ts` - General security tests
 - `test/security-options.test.ts` - Tests for security configuration options
@@ -165,6 +175,6 @@ const interpreter = new Interpreter({
     // For debugging only - remove in production
     sanitizeErrors: false,
     hideHostErrorMessages: false,
-  }
+  },
 });
 ```

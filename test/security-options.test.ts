@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+
 import { Interpreter } from "../src/interpreter";
 import { sanitizeErrorStack } from "../src/readonly-proxy";
 
@@ -96,7 +97,7 @@ describe("Security Options", () => {
         security: { hideHostErrorMessages: true },
       });
 
-      await expect(interpreter.evaluateAsync("new BadClass()")).rejects.toThrow(
+      return expect(interpreter.evaluateAsync("new BadClass()")).rejects.toThrow(
         "[error details hidden]",
       );
     });
@@ -111,9 +112,9 @@ describe("Security Options", () => {
         security: { hideHostErrorMessages: true },
       });
 
-      await expect(
-        interpreter.evaluateAsync("await asyncThrow()"),
-      ).rejects.toThrow("[error details hidden]");
+      return expect(interpreter.evaluateAsync("await asyncThrow()")).rejects.toThrow(
+        "[error details hidden]",
+      );
     });
   });
 
