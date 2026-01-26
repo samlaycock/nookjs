@@ -1161,9 +1161,14 @@ class Tokenizer {
           this.index += 2;
           return "<=";
         }
-        if (next === 60 && input.charCodeAt(start + 2) === 61) {
-          this.index += 3;
-          return "<<=";
+        if (next === 60) {
+          const next2 = input.charCodeAt(start + 2);
+          if (next2 === 61) {
+            this.index += 3;
+            return "<<=";
+          }
+          this.index += 2;
+          return "<<";
         }
         this.index += 1;
         return "<";
@@ -1181,10 +1186,17 @@ class Tokenizer {
             this.index += 3;
             return ">>=";
           }
-          if (next2 === 62 && input.charCodeAt(start + 3) === 61) {
-            this.index += 4;
-            return ">>>=";
+          if (next2 === 62) {
+            const next3 = input.charCodeAt(start + 3);
+            if (next3 === 61) {
+              this.index += 4;
+              return ">>>=";
+            }
+            this.index += 3;
+            return ">>>";
           }
+          this.index += 2;
+          return ">>";
         }
         this.index += 1;
         return ">";

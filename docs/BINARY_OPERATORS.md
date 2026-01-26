@@ -2,14 +2,16 @@
 
 ## What it is
 
-Binary operations such as `+`, `-`, comparisons, and `**`.
+Binary operations such as `+`, `-`, comparisons, bitwise operators, and `**`.
 
 ## Interpreter implementation
 
 - Evaluated by `applyBinaryOperator`.
-- Supported: `+`, `-`, `*`, `/`, `%`, `**`, `==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=`.
+- Arithmetic: `+`, `-`, `*`, `/`, `%`, `**`
+- Comparison: `==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=`
+- Bitwise: `&`, `|`, `^`, `<<`, `>>`, `>>>`
 
 ## Gotchas
 
-- No bitwise operators, `in`, or `instanceof`.
+- No `in` or `instanceof` operators.
 - Division/modulo by zero throws an `InterpreterError`.

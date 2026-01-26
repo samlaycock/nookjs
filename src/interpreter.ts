@@ -2989,6 +2989,20 @@ export class Interpreter {
       case ">=":
         return left >= right;
 
+      // Bitwise operators
+      case "&":
+        return left & right;
+      case "|":
+        return left | right;
+      case "^":
+        return left ^ right;
+      case "<<":
+        return left << right;
+      case ">>":
+        return left >> right;
+      case ">>>":
+        return left >>> right;
+
       default:
         throw new InterpreterError(`Unsupported binary operator: ${operator}`);
     }
@@ -3253,6 +3267,20 @@ export class Interpreter {
    * Returns what the loop should return based on the control flow.
    * This core logic is shared between sync and async loop evaluation.
    */
+  // Pre-allocated control flow result objects to avoid allocation in hot loops
+  private static readonly CONTROL_FLOW_CONTINUE: {
+    shouldReturn: false;
+    value: undefined;
+  } = { shouldReturn: false, value: undefined };
+  private static readonly CONTROL_FLOW_BREAK: {
+    shouldReturn: true;
+    value: undefined;
+  } = { shouldReturn: true, value: undefined };
+
+  /**
+   * Check loop control flow result without allocating objects in the common case.
+   * Returns a cached object indicating what action to take.
+   */
   private handleLoopControlFlow(result: any): {
     shouldReturn: boolean;
     value: any;
@@ -3262,18 +3290,13 @@ export class Interpreter {
       return { shouldReturn: true, value: result };
     }
 
-    // If we hit a break statement, exit the loop (return undefined)
+    // If we hit a break statement, exit the loop and return undefined
     if (result instanceof BreakValue) {
-      return { shouldReturn: true, value: undefined };
+      return Interpreter.CONTROL_FLOW_BREAK;
     }
 
-    // If we hit a continue statement, continue to next iteration
-    if (result instanceof ContinueValue) {
-      return { shouldReturn: false, value: result };
-    }
-
-    // Normal result - continue execution
-    return { shouldReturn: false, value: result };
+    // Normal result or continue - keep iterating (continue is handled by not breaking)
+    return Interpreter.CONTROL_FLOW_CONTINUE;
   }
 
   /**

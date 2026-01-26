@@ -1,366 +1,366 @@
 {
-  "timestamp": "2026-01-15T23:41:57.202Z",
+  "timestamp": "2026-01-26T21:44:58.496Z",
   "runtime": "Bun",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "results": [
     {
       "name": "Simple Addition",
-      "interpreterTime": 8.622542000000001,
-      "nativeTime": 0.6928330000000003,
-      "slowdownFactor": 12.445339641731843,
+      "interpreterTime": 29.138084,
+      "nativeTime": 1.038958000000001,
+      "slowdownFactor": 28.045487883052033,
       "opsPerSecond": {
-        "interpreter": 1159750.8020256672,
-        "native": 14433492.630980331
+        "interpreter": 343193.46460803674,
+        "native": 9625028.15320734
       }
     },
     {
       "name": "Complex Arithmetic",
-      "interpreterTime": 12.526499999999999,
-      "nativeTime": 0.33970899999999915,
-      "slowdownFactor": 36.874207041909486,
+      "interpreterTime": 59.71345899999999,
+      "nativeTime": 2.655332999999999,
+      "slowdownFactor": 22.48812446499178,
       "opsPerSecond": {
-        "interpreter": 798307.5879136232,
-        "native": 29436959.2798543
+        "interpreter": 167466.43332117138,
+        "native": 3766005.9962347485
       }
     },
     {
       "name": "Exponentiation",
-      "interpreterTime": 4.672957999999994,
-      "nativeTime": 0.676833000000002,
-      "slowdownFactor": 6.904152132062089,
+      "interpreterTime": 18.227334000000013,
+      "nativeTime": 1.5816670000000101,
+      "slowdownFactor": 11.524128656664073,
       "opsPerSecond": {
-        "interpreter": 2139972.154682326,
-        "native": 14774693.314303484
+        "interpreter": 548626.5846667425,
+        "native": 6322443.3461657455
       }
     },
     {
       "name": "Variable Declaration",
-      "interpreterTime": 10.161957999999998,
-      "nativeTime": 0.7277500000000003,
-      "slowdownFactor": 13.963528684300918,
+      "interpreterTime": 25.465790999999996,
+      "nativeTime": 1.3053340000000162,
+      "slowdownFactor": 19.509022978026834,
       "opsPerSecond": {
-        "interpreter": 984062.323422317,
-        "native": 13740982.48024733
+        "interpreter": 392683.6594237344,
+        "native": 7660874.534793299
       }
     },
     {
       "name": "Variable Assignment",
-      "interpreterTime": 7.839999999999996,
-      "nativeTime": 0.33733399999999847,
-      "slowdownFactor": 23.24106078841751,
+      "interpreterTime": 34.264624999999995,
+      "nativeTime": 1.2264160000000004,
+      "slowdownFactor": 27.938827445173565,
       "opsPerSecond": {
-        "interpreter": 1275510.2040816331,
-        "native": 29644210.189308062
+        "interpreter": 291846.1824695295,
+        "native": 8153840.132548823
       }
     },
     {
       "name": "Multiple Variables",
-      "interpreterTime": 14.976666999999999,
-      "nativeTime": 0.8651659999999879,
-      "slowdownFactor": 17.310743834131493,
+      "interpreterTime": 36.97258399999998,
+      "nativeTime": 1.3477919999999983,
+      "slowdownFactor": 27.431965763263197,
       "opsPerSecond": {
-        "interpreter": 667705.3045246984,
-        "native": 11558475.483317815
+        "interpreter": 270470.68173541786,
+        "native": 7419542.481332441
       }
     },
     {
       "name": "Simple If Statement",
-      "interpreterTime": 15.821250000000006,
-      "nativeTime": 0.2972910000000013,
-      "slowdownFactor": 53.21805907343289,
+      "interpreterTime": 40.29462499999997,
+      "nativeTime": 1.5982500000000073,
+      "slowdownFactor": 25.211715939308483,
       "opsPerSecond": {
-        "interpreter": 632061.3099470646,
-        "native": 33637076.13079426
+        "interpreter": 248172.05768759502,
+        "native": 6256843.422493324
       }
     },
     {
       "name": "If/Else Chain",
-      "interpreterTime": 19.648540999999994,
-      "nativeTime": 0.33262499999999307,
-      "slowdownFactor": 59.071149192034284,
+      "interpreterTime": 41.67841599999997,
+      "nativeTime": 2.123999999999967,
+      "slowdownFactor": 19.622606403013474,
       "opsPerSecond": {
-        "interpreter": 508943.64115890354,
-        "native": 30063885.75723475
+        "interpreter": 239932.3429182147,
+        "native": 4708097.928436985
       }
     },
     {
       "name": "Ternary Operator",
-      "interpreterTime": 10.226625000000013,
-      "nativeTime": 0.29725000000000534,
-      "slowdownFactor": 34.40412111017604,
+      "interpreterTime": 39.902417000000014,
+      "nativeTime": 3.0001250000000255,
+      "slowdownFactor": 13.300251489521163,
       "opsPerSecond": {
-        "interpreter": 977839.7076259261,
-        "native": 33641715.7275015
+        "interpreter": 250611.38527022052,
+        "native": 3333194.450231212
       }
     },
     {
       "name": "For Loop (small)",
-      "interpreterTime": 16.606082999999984,
-      "nativeTime": 0.26316600000001245,
-      "slowdownFactor": 63.10117188390293,
+      "interpreterTime": 62.506249999999966,
+      "nativeTime": 1.8473339999999894,
+      "slowdownFactor": 33.835922469894626,
       "opsPerSecond": {
-        "interpreter": 301094.4844729492,
-        "native": 18999414.818022706
+        "interpreter": 79992.00079992005,
+        "native": 2706603.137277844
       }
     },
     {
       "name": "While Loop",
-      "interpreterTime": 16.9075,
-      "nativeTime": 0.7060830000000067,
-      "slowdownFactor": 23.945485162508994,
+      "interpreterTime": 62.093958999999984,
+      "nativeTime": 4.302416999999991,
+      "slowdownFactor": 14.432343261938605,
       "opsPerSecond": {
-        "interpreter": 295726.74848440045,
-        "native": 7081320.46799024
+        "interpreter": 80523.13108268715,
+        "native": 1162137.4683114188
       }
     },
     {
       "name": "for...of Loop",
-      "interpreterTime": 15.459624999999988,
-      "nativeTime": 0.49262500000000387,
-      "slowdownFactor": 31.382136513574967,
+      "interpreterTime": 48.357541000000026,
+      "nativeTime": 1.9328749999999673,
+      "slowdownFactor": 25.018452305503896,
       "opsPerSecond": {
-        "interpreter": 323423.1101983395,
-        "native": 10149708.195889289
+        "interpreter": 103396.48990836811,
+        "native": 2586820.151329023
       }
     },
     {
       "name": "Function Declaration",
-      "interpreterTime": 9.349792000000008,
-      "nativeTime": 1.2863749999999925,
-      "slowdownFactor": 7.26832533281513,
+      "interpreterTime": 26.64408400000002,
+      "nativeTime": 4.063749999999914,
+      "slowdownFactor": 6.5565263611198,
       "opsPerSecond": {
-        "interpreter": 1069542.509608769,
-        "native": 7773782.917112085
+        "interpreter": 375317.83791103464,
+        "native": 2460781.298062187
       }
     },
     {
       "name": "Function Call",
-      "interpreterTime": 8.528583999999995,
-      "nativeTime": 1.0450409999999977,
-      "slowdownFactor": 8.161004209404238,
+      "interpreterTime": 32.19629199999997,
+      "nativeTime": 2.3454169999999976,
+      "slowdownFactor": 13.727320983859162,
       "opsPerSecond": {
-        "interpreter": 586263.7924419813,
-        "native": 4784501.277940302
+        "interpreter": 155297.38641952944,
+        "native": 2131817.0713352915
       }
     },
     {
       "name": "Recursive Factorial",
-      "interpreterTime": 12.646000000000015,
-      "nativeTime": 1.1491670000000056,
-      "slowdownFactor": 11.004492819581447,
+      "interpreterTime": 69.03708299999994,
+      "nativeTime": 3.7556660000000193,
+      "slowdownFactor": 18.38211465023769,
       "opsPerSecond": {
-        "interpreter": 395381.9389530282,
-        "native": 4350977.708200788
+        "interpreter": 72424.84448539063,
+        "native": 1331321.7948560852
       }
     },
     {
       "name": "Closure",
-      "interpreterTime": 17.452292,
-      "nativeTime": 0.8536249999999939,
-      "slowdownFactor": 20.444916678869674,
+      "interpreterTime": 42.69091700000001,
+      "nativeTime": 4.785708999999997,
+      "slowdownFactor": 8.920499971895499,
       "opsPerSecond": {
-        "interpreter": 286495.32107301435,
-        "native": 5857372.968223793
+        "interpreter": 117120.93230510832,
+        "native": 1044777.2733360934
       }
     },
     {
       "name": "Arrow Function",
-      "interpreterTime": 5.546375000000012,
-      "nativeTime": 0.208958999999993,
-      "slowdownFactor": 26.542886403553794,
+      "interpreterTime": 26.504083000000037,
+      "nativeTime": 0.4760840000000144,
+      "slowdownFactor": 55.67102234059375,
       "opsPerSecond": {
-        "interpreter": 901489.7117486628,
-        "native": 23928139.01291721
+        "interpreter": 188650.1789177159,
+        "native": 10502348.32508517
       }
     },
     {
       "name": "Array Creation",
-      "interpreterTime": 8.047832999999997,
-      "nativeTime": 0.2857500000000073,
-      "slowdownFactor": 28.163895013122634,
+      "interpreterTime": 25.326416999999992,
+      "nativeTime": 3.767708000000084,
+      "slowdownFactor": 6.721969165338563,
       "opsPerSecond": {
-        "interpreter": 1242570.5155661162,
-        "native": 34995625.546805754
+        "interpreter": 394844.63988727675,
+        "native": 2654133.4944214826
       }
     },
     {
       "name": "Array Access",
-      "interpreterTime": 9.192875000000015,
-      "nativeTime": 0.288250000000005,
-      "slowdownFactor": 31.892020815264026,
+      "interpreterTime": 42.24541599999998,
+      "nativeTime": 2.6644999999999754,
+      "slowdownFactor": 15.854913116907625,
       "opsPerSecond": {
-        "interpreter": 1087798.9747494645,
-        "native": 34692107.545532785
+        "interpreter": 236712.0730921434,
+        "native": 3753049.3525990215
       }
     },
     {
       "name": "Array Assignment",
-      "interpreterTime": 14.121834000000007,
-      "nativeTime": 0.4259999999999877,
-      "slowdownFactor": 33.14984507042351,
+      "interpreterTime": 33.69637499999999,
+      "nativeTime": 1.473292000000015,
+      "slowdownFactor": 22.871484403634614,
       "opsPerSecond": {
-        "interpreter": 708123.3216592119,
-        "native": 23474178.403756544
+        "interpreter": 296767.8273998317,
+        "native": 6787520.73587578
       }
     },
     {
       "name": "Array Iteration",
-      "interpreterTime": 26.14375000000001,
-      "nativeTime": 0.32129199999997127,
-      "slowdownFactor": 81.37068461089088,
+      "interpreterTime": 81.48116600000003,
+      "nativeTime": 3.2905410000000757,
+      "slowdownFactor": 24.762240008557303,
       "opsPerSecond": {
-        "interpreter": 191250.29882859183,
-        "native": 15562167.747719977
+        "interpreter": 61363.87395339922,
+        "native": 1519506.9746889297
       }
     },
     {
       "name": "Object Creation",
-      "interpreterTime": 10.989084000000048,
-      "nativeTime": 0.316332999999986,
-      "slowdownFactor": 34.738974435169695,
+      "interpreterTime": 37.45520799999997,
+      "nativeTime": 2.579499999999939,
+      "slowdownFactor": 14.520336499321905,
       "opsPerSecond": {
-        "interpreter": 909993.9540001657,
-        "native": 31612256.70417074
+        "interpreter": 266985.5684688764,
+        "native": 3876720.294630834
       }
     },
     {
       "name": "Object Property Access",
-      "interpreterTime": 11.256083999999987,
-      "nativeTime": 0.3467499999999859,
-      "slowdownFactor": 32.46166979091693,
+      "interpreterTime": 41.492624999999975,
+      "nativeTime": 3.275292000000036,
+      "slowdownFactor": 12.668374300672893,
       "opsPerSecond": {
-        "interpreter": 888408.4376058327,
-        "native": 28839221.341024965
+        "interpreter": 241006.6849229232,
+        "native": 3053162.8935679295
       }
     },
     {
       "name": "Object Property Assignment",
-      "interpreterTime": 10.03020799999996,
-      "nativeTime": 0.3948750000000132,
-      "slowdownFactor": 25.4009699271912,
+      "interpreterTime": 41.122749999999996,
+      "nativeTime": 1.9030410000000302,
+      "slowdownFactor": 21.608966911379916,
       "opsPerSecond": {
-        "interpreter": 996988.2977501604,
-        "native": 25324469.76891337
+        "interpreter": 243174.3985993155,
+        "native": 5254747.533027318
       }
     },
     {
       "name": "Object Method Call",
-      "interpreterTime": 15.388290999999981,
-      "nativeTime": 0.6232499999999845,
-      "slowdownFactor": 24.69039871640652,
+      "interpreterTime": 52.84554200000002,
+      "nativeTime": 1.54424999999992,
+      "slowdownFactor": 34.22084636555141,
       "opsPerSecond": {
-        "interpreter": 324922.3711716919,
-        "native": 8022462.896109305
+        "interpreter": 94615.3603647399,
+        "native": 3237817.7108630463
       }
     },
     {
       "name": "String Concatenation",
-      "interpreterTime": 6.065166000000033,
-      "nativeTime": 0.4630830000000401,
-      "slowdownFactor": 13.097362675804355,
+      "interpreterTime": 21.877833999999893,
+      "nativeTime": 2.197791000000052,
+      "slowdownFactor": 9.95446518799985,
       "opsPerSecond": {
-        "interpreter": 1648759.4898474247,
-        "native": 21594401.003705885
+        "interpreter": 457083.6399983677,
+        "native": 4550023.182368007
       }
     },
     {
       "name": "String Length",
-      "interpreterTime": 5.501292000000035,
-      "nativeTime": 0.22875000000004775,
-      "slowdownFactor": 24.04936393442136,
+      "interpreterTime": 17.0757500000002,
+      "nativeTime": 2.6896670000000995,
+      "slowdownFactor": 6.348648364276904,
       "opsPerSecond": {
-        "interpreter": 1817754.8110516467,
-        "native": 43715846.99452639
+        "interpreter": 585625.8143858913,
+        "native": 3717932.3685793187
       }
     },
     {
       "name": "typeof Number",
-      "interpreterTime": 4.8091249999999945,
-      "nativeTime": 0.2658749999999941,
-      "slowdownFactor": 18.08791725434923,
+      "interpreterTime": 18.371415999999954,
+      "nativeTime": 0.70900000000006,
+      "slowdownFactor": 25.911729196048515,
       "opsPerSecond": {
-        "interpreter": 2079380.3446572947,
-        "native": 37611659.61448132
+        "interpreter": 544323.8561469637,
+        "native": 14104372.35542899
       }
     },
     {
       "name": "typeof Variable",
-      "interpreterTime": 7.683832999999993,
-      "nativeTime": 0.2515830000000392,
-      "slowdownFactor": 30.541940433172336,
+      "interpreterTime": 22.0306250000001,
+      "nativeTime": 2.650083999999879,
+      "slowdownFactor": 8.313179884109752,
       "opsPerSecond": {
-        "interpreter": 1301433.8026347018,
-        "native": 39748313.67778603
+        "interpreter": 453913.58620102494,
+        "native": 3773465.2939304784
       }
     },
     {
       "name": "Logical AND",
-      "interpreterTime": 6.140000000000043,
-      "nativeTime": 0.21425000000004957,
-      "slowdownFactor": 28.658109684941063,
+      "interpreterTime": 20.371124999999893,
+      "nativeTime": 3.051834000000099,
+      "slowdownFactor": 6.6750435967353505,
       "opsPerSecond": {
-        "interpreter": 1628664.4951139952,
-        "native": 46674445.74094603
+        "interpreter": 490890.9056323621,
+        "native": 3276718.196336916
       }
     },
     {
       "name": "Logical OR",
-      "interpreterTime": 6.1801660000000425,
-      "nativeTime": 0.23466600000000426,
-      "slowdownFactor": 26.336009477299353,
+      "interpreterTime": 16.644416999999976,
+      "nativeTime": 2.499084000000039,
+      "slowdownFactor": 6.6602070998812835,
       "opsPerSecond": {
-        "interpreter": 1618079.5143690205,
-        "native": 42613757.42544646
+        "interpreter": 600802.0587323675,
+        "native": 4001466.137192605
       }
     },
     {
       "name": "Logical NOT",
-      "interpreterTime": 5.130709000000024,
-      "nativeTime": 0.22274999999996226,
-      "slowdownFactor": 23.033485970823318,
+      "interpreterTime": 13.368249999999989,
+      "nativeTime": 2.4412499999998545,
+      "slowdownFactor": 5.475985663082759,
       "opsPerSecond": {
-        "interpreter": 1949048.367389371,
-        "native": 44893378.22671916
+        "interpreter": 748041.0674546038,
+        "native": 4096262.160778534
       }
     },
     {
       "name": "Fibonacci (iterative)",
-      "interpreterTime": 15.169500000000028,
-      "nativeTime": 16.037374999999997,
-      "slowdownFactor": 0.9458842235715028,
+      "interpreterTime": 36.14958299999989,
+      "nativeTime": 49.66124999999988,
+      "slowdownFactor": 0.7279233406327867,
       "opsPerSecond": {
-        "interpreter": 131843.50176340662,
-        "native": 124708.68829842792
+        "interpreter": 55325.67277470409,
+        "native": 40272.84854891902
       }
     },
     {
       "name": "Prime Check",
-      "interpreterTime": 7.184500000000014,
-      "nativeTime": 14.896416999999985,
-      "slowdownFactor": 0.4822971859608939,
+      "interpreterTime": 21.125958000000082,
+      "nativeTime": 46.169165999999905,
+      "slowdownFactor": 0.4575772063978831,
       "opsPerSecond": {
-        "interpreter": 278377.0617301129,
-        "native": 134260.4735084955
+        "interpreter": 94670.26300061717,
+        "native": 43318.95447277527
       }
     },
     {
       "name": "Array Sum with Higher-Order Function",
-      "interpreterTime": 13.196124999999995,
-      "nativeTime": 24.466999999999985,
-      "slowdownFactor": 0.5393438100298362,
+      "interpreterTime": 34.851249999999936,
+      "nativeTime": 72.61824999999999,
+      "slowdownFactor": 0.47992412375676835,
       "opsPerSecond": {
-        "interpreter": 151559.64345593884,
-        "native": 81742.75554828958
+        "interpreter": 57386.75083390133,
+        "native": 27541.286109208086
       }
     },
     {
       "name": "Nested Object Processing",
-      "interpreterTime": 10.589375000000018,
-      "nativeTime": 11.597833000000037,
-      "slowdownFactor": 0.9130477219321906,
+      "interpreterTime": 36.80445800000007,
+      "nativeTime": 30.778999999999996,
+      "slowdownFactor": 1.1957652295396235,
       "opsPerSecond": {
-        "interpreter": 94434.27964351044,
-        "native": 86223.00390081464
+        "interpreter": 27170.62155894262,
+        "native": 32489.684525163262
       }
     }
   ]
