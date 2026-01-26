@@ -21,7 +21,11 @@ import {
   isDangerousSymbol,
   isForbiddenGlobalName,
 } from "./constants";
-import { ReadOnlyProxy } from "./readonly-proxy";
+import {
+  ReadOnlyProxy,
+  setSecurityOptions,
+  sanitizeErrorStack,
+} from "./readonly-proxy";
 
 type ASTNode = ESTree.Node;
 
@@ -2286,6 +2290,26 @@ export type FeatureControl = {
   features: LanguageFeature[];
 };
 
+/**
+ * Security options for the interpreter sandbox
+ */
+export type SecurityOptions = {
+  /**
+   * When true, sanitizes error stack traces to remove host file paths.
+   * This prevents untrusted code from learning about the host environment.
+   * Default: true
+   */
+  sanitizeErrors?: boolean;
+
+  /**
+   * When true, hides the original error message from host function errors,
+   * replacing it with a generic message. This prevents sensitive information
+   * in error messages from leaking to untrusted code.
+   * Default: true
+   */
+  hideHostErrorMessages?: boolean;
+};
+
 export type InterpreterOptions = {
   globals?: Record<string, any>;
   validator?: ASTValidator;
@@ -2295,6 +2319,11 @@ export type InterpreterOptions = {
    * Blacklist: all features except specified ones are allowed
    */
   featureControl?: FeatureControl;
+  /**
+   * Security options for the sandbox
+   * Controls error sanitization and other security behaviors
+   */
+  security?: SecurityOptions;
 };
 
 export type EvaluateOptions = {
@@ -2337,6 +2366,7 @@ export class Interpreter {
   private constructorValidator?: ASTValidator; // AST validator that applies to all evaluate() calls
   private constructorFeatureControl?: FeatureControl; // Feature control that applies to all evaluate() calls
   private constructorFeatureSet?: Set<LanguageFeature>; // Cached feature set for faster lookup
+  private securityOptions: SecurityOptions; // Security options for sandbox
   private perCallGlobalKeys: Set<string> = new Set(); // Track per-call globals for cleanup
   private overriddenConstructorGlobals: Map<string, any> = new Map(); // Track original values when per-call globals override
   private currentFeatureControl?: FeatureControl; // Active feature control (per-call overrides constructor)
@@ -2386,9 +2416,39 @@ export class Interpreter {
     this.constructorFeatureSet = this.constructorFeatureControl
       ? new Set(this.constructorFeatureControl.features)
       : undefined;
+
+    // Initialize security options with defaults (both true for maximum security)
+    this.securityOptions = {
+      sanitizeErrors: options?.security?.sanitizeErrors ?? true,
+      hideHostErrorMessages: options?.security?.hideHostErrorMessages ?? true,
+    };
+
+    // Configure ReadOnlyProxy with security options
+    setSecurityOptions(this.securityOptions);
+
     // Inject built-in globals that should always be available
     this.injectBuiltinGlobals();
     this.injectGlobals(this.constructorGlobals);
+  }
+
+  /**
+   * Format a host error message respecting security options.
+   * When hideHostErrorMessages is true, returns a generic message.
+   * When sanitizeErrors is true, sanitizes stack traces in the message.
+   */
+  private formatHostError(context: string, error: Error): string {
+    if (this.securityOptions.hideHostErrorMessages) {
+      return `${context}: [error details hidden]`;
+    }
+
+    let message = error.message || "Unknown error";
+
+    // If the error message contains stack-like content, sanitize it
+    if (this.securityOptions.sanitizeErrors && message.includes("\n    at ")) {
+      message = sanitizeErrorStack(message);
+    }
+
+    return `${context}: ${message}`;
   }
 
   /**
@@ -4062,7 +4122,12 @@ export class Interpreter {
       const result = Reflect.construct(constructor.hostFunc, args);
       return ReadOnlyProxy.wrap(result, constructor.name);
     } catch (error: any) {
-      throw new InterpreterError(`Constructor threw error: ${error.message}`);
+      throw new InterpreterError(
+        this.formatHostError(
+          `Constructor '${constructor.name}' threw error`,
+          error,
+        ),
+      );
     }
   }
 
@@ -5883,7 +5948,10 @@ export class Interpreter {
           throw error;
         }
         throw new InterpreterError(
-          `Host function '${callee.name}' threw error: ${error.message}`,
+          this.formatHostError(
+            `Host function '${callee.name}' threw error`,
+            error,
+          ),
         );
       }
     }
@@ -7159,7 +7227,10 @@ export class Interpreter {
           throw error;
         }
         throw new InterpreterError(
-          `Host function '${callee.name}' threw error: ${error.message}`,
+          this.formatHostError(
+            `Host function '${callee.name}' threw error`,
+            error,
+          ),
         );
       }
     }

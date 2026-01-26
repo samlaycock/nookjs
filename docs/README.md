@@ -1,6 +1,16 @@
-# Interpreter Language Features
+# Interpreter Documentation
 
-Each file in this folder documents one `LanguageFeature` flag supported by the interpreter. Every doc covers:
+## Security
+
+- [SECURITY](SECURITY.md) - Security sandboxing model, options, and recommendations
+
+## Presets
+
+- [PRESETS](PRESETS.md) - ECMAScript version presets, API addons, and the `preset()` function
+
+## Language Features
+
+Each file below documents one `LanguageFeature` flag supported by the interpreter. Every doc covers:
 
 - What the language feature is
 - How it is implemented in this interpreter

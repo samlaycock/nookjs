@@ -392,7 +392,9 @@ describe("Array Methods", () => {
     });
 
     it("should throw error for empty array without initial value", () => {
-      const interpreter = new Interpreter();
+      const interpreter = new Interpreter({
+        security: { hideHostErrorMessages: false },
+      });
       expect(() => {
         interpreter.evaluate(`
           let arr = [];

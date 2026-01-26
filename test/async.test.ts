@@ -45,6 +45,7 @@ describe("evaluateAsync()", () => {
       };
       const interpreter = new Interpreter({
         globals: { asyncError },
+        security: { hideHostErrorMessages: false },
       });
       return expect(interpreter.evaluateAsync("asyncError()")).rejects.toThrow(
         "Host function 'asyncError' threw error: Async error",
@@ -57,7 +58,9 @@ describe("evaluateAsync()", () => {
       const interpreter = new Interpreter({
         globals: { asyncDouble, asyncTriple },
       });
-      const result = await interpreter.evaluateAsync("asyncDouble(5) + asyncTriple(4)");
+      const result = await interpreter.evaluateAsync(
+        "asyncDouble(5) + asyncTriple(4)",
+      );
       expect(result).toBe(22); // 10 + 12
     });
 
@@ -67,7 +70,9 @@ describe("evaluateAsync()", () => {
       const interpreter = new Interpreter({
         globals: { asyncAdd, asyncDouble },
       });
-      const result = await interpreter.evaluateAsync("asyncDouble(asyncAdd(3, 7))");
+      const result = await interpreter.evaluateAsync(
+        "asyncDouble(asyncAdd(3, 7))",
+      );
       expect(result).toBe(20); // double(10) = 20
     });
   });
@@ -88,7 +93,9 @@ describe("evaluateAsync()", () => {
       const interpreter = new Interpreter({
         globals: { syncAdd, asyncDouble },
       });
-      const result = await interpreter.evaluateAsync("asyncDouble(syncAdd(3, 7))");
+      const result = await interpreter.evaluateAsync(
+        "asyncDouble(syncAdd(3, 7))",
+      );
       expect(result).toBe(20);
     });
   });
@@ -147,7 +154,9 @@ describe("evaluateAsync()", () => {
 
     it("should evaluate objects", async () => {
       const interpreter = new Interpreter();
-      const result = await interpreter.evaluateAsync("({ name: 'Alice', age: 30 })");
+      const result = await interpreter.evaluateAsync(
+        "({ name: 'Alice', age: 30 })",
+      );
       expect(result).toEqual({ name: "Alice", age: 30 });
     });
 
@@ -387,7 +396,9 @@ describe("evaluateAsync()", () => {
       const interpreter = new Interpreter({
         globals: { asyncProcessData },
       });
-      const result = await interpreter.evaluateAsync("asyncProcessData([10, 20, 30, 40, 50])");
+      const result = await interpreter.evaluateAsync(
+        "asyncProcessData([10, 20, 30, 40, 50])",
+      );
       expect(result).toBe(30);
     });
   });
@@ -413,7 +424,9 @@ describe("evaluateAsync()", () => {
     it("should clean up per-call globals after async execution", async () => {
       const interpreter = new Interpreter();
       await interpreter.evaluateAsync("let result = x", { globals: { x: 10 } });
-      return expect(interpreter.evaluateAsync("x")).rejects.toThrow("Undefined variable 'x'");
+      return expect(interpreter.evaluateAsync("x")).rejects.toThrow(
+        "Undefined variable 'x'",
+      );
     });
   });
 

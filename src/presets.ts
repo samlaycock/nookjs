@@ -91,6 +91,13 @@ export const ES5: InterpreterOptions = {
     Date,
     Math,
     JSON,
+    Error,
+    TypeError,
+    ReferenceError,
+    SyntaxError,
+    RangeError,
+    URIError,
+    EvalError,
     parseInt,
     parseFloat,
     isNaN,
@@ -144,22 +151,7 @@ export const ES2015: InterpreterOptions = {
   },
   globals: {
     // ES5 globals
-    Array,
-    Object,
-    String,
-    Number,
-    Boolean,
-    Date,
-    Math,
-    JSON,
-    parseInt,
-    parseFloat,
-    isNaN,
-    isFinite,
-    encodeURI,
-    encodeURIComponent,
-    decodeURI,
-    decodeURIComponent,
+    ...ES5.globals,
     // ES6 additions
     Promise,
     Symbol,
@@ -233,7 +225,10 @@ export const ES2018: InterpreterOptions = {
   ...ES2017,
   featureControl: {
     mode: "whitelist" as const,
-    features: [...(ES2017.featureControl!.features as LanguageFeature[]), "AsyncGenerators"],
+    features: [
+      ...(ES2017.featureControl!.features as LanguageFeature[]),
+      "AsyncGenerators",
+    ],
   },
 };
 
@@ -269,7 +264,10 @@ export const ES2020: InterpreterOptions = {
   ...ES2019,
   featureControl: {
     mode: "whitelist" as const,
-    features: [...(ES2019.featureControl!.features as LanguageFeature[]), "OptionalChaining"],
+    features: [
+      ...(ES2019.featureControl!.features as LanguageFeature[]),
+      "OptionalChaining",
+    ],
   },
   globals: {
     ...ES2019.globals,
@@ -294,14 +292,19 @@ export const ES2021: InterpreterOptions = {
   ...ES2020,
   featureControl: {
     mode: "whitelist" as const,
-    features: [...(ES2020.featureControl!.features as LanguageFeature[]), "LogicalAssignment"],
+    features: [
+      ...(ES2020.featureControl!.features as LanguageFeature[]),
+      "LogicalAssignment",
+    ],
   },
   globals: {
     ...ES2020.globals,
     // ES2021 additions
     WeakRef: typeof WeakRef !== "undefined" ? WeakRef : undefined,
     FinalizationRegistry:
-      typeof FinalizationRegistry !== "undefined" ? FinalizationRegistry : undefined,
+      typeof FinalizationRegistry !== "undefined"
+        ? FinalizationRegistry
+        : undefined,
   },
 };
 
@@ -415,3 +418,240 @@ export function getPreset(name: PresetName): InterpreterOptions {
   };
   return presets[name];
 }
+
+// =============================================================================
+// Preset Combination
+// =============================================================================
+
+/**
+ * Combines multiple presets and option overrides into a single InterpreterOptions object.
+ *
+ * This function intelligently merges:
+ * - `globals`: Later presets override earlier ones (shallow merge)
+ * - `featureControl`: Features are unioned if modes are compatible
+ * - `security`: Later presets override earlier ones (shallow merge)
+ * - `validator`: Later presets override earlier ones
+ *
+ * @param presets - One or more presets or partial InterpreterOptions to combine
+ * @returns A merged InterpreterOptions object
+ *
+ * @example
+ * ```typescript
+ * // Combine ES2022 with Fetch API support
+ * const interpreter = new Interpreter(preset(ES2022, FetchAPI));
+ *
+ * // Combine with custom options
+ * const interpreter = new Interpreter(preset(ES2022, FetchAPI, {
+ *   security: { hideHostErrorMessages: false }
+ * }));
+ *
+ * // Combine multiple addons
+ * const interpreter = new Interpreter(preset(ES2022, FetchAPI, ConsoleAPI, TimersAPI));
+ * ```
+ */
+export function preset(
+  ...presets: (InterpreterOptions | Partial<InterpreterOptions>)[]
+): InterpreterOptions {
+  const result: InterpreterOptions = {};
+
+  for (const p of presets) {
+    // Merge globals
+    if (p.globals) {
+      result.globals = { ...result.globals, ...p.globals };
+    }
+
+    // Merge feature control
+    if (p.featureControl) {
+      if (!result.featureControl) {
+        // First feature control, copy it
+        result.featureControl = {
+          mode: p.featureControl.mode,
+          features: [...p.featureControl.features],
+        };
+      } else {
+        // Merge feature controls
+        result.featureControl = mergeFeatureControls(
+          result.featureControl,
+          p.featureControl,
+        );
+      }
+    }
+
+    // Merge security options
+    if (p.security) {
+      result.security = { ...result.security, ...p.security };
+    }
+
+    // Override validator (last one wins)
+    if (p.validator) {
+      result.validator = p.validator;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Merges two feature control configurations.
+ *
+ * Rules:
+ * - If both are whitelists: union the features
+ * - If both are blacklists: intersect the features (block if either blocks)
+ * - If modes differ: whitelist takes precedence (more restrictive)
+ */
+function mergeFeatureControls(
+  a: NonNullable<InterpreterOptions["featureControl"]>,
+  b: NonNullable<InterpreterOptions["featureControl"]>,
+): NonNullable<InterpreterOptions["featureControl"]> {
+  if (a.mode === "whitelist" && b.mode === "whitelist") {
+    // Union: allow features from both
+    const features = new Set([...a.features, ...b.features]);
+    return { mode: "whitelist", features: [...features] as LanguageFeature[] };
+  }
+
+  if (a.mode === "blacklist" && b.mode === "blacklist") {
+    // Union: block features from both
+    const features = new Set([...a.features, ...b.features]);
+    return { mode: "blacklist", features: [...features] as LanguageFeature[] };
+  }
+
+  // Mixed modes: whitelist is more restrictive, use it
+  // Only allow features that are in the whitelist
+  const whitelist = a.mode === "whitelist" ? a : b;
+  const blacklist = a.mode === "blacklist" ? a : b;
+
+  // Remove blacklisted features from the whitelist
+  const blacklistSet = new Set(blacklist.features);
+  const features = whitelist.features.filter((f) => !blacklistSet.has(f));
+
+  return { mode: "whitelist", features: features as LanguageFeature[] };
+}
+
+// =============================================================================
+// Addon Presets
+// =============================================================================
+
+/**
+ * Fetch API addon preset.
+ *
+ * Provides access to the Fetch API for making HTTP requests.
+ * Requires async/await support (ES2017+).
+ *
+ * Includes:
+ * - fetch
+ * - Request
+ * - Response
+ * - Headers
+ * - AbortController
+ * - AbortSignal
+ * - URL
+ * - URLSearchParams
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, FetchAPI));
+ * await interpreter.evaluateAsync(`
+ *   const response = await fetch('https://api.example.com/data');
+ *   const data = await response.json();
+ * `);
+ * ```
+ */
+export const FetchAPI: InterpreterOptions = {
+  globals: {
+    fetch,
+    Request,
+    Response,
+    Headers,
+    AbortController,
+    AbortSignal,
+    URL,
+    URLSearchParams,
+  },
+};
+
+/**
+ * Console API addon preset.
+ *
+ * Provides access to console methods for logging.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, ConsoleAPI));
+ * interpreter.evaluate(`console.log('Hello, world!')`);
+ * ```
+ */
+export const ConsoleAPI: InterpreterOptions = {
+  globals: {
+    console,
+  },
+};
+
+/**
+ * Timers API addon preset.
+ *
+ * Provides access to timer functions.
+ * Note: These are async operations and require evaluateAsync().
+ *
+ * Includes:
+ * - setTimeout
+ * - clearTimeout
+ * - setInterval
+ * - clearInterval
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, TimersAPI));
+ * await interpreter.evaluateAsync(`
+ *   await new Promise(resolve => setTimeout(resolve, 100));
+ * `);
+ * ```
+ */
+export const TimersAPI: InterpreterOptions = {
+  globals: {
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+  },
+};
+
+/**
+ * TextEncoder/TextDecoder API addon preset.
+ *
+ * Provides access to text encoding/decoding utilities.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, TextCodecAPI));
+ * interpreter.evaluate(`
+ *   const encoder = new TextEncoder();
+ *   const bytes = encoder.encode('Hello');
+ * `);
+ * ```
+ */
+export const TextCodecAPI: InterpreterOptions = {
+  globals: {
+    TextEncoder,
+    TextDecoder,
+  },
+};
+
+/**
+ * Crypto API addon preset.
+ *
+ * Provides access to cryptographic functions.
+ * Note: Only includes the global crypto object, not subtle crypto.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, CryptoAPI));
+ * interpreter.evaluate(`
+ *   const uuid = crypto.randomUUID();
+ * `);
+ * ```
+ */
+export const CryptoAPI: InterpreterOptions = {
+  globals: {
+    crypto,
+  },
+};

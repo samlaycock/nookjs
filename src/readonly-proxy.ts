@@ -2,6 +2,82 @@ import { isDangerousProperty } from "./constants";
 import { InterpreterError, HostFunctionValue } from "./interpreter";
 
 /**
+ * Security options for ReadOnlyProxy
+ */
+export interface SecurityOptions {
+  /**
+   * When true, sanitizes error stack traces to remove host file paths.
+   * This prevents untrusted code from learning about the host environment.
+   * Default: true
+   */
+  sanitizeErrors?: boolean;
+}
+
+// Global security options - can be set by the Interpreter
+let globalSecurityOptions: SecurityOptions = {
+  sanitizeErrors: true,
+};
+
+/**
+ * Set global security options for ReadOnlyProxy
+ * Called by Interpreter constructor to configure security behavior
+ */
+export function setSecurityOptions(options: SecurityOptions): void {
+  globalSecurityOptions = { ...globalSecurityOptions, ...options };
+}
+
+/**
+ * Get current security options
+ */
+export function getSecurityOptions(): SecurityOptions {
+  return globalSecurityOptions;
+}
+
+/**
+ * Sanitize an error stack trace to remove host implementation details.
+ * Replaces file paths with generic location markers.
+ */
+export function sanitizeErrorStack(stack: string | undefined): string {
+  if (!stack) return "";
+
+  // Split into lines and process each
+  const lines = stack.split("\n");
+  const sanitizedLines: string[] = [];
+
+  for (const line of lines) {
+    // Keep the first line (error message)
+    if (!line.includes("    at ")) {
+      sanitizedLines.push(line);
+      continue;
+    }
+
+    // For stack frame lines, remove file paths
+    // Typical format: "    at functionName (file:///path/to/file.ts:123:45)"
+    // or: "    at file:///path/to/file.ts:123:45"
+    // or: "    at functionName (/path/to/file.ts:123:45)"
+
+    // Replace paths with [native code] or [sandbox] marker
+    const sanitized = line
+      // Remove file:// URLs with line numbers
+      .replace(/\(file:\/\/[^)]+\)/g, "([native code])")
+      // Remove absolute paths with line numbers (Unix)
+      .replace(/\(\/[^)]+\)/g, "([native code])")
+      // Remove absolute paths with line numbers (Windows)
+      .replace(/\([A-Za-z]:\\[^)]+\)/g, "([native code])")
+      // Remove bare file:// URLs (no parens)
+      .replace(/file:\/\/\S+/g, "[native code]")
+      // Remove bare absolute paths (Unix) at end of line
+      .replace(/\/\S+\.[jt]s:\d+:\d+$/g, "[native code]")
+      // Remove bare absolute paths (Windows) at end of line
+      .replace(/[A-Za-z]:\\\S+\.[jt]s:\d+:\d+$/g, "[native code]");
+
+    sanitizedLines.push(sanitized);
+  }
+
+  return sanitizedLines.join("\n");
+}
+
+/**
  * ReadOnlyProxy - Wraps global objects to make them read-only and secure
  *
  * Features:
@@ -10,6 +86,7 @@ import { InterpreterError, HostFunctionValue } from "./interpreter";
  * - Wraps functions as HostFunctionValue for proper sandbox execution
  * - Recursively wraps nested objects
  * - Preserves 'this' binding for method calls
+ * - Sanitizes Error stack traces to prevent host path leakage
  */
 export class ReadOnlyProxy {
   private static wrapIterator(
@@ -78,6 +155,9 @@ export class ReadOnlyProxy {
       return new HostFunctionValue(value, name, isAsync);
     }
 
+    // Check if this is an Error instance - needs special handling for stack sanitization
+    const isError = value instanceof Error;
+
     // Create a proxy that intercepts all operations (for objects like Math, console, etc.)
     return new Proxy(value, {
       get(target, prop, _receiver) {
@@ -100,18 +180,38 @@ export class ReadOnlyProxy {
           return undefined;
         }
 
-        // Allow valueOf for primitive coercion - return the underlying value
-        // This is safe because it just returns the primitive value, not internals
+        // Allow valueOf for primitive coercion with a SAFE implementation
+        // SECURITY: We do NOT call target.valueOf() because host objects may have
+        // custom valueOf implementations that could leak sensitive data or have side effects.
+        // Instead, we provide a safe generic implementation.
         if (prop === "valueOf") {
           return () => {
-            const val = target.valueOf ? target.valueOf() : target;
-            // If valueOf returns a primitive, return it directly
-            if (val === null || val === undefined || typeof val !== "object") {
-              return val;
+            // For primitive wrapper objects (Number, String, Boolean), return the primitive
+            if (
+              target instanceof Number ||
+              target instanceof String ||
+              target instanceof Boolean
+            ) {
+              // These are safe to call - they just return the wrapped primitive
+              return target.valueOf();
             }
-            // Otherwise wrap the result to maintain read-only protection
-            return ReadOnlyProxy.wrap(val, name);
+            // For Date objects, return the timestamp (standard behavior)
+            if (target instanceof Date) {
+              return target.valueOf();
+            }
+            // For all other objects, return the wrapped object itself
+            // This is the standard Object.prototype.valueOf behavior
+            return ReadOnlyProxy.wrap(target, name);
           };
+        }
+
+        // Special handling for Error.stack - sanitize to remove host paths
+        if (isError && prop === "stack") {
+          const stack = Reflect.get(target, prop, target);
+          if (globalSecurityOptions.sanitizeErrors) {
+            return sanitizeErrorStack(stack);
+          }
+          return stack;
         }
 
         // Block dangerous properties that could break out of sandbox

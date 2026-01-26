@@ -233,7 +233,9 @@ describe("Feature Control", () => {
 
       test("blocks template literals", () => {
         expect(() => {
-          interpreter.evaluate("const name = 'World'; const msg = `Hello ${name}`;");
+          interpreter.evaluate(
+            "const name = 'World'; const msg = `Hello ${name}`;",
+          );
         }).toThrow("TemplateLiterals is not enabled");
       });
 
@@ -270,7 +272,9 @@ describe("Feature Control", () => {
       test("blocks default parameters", () => {
         expect(() => {
           interpreter.evaluate("function foo(x = 10) { return x; }");
-        }).toThrow(/DefaultParameters is not enabled|Destructuring parameters not supported/);
+        }).toThrow(
+          /DefaultParameters is not enabled|Destructuring parameters not supported/,
+        );
       });
 
       test("blocks optional chaining", () => {
@@ -559,6 +563,7 @@ describe("Feature Control", () => {
               "Generators",
             ],
           },
+          security: { hideHostErrorMessages: false },
         });
 
         expect(() => {
@@ -578,9 +583,9 @@ describe("Feature Control", () => {
           },
         });
 
-        return expect(interp.evaluateAsync("async function* gen() { yield 1; }")).rejects.toThrow(
-          "AsyncGenerators is not enabled",
-        );
+        return expect(
+          interp.evaluateAsync("async function* gen() { yield 1; }"),
+        ).rejects.toThrow("AsyncGenerators is not enabled");
       });
     });
   });
@@ -662,7 +667,9 @@ describe("Feature Control", () => {
       test("blocks default parameters", () => {
         expect(() => {
           interpreter.evaluate("function foo(x = 10) { return x; }");
-        }).toThrow(/DefaultParameters is not enabled|Destructuring parameters not supported/);
+        }).toThrow(
+          /DefaultParameters is not enabled|Destructuring parameters not supported/,
+        );
       });
 
       test("blocks async/await", () => {
@@ -682,7 +689,9 @@ describe("Feature Control", () => {
         });
 
         // Arrow functions work
-        const result = interpreter.evaluate("const add = (a, b) => a + b; add(2, 3);");
+        const result = interpreter.evaluate(
+          "const add = (a, b) => a + b; add(2, 3);",
+        );
         expect(result).toBe(5);
 
         // Async functions blocked
@@ -732,19 +741,22 @@ describe("Feature Control", () => {
 
     test("per-call feature control overrides constructor-level", () => {
       // Per-call: whitelist with arrow functions
-      const result = interpreter.evaluate("const add = (a, b) => a + b; add(2, 3);", {
-        featureControl: {
-          mode: "whitelist",
-          features: [
-            "ArrowFunctions",
-            "LetConst",
-            "VariableDeclarations",
-            "BinaryOperators",
-            "CallExpression",
-            "ReturnStatement",
-          ],
+      const result = interpreter.evaluate(
+        "const add = (a, b) => a + b; add(2, 3);",
+        {
+          featureControl: {
+            mode: "whitelist",
+            features: [
+              "ArrowFunctions",
+              "LetConst",
+              "VariableDeclarations",
+              "BinaryOperators",
+              "CallExpression",
+              "ReturnStatement",
+            ],
+          },
         },
-      });
+      );
       expect(result).toBe(5);
     });
 
@@ -774,12 +786,15 @@ describe("Feature Control", () => {
       expect(result1).toBe(3);
 
       // Second call: blacklist nothing (allow all)
-      const result2 = interpreter.evaluate("const add = (a, b) => a + b; add(3, 4);", {
-        featureControl: {
-          mode: "blacklist",
-          features: [],
+      const result2 = interpreter.evaluate(
+        "const add = (a, b) => a + b; add(3, 4);",
+        {
+          featureControl: {
+            mode: "blacklist",
+            features: [],
+          },
         },
-      });
+      );
       expect(result2).toBe(7);
     });
   });
@@ -970,7 +985,9 @@ describe("Feature Control", () => {
 
       // But calling it fails (CallExpression not enabled)
       expect(() => {
-        interpreter.evaluate("const multiply = (a, b) => a * b; multiply(2, 3);");
+        interpreter.evaluate(
+          "const multiply = (a, b) => a * b; multiply(2, 3);",
+        );
       }).toThrow("CallExpression is not enabled");
     });
   });

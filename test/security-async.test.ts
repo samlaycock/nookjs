@@ -223,6 +223,7 @@ describe("Security: Async/Await Features", () => {
       };
       const interpreter = new Interpreter({
         globals: { errorHost },
+        security: { hideHostErrorMessages: false },
       });
       return expect(
         interpreter.evaluateAsync(`
