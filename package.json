@@ -1,10 +1,12 @@
 {
-  "name": "interpreter",
-  "private": true,
-  "type": "module",
+  "name": "nookjs",
+  "version": "0.0.1",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

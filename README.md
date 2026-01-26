@@ -1,4 +1,4 @@
-# JavaScript Interpreter
+# NookJS - JavaScript/Typescript(ish) Interpreter
 
 A simple, secure JavaScript interpreter built with TypeScript and a zero-dependency custom AST parser. This interpreter evaluates a subset of JavaScript, supporting mathematical operations, variables, boolean logic, control flow, functions, strings, and arrays. It also accepts TypeScript-style type annotations that are stripped at parse time (types-as-comments).
 
