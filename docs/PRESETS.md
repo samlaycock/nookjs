@@ -109,6 +109,21 @@ ES2021+ presets add:
 
 Addon presets provide access to specific Web/Runtime APIs. They only add globals and don't modify feature control.
 
+| Preset          | Description                                    | Key Globals                                      |
+| --------------- | ---------------------------------------------- | ------------------------------------------------ |
+| `FetchAPI`      | HTTP requests                                  | `fetch`, `Request`, `Response`, `Headers`        |
+| `ConsoleAPI`    | Logging                                        | `console`                                        |
+| `TimersAPI`     | Timers                                         | `setTimeout`, `setInterval`                      |
+| `TextCodecAPI`  | Text encoding/decoding                         | `TextEncoder`, `TextDecoder`                     |
+| `CryptoAPI`     | Cryptographic functions                        | `crypto`                                         |
+| `RegExpAPI`     | Regular expressions                            | `RegExp`                                         |
+| `IntlAPI`       | Internationalization                           | `Intl`                                           |
+| `BufferAPI`     | Binary data handling                           | `ArrayBuffer`, `DataView`, typed arrays          |
+| `StreamsAPI`    | Streaming data                                 | `ReadableStream`, `WritableStream`               |
+| `BlobAPI`       | Blob/File handling                             | `Blob`, `File`                                   |
+| `PerformanceAPI`| Performance measurement                        | `performance`                                    |
+| `EventAPI`      | Custom events                                  | `Event`, `EventTarget`, `CustomEvent`            |
+
 ### `FetchAPI`
 
 Provides the Fetch API for making HTTP requests. Requires async/await (ES2017+).
@@ -184,6 +199,122 @@ interpreter.evaluate(`
 ```
 
 **Includes:** `crypto`
+
+### `RegExpAPI`
+
+Provides regular expression functionality.
+
+```typescript
+const interpreter = new Interpreter(preset(ES2022, RegExpAPI));
+
+interpreter.evaluate(`
+  const pattern = new RegExp('hello', 'i');
+  pattern.test('Hello World'); // true
+`);
+```
+
+**Includes:** `RegExp`
+
+### `IntlAPI`
+
+Provides internationalization functionality for formatting dates, numbers, and strings.
+
+```typescript
+const interpreter = new Interpreter(preset(ES2022, IntlAPI));
+
+interpreter.evaluate(`
+  const formatter = new Intl.NumberFormat('en-US', { 
+    style: 'currency', 
+    currency: 'USD' 
+  });
+  formatter.format(1234.56); // "$1,234.56"
+`);
+```
+
+**Includes:** `Intl`
+
+### `BufferAPI`
+
+Provides binary data handling with ArrayBuffer, DataView, and typed arrays.
+
+```typescript
+const interpreter = new Interpreter(preset(ES2022, BufferAPI));
+
+interpreter.evaluate(`
+  const buffer = new ArrayBuffer(16);
+  const view = new DataView(buffer);
+  view.setInt32(0, 42);
+  const arr = new Uint8Array(buffer);
+`);
+```
+
+**Includes:** `ArrayBuffer`, `SharedArrayBuffer`, `DataView`, `Int8Array`, `Uint8Array`, `Uint8ClampedArray`, `Int16Array`, `Uint16Array`, `Int32Array`, `Uint32Array`, `Float32Array`, `Float64Array`, `BigInt64Array`, `BigUint64Array`
+
+### `StreamsAPI`
+
+Provides the Streams API for handling streaming data. Useful with Fetch API responses.
+
+```typescript
+const interpreter = new Interpreter(preset(ES2022, StreamsAPI));
+
+await interpreter.evaluateAsync(`
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue('hello');
+      controller.close();
+    }
+  });
+`);
+```
+
+**Includes:** `ReadableStream`, `WritableStream`, `TransformStream`, `ByteLengthQueuingStrategy`, `CountQueuingStrategy`
+
+### `BlobAPI`
+
+Provides Blob and File handling for binary data.
+
+```typescript
+const interpreter = new Interpreter(preset(ES2022, BlobAPI));
+
+interpreter.evaluate(`
+  const blob = new Blob(['hello'], { type: 'text/plain' });
+  blob.size; // 5
+`);
+```
+
+**Includes:** `Blob`, `File`
+
+### `PerformanceAPI`
+
+Provides performance measurement utilities.
+
+```typescript
+const interpreter = new Interpreter(preset(ES2022, PerformanceAPI));
+
+interpreter.evaluate(`
+  const start = performance.now();
+  // ... do work ...
+  const elapsed = performance.now() - start;
+`);
+```
+
+**Includes:** `performance`
+
+### `EventAPI`
+
+Provides event-related classes for custom event handling.
+
+```typescript
+const interpreter = new Interpreter(preset(ES2022, EventAPI));
+
+interpreter.evaluate(`
+  const target = new EventTarget();
+  target.addEventListener('custom', (e) => console.log(e.type));
+  target.dispatchEvent(new Event('custom'));
+`);
+```
+
+**Includes:** `Event`, `EventTarget`, `CustomEvent`
 
 ## Creating Custom Presets
 

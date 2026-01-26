@@ -641,3 +641,172 @@ export const CryptoAPI: InterpreterOptions = {
     crypto,
   },
 };
+
+/**
+ * RegExp API addon preset.
+ *
+ * Provides access to regular expression functionality.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, RegExpAPI));
+ * interpreter.evaluate(`
+ *   const pattern = new RegExp('hello', 'i');
+ *   pattern.test('Hello World'); // true
+ * `);
+ * ```
+ */
+export const RegExpAPI: InterpreterOptions = {
+  globals: {
+    RegExp,
+  },
+};
+
+/**
+ * Intl API addon preset.
+ *
+ * Provides access to internationalization functionality.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, IntlAPI));
+ * interpreter.evaluate(`
+ *   const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+ *   formatter.format(1234.56); // "$1,234.56"
+ * `);
+ * ```
+ */
+export const IntlAPI: InterpreterOptions = {
+  globals: {
+    Intl,
+  },
+};
+
+/**
+ * Buffer API addon preset.
+ *
+ * Provides access to binary data handling with ArrayBuffer, DataView, and typed arrays.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, BufferAPI));
+ * interpreter.evaluate(`
+ *   const buffer = new ArrayBuffer(16);
+ *   const view = new DataView(buffer);
+ *   view.setInt32(0, 42);
+ *   const arr = new Uint8Array(buffer);
+ * `);
+ * ```
+ */
+export const BufferAPI: InterpreterOptions = {
+  globals: {
+    ArrayBuffer,
+    SharedArrayBuffer: typeof SharedArrayBuffer !== "undefined" ? SharedArrayBuffer : undefined,
+    DataView,
+    // Typed arrays
+    Int8Array,
+    Uint8Array,
+    Uint8ClampedArray,
+    Int16Array,
+    Uint16Array,
+    Int32Array,
+    Uint32Array,
+    Float32Array,
+    Float64Array,
+    BigInt64Array,
+    BigUint64Array,
+  },
+};
+
+/**
+ * Streams API addon preset.
+ *
+ * Provides access to the Streams API for handling streaming data.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, StreamsAPI));
+ * await interpreter.evaluateAsync(`
+ *   const stream = new ReadableStream({
+ *     start(controller) {
+ *       controller.enqueue('hello');
+ *       controller.close();
+ *     }
+ *   });
+ * `);
+ * ```
+ */
+export const StreamsAPI: InterpreterOptions = {
+  globals: {
+    ReadableStream,
+    WritableStream,
+    TransformStream,
+    ByteLengthQueuingStrategy,
+    CountQueuingStrategy,
+  },
+};
+
+/**
+ * Blob/File API addon preset.
+ *
+ * Provides access to Blob and File handling.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, BlobAPI));
+ * interpreter.evaluate(`
+ *   const blob = new Blob(['hello'], { type: 'text/plain' });
+ *   blob.size; // 5
+ * `);
+ * ```
+ */
+export const BlobAPI: InterpreterOptions = {
+  globals: {
+    Blob,
+    File,
+  },
+};
+
+/**
+ * Performance API addon preset.
+ *
+ * Provides access to performance measurement utilities.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, PerformanceAPI));
+ * interpreter.evaluate(`
+ *   const start = performance.now();
+ *   // ... do work ...
+ *   const elapsed = performance.now() - start;
+ * `);
+ * ```
+ */
+export const PerformanceAPI: InterpreterOptions = {
+  globals: {
+    performance,
+  },
+};
+
+/**
+ * Event API addon preset.
+ *
+ * Provides access to event-related classes.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, EventAPI));
+ * interpreter.evaluate(`
+ *   const target = new EventTarget();
+ *   target.addEventListener('custom', (e) => console.log(e.type));
+ *   target.dispatchEvent(new Event('custom'));
+ * `);
+ * ```
+ */
+export const EventAPI: InterpreterOptions = {
+  globals: {
+    Event,
+    EventTarget,
+    CustomEvent,
+  },
+};

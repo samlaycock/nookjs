@@ -10,6 +10,13 @@ import {
   TimersAPI,
   TextCodecAPI,
   CryptoAPI,
+  RegExpAPI,
+  IntlAPI,
+  BufferAPI,
+  StreamsAPI,
+  BlobAPI,
+  PerformanceAPI,
+  EventAPI,
 } from "../src/presets";
 
 describe("preset() function", () => {
@@ -264,6 +271,138 @@ describe("Addon Presets", () => {
         typeof uuid === 'string' && uuid.length === 36
       `);
       expect(result).toBe(true);
+    });
+  });
+
+  describe("RegExpAPI", () => {
+    it("should provide RegExp global", () => {
+      expect(RegExpAPI.globals?.RegExp).toBe(RegExp);
+    });
+
+    it("should work with interpreter", async () => {
+      const interpreter = new Interpreter(preset(ES2022, RegExpAPI));
+
+      const result = await interpreter.evaluateAsync(`
+        const pattern = new RegExp('hello', 'i');
+        pattern.test('Hello World')
+      `);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe("IntlAPI", () => {
+    it("should provide Intl global", () => {
+      expect(IntlAPI.globals?.Intl).toBe(Intl);
+    });
+
+    it("should work with interpreter", async () => {
+      const interpreter = new Interpreter(preset(ES2022, IntlAPI));
+
+      // Test that Intl object is accessible and has expected properties
+      const result = await interpreter.evaluateAsync(`
+        typeof Intl === 'object' && typeof Intl.DateTimeFormat === 'function'
+      `);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe("BufferAPI", () => {
+    it("should provide ArrayBuffer and typed array globals", () => {
+      expect(BufferAPI.globals?.ArrayBuffer).toBe(ArrayBuffer);
+      expect(BufferAPI.globals?.DataView).toBe(DataView);
+      expect(BufferAPI.globals?.Uint8Array).toBe(Uint8Array);
+      expect(BufferAPI.globals?.Int32Array).toBe(Int32Array);
+      expect(BufferAPI.globals?.Float64Array).toBe(Float64Array);
+    });
+
+    it("should work with interpreter - ArrayBuffer", async () => {
+      const interpreter = new Interpreter(preset(ES2022, BufferAPI));
+
+      const result = await interpreter.evaluateAsync(`
+        const buffer = new ArrayBuffer(16);
+        buffer.byteLength
+      `);
+      expect(result).toBe(16);
+    });
+
+    it("should support typed arrays", async () => {
+      const interpreter = new Interpreter(preset(ES2022, BufferAPI));
+
+      const result = await interpreter.evaluateAsync(`
+        const arr = new Uint8Array(5);
+        arr.length
+      `);
+      expect(result).toBe(5);
+    });
+  });
+
+  describe("StreamsAPI", () => {
+    it("should provide stream globals", () => {
+      expect(StreamsAPI.globals?.ReadableStream).toBe(ReadableStream);
+      expect(StreamsAPI.globals?.WritableStream).toBe(WritableStream);
+      expect(StreamsAPI.globals?.TransformStream).toBe(TransformStream);
+    });
+
+    it("should work with interpreter", async () => {
+      const interpreter = new Interpreter(preset(ES2022, StreamsAPI));
+
+      // Test that stream constructors are available
+      const result = await interpreter.evaluateAsync(`
+        typeof ReadableStream === 'function' && typeof WritableStream === 'function'
+      `);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe("BlobAPI", () => {
+    it("should provide Blob and File globals", () => {
+      expect(BlobAPI.globals?.Blob).toBe(Blob);
+      expect(BlobAPI.globals?.File).toBe(File);
+    });
+
+    it("should work with interpreter", async () => {
+      const interpreter = new Interpreter(preset(ES2022, BlobAPI));
+
+      const result = await interpreter.evaluateAsync(`
+        const blob = new Blob(['hello'], { type: 'text/plain' });
+        blob.size
+      `);
+      expect(result).toBe(5);
+    });
+  });
+
+  describe("PerformanceAPI", () => {
+    it("should provide performance global", () => {
+      expect(PerformanceAPI.globals?.performance).toBe(performance);
+    });
+
+    it("should work with interpreter", async () => {
+      const interpreter = new Interpreter(preset(ES2022, PerformanceAPI));
+
+      const result = await interpreter.evaluateAsync(`
+        const start = performance.now();
+        typeof start === 'number' && start > 0
+      `);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe("EventAPI", () => {
+    it("should provide event globals", () => {
+      expect(EventAPI.globals?.Event).toBe(Event);
+      expect(EventAPI.globals?.EventTarget).toBe(EventTarget);
+      expect(EventAPI.globals?.CustomEvent).toBe(CustomEvent);
+    });
+
+    it("should work with interpreter", async () => {
+      const interpreter = new Interpreter(preset(ES2022, EventAPI));
+
+      // Test that Event can be constructed
+      const result = await interpreter.evaluateAsync(`
+        const event = new Event('test');
+        event.type
+      `);
+      expect(result).toBe("test");
     });
   });
 });
