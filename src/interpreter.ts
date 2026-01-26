@@ -2183,6 +2183,22 @@ export type EvaluateOptions = {
    * Throws InterpreterError when aborted
    */
   signal?: AbortSignal;
+  /**
+   * Maximum call stack depth
+   * Throws InterpreterError if exceeded (protects against infinite recursion)
+   */
+  maxCallStackDepth?: number;
+  /**
+   * Maximum iterations per loop
+   * Throws InterpreterError if any single loop exceeds this limit
+   */
+  maxLoopIterations?: number;
+  /**
+   * Maximum memory usage in bytes (best-effort estimate)
+   * Throws InterpreterError if exceeded
+   * Note: This is an approximation based on string/array/object allocations
+   */
+  maxMemory?: number;
 };
 
 /**
@@ -2217,6 +2233,17 @@ export class Interpreter {
   private abortSignal?: AbortSignal; // Signal for immediate cancellation
   private executionCheckCounter = 0;
   private static readonly EXECUTION_CHECK_MASK = 0xff; // check every 256 nodes
+
+  // Call stack depth limiting
+  private maxCallStackDepth?: number;
+  private currentCallStackDepth = 0;
+
+  // Loop iteration limiting
+  private maxLoopIterations?: number;
+
+  // Memory tracking (best-effort)
+  private maxMemory?: number;
+  private currentMemoryUsage = 0;
 
   // Generator yield handling - for passing values into yield expressions
   // When set, the next yield expression will return this value instead of YieldValue
@@ -2455,6 +2482,51 @@ export class Interpreter {
     }
   }
 
+  /**
+   * Check and increment call stack depth.
+   * Call this before entering a function/method call.
+   */
+  private enterCallStack(): void {
+    if (this.maxCallStackDepth !== undefined) {
+      if (this.currentCallStackDepth >= this.maxCallStackDepth) {
+        throw new InterpreterError("Maximum call stack depth exceeded");
+      }
+    }
+    this.currentCallStackDepth++;
+  }
+
+  /**
+   * Decrement call stack depth.
+   * Call this after returning from a function/method call.
+   */
+  private exitCallStack(): void {
+    this.currentCallStackDepth--;
+  }
+
+  /**
+   * Check loop iteration count against limit.
+   * @param iterations Current iteration count for the loop
+   */
+  private checkLoopIterations(iterations: number): void {
+    if (this.maxLoopIterations !== undefined && iterations >= this.maxLoopIterations) {
+      throw new InterpreterError("Maximum loop iterations exceeded");
+    }
+  }
+
+  /**
+   * Track memory allocation (best-effort estimate).
+   * @param bytes Estimated bytes being allocated
+   */
+  private trackMemory(bytes: number): void {
+    if (this.maxMemory === undefined) {
+      return;
+    }
+    this.currentMemoryUsage += bytes;
+    if (this.currentMemoryUsage > this.maxMemory) {
+      throw new InterpreterError("Maximum memory limit exceeded");
+    }
+  }
+
   private beginEvaluation(options?: EvaluateOptions): void {
     // Inject per-call globals if provided (with override capability).
     if (options?.globals) {
@@ -2472,6 +2544,17 @@ export class Interpreter {
     this.executionTimeout = options?.timeout;
     this.abortSignal = options?.signal;
     this.executionCheckCounter = 0;
+
+    // Initialize call stack limiting.
+    this.maxCallStackDepth = options?.maxCallStackDepth;
+    this.currentCallStackDepth = 0;
+
+    // Initialize loop iteration limiting.
+    this.maxLoopIterations = options?.maxLoopIterations;
+
+    // Initialize memory tracking.
+    this.maxMemory = options?.maxMemory;
+    this.currentMemoryUsage = 0;
   }
 
   private endEvaluation(options?: EvaluateOptions): void {
@@ -2488,6 +2571,17 @@ export class Interpreter {
     this.executionStartTime = undefined;
     this.executionTimeout = undefined;
     this.abortSignal = undefined;
+
+    // Clear call stack limiting.
+    this.maxCallStackDepth = undefined;
+    this.currentCallStackDepth = 0;
+
+    // Clear loop iteration limiting.
+    this.maxLoopIterations = undefined;
+
+    // Clear memory tracking.
+    this.maxMemory = undefined;
+    this.currentMemoryUsage = 0;
   }
 
   private parseAndValidate(code: string, options?: EvaluateOptions): ESTree.Program {
@@ -3071,6 +3165,9 @@ export class Interpreter {
         result += this.coerceTemplateValue(exprValue);
       }
     }
+
+    // Track memory: estimate 2 bytes per character (UTF-16)
+    this.trackMemory(result.length * 2);
 
     return result;
   }
@@ -3670,6 +3767,9 @@ export class Interpreter {
    * Sets up environment, binds parameters, executes body, and unwraps return value.
    */
   private executeSandboxFunction(fn: FunctionValue, args: any[], thisValue: any): any {
+    // Check and track call stack depth
+    this.enterCallStack();
+
     const previousEnvironment = this.environment;
     const previousSuperBinding = this.currentSuperBinding;
     this.environment = new Environment(fn.closure, thisValue, true);
@@ -3701,6 +3801,7 @@ export class Interpreter {
       // Restore the previous environment (exit function scope)
       this.environment = previousEnvironment;
       this.currentSuperBinding = previousSuperBinding;
+      this.exitCallStack();
     }
   }
 
@@ -3714,6 +3815,9 @@ export class Interpreter {
     args: any[],
     thisValue: any,
   ): Promise<any> {
+    // Check and track call stack depth
+    this.enterCallStack();
+
     const previousEnvironment = this.environment;
     const previousSuperBinding = this.currentSuperBinding;
     this.environment = new Environment(fn.closure, thisValue, true);
@@ -3745,6 +3849,7 @@ export class Interpreter {
       // Restore the previous environment (exit function scope)
       this.environment = previousEnvironment;
       this.currentSuperBinding = previousSuperBinding;
+      this.exitCallStack();
     }
   }
 
@@ -4437,10 +4542,12 @@ export class Interpreter {
     }
 
     let result: any = undefined;
+    let iterations = 0;
 
     while (this.evaluateNode(node.test)) {
       // Check execution limits at the start of each loop iteration
       this.checkExecutionLimits();
+      this.checkLoopIterations(iterations++);
 
       result = this.evaluateNode(node.body);
 
@@ -4460,10 +4567,12 @@ export class Interpreter {
     }
 
     let result: any = undefined;
+    let iterations = 0;
 
     do {
       // Check execution limits at the start of each loop iteration
       this.checkExecutionLimits();
+      this.checkLoopIterations(iterations++);
 
       result = this.evaluateNode(node.body);
 
@@ -4493,11 +4602,13 @@ export class Interpreter {
       }
 
       let result: any = undefined;
+      let iterations = 0;
 
       // Loop while test condition is true
       while (true) {
         // Check execution limits at the start of each loop iteration
         this.checkExecutionLimits();
+        this.checkLoopIterations(iterations++);
 
         // Check test condition (e.g., i < 10)
         if (node.test) {
@@ -4577,12 +4688,14 @@ export class Interpreter {
       const { variableName, isDeclaration, variableKind } = this.extractForOfVariable(node.left);
 
       let result: any = undefined;
+      let iterations = 0;
 
       // Iterate using the iterator protocol
       let iterResult = iterator.next();
       while (!iterResult.done) {
         // Check execution limits at the start of each loop iteration
         this.checkExecutionLimits();
+        this.checkLoopIterations(iterations++);
 
         const currentValue = iterResult.value;
 
@@ -4671,6 +4784,7 @@ export class Interpreter {
       const { variableName, isDeclaration, variableKind } = this.extractForInVariable(node.left);
 
       let result: any = undefined;
+      let iterations = 0;
 
       // Iterate over object keys (own enumerable properties)
       // Use Object.keys to get own enumerable property names
@@ -4679,6 +4793,7 @@ export class Interpreter {
       for (const key of keys) {
         // Check execution limits at the start of each loop iteration
         this.checkExecutionLimits();
+        this.checkLoopIterations(iterations++);
 
         if (isDeclaration) {
           // For declarations (let/const), create a NEW scope for EACH iteration
@@ -6325,6 +6440,9 @@ export class Interpreter {
       }
     }
 
+    // Track memory: estimate 16 bytes per array element
+    this.trackMemory(elements.length * 16);
+
     return elements;
   }
 
@@ -6365,6 +6483,10 @@ export class Interpreter {
         throw new InterpreterError(`Unsupported object property type: ${propertyType}`);
       }
     }
+
+    // Track memory: estimate 64 bytes base + 32 bytes per property
+    const propertyCount = Object.keys(obj).length;
+    this.trackMemory(64 + propertyCount * 32);
 
     return obj;
   }
@@ -7157,10 +7279,12 @@ export class Interpreter {
     }
 
     let result: any = undefined;
+    let iterations = 0;
 
     while (await this.evaluateNodeAsync(node.test)) {
       // Check execution limits at the start of each loop iteration
       this.checkExecutionLimits();
+      this.checkLoopIterations(iterations++);
 
       result = await this.evaluateNodeAsync(node.body);
 
@@ -7180,10 +7304,12 @@ export class Interpreter {
     }
 
     let result: any = undefined;
+    let iterations = 0;
 
     do {
       // Check execution limits at the start of each loop iteration
       this.checkExecutionLimits();
+      this.checkLoopIterations(iterations++);
 
       result = await this.evaluateNodeAsync(node.body);
 
@@ -7211,10 +7337,12 @@ export class Interpreter {
       }
 
       let result: any = undefined;
+      let iterations = 0;
 
       while (true) {
         // Check execution limits at the start of each loop iteration
         this.checkExecutionLimits();
+        this.checkLoopIterations(iterations++);
 
         if (node.test) {
           const condition = await this.evaluateNodeAsync(node.test);
@@ -7285,6 +7413,7 @@ export class Interpreter {
       const { variableName, isDeclaration, variableKind } = this.extractForOfVariable(node.left);
 
       let result: any = undefined;
+      let iterations = 0;
 
       // Iterate using the iterator protocol
       let iterResult = isAsync
@@ -7294,6 +7423,7 @@ export class Interpreter {
       while (!iterResult.done) {
         // Check execution limits at the start of each loop iteration
         this.checkExecutionLimits();
+        this.checkLoopIterations(iterations++);
 
         const currentValue = iterResult.value;
 
@@ -7381,6 +7511,7 @@ export class Interpreter {
       const { variableName, isDeclaration, variableKind } = this.extractForInVariable(node.left);
 
       let result: any = undefined;
+      let iterations = 0;
 
       // Iterate over object keys (own enumerable properties)
       const keys = Object.keys(obj);
@@ -7388,6 +7519,7 @@ export class Interpreter {
       for (const key of keys) {
         // Check execution limits at the start of each loop iteration
         this.checkExecutionLimits();
+        this.checkLoopIterations(iterations++);
 
         if (isDeclaration) {
           // For declarations (let/const), create a NEW scope for EACH iteration
@@ -8039,6 +8171,9 @@ export class Interpreter {
       }
     }
 
+    // Track memory: estimate 16 bytes per array element
+    this.trackMemory(elements.length * 16);
+
     return elements;
   }
 
@@ -8075,6 +8210,10 @@ export class Interpreter {
         throw new InterpreterError(`Unsupported object property type: ${propertyType}`);
       }
     }
+
+    // Track memory: estimate 64 bytes base + 32 bytes per property
+    const propertyCount = Object.keys(obj).length;
+    this.trackMemory(64 + propertyCount * 32);
 
     return obj;
   }

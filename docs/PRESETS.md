@@ -109,20 +109,20 @@ ES2021+ presets add:
 
 Addon presets provide access to specific Web/Runtime APIs. They only add globals and don't modify feature control.
 
-| Preset          | Description                                    | Key Globals                                      |
-| --------------- | ---------------------------------------------- | ------------------------------------------------ |
-| `FetchAPI`      | HTTP requests                                  | `fetch`, `Request`, `Response`, `Headers`        |
-| `ConsoleAPI`    | Logging                                        | `console`                                        |
-| `TimersAPI`     | Timers                                         | `setTimeout`, `setInterval`                      |
-| `TextCodecAPI`  | Text encoding/decoding                         | `TextEncoder`, `TextDecoder`                     |
-| `CryptoAPI`     | Cryptographic functions                        | `crypto`                                         |
-| `RegExpAPI`     | Regular expressions                            | `RegExp`                                         |
-| `IntlAPI`       | Internationalization                           | `Intl`                                           |
-| `BufferAPI`     | Binary data handling                           | `ArrayBuffer`, `DataView`, typed arrays          |
-| `StreamsAPI`    | Streaming data                                 | `ReadableStream`, `WritableStream`               |
-| `BlobAPI`       | Blob/File handling                             | `Blob`, `File`                                   |
-| `PerformanceAPI`| Performance measurement                        | `performance`                                    |
-| `EventAPI`      | Custom events                                  | `Event`, `EventTarget`, `CustomEvent`            |
+| Preset           | Description             | Key Globals                               |
+| ---------------- | ----------------------- | ----------------------------------------- |
+| `FetchAPI`       | HTTP requests           | `fetch`, `Request`, `Response`, `Headers` |
+| `ConsoleAPI`     | Logging                 | `console`                                 |
+| `TimersAPI`      | Timers                  | `setTimeout`, `setInterval`               |
+| `TextCodecAPI`   | Text encoding/decoding  | `TextEncoder`, `TextDecoder`              |
+| `CryptoAPI`      | Cryptographic functions | `crypto`                                  |
+| `RegExpAPI`      | Regular expressions     | `RegExp`                                  |
+| `IntlAPI`        | Internationalization    | `Intl`                                    |
+| `BufferAPI`      | Binary data handling    | `ArrayBuffer`, `DataView`, typed arrays   |
+| `StreamsAPI`     | Streaming data          | `ReadableStream`, `WritableStream`        |
+| `BlobAPI`        | Blob/File handling      | `Blob`, `File`                            |
+| `PerformanceAPI` | Performance measurement | `performance`                             |
+| `EventAPI`       | Custom events           | `Event`, `EventTarget`, `CustomEvent`     |
 
 ### `FetchAPI`
 

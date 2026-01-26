@@ -153,6 +153,125 @@ Promise objects are passed through `ReadOnlyProxy.wrap()` without wrapping. This
 
 By default, host error messages are hidden from the sandbox. If you need to see error details for debugging, you can disable this with `hideHostErrorMessages: false`.
 
+## Execution Limits
+
+The interpreter provides execution limits to protect against denial-of-service attacks from untrusted code. These limits are configured per-call via `EvaluateOptions`:
+
+```typescript
+const interpreter = new Interpreter();
+
+const result = interpreter.evaluate(
+  `
+  function factorial(n) {
+    if (n <= 1) return 1;
+    return n * factorial(n - 1);
+  }
+  factorial(10);
+`,
+  {
+    // Maximum call stack depth (protects against infinite recursion)
+    maxCallStackDepth: 100,
+
+    // Maximum iterations per loop (protects against infinite loops)
+    maxLoopIterations: 10000,
+
+    // Maximum memory usage in bytes (best-effort estimate)
+    maxMemory: 10 * 1024 * 1024, // 10 MB
+  },
+);
+```
+
+### `maxCallStackDepth`
+
+Limits the depth of function call nesting. When exceeded, throws `InterpreterError: Maximum call stack depth exceeded`.
+
+**Use case:** Prevent stack overflow from infinite recursion.
+
+```typescript
+// This will throw when maxCallStackDepth is exceeded
+interpreter.evaluate(
+  `
+  function infinite() { return infinite(); }
+  infinite();
+`,
+  { maxCallStackDepth: 50 },
+);
+```
+
+### `maxLoopIterations`
+
+Limits the number of iterations **per loop**. Each loop (while, for, do-while, for-of, for-in) has its own counter that resets when the loop completes. When exceeded, throws `InterpreterError: Maximum loop iterations exceeded`.
+
+**Use case:** Prevent infinite loops from consuming CPU.
+
+```typescript
+// This will throw when maxLoopIterations is exceeded
+interpreter.evaluate(`while (true) { }`, { maxLoopIterations: 1000 });
+
+// This works because each loop is under the limit
+interpreter.evaluate(
+  `
+  for (let i = 0; i < 500; i++) { }  // 500 iterations
+  for (let j = 0; j < 500; j++) { }  // 500 iterations
+`,
+  { maxLoopIterations: 1000 },
+);
+```
+
+### `maxMemory`
+
+Limits estimated memory usage in bytes. This is a **best-effort heuristic** that tracks:
+
+- Array allocations: ~16 bytes per element
+- Object allocations: ~64 bytes base + 32 bytes per property
+- String allocations (via template literals): ~2 bytes per character
+
+When exceeded, throws `InterpreterError: Maximum memory limit exceeded`.
+
+**Note:** This is not a precise memory limit. JavaScript doesn't expose precise memory tracking, so the interpreter estimates based on allocations it can observe. The goal is to catch runaway memory consumption, not precise accounting.
+
+```typescript
+// This will throw when estimated memory exceeds the limit
+interpreter.evaluate(
+  `
+  const huge = [];
+  for (let i = 0; i < 100000; i++) {
+    huge.push([1, 2, 3, 4, 5]);
+  }
+`,
+  { maxMemory: 1024 * 1024, maxLoopIterations: 1000000 },
+);
+```
+
+### Combined with Timeout
+
+For comprehensive protection, combine execution limits with the existing `timeout` option:
+
+```typescript
+interpreter.evaluate(code, {
+  timeout: 5000, // 5 seconds wall-clock time
+  maxCallStackDepth: 100,
+  maxLoopIterations: 100000,
+  maxMemory: 10 * 1024 * 1024,
+});
+```
+
+### Execution Limits and AbortSignal
+
+You can also use `AbortSignal` for immediate cancellation:
+
+```typescript
+const controller = new AbortController();
+
+// Cancel after 1 second
+setTimeout(() => controller.abort(), 1000);
+
+interpreter.evaluate(code, {
+  signal: controller.signal,
+  maxLoopIterations: 100000,
+});
+```
+
 ## Security Testing
 
 The interpreter includes comprehensive security tests in:
@@ -160,6 +279,7 @@ The interpreter includes comprehensive security tests in:
 - `test/readonly-proxy-security.test.ts` - Tests for ReadOnlyProxy protections
 - `test/security.test.ts` - General security tests
 - `test/security-options.test.ts` - Tests for security configuration options
+- `test/execution-control.test.ts` - Tests for execution limits (call stack, loops, memory)
 
 ## Recommendations
 
