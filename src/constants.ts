@@ -27,6 +27,7 @@ export const DANGEROUS_PROPERTIES = [
   "__lookupSetter__",
 
   // Object.prototype methods that can bypass proxy
+  "toString",
   "valueOf",
   "toLocaleString",
 

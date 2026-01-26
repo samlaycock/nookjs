@@ -445,7 +445,7 @@ describe("Security: Prototype Pollution Prevention", () => {
           let obj = { a: 1 };
           obj.toString
         `);
-      }).toThrow("Access to inherited property 'toString' is not allowed");
+      }).toThrow("Property name 'toString' is not allowed for security reasons");
     });
 
     it("should block inherited Array.prototype access", () => {
@@ -455,7 +455,7 @@ describe("Security: Prototype Pollution Prevention", () => {
           let arr = [1, 2, 3];
           arr.toString
         `);
-      }).toThrow("Array method 'toString' not supported");
+      }).toThrow("Property name 'toString' is not allowed for security reasons");
     });
 
     it("should block inherited Function.prototype access on sandbox functions", () => {

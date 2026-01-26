@@ -64,11 +64,18 @@ export class ReadOnlyProxy {
       return value;
     }
 
+    // Pass Promises through unwrapped - they are safe (just hold values) and
+    // wrapping breaks the thenable protocol that await relies on
+    if (value instanceof Promise) {
+      return value;
+    }
+
     // If the value itself is a function (not an object with function properties),
     // wrap it directly as HostFunctionValue instead of proxying it
     if (typeof value === "function") {
       const isAsync = value.constructor.name === "AsyncFunction";
-      return new HostFunctionValue((...args: any[]) => value(...args), name, isAsync);
+      // Preserve constructability for native classes/functions (e.g., Error, Response).
+      return new HostFunctionValue(value, name, isAsync);
     }
 
     // Create a proxy that intercepts all operations (for objects like Math, console, etc.)
@@ -87,9 +94,31 @@ export class ReadOnlyProxy {
           return iterator;
         }
 
+        // Allow Symbol.toPrimitive to return undefined - this tells JS to use valueOf/toString
+        // which we handle below. This is necessary for arithmetic operations to work.
+        if (prop === Symbol.toPrimitive) {
+          return undefined;
+        }
+
+        // Allow valueOf for primitive coercion - return the underlying value
+        // This is safe because it just returns the primitive value, not internals
+        if (prop === "valueOf") {
+          return () => {
+            const val = target.valueOf ? target.valueOf() : target;
+            // If valueOf returns a primitive, return it directly
+            if (val === null || val === undefined || typeof val !== "object") {
+              return val;
+            }
+            // Otherwise wrap the result to maintain read-only protection
+            return ReadOnlyProxy.wrap(val, name);
+          };
+        }
+
         // Block dangerous properties that could break out of sandbox
         if (isDangerousProperty(prop)) {
-          throw new InterpreterError(`Cannot access ${String(prop)} on global '${name}'`);
+          throw new InterpreterError(
+            `Cannot access ${String(prop)} on global '${name}'`,
+          );
         }
 
         // Get the actual value
@@ -143,7 +172,9 @@ export class ReadOnlyProxy {
 
       // Block setPrototypeOf to prevent prototype chain manipulation
       setPrototypeOf(_target) {
-        throw new InterpreterError(`Cannot set prototype of global '${name}' (read-only)`);
+        throw new InterpreterError(
+          `Cannot set prototype of global '${name}' (read-only)`,
+        );
       },
 
       // Block getPrototypeOf to prevent accessing the underlying object's prototype

@@ -104,13 +104,17 @@ describe("ReadOnlyProxy Security", () => {
       }).toThrow("Cannot access __lookupSetter__ on global 'obj'");
     });
 
-    it("should block valueOf access", () => {
+    it("should allow valueOf for primitive coercion but return wrapped value", () => {
       const testObj = { value: 42 };
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
-      expect(() => {
-        void (wrapped as any).valueOf;
-      }).toThrow("Cannot access valueOf on global 'obj'");
+      // valueOf is allowed for arithmetic operations, but returns a wrapped proxy
+      const valueOfFn = (wrapped as any).valueOf;
+      expect(typeof valueOfFn).toBe("function");
+      // The function should return a wrapped proxy, not the raw object
+      const result = valueOfFn();
+      expect(result).not.toBe(testObj); // Returns a wrapped proxy, not the raw target
+      expect(result.value).toBe(42); // Properties are still accessible (read-only)
     });
 
     it("should block toLocaleString access", () => {
@@ -156,7 +160,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         interpreter.evaluate("obj.method.apply");
-      }).toThrow("Cannot access properties on host functions");
+      }).toThrow("'apply' is not allowed");
     });
 
     it("should block call access in interpreter context", () => {
@@ -166,7 +170,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         interpreter.evaluate("obj.method.call");
-      }).toThrow("Cannot access properties on host functions");
+      }).toThrow("'call' is not allowed");
     });
 
     it("should block bind access in interpreter context", () => {
@@ -176,7 +180,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         interpreter.evaluate("obj.method.bind");
-      }).toThrow("Cannot access properties on host functions");
+      }).toThrow("'bind' is not allowed");
     });
 
     it("should block arguments access in interpreter context", () => {
@@ -186,7 +190,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         interpreter.evaluate("obj.method.arguments");
-      }).toThrow("Cannot access properties on host functions");
+      }).toThrow("'arguments' is not allowed");
     });
 
     it("should block caller access in interpreter context", () => {
@@ -196,7 +200,7 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         interpreter.evaluate("obj.method.caller");
-      }).toThrow("Cannot access properties on host functions");
+      }).toThrow("'caller' is not allowed");
     });
   });
 
@@ -216,7 +220,9 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         (wrapped as any).newProp = "test";
-      }).toThrow("Cannot modify property 'newProp' on global 'obj' (read-only)");
+      }).toThrow(
+        "Cannot modify property 'newProp' on global 'obj' (read-only)",
+      );
     });
 
     it("should block deleting properties", () => {
@@ -225,7 +231,9 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         delete (wrapped as any).value;
-      }).toThrow("Cannot delete property 'value' from global 'obj' (read-only)");
+      }).toThrow(
+        "Cannot delete property 'value' from global 'obj' (read-only)",
+      );
     });
 
     it("should block Object.defineProperty", () => {
@@ -234,7 +242,9 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         Object.defineProperty(wrapped, "newProp", { value: 100 });
-      }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
+      }).toThrow(
+        "Cannot define property 'newProp' on global 'obj' (read-only)",
+      );
     });
 
     it("should block Object.setPrototypeOf", () => {
@@ -264,7 +274,9 @@ describe("ReadOnlyProxy Security", () => {
       // Cannot modify nested values
       expect(() => {
         (wrapped as any).level1.level2.value = 100;
-      }).toThrow("Cannot modify property 'value' on global 'obj.level1.level2' (read-only)");
+      }).toThrow(
+        "Cannot modify property 'value' on global 'obj.level1.level2' (read-only)",
+      );
     });
 
     it("should block __proto__ on nested objects", () => {
@@ -311,9 +323,9 @@ describe("ReadOnlyProxy Security", () => {
   });
 
   describe("Symbol access protection", () => {
+    // Note: Symbol.toPrimitive is intentionally allowed (returns undefined) for arithmetic operations
     const symbolCases: Array<{ symbol: symbol; name: string }> = [
       { symbol: Symbol.toStringTag, name: "Symbol(Symbol.toStringTag)" },
-      { symbol: Symbol.toPrimitive, name: "Symbol(Symbol.toPrimitive)" },
       { symbol: Symbol.hasInstance, name: "Symbol(Symbol.hasInstance)" },
       { symbol: Symbol.unscopables, name: "Symbol(Symbol.unscopables)" },
       { symbol: Symbol.species, name: "Symbol(Symbol.species)" },
@@ -337,13 +349,14 @@ describe("ReadOnlyProxy Security", () => {
       }).toThrow("Cannot access Symbol(Symbol.toStringTag) on global 'obj'");
     });
 
-    it("should block Symbol.toPrimitive access", () => {
+    it("should allow Symbol.toPrimitive for primitive coercion", () => {
       const testObj = { value: 42 };
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
-      expect(() => {
-        void (wrapped as any)[Symbol.toPrimitive];
-      }).toThrow("Cannot access Symbol(Symbol.toPrimitive) on global 'obj'");
+      // Symbol.toPrimitive returns undefined, which tells JS to use valueOf/toString
+      // This is safe and necessary for arithmetic operations to work
+      const toPrimitive = (wrapped as any)[Symbol.toPrimitive];
+      expect(toPrimitive).toBeUndefined();
     });
 
     it("should block Symbol.hasInstance access", () => {
@@ -377,7 +390,9 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         first.secret = "HACKED";
-      }).toThrow("Cannot modify property 'secret' on global 'arr[]' (read-only)");
+      }).toThrow(
+        "Cannot modify property 'secret' on global 'arr[]' (read-only)",
+      );
     });
 
     it("should wrap values when iterating inside interpreter", () => {
@@ -390,7 +405,9 @@ describe("ReadOnlyProxy Security", () => {
           const obj = [...arr][0];
           obj.secret = "HACKED";
         `);
-      }).toThrow("Cannot modify property 'secret' on global 'arr[]' (read-only)");
+      }).toThrow(
+        "Cannot modify property 'secret' on global 'arr[]' (read-only)",
+      );
     });
 
     it("should wrap values yielded by async iterators", async () => {
@@ -404,7 +421,9 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         result.value.secret = "HACKED";
-      }).toThrow("Cannot modify property 'secret' on global 'gen[]' (read-only)");
+      }).toThrow(
+        "Cannot modify property 'secret' on global 'gen[]' (read-only)",
+      );
     });
   });
 
@@ -433,7 +452,9 @@ describe("ReadOnlyProxy Security", () => {
 
       expect(() => {
         Reflect.defineProperty(wrapped, "newProp", { value: 100 });
-      }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
+      }).toThrow(
+        "Cannot define property 'newProp' on global 'obj' (read-only)",
+      );
     });
 
     it("should block Reflect.setPrototypeOf", () => {
@@ -477,24 +498,28 @@ describe("ReadOnlyProxy Security", () => {
   });
 
   describe("valueOf() exploit prevention", () => {
-    it("should block valueOf() access that could bypass proxy", () => {
+    it("should allow valueOf() but return wrapped value that cannot bypass proxy", () => {
       const testObj = { secret: "CONFIDENTIAL" };
       const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
 
-      // valueOf() used to return the unwrapped object, allowing bypass
-      expect(() => {
-        void (wrapped as any).valueOf;
-      }).toThrow("Cannot access valueOf on global 'obj'");
+      // valueOf() is allowed for primitive coercion but returns a wrapped proxy
+      const valueOfFn = (wrapped as any).valueOf;
+      expect(typeof valueOfFn).toBe("function");
+      const result = valueOfFn();
+      // Result should be wrapped - not the raw testObj
+      expect(result).not.toBe(testObj);
+      // But should have the same property accessible (read-only)
+      expect(result.secret).toBe("CONFIDENTIAL");
     });
 
-    it("should prevent modification via valueOf() bypass", () => {
+    it("should prevent modification via valueOf() - result is wrapped", () => {
       const testObj = { secret: "CONFIDENTIAL" };
       const interpreter = new Interpreter({ globals: { obj: testObj } });
 
-      // This used to work: obj.valueOf().secret = "HACKED"
+      // valueOf() returns a wrapped object, modifications are blocked
       expect(() => {
-        interpreter.evaluate("obj.valueOf()");
-      }).toThrow("Cannot access valueOf on global 'obj'");
+        interpreter.evaluate("obj.valueOf().secret = 'HACKED'");
+      }).toThrow();
 
       // Original object should remain unmodified
       expect(testObj.secret).toBe("CONFIDENTIAL");

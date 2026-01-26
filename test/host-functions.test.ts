@@ -313,7 +313,7 @@ describe("Host Functions", () => {
       });
       expect(() => {
         interpreter.evaluate('myFunc["__proto__"]');
-      }).toThrow("Cannot access properties on host functions");
+      }).toThrow("Cannot access __proto__");
     });
 
     it("should prevent accessing constructor on host functions", () => {
@@ -324,7 +324,7 @@ describe("Host Functions", () => {
       });
       expect(() => {
         interpreter.evaluate("myFunc.constructor");
-      }).toThrow("Cannot access properties on host functions");
+      }).toThrow("'constructor' is not allowed");
     });
 
     it("should prevent assigning properties on host functions", () => {
