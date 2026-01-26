@@ -4077,8 +4077,9 @@ export class Interpreter {
       return this.evaluateLogicalAssignment(node);
     }
 
+    // Handle compound assignment operators (+=, -=, *=, etc.)
     if (node.operator !== "=") {
-      throw new InterpreterError(`Unsupported assignment operator: ${node.operator}`);
+      return this.evaluateCompoundAssignment(node);
     }
 
     const value = this.evaluateNode(node.right);
@@ -4435,6 +4436,184 @@ export class Interpreter {
     }
 
     return newValue;
+  }
+
+  /**
+   * Evaluates compound assignment operators: +=, -=, *=, /=, %=, **=, <<=, >>=, >>>=, &=, |=, ^=
+   * These operators read the current value, apply the operation, and assign the result.
+   */
+  private evaluateCompoundAssignment(node: ESTree.AssignmentExpression): any {
+    const rightValue = this.evaluateNode(node.right);
+
+    // Get the current value and compute the new value
+    const computeNewValue = (currentValue: any): any => {
+      switch (node.operator) {
+        case "+=":
+          return currentValue + rightValue;
+        case "-=":
+          return currentValue - rightValue;
+        case "*=":
+          return currentValue * rightValue;
+        case "/=":
+          return currentValue / rightValue;
+        case "%=":
+          return currentValue % rightValue;
+        case "**=":
+          return currentValue ** rightValue;
+        case "<<=":
+          return currentValue << rightValue;
+        case ">>=":
+          return currentValue >> rightValue;
+        case ">>>=":
+          return currentValue >>> rightValue;
+        case "&=":
+          return currentValue & rightValue;
+        case "|=":
+          return currentValue | rightValue;
+        case "^=":
+          return currentValue ^ rightValue;
+        default:
+          throw new InterpreterError(`Unsupported assignment operator: ${node.operator}`);
+      }
+    };
+
+    // Handle identifier assignment: x += 1
+    if (node.left.type === "Identifier") {
+      const name = (node.left as ESTree.Identifier).name;
+      const currentValue = this.environment.get(name);
+      const newValue = computeNewValue(currentValue);
+      this.environment.set(name, newValue);
+      return newValue;
+    }
+
+    // Handle member expression assignment: obj.prop += 1 or arr[i] += 1
+    if (node.left.type === "MemberExpression") {
+      const memberExpr = node.left as ESTree.MemberExpression;
+
+      // Handle super member assignment
+      if (memberExpr.object.type === "Super") {
+        const currentValue = this.evaluateSuperMemberAccess(memberExpr);
+        const newValue = computeNewValue(currentValue);
+        return this.assignSuperMember(memberExpr, newValue);
+      }
+
+      const object = this.evaluateNode(memberExpr.object);
+
+      if (object instanceof HostFunctionValue) {
+        throw new InterpreterError("Cannot assign properties on host functions");
+      }
+      this.ensureNoInternalObjectMutation(object);
+
+      // Handle private field: this.#field += 1
+      if (memberExpr.property.type === "PrivateIdentifier") {
+        if (!this.isFeatureEnabled("PrivateFields")) {
+          throw new InterpreterError("PrivateFields is not enabled");
+        }
+        const fieldName = (memberExpr.property as ESTree.PrivateIdentifier).name;
+        const currentValue = this.accessPrivateField(object, fieldName);
+        const newValue = computeNewValue(currentValue);
+        return this.assignPrivateField(object, fieldName, newValue);
+      }
+
+      if (memberExpr.computed) {
+        // Computed property: arr[i] += 1 or obj["key"] += 1
+        const property = this.evaluateNode(memberExpr.property);
+
+        if (typeof property === "symbol") {
+          this.validateSymbolProperty(property);
+          if (object instanceof ClassValue || this.getInstanceClass(object)) {
+            throw new InterpreterError("Symbol properties are not supported");
+          }
+          if (typeof object === "object" && object !== null) {
+            const currentValue = object[property];
+            const newValue = computeNewValue(currentValue);
+            object[property] = newValue;
+            return newValue;
+          }
+          throw new InterpreterError("Invalid assignment target");
+        }
+
+        if (Array.isArray(object)) {
+          const index = typeof property === "string" ? Number(property) : property;
+          if (typeof index !== "number" || isNaN(index)) {
+            throw new InterpreterError("Array index must be a number");
+          }
+          const currentValue = object[index];
+          const newValue = computeNewValue(currentValue);
+          object[index] = newValue;
+          return newValue;
+        }
+
+        if (object instanceof ClassValue) {
+          const propName = String(property);
+          const currentValue = this.accessClassStaticMember(object, memberExpr);
+          const newValue = computeNewValue(currentValue);
+          return this.assignClassStaticMember(object, propName, newValue);
+        }
+
+        const instanceClass = this.getInstanceClass(object);
+        if (instanceClass) {
+          const propName = String(property);
+          validatePropertyName(propName);
+          const currentValue = this.getInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            propName,
+          );
+          const newValue = computeNewValue(currentValue);
+          return this.assignInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            propName,
+            newValue,
+          );
+        }
+
+        // Regular object
+        const propName = String(property);
+        validatePropertyName(propName);
+        const currentValue = object[propName];
+        const newValue = computeNewValue(currentValue);
+        object[propName] = newValue;
+        return newValue;
+      } else {
+        // Non-computed property: obj.prop += 1
+        if (memberExpr.property.type !== "Identifier") {
+          throw new InterpreterError("Invalid property access");
+        }
+        const property = (memberExpr.property as ESTree.Identifier).name;
+        validatePropertyName(property);
+
+        if (object instanceof ClassValue) {
+          const currentValue = this.accessClassStaticMember(object, memberExpr);
+          const newValue = computeNewValue(currentValue);
+          return this.assignClassStaticMember(object, property, newValue);
+        }
+
+        const instanceClass = this.getInstanceClass(object);
+        if (instanceClass) {
+          const currentValue = this.getInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            property,
+          );
+          const newValue = computeNewValue(currentValue);
+          return this.assignInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            property,
+            newValue,
+          );
+        }
+
+        const currentValue = object[property];
+        const newValue = computeNewValue(currentValue);
+        object[property] = newValue;
+        return newValue;
+      }
+    }
+
+    throw new InterpreterError("Invalid compound assignment target");
   }
 
   private evaluateVariableDeclaration(node: ESTree.VariableDeclaration): any {
@@ -6839,8 +7018,9 @@ export class Interpreter {
       return await this.evaluateLogicalAssignmentAsync(node);
     }
 
+    // Handle compound assignment operators (+=, -=, *=, etc.)
     if (node.operator !== "=") {
-      throw new InterpreterError(`Unsupported assignment operator: ${node.operator}`);
+      return this.evaluateCompoundAssignmentAsync(node);
     }
 
     const value = await this.evaluateNodeAsync(node.right);
@@ -7181,6 +7361,184 @@ export class Interpreter {
     }
 
     return newValue;
+  }
+
+  /**
+   * Async version of evaluateCompoundAssignment.
+   * Evaluates compound assignment operators: +=, -=, *=, /=, %=, **=, <<=, >>=, >>>=, &=, |=, ^=
+   */
+  private async evaluateCompoundAssignmentAsync(node: ESTree.AssignmentExpression): Promise<any> {
+    const rightValue = await this.evaluateNodeAsync(node.right);
+
+    // Get the current value and compute the new value
+    const computeNewValue = (currentValue: any): any => {
+      switch (node.operator) {
+        case "+=":
+          return currentValue + rightValue;
+        case "-=":
+          return currentValue - rightValue;
+        case "*=":
+          return currentValue * rightValue;
+        case "/=":
+          return currentValue / rightValue;
+        case "%=":
+          return currentValue % rightValue;
+        case "**=":
+          return currentValue ** rightValue;
+        case "<<=":
+          return currentValue << rightValue;
+        case ">>=":
+          return currentValue >> rightValue;
+        case ">>>=":
+          return currentValue >>> rightValue;
+        case "&=":
+          return currentValue & rightValue;
+        case "|=":
+          return currentValue | rightValue;
+        case "^=":
+          return currentValue ^ rightValue;
+        default:
+          throw new InterpreterError(`Unsupported assignment operator: ${node.operator}`);
+      }
+    };
+
+    // Handle identifier assignment: x += 1
+    if (node.left.type === "Identifier") {
+      const name = (node.left as ESTree.Identifier).name;
+      const currentValue = this.environment.get(name);
+      const newValue = computeNewValue(currentValue);
+      this.environment.set(name, newValue);
+      return newValue;
+    }
+
+    // Handle member expression assignment: obj.prop += 1 or arr[i] += 1
+    if (node.left.type === "MemberExpression") {
+      const memberExpr = node.left as ESTree.MemberExpression;
+
+      // Handle super member assignment
+      if (memberExpr.object.type === "Super") {
+        const currentValue = this.evaluateSuperMemberAccess(memberExpr);
+        const newValue = computeNewValue(currentValue);
+        return await this.assignSuperMemberAsync(memberExpr, newValue);
+      }
+
+      const object = await this.evaluateNodeAsync(memberExpr.object);
+
+      if (object instanceof HostFunctionValue) {
+        throw new InterpreterError("Cannot assign properties on host functions");
+      }
+      this.ensureNoInternalObjectMutation(object);
+
+      // Handle private field: this.#field += 1
+      if (memberExpr.property.type === "PrivateIdentifier") {
+        if (!this.isFeatureEnabled("PrivateFields")) {
+          throw new InterpreterError("PrivateFields is not enabled");
+        }
+        const fieldName = (memberExpr.property as ESTree.PrivateIdentifier).name;
+        const currentValue = this.accessPrivateField(object, fieldName);
+        const newValue = computeNewValue(currentValue);
+        return this.assignPrivateField(object, fieldName, newValue);
+      }
+
+      if (memberExpr.computed) {
+        // Computed property: arr[i] += 1 or obj["key"] += 1
+        const property = await this.evaluateNodeAsync(memberExpr.property);
+
+        if (typeof property === "symbol") {
+          this.validateSymbolProperty(property);
+          if (object instanceof ClassValue || this.getInstanceClass(object)) {
+            throw new InterpreterError("Symbol properties are not supported");
+          }
+          if (typeof object === "object" && object !== null) {
+            const currentValue = object[property];
+            const newValue = computeNewValue(currentValue);
+            object[property] = newValue;
+            return newValue;
+          }
+          throw new InterpreterError("Invalid assignment target");
+        }
+
+        if (Array.isArray(object)) {
+          const index = typeof property === "string" ? Number(property) : property;
+          if (typeof index !== "number" || isNaN(index)) {
+            throw new InterpreterError("Array index must be a number");
+          }
+          const currentValue = object[index];
+          const newValue = computeNewValue(currentValue);
+          object[index] = newValue;
+          return newValue;
+        }
+
+        if (object instanceof ClassValue) {
+          const propName = String(property);
+          const currentValue = await this.accessClassStaticMemberAsync(object, memberExpr);
+          const newValue = computeNewValue(currentValue);
+          return await this.assignClassStaticMemberAsync(object, propName, newValue);
+        }
+
+        const instanceClass = this.getInstanceClass(object);
+        if (instanceClass) {
+          const propName = String(property);
+          validatePropertyName(propName);
+          const currentValue = this.getInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            propName,
+          );
+          const newValue = computeNewValue(currentValue);
+          return this.assignInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            propName,
+            newValue,
+          );
+        }
+
+        // Regular object
+        const propName = String(property);
+        validatePropertyName(propName);
+        const currentValue = object[propName];
+        const newValue = computeNewValue(currentValue);
+        object[propName] = newValue;
+        return newValue;
+      } else {
+        // Non-computed property: obj.prop += 1
+        if (memberExpr.property.type !== "Identifier") {
+          throw new InterpreterError("Invalid property access");
+        }
+        const property = (memberExpr.property as ESTree.Identifier).name;
+        validatePropertyName(property);
+
+        if (object instanceof ClassValue) {
+          const currentValue = await this.accessClassStaticMemberAsync(object, memberExpr);
+          const newValue = computeNewValue(currentValue);
+          return await this.assignClassStaticMemberAsync(object, property, newValue);
+        }
+
+        const instanceClass = this.getInstanceClass(object);
+        if (instanceClass) {
+          const currentValue = this.getInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            property,
+          );
+          const newValue = computeNewValue(currentValue);
+          return this.assignInstanceProperty(
+            object as Record<string, any>,
+            instanceClass,
+            property,
+            newValue,
+          );
+        }
+
+        const currentValue = object[property];
+        const newValue = computeNewValue(currentValue);
+        object[property] = newValue;
+        return newValue;
+      }
+    }
+
+    throw new InterpreterError("Invalid compound assignment target");
   }
 
   private async evaluateVariableDeclarationAsync(node: ESTree.VariableDeclaration): Promise<any> {

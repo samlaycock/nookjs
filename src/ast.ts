@@ -1094,7 +1094,12 @@ class Tokenizer {
           this.index += 2;
           return "||";
         }
-        return null;
+        if (next === 61) {
+          this.index += 2;
+          return "|=";
+        }
+        this.index += 1;
+        return "|";
       }
       case 38: {
         // &
@@ -1108,7 +1113,12 @@ class Tokenizer {
           this.index += 2;
           return "&&";
         }
-        return null;
+        if (next === 61) {
+          this.index += 2;
+          return "&=";
+        }
+        this.index += 1;
+        return "&";
       }
       case 61: {
         // =
@@ -1183,6 +1193,11 @@ class Tokenizer {
         // *
         const next = input.charCodeAt(start + 1);
         if (next === 42) {
+          const next2 = input.charCodeAt(start + 2);
+          if (next2 === 61) {
+            this.index += 3;
+            return "**=";
+          }
           this.index += 2;
           return "**";
         }
@@ -1240,6 +1255,16 @@ class Tokenizer {
         }
         this.index += 1;
         return "-";
+      }
+      case 94: {
+        // ^
+        const next = input.charCodeAt(start + 1);
+        if (next === 61) {
+          this.index += 2;
+          return "^=";
+        }
+        this.index += 1;
+        return "^";
       }
       default:
         return null;
@@ -2222,6 +2247,13 @@ class Parser {
         case "*=":
         case "/=":
         case "%=":
+        case "**=":
+        case "<<=":
+        case ">>=":
+        case ">>>=":
+        case "&=":
+        case "|=":
+        case "^=":
           this.next();
           const right = this.parseAssignmentExpression(allowIn);
           const left = this.normalizeAssignmentTarget(leftExpression);
@@ -2310,24 +2342,38 @@ class Parser {
         case "*":
         case "/":
         case "%":
-          precedence = 6;
+          precedence = 11;
           break;
         case "+":
         case "-":
-          precedence = 5;
+          precedence = 10;
+          break;
+        case "<<":
+        case ">>":
+        case ">>>":
+          precedence = 9;
           break;
         case "<":
         case "<=":
         case ">":
         case ">=":
         case "in":
-          precedence = 4;
+          precedence = 8;
           break;
         case "==":
         case "!=":
         case "===":
         case "!==":
-          precedence = 3;
+          precedence = 7;
+          break;
+        case "&":
+          precedence = 6;
+          break;
+        case "^":
+          precedence = 5;
+          break;
+        case "|":
+          precedence = 4;
           break;
         default:
           break;
