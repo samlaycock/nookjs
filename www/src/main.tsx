@@ -4,14 +4,17 @@ import CodeEditor from "@uiw/react-textarea-code-editor";
 import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { Interpreter, ES2024, preset } from "../../src/index";
+import { Interpreter, InterpreterError, ES2024, preset, ParseError } from "../../src/index";
 
 const CODE_LOCAL_STORAGE_KEY = "nookjs-code";
 
 function App() {
   const [code, setCode] = useState(window.localStorage.getItem(CODE_LOCAL_STORAGE_KEY) ?? "");
   const [output, setOutput] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const execute = useCallback(async () => {
+    setError(null);
+
     const interpreter = new Interpreter(
       preset(
         ES2024,
@@ -19,16 +22,28 @@ function App() {
         { security: { hideHostErrorMessages: false } },
       ),
     );
-    const result = await interpreter.evaluate(code);
 
-    if (result) {
-      setOutput(String(result));
-    } else {
-      setOutput(null);
+    try {
+      const result = await interpreter.evaluate(code);
+
+      if (result) {
+        setOutput(String(result));
+      } else {
+        setOutput(null);
+      }
+    } catch (error) {
+      if (error instanceof InterpreterError || error instanceof ParseError) {
+        setError(error.message);
+      } else {
+        console.error(error);
+        setError("An unknown error occurred during execution.");
+      }
     }
   }, [code]);
   const clear = useCallback(() => {
     setCode("");
+    setOutput(null);
+    setError(null);
     window.localStorage.removeItem(CODE_LOCAL_STORAGE_KEY);
   }, []);
 
@@ -54,8 +69,8 @@ function App() {
           JavaScript/Typescript(ish) Interpreter
         </h1>
       </header>
-      <div className="flex-1 grid h-full w-full">
-        <section className="flex flex-col bg-neutral-900">
+      <div className="flex-1 flex flex-col w-full">
+        <section className="flex-1 flex flex-col w-full bg-neutral-900">
           <div className="flex-1 p-6 focus-within:ring-2 focus-within:ring-blue-500">
             <form className="h-full w-full">
               <CodeEditor
@@ -74,16 +89,22 @@ function App() {
               />
             </form>
           </div>
-          <div className="flex flex-row justify-between items-center p-6 border-t border-neutral-700">
-            <div>
+          <div className="flex flex-row gap-6 justify-between items-center p-6 border-t border-neutral-700">
+            <div className="flex-1 overflow-hidden">
               {output !== null && (
-                <div className="flex flex-row gap-4">
+                <div className="flex flex-row gap-4 overflow-hidden">
                   <span className="text-neutral-600">Output:</span>
                   <pre className="text-white whitespace-pre-wrap">{output}</pre>
                 </div>
               )}
+              {error !== null && (
+                <div className="flex flex-row gap-4 overflow-hidden">
+                  <span className="text-red-600">Error:</span>
+                  <pre className="text-red-500 whitespace-pre-wrap">{error}</pre>
+                </div>
+              )}
             </div>
-            <div className="flex flex-row gap-4">
+            <div className="shrink-0 flex flex-row gap-4">
               <button
                 className="px-4 py-2 bg-neutral-600 text-white hover:bg-netrual-700"
                 onClick={clear}
