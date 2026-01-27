@@ -2181,13 +2181,9 @@ export type EvaluateOptions = {
    */
   featureControl?: FeatureControl;
   /**
-   * Maximum execution time in milliseconds
-   * Throws InterpreterError if exceeded
-   */
-  timeout?: number;
-  /**
-   * AbortSignal to allow immediate cancellation
-   * Throws InterpreterError when aborted
+   * AbortSignal to allow cancellation of async evaluation.
+   * Only supported in evaluateAsync(). Ignored by synchronous evaluate().
+   * Throws InterpreterError when aborted.
    */
   signal?: AbortSignal;
   /**
@@ -2234,10 +2230,8 @@ export class Interpreter {
   private currentFeatureControl?: FeatureControl; // Active feature control (per-call overrides constructor)
   private currentFeatureSet?: Set<LanguageFeature>; // Cached per-call feature set
 
-  // Execution control
-  private executionStartTime?: number; // Start time for timeout calculation
-  private executionTimeout?: number; // Timeout duration in ms
-  private abortSignal?: AbortSignal; // Signal for immediate cancellation
+  // Execution control (async-only abort signal)
+  private abortSignal?: AbortSignal; // Signal for async cancellation
   private executionCheckCounter = 0;
   private static readonly EXECUTION_CHECK_MASK = 0xff; // check every 256 nodes
 
@@ -2468,29 +2462,21 @@ export class Interpreter {
   }
 
   /**
-   * Check if execution should be aborted due to timeout or abort signal
-   * Called at the start of each loop iteration and periodically during evaluation
+   * Check if execution should be aborted due to abort signal.
+   * Called at the start of each loop iteration and periodically during evaluation.
+   * Only effective during async evaluation where the event loop can process signal changes.
    */
   private checkExecutionLimits(): void {
-    if (this.executionTimeout === undefined && !this.abortSignal) {
+    if (!this.abortSignal) {
       return;
     }
-    // Reduce overhead by checking time/abort only every N nodes.
+    // Reduce overhead by checking only every N nodes.
     this.executionCheckCounter =
       (this.executionCheckCounter + 1) & Interpreter.EXECUTION_CHECK_MASK;
     if (this.executionCheckCounter !== 0) {
       return;
     }
-    // Check timeout by comparing elapsed time
-    if (this.executionTimeout !== undefined && this.executionStartTime !== undefined) {
-      const elapsed = Date.now() - this.executionStartTime;
-      if (elapsed > this.executionTimeout) {
-        throw new InterpreterError("Execution timeout exceeded");
-      }
-    }
-
-    // Check abort signal
-    if (this.abortSignal?.aborted) {
+    if (this.abortSignal.aborted) {
       throw new InterpreterError("Execution aborted");
     }
   }
@@ -2552,11 +2538,9 @@ export class Interpreter {
       this.currentFeatureSet = new Set(options.featureControl.features);
     }
 
-    // Initialize execution control.
-    this.executionStartTime = options?.timeout !== undefined ? Date.now() : undefined;
-    this.executionTimeout = options?.timeout;
-    this.abortSignal = options?.signal;
-    this.executionCheckCounter = 0;
+    // Signal is set separately by evaluateAsync(); not used in sync evaluate().
+    this.abortSignal = undefined;
+    this.executionCheckCounter = Interpreter.EXECUTION_CHECK_MASK;
 
     // Initialize call stack limiting.
     this.maxCallStackDepth = options?.maxCallStackDepth;
@@ -2584,8 +2568,6 @@ export class Interpreter {
       this.currentFeatureSet = undefined;
     }
     // Clear execution control.
-    this.executionStartTime = undefined;
-    this.executionTimeout = undefined;
     this.abortSignal = undefined;
 
     // Clear call stack limiting.
@@ -2632,6 +2614,12 @@ export class Interpreter {
 
   async evaluateAsync(code: string, options?: EvaluateOptions): Promise<any> {
     this.beginEvaluation(options);
+    // Set abort signal for async evaluation only.
+    this.abortSignal = options?.signal;
+    if (this.abortSignal?.aborted) {
+      this.endEvaluation(options);
+      throw new InterpreterError("Execution aborted");
+    }
     try {
       const ast = this.parseAndValidate(code, options);
       const result = await this.evaluateNodeAsync(ast);
