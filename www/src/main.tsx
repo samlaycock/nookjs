@@ -9,9 +9,7 @@ import { Interpreter, ES2024, preset } from "../../src/index";
 const CODE_LOCAL_STORAGE_KEY = "nookjs-code";
 
 function App() {
-  const [code, setCode] = useState(
-    window.localStorage.getItem(CODE_LOCAL_STORAGE_KEY) ?? "",
-  );
+  const [code, setCode] = useState(window.localStorage.getItem(CODE_LOCAL_STORAGE_KEY) ?? "");
   const [output, setOutput] = useState<string | null>(null);
   const execute = useCallback(async () => {
     const interpreter = new Interpreter(
