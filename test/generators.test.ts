@@ -872,11 +872,7 @@ describe("Generator Functions", () => {
       expect(result).toEqual([1, 20]);
     });
 
-    // NOTE: Multiple yields in a single expression like (yield 1) + (yield 2) is not
-    // currently supported due to how JavaScript evaluates both operands before we can
-    // intercept the first yield. This would require a generator-based evaluator to implement.
-    // The simpler pattern (each yield in its own statement) works correctly.
-    test.skip("yield in expression position receives value", () => {
+    test("yield in expression position receives value", () => {
       const interpreter = new Interpreter();
       const result = interpreter.evaluate(`
         function* gen() {

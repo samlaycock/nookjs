@@ -4119,7 +4119,9 @@ export class Interpreter {
     }
 
     const left = this.evaluateNode(node.left);
+    if (left instanceof YieldValue) return left;
     const right = this.evaluateNode(node.right);
+    if (right instanceof YieldValue) return right;
     return this.applyBinaryOperator(node.operator, left, right);
   }
 
@@ -4222,6 +4224,7 @@ export class Interpreter {
     }
 
     const left = this.evaluateNode(node.left);
+    if (left instanceof YieldValue) return left;
 
     switch (node.operator) {
       case "&&":
@@ -4253,6 +4256,7 @@ export class Interpreter {
 
     // Evaluate the test condition
     const testValue = this.evaluateNode(node.test);
+    if (testValue instanceof YieldValue) return testValue;
 
     // Return consequent if truthy, alternate if falsy
     if (testValue) {
@@ -7049,7 +7053,9 @@ export class Interpreter {
     }
 
     const left = await this.evaluateNodeAsync(node.left);
+    if (left instanceof YieldValue) return left;
     const right = await this.evaluateNodeAsync(node.right);
+    if (right instanceof YieldValue) return right;
     return this.applyBinaryOperator(node.operator, left, right);
   }
 
@@ -7095,6 +7101,7 @@ export class Interpreter {
     }
 
     const left = await this.evaluateNodeAsync(node.left);
+    if (left instanceof YieldValue) return left;
 
     switch (node.operator) {
       case "&&":
@@ -7121,6 +7128,7 @@ export class Interpreter {
 
     // Evaluate the test condition
     const testValue = await this.evaluateNodeAsync(node.test);
+    if (testValue instanceof YieldValue) return testValue;
 
     // Return consequent if truthy, alternate if falsy
     if (testValue) {
