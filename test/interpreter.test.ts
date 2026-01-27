@@ -197,9 +197,10 @@ describe("Interpreter", () => {
       expect(() => interpreter.evaluate("with (obj) { x = 5; }")).toThrow();
     });
 
-    test("throws on unsupported operator", () => {
-      // The 'in' operator is not supported
-      expect(() => interpreter.evaluate("'a' in {a: 1}")).toThrow(InterpreterError);
+    test("in operator works correctly", () => {
+      // The 'in' operator is supported
+      expect(interpreter.evaluate("'a' in {a: 1}")).toBe(true);
+      expect(interpreter.evaluate("'b' in {a: 1}")).toBe(false);
     });
   });
 });

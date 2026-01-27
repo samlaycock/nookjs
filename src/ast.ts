@@ -13,6 +13,7 @@ export interface ParseProfile {
 export namespace ESTree {
   export interface Node {
     readonly type: string;
+    readonly line?: number;
   }
 
   export interface Program extends Node {
@@ -39,7 +40,8 @@ export namespace ESTree {
     | ContinueStatement
     | ThrowStatement
     | TryStatement
-    | ClassDeclaration;
+    | ClassDeclaration
+    | LabeledStatement;
 
   export type Expression =
     | Identifier
@@ -79,8 +81,9 @@ export namespace ESTree {
 
   export interface Literal extends Node {
     readonly type: "Literal";
-    readonly value: string | number | boolean | null;
+    readonly value: string | number | boolean | null | RegExp;
     readonly raw?: string;
+    readonly regex?: { pattern: string; flags: string };
   }
 
   export interface ThisExpression extends Node {
@@ -212,6 +215,12 @@ export namespace ESTree {
   export interface ContinueStatement extends Node {
     readonly type: "ContinueStatement";
     readonly label?: Identifier | null;
+  }
+
+  export interface LabeledStatement extends Node {
+    readonly type: "LabeledStatement";
+    readonly label: Identifier;
+    readonly body: Statement;
   }
 
   export interface ThrowStatement extends Node {
@@ -425,6 +434,7 @@ const TOKEN = {
   String: 4,
   Punctuator: 5,
   PrivateIdentifier: 6,
+  RegExp: 7,
 } as const;
 
 type TokenType = (typeof TOKEN)[keyof typeof TOKEN];
@@ -441,6 +451,7 @@ const isKeyword = (value: string): boolean => {
     case "for":
     case "of":
     case "in":
+    case "instanceof":
     case "switch":
     case "case":
     case "default":
@@ -485,6 +496,7 @@ const SINGLE_CHAR_PUNCTUATORS: Record<number, string> = {
   125: "}",
   91: "[",
   93: "]",
+  126: "~",
 };
 
 const STOP_TOKEN = {
@@ -521,6 +533,7 @@ class Tokenizer {
   private lookaheadLineBreakBefore = false;
   private hasLookahead = false;
   private readonly profiler?: { tokens: number; tokenizeMs: number };
+  currentLine = 1; // 1-based line number for error reporting
 
   constructor(input: string, profiler?: { tokens: number; tokenizeMs: number }) {
     this.input = input;
@@ -614,6 +627,86 @@ class Tokenizer {
     this.lookaheadValue = snapshot.lookaheadValue;
     this.lookaheadLineBreakBefore = snapshot.lookaheadLineBreakBefore;
     this.hasLookahead = snapshot.hasLookahead;
+  }
+
+  // Rescan the current `/` or `/=` token as a regex literal.
+  // Called by the parser when it determines `/` starts a regex, not division.
+  // The tokenizer index has already advanced past `/` (or `/=`), so we back up.
+  rescanAsRegExp(currentPunctuator: string): {
+    pattern: string;
+    flags: string;
+  } {
+    // Back up past the `/` or `/=` that was already consumed.
+    this.index -= currentPunctuator.length;
+    // Now this.index should point at `/`.
+    const input = this.input;
+    const length = input.length;
+    this.index += 1; // skip the opening `/`
+    let pattern = "";
+    let inCharClass = false;
+
+    while (this.index < length) {
+      const code = input.charCodeAt(this.index);
+      if (code === 10 || code === 13) {
+        throw new ParseError("Unterminated regular expression literal");
+      }
+      if (inCharClass) {
+        if (code === 93) {
+          // ]
+          inCharClass = false;
+          pattern += input[this.index]!;
+          this.index += 1;
+        } else if (code === 92) {
+          // backslash
+          pattern += input[this.index]!;
+          this.index += 1;
+          if (this.index < length) {
+            pattern += input[this.index]!;
+            this.index += 1;
+          }
+        } else {
+          pattern += input[this.index]!;
+          this.index += 1;
+        }
+      } else if (code === 47) {
+        // closing `/`
+        this.index += 1;
+        break;
+      } else if (code === 91) {
+        // [
+        inCharClass = true;
+        pattern += input[this.index]!;
+        this.index += 1;
+      } else if (code === 92) {
+        // backslash
+        pattern += input[this.index]!;
+        this.index += 1;
+        if (this.index < length) {
+          pattern += input[this.index]!;
+          this.index += 1;
+        }
+      } else {
+        pattern += input[this.index]!;
+        this.index += 1;
+      }
+    }
+
+    // Read flags (g, i, m, s, u, v, y, d)
+    let flags = "";
+    while (this.index < length) {
+      const code = input.charCodeAt(this.index);
+      const isFlag =
+        (code >= 97 && code <= 122) || // a-z
+        (code >= 65 && code <= 90); // A-Z
+      if (!isFlag) break;
+      flags += input[this.index]!;
+      this.index += 1;
+    }
+
+    // Clear lookahead since we've changed the index.
+    this.hasLookahead = false;
+
+    return { pattern, flags };
   }
 
   // Reads a template element, returning raw/cooked values and tail flag.
@@ -844,6 +937,7 @@ class Tokenizer {
           continue;
         case 10: // \n
           lineBreak = true;
+          this.currentLine++;
           index += 1;
           continue;
         case 47: {
@@ -856,6 +950,7 @@ class Tokenizer {
               return lineBreak;
             }
             lineBreak = true;
+            this.currentLine++;
             index = end + 1;
             continue;
           }
@@ -863,15 +958,22 @@ class Tokenizer {
             // Jump to the end of block comment; detect line breaks in one scan.
             const end = input.indexOf("*/", index + 2);
             if (end === -1) {
-              if (input.indexOf("\n", index + 2) !== -1) {
-                lineBreak = true;
+              // Count newlines in unterminated block comment
+              for (let i = index + 2; i < length; i++) {
+                if (input.charCodeAt(i) === 10) {
+                  lineBreak = true;
+                  this.currentLine++;
+                }
               }
               this.index = length;
               return lineBreak;
             }
-            const lineIndex = input.indexOf("\n", index + 2);
-            if (lineIndex !== -1 && lineIndex < end) {
-              lineBreak = true;
+            // Count newlines within block comment
+            for (let i = index + 2; i < end; i++) {
+              if (input.charCodeAt(i) === 10) {
+                lineBreak = true;
+                this.currentLine++;
+              }
             }
             index = end + 2;
             continue;
@@ -1325,6 +1427,7 @@ class Parser {
   }
 
   private parseStatement(): ESTree.Statement | null {
+    const line = this.tokenizer.currentLine;
     const type = this.currentType;
     const value = this.currentValue;
 
@@ -1337,47 +1440,65 @@ class Parser {
         return null;
       }
     }
+    let result: ESTree.Statement | null = null;
     if (type === TOKEN.Keyword) {
       switch (value) {
         case "if":
-          return this.parseIfStatement();
+          result = this.parseIfStatement();
+          break;
         case "while":
-          return this.parseWhileStatement();
+          result = this.parseWhileStatement();
+          break;
         case "do":
-          return this.parseDoWhileStatement();
+          result = this.parseDoWhileStatement();
+          break;
         case "for":
-          return this.parseForStatement();
+          result = this.parseForStatement();
+          break;
         case "switch":
-          return this.parseSwitchStatement();
+          result = this.parseSwitchStatement();
+          break;
         case "return":
-          return this.parseReturnStatement();
+          result = this.parseReturnStatement();
+          break;
         case "break":
-          return this.parseBreakStatement();
+          result = this.parseBreakStatement();
+          break;
         case "continue":
-          return this.parseContinueStatement();
+          result = this.parseContinueStatement();
+          break;
         case "throw":
-          return this.parseThrowStatement();
+          result = this.parseThrowStatement();
+          break;
         case "try":
-          return this.parseTryStatement();
+          result = this.parseTryStatement();
+          break;
         case "function":
-          return this.parseFunctionDeclaration();
+          result = this.parseFunctionDeclaration();
+          break;
         case "class":
-          return this.parseClassDeclaration();
+          result = this.parseClassDeclaration();
+          break;
         case "let":
         case "const":
         case "var":
-          return this.parseVariableDeclaration(false);
+          result = this.parseVariableDeclaration(false);
+          break;
         case "async":
           if (
             this.tokenizer.peekType() === TOKEN.Keyword &&
             this.tokenizer.peekValue() === "function"
           ) {
-            return this.parseFunctionDeclaration();
+            result = this.parseFunctionDeclaration();
           }
           break;
       }
     }
-    return this.parseExpressionStatement();
+    if (result === null) {
+      result = this.parseExpressionStatement();
+    }
+    (result as any).line = line;
+    return result;
   }
 
   private parseStatementOrEmpty(): ESTree.Statement {
@@ -1673,20 +1794,24 @@ class Parser {
 
   private parseBreakStatement(): ESTree.BreakStatement {
     this.expectKeyword("break");
-    if (this.currentType === TOKEN.Identifier) {
-      throw new ParseError("Labeled break is not supported");
+    let label: ESTree.Identifier | null = null;
+    if (this.currentType === TOKEN.Identifier && !this.currentLineBreakBefore) {
+      label = { type: "Identifier", name: this.currentValue };
+      this.next();
     }
     this.consumeSemicolon();
-    return { type: "BreakStatement", label: null };
+    return { type: "BreakStatement", label };
   }
 
   private parseContinueStatement(): ESTree.ContinueStatement {
     this.expectKeyword("continue");
-    if (this.currentType === TOKEN.Identifier) {
-      throw new ParseError("Labeled continue is not supported");
+    let label: ESTree.Identifier | null = null;
+    if (this.currentType === TOKEN.Identifier && !this.currentLineBreakBefore) {
+      label = { type: "Identifier", name: this.currentValue };
+      this.next();
     }
     this.consumeSemicolon();
-    return { type: "ContinueStatement", label: null };
+    return { type: "ContinueStatement", label };
   }
 
   private parseThrowStatement(): ESTree.ThrowStatement {
@@ -2047,7 +2172,19 @@ class Parser {
     return { type: "VariableDeclaration", declarations, kind };
   }
 
-  private parseExpressionStatement(): ESTree.ExpressionStatement {
+  private parseExpressionStatement(): ESTree.ExpressionStatement | ESTree.LabeledStatement {
+    // Check for labeled statement: identifier followed by ':'
+    if (this.currentType === TOKEN.Identifier && this.tokenizer.peekValue() === ":") {
+      const label: ESTree.Identifier = {
+        type: "Identifier",
+        name: this.currentValue,
+      };
+      this.next(); // consume identifier
+      this.next(); // consume ':'
+      const body = this.parseStatementOrEmpty();
+      return { type: "LabeledStatement", label, body };
+    }
+
     const expression = this.parseExpression();
     this.consumeSemicolon();
     return { type: "ExpressionStatement", expression };
@@ -2339,10 +2476,11 @@ class Parser {
     while (true) {
       const type = this.currentType;
       if (type === TOKEN.Keyword) {
-        if (this.currentValue !== "in") {
-          break;
-        }
-        if (!allowIn) {
+        if (this.currentValue === "in") {
+          if (!allowIn) {
+            break;
+          }
+        } else if (this.currentValue !== "instanceof") {
           break;
         }
       } else if (type !== TOKEN.Punctuator) {
@@ -2370,6 +2508,7 @@ class Parser {
         case ">":
         case ">=":
         case "in":
+        case "instanceof":
           precedence = 8;
           break;
         case "==":
@@ -2431,7 +2570,7 @@ class Parser {
           prefix: true,
         };
       }
-      if (value === "+" || value === "-" || value === "!") {
+      if (value === "+" || value === "-" || value === "!" || value === "~") {
         this.next();
         const argument = this.parseUnaryExpression();
         return {
@@ -2667,6 +2806,25 @@ class Parser {
             return this.parseArrayExpression();
           case "{":
             return this.parseObjectExpression();
+          case "/":
+          case "/=": {
+            const { pattern, flags } = this.tokenizer.rescanAsRegExp(this.currentValue);
+            let value: RegExp | null;
+            try {
+              value = new RegExp(pattern, flags);
+            } catch {
+              throw new ParseError(`Invalid regular expression: /${pattern}/${flags}`);
+            }
+            const raw = `/${pattern}/${flags}`;
+            // Advance to the next token after the regex.
+            this.next();
+            return {
+              type: "Literal",
+              value,
+              raw,
+              regex: { pattern, flags },
+            };
+          }
           default:
             break;
         }

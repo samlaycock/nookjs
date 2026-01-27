@@ -17,7 +17,12 @@ import type { ESTree } from "./ast";
 
 import { parseModule } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
-import { ReadOnlyProxy, setSecurityOptions, sanitizeErrorStack } from "./readonly-proxy";
+import {
+  ReadOnlyProxy,
+  PROXY_TARGET,
+  setSecurityOptions,
+  sanitizeErrorStack,
+} from "./readonly-proxy";
 
 type ASTNode = ESTree.Node;
 
@@ -25,9 +30,11 @@ type ASTNode = ESTree.Node;
  * Custom error class for interpreter-specific errors
  */
 export class InterpreterError extends Error {
-  constructor(message: string) {
-    super(message);
+  line?: number;
+  constructor(message: string, line?: number) {
+    super(line ? `Line ${line}: ${message}` : message);
     this.name = "InterpreterError";
+    this.line = line;
   }
 }
 
@@ -60,7 +67,7 @@ class ReturnValue {
  * When a loop executes `break`, we return BreakValue to signal the loop to exit
  */
 class BreakValue {
-  // Marker class to signal break statement
+  constructor(public label: string | null = null) {}
 }
 
 /**
@@ -68,7 +75,7 @@ class BreakValue {
  * When a loop executes `continue`, we return ContinueValue to signal skipping to next iteration
  */
 class ContinueValue {
-  // Marker class to signal continue statement
+  constructor(public label: string | null = null) {}
 }
 
 /**
@@ -2245,6 +2252,12 @@ export class Interpreter {
   private maxMemory?: number;
   private currentMemoryUsage = 0;
 
+  // Label for the currently executing loop (set by LabeledStatement)
+  private currentLoopLabel: string | null = null;
+
+  // Current line number for error reporting
+  private currentLine = 0;
+
   // Generator yield handling - for passing values into yield expressions
   // When set, the next yield expression will return this value instead of YieldValue
   public pendingYieldReceivedValue?: { value: any; hasValue: boolean };
@@ -2555,6 +2568,9 @@ export class Interpreter {
     // Initialize memory tracking.
     this.maxMemory = options?.maxMemory;
     this.currentMemoryUsage = 0;
+
+    // Reset line tracking.
+    this.currentLine = 0;
   }
 
   private endEvaluation(options?: EvaluateOptions): void {
@@ -2607,6 +2623,8 @@ export class Interpreter {
     try {
       const ast = this.parseAndValidate(code, options);
       return this.evaluateNode(ast);
+    } catch (error) {
+      throw this.enhanceError(error);
     } finally {
       this.endEvaluation(options);
     }
@@ -2619,13 +2637,30 @@ export class Interpreter {
       const result = await this.evaluateNodeAsync(ast);
       // Unwrap RawValue (used to prevent Promise auto-awaiting from NewExpression)
       return result instanceof RawValue ? result.value : result;
+    } catch (error) {
+      throw this.enhanceError(error);
     } finally {
       this.endEvaluation(options);
     }
   }
 
+  /**
+   * Enhance an error with line number information if available.
+   */
+  private enhanceError(error: unknown): unknown {
+    if (error instanceof InterpreterError && error.line === undefined && this.currentLine > 0) {
+      return new InterpreterError(error.message, this.currentLine);
+    }
+    return error;
+  }
+
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
   public evaluateNode(node: ASTNode): any {
+    // Track line number for error reporting
+    if (node.line) {
+      this.currentLine = node.line;
+    }
+
     // Check execution limits periodically
     this.checkExecutionLimits();
 
@@ -2719,6 +2754,9 @@ export class Interpreter {
       case "ContinueStatement":
         return this.evaluateContinueStatement(node as ESTree.ContinueStatement);
 
+      case "LabeledStatement":
+        return this.evaluateLabeledStatement(node as ESTree.LabeledStatement);
+
       case "ThrowStatement":
         return this.evaluateThrowStatement(node as ESTree.ThrowStatement);
 
@@ -2762,6 +2800,11 @@ export class Interpreter {
 
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
   public async evaluateNodeAsync(node: ASTNode): Promise<any> {
+    // Track line number for error reporting
+    if (node.line) {
+      this.currentLine = node.line;
+    }
+
     // Check execution limits periodically
     this.checkExecutionLimits();
 
@@ -2856,6 +2899,9 @@ export class Interpreter {
 
       case "ContinueStatement":
         return this.evaluateContinueStatement(node as ESTree.ContinueStatement);
+
+      case "LabeledStatement":
+        return await this.evaluateLabeledStatementAsync(node as ESTree.LabeledStatement);
 
       case "ThrowStatement":
         return await this.evaluateThrowStatementAsync(node as ESTree.ThrowStatement);
@@ -3003,6 +3049,44 @@ export class Interpreter {
       case ">>>":
         return left >>> right;
 
+      // Relational operators
+      case "in":
+        if (typeof right !== "object" || right === null) {
+          throw new InterpreterError(
+            "Cannot use 'in' operator to search for '" + left + "' in " + right,
+          );
+        }
+        return left in right;
+
+      case "instanceof": {
+        // Unwrap ReadOnlyProxy to get the real object for prototype chain checks
+        const target =
+          left != null && typeof left === "object" && left[PROXY_TARGET]
+            ? left[PROXY_TARGET]
+            : left;
+
+        // Handle HostFunctionValue (wrapped host constructors like Array, Object, etc.)
+        if (right instanceof HostFunctionValue) {
+          return target instanceof right.hostFunc;
+        }
+        // Handle interpreter's ClassValue
+        if (right instanceof ClassValue) {
+          // Check if left is an instance created by this class
+          return this.isInstanceOfClass(left, right);
+        }
+        // Handle interpreter's FunctionValue (user-defined functions used as constructors)
+        if (right instanceof FunctionValue) {
+          // User-defined functions in the interpreter can be used as constructors
+          // Check if left was constructed by this function
+          return this.isInstanceOfFunction(left, right);
+        }
+        // Handle native functions
+        if (typeof right === "function") {
+          return target instanceof right;
+        }
+        throw new InterpreterError("Right-hand side of 'instanceof' is not callable");
+      }
+
       default:
         throw new InterpreterError(`Unsupported binary operator: ${operator}`);
     }
@@ -3020,6 +3104,8 @@ export class Interpreter {
         return -argument;
       case "!":
         return !argument;
+      case "~":
+        return ~argument;
       default:
         throw new InterpreterError(`Unsupported unary operator: ${operator}`);
     }
@@ -3280,8 +3366,13 @@ export class Interpreter {
   /**
    * Check loop control flow result without allocating objects in the common case.
    * Returns a cached object indicating what action to take.
+   * @param label - If this loop is labeled, the label name. Used to consume
+   *   labeled break/continue targeting this specific loop.
    */
-  private handleLoopControlFlow(result: any): {
+  private handleLoopControlFlow(
+    result: any,
+    label?: string | null,
+  ): {
     shouldReturn: boolean;
     value: any;
   } {
@@ -3292,10 +3383,28 @@ export class Interpreter {
 
     // If we hit a break statement, exit the loop and return undefined
     if (result instanceof BreakValue) {
+      // Labeled break targeting this loop's label - consume and break
+      if (result.label !== null && result.label === label) {
+        return Interpreter.CONTROL_FLOW_BREAK;
+      }
+      // Labeled break targeting a different label - propagate
+      if (result.label !== null) {
+        return { shouldReturn: true, value: result };
+      }
+      // Unlabeled break - consume
       return Interpreter.CONTROL_FLOW_BREAK;
     }
 
-    // Normal result or continue - keep iterating (continue is handled by not breaking)
+    // Labeled continue targeting this loop's label - treat as unlabeled continue
+    if (result instanceof ContinueValue && result.label !== null) {
+      if (result.label === label) {
+        return Interpreter.CONTROL_FLOW_CONTINUE;
+      }
+      // Labeled continue targeting a different label - propagate
+      return { shouldReturn: true, value: result };
+    }
+
+    // Normal result or unlabeled continue - keep iterating
     return Interpreter.CONTROL_FLOW_CONTINUE;
   }
 
@@ -3519,6 +3628,9 @@ export class Interpreter {
     if (Object.getPrototypeOf(object) === null) {
       return;
     }
+    if (object instanceof RegExp) {
+      return;
+    }
     if (propName in object && !Object.prototype.hasOwnProperty.call(object, propName)) {
       throw new InterpreterError(`Access to inherited property '${propName}' is not allowed`);
     }
@@ -3530,6 +3642,9 @@ export class Interpreter {
     }
     if (this.instanceClassMap.has(object)) {
       return false;
+    }
+    if (object instanceof RegExp) {
+      return true;
     }
     return Object.getPrototypeOf(object) === null;
   }
@@ -3543,6 +3658,37 @@ export class Interpreter {
       return null;
     }
     return this.instanceClassMap.get(object) ?? null;
+  }
+
+  /**
+   * Check if an object is an instance of a ClassValue.
+   * Handles inheritance by walking up the prototype chain.
+   */
+  private isInstanceOfClass(obj: any, classValue: ClassValue): boolean {
+    if (typeof obj !== "object" || obj === null) {
+      return false;
+    }
+    // Get the class that created this instance
+    let instanceClass = this.getInstanceClass(obj);
+    // Walk up the inheritance chain
+    while (instanceClass) {
+      if (instanceClass === classValue) {
+        return true;
+      }
+      instanceClass = instanceClass.parentClass ?? null;
+    }
+    return false;
+  }
+
+  /**
+   * Check if an object is an instance of a FunctionValue (user-defined constructor).
+   * This is for functions used as constructors with 'new'.
+   */
+  private isInstanceOfFunction(_obj: any, _funcValue: FunctionValue): boolean {
+    // FunctionValue instances used as constructors aren't tracked the same way
+    // as ClassValue instances. For now, return false.
+    // This could be extended if we track function-based construction.
+    return false;
   }
 
   /**
@@ -3999,6 +4145,11 @@ export class Interpreter {
       return this.evaluateTypeof(node.argument);
     }
 
+    // Special case: delete operates on references, not values
+    if (node.operator === "delete") {
+      return this.evaluateDelete(node.argument);
+    }
+
     // For other unary operators, evaluate normally
     const argument = this.evaluateNode(node.argument);
     return this.applyUnaryOperator(node.operator, argument);
@@ -4017,6 +4168,38 @@ export class Interpreter {
       }
       throw error;
     }
+  }
+
+  /**
+   * Evaluate delete operator.
+   * - `delete obj.prop` / `delete obj[expr]` deletes a property from an object.
+   * - `delete identifier` returns true in non-strict mode (but doesn't actually delete).
+   * - `delete literal` returns true.
+   */
+  private evaluateDelete(argument: ESTree.Expression): boolean {
+    // delete obj.prop or delete obj[expr]
+    if (argument.type === "MemberExpression") {
+      const obj = this.evaluateNode(argument.object);
+      if (obj === null || obj === undefined) {
+        throw new InterpreterError(`Cannot delete property of ${obj}`);
+      }
+      const prop = argument.computed
+        ? this.evaluateNode(argument.property)
+        : (argument.property as ESTree.Identifier).name;
+      // Block deletion on read-only proxied globals
+      if (typeof obj === "object" && obj !== null) {
+        return delete obj[prop];
+      }
+      return true;
+    }
+
+    // delete identifier - in non-strict mode returns true but doesn't delete
+    if (argument.type === "Identifier") {
+      return true;
+    }
+
+    // delete on literals or other expressions returns true
+    return true;
   }
 
   private evaluateUpdateExpression(node: ESTree.UpdateExpression): any {
@@ -4743,6 +4926,9 @@ export class Interpreter {
       throw new InterpreterError("WhileStatement is not enabled");
     }
 
+    const myLabel = this.currentLoopLabel;
+    this.currentLoopLabel = null;
+
     let result: any = undefined;
     let iterations = 0;
 
@@ -4753,13 +4939,15 @@ export class Interpreter {
 
       result = this.evaluateNode(node.body);
 
-      const controlFlow = this.handleLoopControlFlow(result);
+      const controlFlow = this.handleLoopControlFlow(result, myLabel);
       if (controlFlow.shouldReturn) {
+        this.currentLoopLabel = myLabel;
         return controlFlow.value;
       }
       // Continue to next iteration (for ContinueValue or normal result)
     }
 
+    this.currentLoopLabel = myLabel;
     return result;
   }
 
@@ -4767,6 +4955,9 @@ export class Interpreter {
     if (!this.isFeatureEnabled("DoWhileStatement")) {
       throw new InterpreterError("DoWhileStatement is not enabled");
     }
+
+    const myLabel = this.currentLoopLabel;
+    this.currentLoopLabel = null;
 
     let result: any = undefined;
     let iterations = 0;
@@ -4778,13 +4969,15 @@ export class Interpreter {
 
       result = this.evaluateNode(node.body);
 
-      const controlFlow = this.handleLoopControlFlow(result);
+      const controlFlow = this.handleLoopControlFlow(result, myLabel);
       if (controlFlow.shouldReturn) {
+        this.currentLoopLabel = myLabel;
         return controlFlow.value;
       }
       // Continue to next iteration (for ContinueValue or normal result)
     } while (this.evaluateNode(node.test));
 
+    this.currentLoopLabel = myLabel;
     return result;
   }
 
@@ -4792,6 +4985,10 @@ export class Interpreter {
     if (!this.isFeatureEnabled("ForStatement")) {
       throw new InterpreterError("ForStatement is not enabled");
     }
+
+    // Save and clear the loop label (only labeled loops should have a label)
+    const myLabel = this.currentLoopLabel;
+    this.currentLoopLabel = null;
 
     // Create a new environment for the for loop scope
     const previousEnv = this.environment;
@@ -4828,7 +5025,20 @@ export class Interpreter {
           return result;
         }
         if (result instanceof BreakValue) {
+          // Labeled break targeting this loop's label - consume
+          if (result.label !== null && result.label === myLabel) {
+            return undefined;
+          }
+          // Labeled break targeting a different label - propagate
+          if (result.label !== null) {
+            return result;
+          }
+          // Unlabeled break - consume
           return undefined;
+        }
+        // Labeled continue targeting a different label - propagate
+        if (result instanceof ContinueValue && result.label !== null && result.label !== myLabel) {
+          return result;
         }
 
         // Execute update expression (e.g., i++)
@@ -4844,6 +5054,7 @@ export class Interpreter {
     } finally {
       // Restore the previous environment
       this.environment = previousEnv;
+      this.currentLoopLabel = myLabel;
     }
   }
 
@@ -4861,6 +5072,9 @@ export class Interpreter {
     if (!this.isFeatureEnabled("ForOfStatement")) {
       throw new InterpreterError("ForOfStatement is not enabled");
     }
+
+    const myLabel = this.currentLoopLabel;
+    this.currentLoopLabel = null;
 
     // Create a new environment for the for...of loop scope
     const previousEnv = this.environment;
@@ -4934,6 +5148,10 @@ export class Interpreter {
           if (typeof iterator.return === "function") {
             iterator.return();
           }
+          // Labeled break targeting a different label - propagate
+          if (result.label !== null && result.label !== myLabel) {
+            return result;
+          }
           return undefined;
         }
         if (result instanceof ReturnValue) {
@@ -4943,7 +5161,14 @@ export class Interpreter {
           }
           return result;
         }
-        // ContinueValue just continues to the next iteration
+        // Labeled continue targeting a different label - propagate
+        if (result instanceof ContinueValue && result.label !== null && result.label !== myLabel) {
+          if (typeof iterator.return === "function") {
+            iterator.return();
+          }
+          return result;
+        }
+        // ContinueValue (unlabeled or targeting this loop) just continues to the next iteration
 
         // Get next value
         iterResult = iterator.next();
@@ -4953,6 +5178,7 @@ export class Interpreter {
     } finally {
       // Restore the previous environment
       this.environment = previousEnv;
+      this.currentLoopLabel = myLabel;
     }
   }
 
@@ -4964,6 +5190,9 @@ export class Interpreter {
     if (!this.isFeatureEnabled("ForInStatement")) {
       throw new InterpreterError("ForInStatement is not enabled");
     }
+
+    const myLabel = this.currentLoopLabel;
+    this.currentLoopLabel = null;
 
     // Create a new environment for the for...in loop scope
     const previousEnv = this.environment;
@@ -5019,7 +5248,7 @@ export class Interpreter {
         }
 
         // Handle control flow
-        const controlFlow = this.handleLoopControlFlow(result);
+        const controlFlow = this.handleLoopControlFlow(result, myLabel);
         if (controlFlow.shouldReturn) {
           return controlFlow.value;
         }
@@ -5029,6 +5258,7 @@ export class Interpreter {
     } finally {
       // Restore the previous environment
       this.environment = previousEnv;
+      this.currentLoopLabel = myLabel;
     }
   }
 
@@ -5390,15 +5620,84 @@ export class Interpreter {
     return new ReturnValue(value);
   }
 
+  private evaluateLabeledStatement(node: ESTree.LabeledStatement): any {
+    const labelName = node.label.name;
+    const body = node.body;
+
+    // For labeled loops, we need to handle labeled continue by re-entering the loop
+    if (this.isLoopStatement(body)) {
+      return this.evaluateLabeledLoop(labelName, body);
+    }
+
+    const result = this.evaluateNode(body);
+    // If break targets this label, consume it
+    if (result instanceof BreakValue && result.label === labelName) {
+      return undefined;
+    }
+    return result;
+  }
+
+  private async evaluateLabeledStatementAsync(node: ESTree.LabeledStatement): Promise<any> {
+    const labelName = node.label.name;
+    const body = node.body;
+
+    // For labeled loops, we need to handle labeled continue by re-entering the loop
+    if (this.isLoopStatement(body)) {
+      return await this.evaluateLabeledLoopAsync(labelName, body);
+    }
+
+    const result = await this.evaluateNodeAsync(body);
+    // If break targets this label, consume it
+    if (result instanceof BreakValue && result.label === labelName) {
+      return undefined;
+    }
+    return result;
+  }
+
+  private isLoopStatement(node: ESTree.Statement): boolean {
+    return (
+      node.type === "WhileStatement" ||
+      node.type === "DoWhileStatement" ||
+      node.type === "ForStatement" ||
+      node.type === "ForOfStatement" ||
+      node.type === "ForInStatement"
+    );
+  }
+
+  private evaluateLabeledLoop(label: string, body: ESTree.Statement): any {
+    const previousLabel = this.currentLoopLabel;
+    this.currentLoopLabel = label;
+    try {
+      const result = this.evaluateNode(body);
+      if (result instanceof BreakValue && result.label === label) {
+        return undefined;
+      }
+      return result;
+    } finally {
+      this.currentLoopLabel = previousLabel;
+    }
+  }
+
+  private async evaluateLabeledLoopAsync(label: string, body: ESTree.Statement): Promise<any> {
+    const previousLabel = this.currentLoopLabel;
+    this.currentLoopLabel = label;
+    try {
+      const result = await this.evaluateNodeAsync(body);
+      if (result instanceof BreakValue && result.label === label) {
+        return undefined;
+      }
+      return result;
+    } finally {
+      this.currentLoopLabel = previousLabel;
+    }
+  }
+
   private evaluateBreakStatement(node: ESTree.BreakStatement): any {
     if (!this.isFeatureEnabled("BreakStatement")) {
       throw new InterpreterError("BreakStatement is not enabled");
     }
 
-    if (node.label) {
-      throw new InterpreterError("Labeled break statements are not supported");
-    }
-    return new BreakValue();
+    return new BreakValue(node.label?.name ?? null);
   }
 
   private evaluateContinueStatement(node: ESTree.ContinueStatement): any {
@@ -5406,10 +5705,7 @@ export class Interpreter {
       throw new InterpreterError("ContinueStatement is not enabled");
     }
 
-    if (node.label) {
-      throw new InterpreterError("Labeled continue statements are not supported");
-    }
-    return new ContinueValue();
+    return new ContinueValue(node.label?.name ?? null);
   }
 
   /**
@@ -5815,7 +6111,7 @@ export class Interpreter {
     // Handle native JavaScript functions (e.g., bound class methods)
     if (typeof callee === "function") {
       const args = this.evaluateArguments(node.arguments);
-      return callee(...args);
+      return thisValue !== undefined ? callee.call(thisValue, ...args) : callee(...args);
     }
 
     if (callee instanceof ClassValue) {
@@ -6779,6 +7075,11 @@ export class Interpreter {
       return this.evaluateTypeofAsync(node.argument);
     }
 
+    // Special case: delete operates on references, not values
+    if (node.operator === "delete") {
+      return this.evaluateDelete(node.argument);
+    }
+
     // For other unary operators, evaluate normally
     const argument = await this.evaluateNodeAsync(node.argument);
     return this.applyUnaryOperator(node.operator, argument);
@@ -6941,7 +7242,9 @@ export class Interpreter {
     // Handle native JavaScript functions (e.g., bound class methods)
     if (typeof callee === "function") {
       const args = await this.evaluateArgumentsAsync(node.arguments);
-      return await callee(...args);
+      return thisValue !== undefined
+        ? await callee.call(thisValue, ...args)
+        : await callee(...args);
     }
 
     if (callee instanceof ClassValue) {
@@ -7659,6 +7962,9 @@ export class Interpreter {
       throw new InterpreterError("WhileStatement is not enabled");
     }
 
+    const myLabel = this.currentLoopLabel;
+    this.currentLoopLabel = null;
+
     let result: any = undefined;
     let iterations = 0;
 
@@ -7669,13 +7975,15 @@ export class Interpreter {
 
       result = await this.evaluateNodeAsync(node.body);
 
-      const controlFlow = this.handleLoopControlFlow(result);
+      const controlFlow = this.handleLoopControlFlow(result, myLabel);
       if (controlFlow.shouldReturn) {
+        this.currentLoopLabel = myLabel;
         return controlFlow.value;
       }
       // Continue to next iteration (for ContinueValue or normal result)
     }
 
+    this.currentLoopLabel = myLabel;
     return result;
   }
 
@@ -7683,6 +7991,9 @@ export class Interpreter {
     if (!this.isFeatureEnabled("DoWhileStatement")) {
       throw new InterpreterError("DoWhileStatement is not enabled");
     }
+
+    const myLabel = this.currentLoopLabel;
+    this.currentLoopLabel = null;
 
     let result: any = undefined;
     let iterations = 0;
@@ -7694,13 +8005,15 @@ export class Interpreter {
 
       result = await this.evaluateNodeAsync(node.body);
 
-      const controlFlow = this.handleLoopControlFlow(result);
+      const controlFlow = this.handleLoopControlFlow(result, myLabel);
       if (controlFlow.shouldReturn) {
+        this.currentLoopLabel = myLabel;
         return controlFlow.value;
       }
       // Continue to next iteration (for ContinueValue or normal result)
     } while (await this.evaluateNodeAsync(node.test));
 
+    this.currentLoopLabel = myLabel;
     return result;
   }
 
@@ -7708,6 +8021,9 @@ export class Interpreter {
     if (!this.isFeatureEnabled("ForStatement")) {
       throw new InterpreterError("ForStatement is not enabled");
     }
+
+    const myLabel = this.currentLoopLabel;
+    this.currentLoopLabel = null;
 
     const previousEnv = this.environment;
     this.environment = new Environment(previousEnv);
@@ -7739,7 +8055,15 @@ export class Interpreter {
           return result;
         }
         if (result instanceof BreakValue) {
+          // Labeled break targeting a different label - propagate
+          if (result.label !== null && result.label !== myLabel) {
+            return result;
+          }
           return undefined;
+        }
+        // Labeled continue targeting a different label - propagate
+        if (result instanceof ContinueValue && result.label !== null && result.label !== myLabel) {
+          return result;
         }
 
         // Execute update expression (e.g., i++)
@@ -7754,6 +8078,7 @@ export class Interpreter {
       return result;
     } finally {
       this.environment = previousEnv;
+      this.currentLoopLabel = myLabel;
     }
   }
 
@@ -7761,6 +8086,9 @@ export class Interpreter {
     if (!this.isFeatureEnabled("ForOfStatement")) {
       throw new InterpreterError("ForOfStatement is not enabled");
     }
+
+    const myLabel = this.currentLoopLabel;
+    this.currentLoopLabel = null;
 
     const previousEnv = this.environment;
     this.environment = new Environment(previousEnv);
@@ -7839,6 +8167,10 @@ export class Interpreter {
               (iterator as Iterator<any>).return?.();
             }
           }
+          // Labeled break targeting a different label - propagate
+          if (result.label !== null && result.label !== myLabel) {
+            return result;
+          }
           return undefined;
         }
         if (result instanceof ReturnValue) {
@@ -7852,7 +8184,18 @@ export class Interpreter {
           }
           return result;
         }
-        // ContinueValue just continues to the next iteration
+        // Labeled continue targeting a different label - propagate
+        if (result instanceof ContinueValue && result.label !== null && result.label !== myLabel) {
+          if (typeof iterator.return === "function") {
+            if (isAsync) {
+              await (iterator as AsyncIterator<any>).return?.();
+            } else {
+              (iterator as Iterator<any>).return?.();
+            }
+          }
+          return result;
+        }
+        // ContinueValue (unlabeled or targeting this loop) just continues to the next iteration
 
         // Get next value
         iterResult = isAsync
@@ -7863,6 +8206,7 @@ export class Interpreter {
       return result;
     } finally {
       this.environment = previousEnv;
+      this.currentLoopLabel = myLabel;
     }
   }
 
@@ -7870,6 +8214,9 @@ export class Interpreter {
     if (!this.isFeatureEnabled("ForInStatement")) {
       throw new InterpreterError("ForInStatement is not enabled");
     }
+
+    const myLabel = this.currentLoopLabel;
+    this.currentLoopLabel = null;
 
     // Create a new environment for the for...in loop scope
     const previousEnv = this.environment;
@@ -7924,7 +8271,7 @@ export class Interpreter {
         }
 
         // Handle control flow
-        const controlFlow = this.handleLoopControlFlow(result);
+        const controlFlow = this.handleLoopControlFlow(result, myLabel);
         if (controlFlow.shouldReturn) {
           return controlFlow.value;
         }
@@ -7933,6 +8280,7 @@ export class Interpreter {
       return result;
     } finally {
       this.environment = previousEnv;
+      this.currentLoopLabel = myLabel;
     }
   }
 

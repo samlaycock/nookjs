@@ -343,9 +343,9 @@ describe("AST Parser", () => {
   });
 
   describe("Errors", () => {
-    it("rejects labeled break/continue", () => {
-      expect(() => parseModule("break label;")).toThrow();
-      expect(() => parseModule("continue label;")).toThrow();
+    it("parses labeled break/continue", () => {
+      expect(() => parseModule("break label;")).not.toThrow();
+      expect(() => parseModule("continue label;")).not.toThrow();
     });
 
     it("rejects private identifiers in object literals", () => {

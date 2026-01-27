@@ -163,7 +163,7 @@ describe("Global Objects (via ReadOnlyProxy)", () => {
         const interpreter = new Interpreter({ globals: { Math } });
         expect(() => {
           interpreter.evaluate("delete Math.floor");
-        }).toThrow("Unsupported unary operator: delete");
+        }).toThrow("Cannot delete property 'floor' from global 'Math' (read-only)");
       });
 
       it("should block access to __proto__", () => {

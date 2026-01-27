@@ -556,6 +556,38 @@ describe("Comparison and Logical Operators", () => {
       });
     });
 
+    describe("Bitwise NOT (~)", () => {
+      test("bitwise NOT of 0", () => {
+        expect(interpreter.evaluate("~0")).toBe(-1);
+      });
+
+      test("bitwise NOT of positive number", () => {
+        expect(interpreter.evaluate("~5")).toBe(-6);
+      });
+
+      test("bitwise NOT of negative number", () => {
+        expect(interpreter.evaluate("~-1")).toBe(0);
+      });
+
+      test("double bitwise NOT truncates to integer", () => {
+        expect(interpreter.evaluate("~~3.7")).toBe(3);
+        expect(interpreter.evaluate("~~-3.7")).toBe(-3);
+      });
+
+      test("bitwise NOT of -1", () => {
+        expect(interpreter.evaluate("~-1")).toBe(0);
+      });
+
+      test("bitwise NOT combined with other operators", () => {
+        expect(interpreter.evaluate("~5 & 0xFF")).toBe(250); // ~5 = -6, -6 & 0xFF = 250
+      });
+
+      test("bitwise NOT in expressions", () => {
+        interpreter.evaluate("let x = 10");
+        expect(interpreter.evaluate("~x")).toBe(-11);
+      });
+    });
+
     describe("Practical Bitwise Examples", () => {
       test("check if number is even", () => {
         expect(interpreter.evaluate("4 & 1")).toBe(0); // even

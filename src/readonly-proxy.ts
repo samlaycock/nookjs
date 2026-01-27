@@ -2,6 +2,13 @@ import { isDangerousProperty } from "./constants";
 import { InterpreterError, HostFunctionValue } from "./interpreter";
 
 /**
+ * Symbol used to retrieve the underlying target from a ReadOnlyProxy.
+ * This is needed for operations like `instanceof` that must inspect
+ * the real prototype chain of the wrapped object.
+ */
+export const PROXY_TARGET = Symbol("ReadOnlyProxy.target");
+
+/**
  * Security options for ReadOnlyProxy
  */
 export interface SecurityOptions {
@@ -161,6 +168,11 @@ export class ReadOnlyProxy {
     // Create a proxy that intercepts all operations (for objects like Math, console, etc.)
     return new Proxy(value, {
       get(target, prop, _receiver) {
+        // Allow retrieving the underlying target for instanceof checks
+        if (prop === PROXY_TARGET) {
+          return target;
+        }
+
         if (prop === Symbol.iterator || prop === Symbol.asyncIterator) {
           const iterator = Reflect.get(target, prop, target);
           if (typeof iterator === "function") {
