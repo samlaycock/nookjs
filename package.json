@@ -1,6 +1,8 @@
 {
   "name": "nookjs",
-  "version": "0.0.6",
+  "version": "0.0.7",
+  "description": "A fast, standards-compliant JavaScript/Typescript parser and interpreter written in TypeScript.",
+  "homepage": "https://nookjs.dev",
   "files": [
     "dist"
   ],
