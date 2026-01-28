@@ -83,9 +83,10 @@ export namespace ESTree {
 
   export interface Literal extends Node {
     readonly type: "Literal";
-    readonly value: string | number | boolean | null | RegExp;
+    readonly value: string | number | boolean | null | RegExp | bigint;
     readonly raw?: string;
     readonly regex?: { pattern: string; flags: string };
+    readonly bigint?: string;
   }
 
   export interface ThisExpression extends Node {
@@ -448,6 +449,7 @@ const TOKEN = {
   Punctuator: 5,
   PrivateIdentifier: 6,
   RegExp: 7,
+  BigInt: 8,
 } as const;
 
 type TokenType = (typeof TOKEN)[keyof typeof TOKEN];
@@ -880,7 +882,14 @@ class Tokenizer {
     }
 
     if (code >= 48 && code <= 57) {
-      this.setToken(setCurrent, TOKEN.Number, this.readNumber(), lineBreakBefore);
+      const numStr = this.readNumber();
+      // Check for BigInt suffix 'n'
+      if (input.charCodeAt(this.index) === 110) {
+        this.index += 1;
+        this.setToken(setCurrent, TOKEN.BigInt, numStr, lineBreakBefore);
+      } else {
+        this.setToken(setCurrent, TOKEN.Number, numStr, lineBreakBefore);
+      }
       this.recordToken(start);
       return;
     }
@@ -1031,11 +1040,15 @@ class Tokenizer {
     if (input.charCodeAt(index) === 48 && index + 1 < length) {
       const prefix = input.charCodeAt(index + 1);
       if (prefix === 120 || prefix === 88) {
+        // Hexadecimal: 0x or 0X
         index += 2;
         while (index < length) {
           const code = input.charCodeAt(index);
           const isHex =
-            (code >= 48 && code <= 57) || (code >= 97 && code <= 102) || (code >= 65 && code <= 70);
+            (code >= 48 && code <= 57) ||
+            (code >= 97 && code <= 102) ||
+            (code >= 65 && code <= 70) ||
+            code === 95; // underscore
           if (!isHex) {
             break;
           }
@@ -1045,10 +1058,11 @@ class Tokenizer {
         return input.slice(start, index);
       }
       if (prefix === 98 || prefix === 66) {
+        // Binary: 0b or 0B
         index += 2;
         while (index < length) {
           const code = input.charCodeAt(index);
-          if (code !== 48 && code !== 49) {
+          if (code !== 48 && code !== 49 && code !== 95) {
             break;
           }
           index += 1;
@@ -1057,10 +1071,11 @@ class Tokenizer {
         return input.slice(start, index);
       }
       if (prefix === 111 || prefix === 79) {
+        // Octal: 0o or 0O
         index += 2;
         while (index < length) {
           const code = input.charCodeAt(index);
-          if (code < 48 || code > 55) {
+          if ((code < 48 || code > 55) && code !== 95) {
             break;
           }
           index += 1;
@@ -1070,20 +1085,22 @@ class Tokenizer {
       }
     }
 
+    // Decimal integer part
     while (index < length) {
       const code = input.charCodeAt(index);
-      if (code < 48 || code > 57) {
+      if ((code < 48 || code > 57) && code !== 95) {
         break;
       }
       index += 1;
     }
+    // Decimal fraction part
     if (input.charCodeAt(index) === 46) {
       const nextCode = input.charCodeAt(index + 1);
       if (nextCode >= 48 && nextCode <= 57) {
         index += 1;
         while (index < length) {
           const code = input.charCodeAt(index);
-          if (code < 48 || code > 57) {
+          if ((code < 48 || code > 57) && code !== 95) {
             break;
           }
           index += 1;
@@ -2798,6 +2815,16 @@ class Parser {
         this.next();
         return { type: "Literal", value: this.parseNumberLiteral(raw), raw };
       }
+      case TOKEN.BigInt: {
+        const raw = this.currentValue;
+        this.next();
+        return {
+          type: "Literal",
+          value: this.parseBigIntLiteral(raw),
+          raw: raw + "n",
+          bigint: raw,
+        };
+      }
       case TOKEN.String: {
         const value = this.currentValue;
         this.next();
@@ -3008,7 +3035,7 @@ class Parser {
         const value = this.parseMethodFunction(false, false);
         return {
           type: "Property",
-          key: accessorKey,
+          key: accessorKey as ESTree.Expression,
           value,
           kind,
           method: false,
@@ -3337,19 +3364,42 @@ class Parser {
   }
 
   private parseNumberLiteral(raw: string): number {
-    if (raw.length > 1 && raw.charCodeAt(0) === 48) {
-      const prefix = raw.charCodeAt(1);
+    // Strip numeric separators (underscores) before parsing
+    const stripped = raw.includes("_") ? raw.replace(/_/g, "") : raw;
+    if (stripped.length > 1 && stripped.charCodeAt(0) === 48) {
+      const prefix = stripped.charCodeAt(1);
       if (prefix === 120 || prefix === 88) {
-        return Number.parseInt(raw.slice(2), 16);
+        return Number.parseInt(stripped.slice(2), 16);
       }
       if (prefix === 98 || prefix === 66) {
-        return Number.parseInt(raw.slice(2), 2);
+        return Number.parseInt(stripped.slice(2), 2);
       }
       if (prefix === 111 || prefix === 79) {
-        return Number.parseInt(raw.slice(2), 8);
+        return Number.parseInt(stripped.slice(2), 8);
       }
     }
-    return Number.parseFloat(raw);
+    return Number.parseFloat(stripped);
+  }
+
+  private parseBigIntLiteral(raw: string): bigint {
+    // Strip numeric separators (underscores) before parsing
+    const stripped = raw.includes("_") ? raw.replace(/_/g, "") : raw;
+    if (stripped.length > 1 && stripped.charCodeAt(0) === 48) {
+      const prefix = stripped.charCodeAt(1);
+      if (prefix === 120 || prefix === 88) {
+        // Hexadecimal
+        return BigInt("0x" + stripped.slice(2));
+      }
+      if (prefix === 98 || prefix === 66) {
+        // Binary
+        return BigInt("0b" + stripped.slice(2));
+      }
+      if (prefix === 111 || prefix === 79) {
+        // Octal
+        return BigInt("0o" + stripped.slice(2));
+      }
+    }
+    return BigInt(stripped);
   }
 
   private tryParseArrowFunction(): ESTree.ArrowFunctionExpression | null {
