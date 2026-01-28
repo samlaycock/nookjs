@@ -62,14 +62,14 @@ function App() {
   }, [code]);
 
   return (
-    <main className="flex flex-col h-screen w-screen font-mono bg-neutral-950">
+    <div className="flex flex-col h-screen w-screen font-mono bg-neutral-950">
       <header className="flex flex-col p-6">
         <h1 className="text-amber-50 text-xl font-semibold">
           Nook<span className="text-amber-500">JS</span>
         </h1>
         <p className="text-neutral-50">JavaScript/TypeScript(ish) Interpreter</p>
       </header>
-      <div className="flex-1 flex flex-col w-full">
+      <main className="flex-1 flex flex-col w-full">
         <section className="flex-1 flex flex-col w-full bg-neutral-900 border-t border-neutral-700">
           <div className="relative flex-1 p-6 z-10 focus-within:ring-2 focus-within:ring-amber-500">
             <form className="h-full w-full">
@@ -120,13 +120,13 @@ function App() {
             </div>
           </div>
         </section>
-      </div>
+      </main>
       <footer className="flex flex-row justify-center px-6 py-3 border-t border-neutral-700">
         <span className="text-neutral-600 text-sm">
           🧱 &copy; Samuel Laycock {new Date().getFullYear()}
         </span>
       </footer>
-    </main>
+    </div>
   );
 }
 
