@@ -4,12 +4,20 @@ import CodeEditor from "@uiw/react-textarea-code-editor";
 import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { Interpreter, InterpreterError, ES2024, preset, ParseError } from "../../src/index";
+import {
+  Interpreter,
+  InterpreterError,
+  ES2024,
+  preset,
+  ParseError,
+} from "../../src/index";
 
 const CODE_LOCAL_STORAGE_KEY = "nookjs-code";
 
 function App() {
-  const [code, setCode] = useState(window.localStorage.getItem(CODE_LOCAL_STORAGE_KEY) ?? "");
+  const [code, setCode] = useState(
+    window.localStorage.getItem(CODE_LOCAL_STORAGE_KEY) ?? "",
+  );
   const [output, setOutput] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const execute = useCallback(async () => {
@@ -63,21 +71,23 @@ function App() {
 
   return (
     <main className="flex flex-col h-screen w-screen font-mono bg-neutral-950">
-      <header className="flex flex-row p-6">
-        <h1 className="text-white">
-          <span className="font-semibold">NookJS</span> <br />
-          JavaScript/Typescript(ish) Interpreter
+      <header className="flex flex-col p-6">
+        <h1 className="text-amber-50 text-xl font-semibold">
+          Nook<span className="text-amber-500">JS</span>
         </h1>
+        <p className="text-neutral-50">
+          JavaScript/Typescript(ish) Interpreter
+        </p>
       </header>
       <div className="flex-1 flex flex-col w-full">
-        <section className="flex-1 flex flex-col w-full bg-neutral-900">
-          <div className="flex-1 p-6 focus-within:ring-2 focus-within:ring-blue-500">
+        <section className="flex-1 flex flex-col w-full bg-neutral-900 border-t border-neutral-700">
+          <div className="relative flex-1 p-6 z-10 focus-within:ring-2 focus-within:ring-amber-500">
             <form className="h-full w-full">
               <CodeEditor
                 id="input"
                 value={code}
                 language="ts"
-                placeholder="Please enter JS/TS code."
+                placeholder="Please enter Javascript/Typescript code."
                 onChange={(evn) => setCode(evn.target.value)}
                 padding={0}
                 style={{
@@ -94,25 +104,29 @@ function App() {
               {output !== null && (
                 <div className="flex flex-row gap-4 overflow-hidden">
                   <span className="text-neutral-600">Output:</span>
-                  <pre className="text-white whitespace-pre-wrap">{output}</pre>
+                  <pre className="text-neutral-50 whitespace-pre-wrap">
+                    {output}
+                  </pre>
                 </div>
               )}
               {error !== null && (
                 <div className="flex flex-row gap-4 overflow-hidden">
                   <span className="text-red-600">Error:</span>
-                  <pre className="text-red-500 whitespace-pre-wrap">{error}</pre>
+                  <pre className="text-red-500 whitespace-pre-wrap">
+                    {error}
+                  </pre>
                 </div>
               )}
             </div>
             <div className="shrink-0 flex flex-row gap-4">
               <button
-                className="px-4 py-2 bg-neutral-600 text-white hover:bg-netrual-700"
+                className="px-4 py-2 bg-neutral-600 text-neutral-50 cursor-pointer hover:bg-neutral-500"
                 onClick={clear}
               >
                 Clear
               </button>
               <button
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700"
+                className="px-4 py-2 bg-amber-500 text-amber-950 cursor-pointer hover:bg-amber-400"
                 onClick={execute}
               >
                 Run
