@@ -123,7 +123,7 @@ function App() {
       </div>
       <footer className="flex flex-row justify-center px-6 py-3 border-t border-neutral-700">
         <span className="text-neutral-600 text-sm">
-          &copy; Samuel Laycock {new Date().getFullYear()}
+          🧱 &copy; Samuel Laycock {new Date().getFullYear()}
         </span>
       </footer>
     </main>
