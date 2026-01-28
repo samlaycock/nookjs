@@ -44,7 +44,7 @@ const interpreter = new Interpreter(
   ),
 );
 
-const code = \`${code.replace(/`/g, "\\`")}\`;
+const code = \`${code.replace(/`/g, "\\`").replace(/\$/g, "\\$")}\`;
 
 const result = await interpreter.evaluateAsync(code);`,
     [code],
