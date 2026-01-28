@@ -7,9 +7,26 @@ import { createRoot } from "react-dom/client";
 import { Interpreter, InterpreterError, ES2024, preset, ParseError } from "../../src/index";
 
 const CODE_LOCAL_STORAGE_KEY = "nookjs-code";
+const DEFAULT_CODE = `// Welcome to NookJS!
+
+const main = (length: number) => {
+  const arr = Array.from({ length });
+  let i: number = 0;
+
+  for (const item of arr) {
+    i += 1;
+    console.log(\`Simon says: \${i}\`);
+  }
+}
+
+main(10);
+alert("Check your console!");
+`;
 
 function App() {
-  const [code, setCode] = useState(window.localStorage.getItem(CODE_LOCAL_STORAGE_KEY) ?? "");
+  const [code, setCode] = useState(
+    window.localStorage.getItem(CODE_LOCAL_STORAGE_KEY) ?? DEFAULT_CODE,
+  );
   const [output, setOutput] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const execute = useCallback(async () => {
