@@ -64,6 +64,8 @@ export namespace ESTree {
     | AwaitExpression
     | YieldExpression
     | TemplateLiteral
+    | TaggedTemplateExpression
+    | SequenceExpression
     | ChainExpression
     | ClassExpression;
 
@@ -384,6 +386,17 @@ export namespace ESTree {
   export interface TemplateLiteral extends Node {
     readonly type: "TemplateLiteral";
     readonly quasis: TemplateElement[];
+    readonly expressions: Expression[];
+  }
+
+  export interface TaggedTemplateExpression extends Node {
+    readonly type: "TaggedTemplateExpression";
+    readonly tag: Expression;
+    readonly quasi: TemplateLiteral;
+  }
+
+  export interface SequenceExpression extends Node {
+    readonly type: "SequenceExpression";
     readonly expressions: Expression[];
   }
 
@@ -1597,6 +1610,15 @@ class Parser {
 
   private parseForStatement(): ESTree.ForStatement | ESTree.ForOfStatement | ESTree.ForInStatement {
     this.expectKeyword("for");
+
+    // Check for `for await (...)`
+    const isAwait =
+      (this.currentType === TOKEN.Keyword || this.currentType === TOKEN.Identifier) &&
+      this.currentValue === "await";
+    if (isAwait) {
+      this.next();
+    }
+
     this.expectPunctuator("(");
 
     if (this.currentType === TOKEN.Punctuator && this.currentValue === ";") {
@@ -1634,7 +1656,7 @@ class Parser {
           left: declaration,
           right,
           body,
-          await: false,
+          await: isAwait,
         };
       }
       if (
@@ -1685,7 +1707,7 @@ class Parser {
         left: initExpression as ESTree.Pattern,
         right,
         body,
-        await: false,
+        await: isAwait,
       };
     }
 
@@ -2156,7 +2178,7 @@ class Parser {
       this.consumeTypeAnnotation(STOP_TOKEN.Var);
       const init =
         this.currentType === TOKEN.Punctuator && this.currentValue === "="
-          ? (this.next(), this.parseExpression())
+          ? (this.next(), this.parseAssignmentExpression())
           : null;
       declarations.push({ type: "VariableDeclarator", id, init });
       if (this.currentType !== TOKEN.Punctuator || this.currentValue !== ",") {
@@ -2372,7 +2394,19 @@ class Parser {
   }
 
   private parseExpression(allowIn = true): ESTree.Expression {
-    return this.parseAssignmentExpression(allowIn);
+    const expr = this.parseAssignmentExpression(allowIn);
+
+    // Handle comma operator (sequence expression)
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
+      const expressions: ESTree.Expression[] = [expr];
+      while (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
+        this.next();
+        expressions.push(this.parseAssignmentExpression(allowIn));
+      }
+      return { type: "SequenceExpression", expressions };
+    }
+
+    return expr;
   }
 
   // Try arrow parsing first since it shares a prefix with grouping/expressions.
@@ -2719,6 +2753,15 @@ class Parser {
           };
           continue;
         }
+        case "`": {
+          const quasi = this.parseTemplateLiteral();
+          expression = {
+            type: "TaggedTemplateExpression",
+            tag: expression,
+            quasi,
+          };
+          continue;
+        }
         default:
           break;
       }
@@ -2888,13 +2931,13 @@ class Parser {
         }
         if (value === "...") {
           this.next();
-          const argument = this.parseExpression();
+          const argument = this.parseAssignmentExpression();
           elements.push({ type: "SpreadElement", argument });
         } else {
-          elements.push(this.parseExpression());
+          elements.push(this.parseAssignmentExpression());
         }
       } else {
-        elements.push(this.parseExpression());
+        elements.push(this.parseAssignmentExpression());
       }
       if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
         this.next();
@@ -2918,7 +2961,7 @@ class Parser {
       }
       if (type === TOKEN.Punctuator && value === "...") {
         this.next();
-        const argument = this.parseExpression();
+        const argument = this.parseAssignmentExpression();
         properties.push({ type: "SpreadElement", argument });
         if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
           this.next();
@@ -2959,7 +3002,7 @@ class Parser {
 
     if (this.currentType === TOKEN.Punctuator && this.currentValue === ":") {
       this.next();
-      const value = this.parseExpression();
+      const value = this.parseAssignmentExpression();
       return {
         type: "Property",
         key,
@@ -3011,10 +3054,10 @@ class Parser {
       const value = this.currentValue;
       if (type === TOKEN.Punctuator && value === "...") {
         this.next();
-        const argument = this.parseExpression();
+        const argument = this.parseAssignmentExpression();
         args.push({ type: "SpreadElement", argument });
       } else {
-        args.push(this.parseExpression());
+        args.push(this.parseAssignmentExpression());
       }
       if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
         this.next();

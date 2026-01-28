@@ -31,6 +31,7 @@ type ASTNode = ESTree.Node;
  */
 export class InterpreterError extends Error {
   line?: number;
+  thrownValue?: any;
   constructor(message: string, line?: number) {
     super(line ? `Line ${line}: ${message}` : message);
     this.name = "InterpreterError";
@@ -2769,6 +2770,12 @@ export class Interpreter {
       case "TemplateLiteral":
         return this.evaluateTemplateLiteral(node as ESTree.TemplateLiteral);
 
+      case "TaggedTemplateExpression":
+        return this.evaluateTaggedTemplateExpression(node as ESTree.TaggedTemplateExpression);
+
+      case "SequenceExpression":
+        return this.evaluateSequenceExpression(node as ESTree.SequenceExpression);
+
       case "ChainExpression":
         return this.evaluateChainExpression(node as ESTree.ChainExpression);
 
@@ -2918,6 +2925,14 @@ export class Interpreter {
 
       case "TemplateLiteral":
         return await this.evaluateTemplateLiteralAsync(node as ESTree.TemplateLiteral);
+
+      case "TaggedTemplateExpression":
+        return await this.evaluateTaggedTemplateExpressionAsync(
+          node as ESTree.TaggedTemplateExpression,
+        );
+
+      case "SequenceExpression":
+        return await this.evaluateSequenceExpressionAsync(node as ESTree.SequenceExpression);
 
       case "ChainExpression":
         return await this.evaluateChainExpressionAsync(node as ESTree.ChainExpression);
@@ -5065,6 +5080,12 @@ export class Interpreter {
       throw new InterpreterError("ForOfStatement is not enabled");
     }
 
+    if (node.await) {
+      throw new InterpreterError(
+        "Cannot use for await...of in synchronous evaluate(). Use evaluateAsync() instead.",
+      );
+    }
+
     const myLabel = this.currentLoopLabel;
     this.currentLoopLabel = null;
 
@@ -5710,7 +5731,9 @@ export class Interpreter {
     }
 
     const value = this.evaluateNode(node.argument);
-    throw new InterpreterError(`Uncaught ${String(value)}`);
+    const error = new InterpreterError(`Uncaught ${String(value)}`);
+    error.thrownValue = value;
+    throw error;
   }
 
   /**
@@ -5741,9 +5764,20 @@ export class Interpreter {
 
         try {
           // Bind error to catch parameter if provided
-          const paramName = this.getCatchParameterName(node.handler);
-          if (paramName) {
-            this.environment.declare(paramName, error, "let");
+          if (node.handler.param) {
+            if (node.handler.param.type === "Identifier") {
+              this.environment.declare(node.handler.param.name, error, "let");
+            } else if (
+              node.handler.param.type === "ObjectPattern" ||
+              node.handler.param.type === "ArrayPattern"
+            ) {
+              // Use original thrown value for destructuring
+              const value =
+                error instanceof InterpreterError && "thrownValue" in error
+                  ? error.thrownValue
+                  : error;
+              this.destructurePattern(node.handler.param, value, true, "let");
+            }
           }
 
           // Execute catch block
@@ -6359,6 +6393,10 @@ export class Interpreter {
         if (arrayMethod) {
           return arrayMethod;
         }
+        // Allow access to own properties on arrays (e.g., tagged template strings.raw)
+        if (Object.prototype.hasOwnProperty.call(object, property)) {
+          return (object as any)[property];
+        }
         throw new InterpreterError(`Array method '${property}' not supported`);
       }
 
@@ -6960,8 +6998,10 @@ export class Interpreter {
         }
       } else if (property.type === "Property") {
         // Regular property
-        // Get the property key
-        const key = this.extractPropertyKey(property.key);
+        // Get the property key - evaluate expression for computed properties
+        const key = property.computed
+          ? String(this.evaluateNode(property.key))
+          : this.extractPropertyKey(property.key);
 
         validatePropertyName(key); // Security: prevent prototype pollution
 
@@ -7008,6 +7048,54 @@ export class Interpreter {
 
     // Build the final string using shared logic
     return this.buildTemplateLiteralString(node.quasis, expressionValues);
+  }
+
+  private evaluateTaggedTemplateExpression(node: ESTree.TaggedTemplateExpression): any {
+    if (!this.isFeatureEnabled("TemplateLiterals")) {
+      throw new InterpreterError("TemplateLiterals is not enabled");
+    }
+
+    const tag = this.evaluateNode(node.tag);
+
+    // Build the strings array with cooked values
+    const strings: string[] = node.quasi.quasis.map((q) => q.value.cooked);
+    // Attach the raw property (frozen array of raw strings)
+    const raw: string[] = node.quasi.quasis.map((q) => q.value.raw);
+    Object.freeze(raw);
+    Object.defineProperty(strings, "raw", {
+      value: raw,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+    Object.freeze(strings);
+
+    // Evaluate expressions
+    const values: any[] = [];
+    for (const expr of node.quasi.expressions) {
+      values.push(this.evaluateNode(expr));
+    }
+
+    // Call the tag function
+    const args = [strings, ...values];
+    if (tag instanceof FunctionValue) {
+      return this.executeSandboxFunction(tag, args, undefined);
+    }
+    if (tag instanceof HostFunctionValue) {
+      return tag.hostFunc(...args);
+    }
+    if (typeof tag === "function") {
+      return tag(...args);
+    }
+    throw new InterpreterError("Tag expression is not a function");
+  }
+
+  private evaluateSequenceExpression(node: ESTree.SequenceExpression): any {
+    let result: any;
+    for (const expr of node.expressions) {
+      result = this.evaluateNode(expr);
+    }
+    return result;
   }
 
   /**
@@ -8096,9 +8184,12 @@ export class Interpreter {
       // Get an iterator from the value
       // Support: arrays, generators, and any object with [Symbol.iterator] or [Symbol.asyncIterator]
       let iterator: Iterator<any> | AsyncIterator<any>;
-      let isAsync = false;
+      let isAsync = node.await || false;
 
-      if (Array.isArray(iterableValue)) {
+      // For `for await...of`, prefer Symbol.asyncIterator
+      if (isAsync && iterableValue && typeof iterableValue[Symbol.asyncIterator] === "function") {
+        iterator = iterableValue[Symbol.asyncIterator]();
+      } else if (!isAsync && Array.isArray(iterableValue)) {
         iterator = iterableValue[Symbol.iterator]();
       } else if (iterableValue && typeof iterableValue[Symbol.asyncIterator] === "function") {
         iterator = iterableValue[Symbol.asyncIterator]();
@@ -8451,7 +8542,9 @@ export class Interpreter {
     }
 
     const value = await this.evaluateNodeAsync(node.argument);
-    throw new InterpreterError(`Uncaught ${String(value)}`);
+    const error = new InterpreterError(`Uncaught ${String(value)}`);
+    error.thrownValue = value;
+    throw error;
   }
 
   /**
@@ -8482,9 +8575,20 @@ export class Interpreter {
 
         try {
           // Bind error to catch parameter if provided
-          const paramName = this.getCatchParameterName(node.handler);
-          if (paramName) {
-            this.environment.declare(paramName, error, "let");
+          if (node.handler.param) {
+            if (node.handler.param.type === "Identifier") {
+              this.environment.declare(node.handler.param.name, error, "let");
+            } else if (
+              node.handler.param.type === "ObjectPattern" ||
+              node.handler.param.type === "ArrayPattern"
+            ) {
+              // Use original thrown value for destructuring
+              const value =
+                error instanceof InterpreterError && "thrownValue" in error
+                  ? error.thrownValue
+                  : error;
+              await this.destructurePatternAsync(node.handler.param, value, true, "let");
+            }
           }
 
           // Execute catch block
@@ -8853,6 +8957,10 @@ export class Interpreter {
         if (arrayMethod) {
           return arrayMethod;
         }
+        // Allow access to own properties on arrays (e.g., tagged template strings.raw)
+        if (Object.prototype.hasOwnProperty.call(object, property)) {
+          return (object as any)[property];
+        }
         throw new InterpreterError(`Array method '${property}' not supported`);
       }
 
@@ -8923,8 +9031,10 @@ export class Interpreter {
           obj[key] = value;
         }
       } else if (property.type === "Property") {
-        // Regular property
-        const key = this.extractPropertyKey(property.key);
+        // Regular property - evaluate expression for computed properties
+        const key = property.computed
+          ? String(await this.evaluateNodeAsync(property.key))
+          : this.extractPropertyKey(property.key);
 
         validatePropertyName(key);
 
@@ -8962,6 +9072,55 @@ export class Interpreter {
 
     // Build the final string using shared logic
     return this.buildTemplateLiteralString(node.quasis, expressionValues);
+  }
+
+  private async evaluateTaggedTemplateExpressionAsync(
+    node: ESTree.TaggedTemplateExpression,
+  ): Promise<any> {
+    if (!this.isFeatureEnabled("TemplateLiterals")) {
+      throw new InterpreterError("TemplateLiterals is not enabled");
+    }
+
+    const tag = await this.evaluateNodeAsync(node.tag);
+
+    // Build the strings array with cooked values
+    const strings: string[] = node.quasi.quasis.map((q) => q.value.cooked);
+    const raw: string[] = node.quasi.quasis.map((q) => q.value.raw);
+    Object.freeze(raw);
+    Object.defineProperty(strings, "raw", {
+      value: raw,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+    Object.freeze(strings);
+
+    // Evaluate expressions asynchronously
+    const values: any[] = [];
+    for (const expr of node.quasi.expressions) {
+      values.push(await this.evaluateNodeAsync(expr));
+    }
+
+    // Call the tag function
+    const args = [strings, ...values];
+    if (tag instanceof FunctionValue) {
+      return await this.executeSandboxFunctionAsync(tag, args, undefined);
+    }
+    if (tag instanceof HostFunctionValue) {
+      return tag.isAsync ? await tag.hostFunc(...args) : tag.hostFunc(...args);
+    }
+    if (typeof tag === "function") {
+      return tag(...args);
+    }
+    throw new InterpreterError("Tag expression is not a function");
+  }
+
+  private async evaluateSequenceExpressionAsync(node: ESTree.SequenceExpression): Promise<any> {
+    let result: any;
+    for (const expr of node.expressions) {
+      result = await this.evaluateNodeAsync(expr);
+    }
+    return result;
   }
 
   /**
