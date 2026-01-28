@@ -119,6 +119,7 @@ class FunctionValue {
     public defaultValues: Map<number, ESTree.Expression> = new Map(), // Default values for parameters by index
     public homeClass: ClassValue | null = null, // Class this method belongs to (for super binding)
     public homeIsStatic: boolean = false, // Whether the method is static
+    public destructuredParams: Map<number, ESTree.ObjectPattern | ESTree.ArrayPattern> = new Map(), // Destructuring patterns by param index
   ) {}
 }
 
@@ -2829,7 +2830,6 @@ export class Interpreter {
         return await this.evaluateUnaryExpressionAsync(node as ESTree.UnaryExpression);
 
       case "UpdateExpression":
-        // UpdateExpression (++/--) only works on identifiers - no async needed
         return this.evaluateUpdateExpression(node as ESTree.UpdateExpression);
 
       case "LogicalExpression":
@@ -3180,7 +3180,13 @@ export class Interpreter {
         value = this.evaluateNode(defaultExpr);
       }
 
-      this.environment.declare(fn.params[i]!, value, "let");
+      // Check if this parameter is a destructuring pattern
+      if (fn.destructuredParams.has(i)) {
+        const pattern = fn.destructuredParams.get(i)!;
+        this.destructurePattern(pattern, value, true, "let");
+      } else {
+        this.environment.declare(fn.params[i]!, value, "let");
+      }
     }
 
     // Bind rest parameter if present
@@ -3207,7 +3213,13 @@ export class Interpreter {
         value = await this.evaluateNodeAsync(defaultExpr);
       }
 
-      this.environment.declare(fn.params[i]!, value, "let");
+      // Check if this parameter is a destructuring pattern
+      if (fn.destructuredParams.has(i)) {
+        const pattern = fn.destructuredParams.get(i)!;
+        await this.destructurePatternAsync(pattern, value, true, "let");
+      } else {
+        this.environment.declare(fn.params[i]!, value, "let");
+      }
     }
 
     // Bind rest parameter if present
@@ -3516,10 +3528,80 @@ export class Interpreter {
   }
 
   /**
-   * Extracts a property key from an object property.
-   * Handles both Identifier keys and Literal keys.
-   * Returns the string key to use in the resulting object.
+   * Parse function parameters from AST nodes into the arrays/maps needed by FunctionValue.
+   * Handles Identifier, RestElement, AssignmentPattern, ObjectPattern, and ArrayPattern.
    */
+  private parseFunctionParams(nodeParams: ESTree.Pattern[]): {
+    params: string[];
+    restParamIndex: number | null;
+    defaultValues: Map<number, ESTree.Expression>;
+    destructuredParams: Map<number, ESTree.ObjectPattern | ESTree.ArrayPattern>;
+  } {
+    const params: string[] = [];
+    let restParamIndex: number | null = null;
+    const defaultValues = new Map<number, ESTree.Expression>();
+    const destructuredParams = new Map<number, ESTree.ObjectPattern | ESTree.ArrayPattern>();
+
+    for (let i = 0; i < nodeParams.length; i++) {
+      const param = nodeParams[i];
+
+      if (!param) {
+        continue;
+      }
+
+      if (param.type === "RestElement") {
+        if (!this.isFeatureEnabled("RestParameters")) {
+          throw new InterpreterError("RestParameters is not enabled");
+        }
+        if (i !== nodeParams.length - 1) {
+          throw new InterpreterError("Rest parameter must be last");
+        }
+        const restElement = param as ESTree.RestElement;
+        if (restElement.argument.type !== "Identifier") {
+          throw new InterpreterError("Rest parameter must be an identifier");
+        }
+        restParamIndex = i;
+        params.push((restElement.argument as ESTree.Identifier).name);
+      } else if (param.type === "Identifier") {
+        params.push((param as ESTree.Identifier).name);
+      } else if (param.type === "ObjectPattern" || param.type === "ArrayPattern") {
+        // Destructuring parameter: ({ a, b }) => ... or ([a, b]) => ...
+        if (!this.isFeatureEnabled("Destructuring")) {
+          throw new InterpreterError("Destructuring is not enabled");
+        }
+        params.push(`__destructured_${i}__`);
+        destructuredParams.set(i, param);
+      } else if (param.type === "AssignmentPattern") {
+        if (!this.isFeatureEnabled("DefaultParameters")) {
+          throw new InterpreterError("DefaultParameters is not enabled");
+        }
+        const assignmentPattern = param as ESTree.AssignmentPattern;
+        if (assignmentPattern.left.type === "Identifier") {
+          params.push((assignmentPattern.left as ESTree.Identifier).name);
+        } else if (
+          assignmentPattern.left.type === "ObjectPattern" ||
+          assignmentPattern.left.type === "ArrayPattern"
+        ) {
+          // Destructuring with default: ({ a, b } = {}) => ...
+          if (!this.isFeatureEnabled("Destructuring")) {
+            throw new InterpreterError("Destructuring is not enabled");
+          }
+          params.push(`__destructured_${i}__`);
+          destructuredParams.set(i, assignmentPattern.left);
+        } else {
+          throw new InterpreterError("Unsupported parameter pattern type");
+        }
+        if (assignmentPattern.right) {
+          defaultValues.set(i, assignmentPattern.right);
+        }
+      } else {
+        throw new InterpreterError(`Unsupported parameter type: ${(param as ESTree.Node).type}`);
+      }
+    }
+
+    return { params, restParamIndex, defaultValues, destructuredParams };
+  }
+
   private extractPropertyKey(key: ESTree.Expression): string {
     if (key.type === "Identifier") {
       return (key as ESTree.Identifier).name;
@@ -4213,24 +4295,42 @@ export class Interpreter {
     }
 
     // UpdateExpression handles ++ and -- operators (both prefix and postfix)
-    if (node.argument.type !== "Identifier") {
-      throw new InterpreterError("Update expression must operate on an identifier");
+    if (node.argument.type === "Identifier") {
+      const name = (node.argument as ESTree.Identifier).name;
+      const currentValue = this.environment.get(name);
+
+      const [newValue, returnValue] = this.applyUpdateOperator(
+        node.operator,
+        currentValue,
+        node.prefix,
+      );
+
+      this.environment.set(name, newValue);
+      return returnValue;
     }
 
-    const identifier = node.argument as ESTree.Identifier;
-    const name = identifier.name;
-    const currentValue = this.environment.get(name);
+    if (node.argument.type === "MemberExpression") {
+      const memberExpr = node.argument as ESTree.MemberExpression;
+      const object = this.evaluateNode(memberExpr.object);
+      const property = memberExpr.computed
+        ? String(this.evaluateNode(memberExpr.property))
+        : (memberExpr.property as ESTree.Identifier).name;
 
-    const [newValue, returnValue] = this.applyUpdateOperator(
-      node.operator,
-      currentValue,
-      node.prefix,
+      const currentValue = object[property];
+
+      const [newValue, returnValue] = this.applyUpdateOperator(
+        node.operator,
+        currentValue,
+        node.prefix,
+      );
+
+      object[property] = newValue;
+      return returnValue;
+    }
+
+    throw new InterpreterError(
+      "Update expression must operate on an identifier or member expression",
     );
-
-    // Update the variable with the new value
-    this.environment.set(name, newValue);
-
-    return returnValue;
   }
 
   private evaluateLogicalExpression(node: ESTree.LogicalExpression): any {
@@ -5368,55 +5468,9 @@ export class Interpreter {
     }
 
     const name = node.id.name;
-    const params: string[] = [];
-    let restParamIndex: number | null = null;
-    const defaultValues = new Map<number, ESTree.Expression>();
-
-    for (let i = 0; i < node.params.length; i++) {
-      const param = node.params[i];
-
-      if (!param) {
-        continue;
-      }
-
-      if (param.type === "RestElement") {
-        // Rest parameter: ...args
-        if (!this.isFeatureEnabled("RestParameters")) {
-          throw new InterpreterError("RestParameters is not enabled");
-        }
-
-        if (i !== node.params.length - 1) {
-          throw new InterpreterError("Rest parameter must be last");
-        }
-
-        const restElement = param as ESTree.RestElement;
-        if (restElement.argument.type !== "Identifier") {
-          throw new InterpreterError("Rest parameter must be an identifier");
-        }
-
-        restParamIndex = i;
-        params.push((restElement.argument as ESTree.Identifier).name);
-      } else if (param.type === "Identifier") {
-        params.push((param as ESTree.Identifier).name);
-      } else if (param.type === "AssignmentPattern") {
-        // Default parameter: a = 5
-        if (!this.isFeatureEnabled("DefaultParameters")) {
-          throw new InterpreterError("DefaultParameters is not enabled");
-        }
-
-        const assignmentPattern = param as ESTree.AssignmentPattern;
-        if (assignmentPattern.left.type !== "Identifier") {
-          throw new InterpreterError("Destructuring in default parameters is not supported");
-        }
-
-        params.push((assignmentPattern.left as ESTree.Identifier).name);
-        if (assignmentPattern.right) {
-          defaultValues.set(i, assignmentPattern.right);
-        }
-      } else {
-        throw new InterpreterError("Destructuring parameters not supported");
-      }
-    }
+    const { params, restParamIndex, defaultValues, destructuredParams } = this.parseFunctionParams(
+      node.params,
+    );
 
     if (node.body.type !== "BlockStatement") {
       throw new InterpreterError("Function body must be a block statement");
@@ -5431,6 +5485,9 @@ export class Interpreter {
       restParamIndex,
       node.generator || false,
       defaultValues,
+      null,
+      false,
+      destructuredParams,
     );
 
     // Declare the function in the current environment
@@ -5461,55 +5518,9 @@ export class Interpreter {
       throw new InterpreterError("Function must have a body");
     }
 
-    const params: string[] = [];
-    let restParamIndex: number | null = null;
-    const defaultValues = new Map<number, ESTree.Expression>();
-
-    for (let i = 0; i < node.params.length; i++) {
-      const param = node.params[i];
-
-      if (!param) {
-        continue;
-      }
-
-      if (param.type === "RestElement") {
-        // Rest parameter: ...args
-        if (!this.isFeatureEnabled("RestParameters")) {
-          throw new InterpreterError("RestParameters is not enabled");
-        }
-
-        if (i !== node.params.length - 1) {
-          throw new InterpreterError("Rest parameter must be last");
-        }
-
-        const restElement = param as ESTree.RestElement;
-        if (restElement.argument.type !== "Identifier") {
-          throw new InterpreterError("Rest parameter must be an identifier");
-        }
-
-        restParamIndex = i;
-        params.push((restElement.argument as ESTree.Identifier).name);
-      } else if (param.type === "Identifier") {
-        params.push((param as ESTree.Identifier).name);
-      } else if (param.type === "AssignmentPattern") {
-        // Default parameter: a = 5
-        if (!this.isFeatureEnabled("DefaultParameters")) {
-          throw new InterpreterError("DefaultParameters is not enabled");
-        }
-
-        const assignmentPattern = param as ESTree.AssignmentPattern;
-        if (assignmentPattern.left.type !== "Identifier") {
-          throw new InterpreterError("Destructuring in default parameters is not supported");
-        }
-
-        params.push((assignmentPattern.left as ESTree.Identifier).name);
-        if (assignmentPattern.right) {
-          defaultValues.set(i, assignmentPattern.right);
-        }
-      } else {
-        throw new InterpreterError("Destructuring parameters not supported");
-      }
-    }
+    const { params, restParamIndex, defaultValues, destructuredParams } = this.parseFunctionParams(
+      node.params,
+    );
 
     if (node.body.type !== "BlockStatement") {
       throw new InterpreterError("Function body must be a block statement");
@@ -5525,6 +5536,9 @@ export class Interpreter {
       restParamIndex,
       node.generator || false,
       defaultValues,
+      null,
+      false,
+      destructuredParams,
     );
   }
 
@@ -5540,55 +5554,9 @@ export class Interpreter {
       throw new InterpreterError("Arrow functions cannot be generators");
     }
 
-    const params: string[] = [];
-    let restParamIndex: number | null = null;
-    const defaultValues = new Map<number, ESTree.Expression>();
-
-    for (let i = 0; i < node.params.length; i++) {
-      const param = node.params[i];
-
-      if (!param) {
-        continue;
-      }
-
-      if (param.type === "RestElement") {
-        // Rest parameter: ...args
-        if (!this.isFeatureEnabled("RestParameters")) {
-          throw new InterpreterError("RestParameters is not enabled");
-        }
-
-        if (i !== node.params.length - 1) {
-          throw new InterpreterError("Rest parameter must be last");
-        }
-
-        const restElement = param as ESTree.RestElement;
-        if (restElement.argument.type !== "Identifier") {
-          throw new InterpreterError("Rest parameter must be an identifier");
-        }
-
-        restParamIndex = i;
-        params.push((restElement.argument as ESTree.Identifier).name);
-      } else if (param.type === "Identifier") {
-        params.push((param as ESTree.Identifier).name);
-      } else if (param.type === "AssignmentPattern") {
-        // Default parameter: a = 5
-        if (!this.isFeatureEnabled("DefaultParameters")) {
-          throw new InterpreterError("DefaultParameters is not enabled");
-        }
-
-        const assignmentPattern = param as ESTree.AssignmentPattern;
-        if (assignmentPattern.left.type !== "Identifier") {
-          throw new InterpreterError("Destructuring in default parameters is not supported");
-        }
-
-        params.push((assignmentPattern.left as ESTree.Identifier).name);
-        if (assignmentPattern.right) {
-          defaultValues.set(i, assignmentPattern.right);
-        }
-      } else {
-        throw new InterpreterError("Destructuring parameters not supported");
-      }
-    }
+    const { params, restParamIndex, defaultValues, destructuredParams } = this.parseFunctionParams(
+      node.params,
+    );
 
     // Arrow functions can have expression body or block body
     let body: ESTree.BlockStatement;
@@ -5619,6 +5587,9 @@ export class Interpreter {
       restParamIndex,
       false, // arrow functions are not generators
       defaultValues,
+      null,
+      false,
+      destructuredParams,
     );
 
     return func;
@@ -6397,7 +6368,12 @@ export class Interpreter {
         if (Object.prototype.hasOwnProperty.call(object, property)) {
           return (object as any)[property];
         }
-        throw new InterpreterError(`Array method '${property}' not supported`);
+        // Delegate to native array method if safe
+        const nativeMethod = this.getNativeMethod(object, property);
+        if (nativeMethod !== undefined) {
+          return nativeMethod;
+        }
+        throw new InterpreterError(`Array property '${property}' not supported`);
       }
 
       // Handle string methods
@@ -6406,7 +6382,12 @@ export class Interpreter {
         if (stringMethod) {
           return stringMethod;
         }
-        throw new InterpreterError(`String method '${property}' not supported`);
+        // Delegate to native string method if safe
+        const nativeMethod = this.getNativeMethod(object, property);
+        if (nativeMethod !== undefined) {
+          return nativeMethod;
+        }
+        throw new InterpreterError(`String property '${property}' not supported`);
       }
 
       // Handle object property access
@@ -6711,6 +6692,154 @@ export class Interpreter {
           true, // skipArgWrapping
         );
 
+      case "forEach":
+        return new HostFunctionValue(
+          (callback: FunctionValue | Function) => {
+            for (let i = 0; i < arr.length; i++) {
+              this.callCallback(callback, undefined, [arr[i], i, arr]);
+            }
+            return undefined;
+          },
+          "forEach",
+          false,
+          false,
+          true, // skipArgWrapping
+        );
+
+      case "sort":
+        return new HostFunctionValue(
+          (compareFn?: FunctionValue | Function) => {
+            if (compareFn) {
+              arr.sort((a: any, b: any) => this.callCallback(compareFn, undefined, [a, b]));
+            } else {
+              // eslint-disable-next-line @typescript-eslint/require-array-sort-compare -- intentional: match JS default sort behavior
+              arr.sort();
+            }
+            return arr;
+          },
+          "sort",
+          false,
+          false,
+          true, // skipArgWrapping
+        );
+
+      case "flat":
+        return new HostFunctionValue((depth?: number) => arr.flat(depth), "flat", false);
+
+      case "flatMap":
+        return new HostFunctionValue(
+          (callback: FunctionValue | Function) => {
+            const result: any[] = [];
+            for (let i = 0; i < arr.length; i++) {
+              const mapped = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              if (Array.isArray(mapped)) {
+                result.push(...mapped);
+              } else {
+                result.push(mapped);
+              }
+            }
+            return result;
+          },
+          "flatMap",
+          false,
+          false,
+          true, // skipArgWrapping
+        );
+
+      case "at":
+        return new HostFunctionValue((index: number) => arr.at(index), "at", false);
+
+      case "findLast":
+        return new HostFunctionValue(
+          (callback: FunctionValue | Function) => {
+            for (let i = arr.length - 1; i >= 0; i--) {
+              const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              if (matches) {
+                return arr[i];
+              }
+            }
+            return undefined;
+          },
+          "findLast",
+          false,
+          false,
+          true, // skipArgWrapping
+        );
+
+      case "findLastIndex":
+        return new HostFunctionValue(
+          (callback: FunctionValue | Function) => {
+            for (let i = arr.length - 1; i >= 0; i--) {
+              const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              if (matches) {
+                return i;
+              }
+            }
+            return -1;
+          },
+          "findLastIndex",
+          false,
+          false,
+          true, // skipArgWrapping
+        );
+
+      case "reduceRight":
+        return new HostFunctionValue(
+          (callback: FunctionValue | Function, initialValue?: any) => {
+            let accumulator = initialValue;
+            let startIndex = arr.length - 1;
+
+            if (initialValue === undefined) {
+              if (arr.length === 0) {
+                throw new InterpreterError("Reduce of empty array with no initial value");
+              }
+              accumulator = arr[arr.length - 1];
+              startIndex = arr.length - 2;
+            }
+
+            for (let i = startIndex; i >= 0; i--) {
+              accumulator = this.callCallback(callback, undefined, [accumulator, arr[i], i, arr]);
+            }
+            return accumulator;
+          },
+          "reduceRight",
+          false,
+          false,
+          true, // skipArgWrapping
+        );
+
+      case "splice":
+        return new HostFunctionValue(
+          (start: number, deleteCount?: number, ...items: any[]) => {
+            if (deleteCount === undefined) {
+              return arr.splice(start);
+            }
+            return arr.splice(start, deleteCount, ...items);
+          },
+          "splice",
+          false,
+        );
+
+      case "fill":
+        return new HostFunctionValue(
+          (value: any, start?: number, end?: number) => {
+            arr.fill(value, start, end);
+            return arr;
+          },
+          "fill",
+          false,
+        );
+
+      case "lastIndexOf":
+        return new HostFunctionValue(
+          (searchElement: any, fromIndex?: number) =>
+            fromIndex !== undefined
+              ? arr.lastIndexOf(searchElement, fromIndex)
+              : arr.lastIndexOf(searchElement),
+          "lastIndexOf",
+          false,
+        );
+
       default:
         return null;
     }
@@ -6902,9 +7031,24 @@ export class Interpreter {
   }
 
   /**
-   * Helper to call a callback that can be either a FunctionValue (sandbox function)
-   * or a native function (from wrapArgsForHost). Used by array methods.
+   * Delegate to a native method on an object (array or string) if the property
+   * is safe. Returns undefined if the property is dangerous or doesn't exist.
+   * For function properties, wraps them as HostFunctionValue.
    */
+  private getNativeMethod(object: any, property: string): any {
+    if (isDangerousProperty(property)) {
+      return undefined;
+    }
+    const value = (object as any)[property];
+    if (value === undefined) {
+      return undefined;
+    }
+    if (typeof value === "function") {
+      return new HostFunctionValue((...args: any[]) => value.apply(object, args), property, false);
+    }
+    return value;
+  }
+
   private callCallback(callback: FunctionValue | Function, thisValue: any, args: any[]): any {
     if (callback instanceof FunctionValue) {
       return this.callSandboxFunction(callback, thisValue, args);
@@ -6926,7 +7070,12 @@ export class Interpreter {
     try {
       // Bind parameters
       for (let i = 0; i < func.params.length && i < args.length; i++) {
-        this.environment.declare(func.params[i]!, args[i], "let");
+        if (func.destructuredParams.has(i)) {
+          const pattern = func.destructuredParams.get(i)!;
+          this.destructurePattern(pattern, args[i], true, "let");
+        } else {
+          this.environment.declare(func.params[i]!, args[i], "let");
+        }
       }
 
       // Execute function body
@@ -6997,7 +7146,6 @@ export class Interpreter {
           obj[key] = value;
         }
       } else if (property.type === "Property") {
-        // Regular property
         // Get the property key - evaluate expression for computed properties
         const key = property.computed
           ? String(this.evaluateNode(property.key))
@@ -7005,9 +7153,24 @@ export class Interpreter {
 
         validatePropertyName(key); // Security: prevent prototype pollution
 
-        // Evaluate the property value
-        const value = this.evaluateNode(property.value);
-        obj[key] = value;
+        if (property.kind === "get" || property.kind === "set") {
+          // Getter/setter property
+          const funcValue = this.evaluateNode(property.value) as FunctionValue;
+          const descriptor = Object.getOwnPropertyDescriptor(obj, key) || {
+            configurable: true,
+            enumerable: true,
+          };
+          if (property.kind === "get") {
+            descriptor.get = () => this.executeSandboxFunction(funcValue, [], obj);
+          } else {
+            descriptor.set = (v: any) => this.executeSandboxFunction(funcValue, [v], obj);
+          }
+          Object.defineProperty(obj, key, descriptor);
+        } else {
+          // Regular property or method shorthand
+          const value = this.evaluateNode(property.value);
+          obj[key] = value;
+        }
       } else {
         const propertyType = (property as ESTree.Node).type;
         throw new InterpreterError(`Unsupported object property type: ${propertyType}`);
@@ -8961,7 +9124,12 @@ export class Interpreter {
         if (Object.prototype.hasOwnProperty.call(object, property)) {
           return (object as any)[property];
         }
-        throw new InterpreterError(`Array method '${property}' not supported`);
+        // Delegate to native array method if safe
+        const nativeMethod = this.getNativeMethod(object, property);
+        if (nativeMethod !== undefined) {
+          return nativeMethod;
+        }
+        throw new InterpreterError(`Array property '${property}' not supported`);
       }
 
       // Handle string methods (reuse sync version since string methods work the same)
@@ -8970,7 +9138,12 @@ export class Interpreter {
         if (stringMethod) {
           return stringMethod;
         }
-        throw new InterpreterError(`String method '${property}' not supported`);
+        // Delegate to native string method if safe
+        const nativeMethod = this.getNativeMethod(object, property);
+        if (nativeMethod !== undefined) {
+          return nativeMethod;
+        }
+        throw new InterpreterError(`String property '${property}' not supported`);
       }
 
       if (typeof object === "object" && object !== null && !Array.isArray(object)) {
@@ -9031,15 +9204,31 @@ export class Interpreter {
           obj[key] = value;
         }
       } else if (property.type === "Property") {
-        // Regular property - evaluate expression for computed properties
+        // Evaluate expression for computed properties
         const key = property.computed
           ? String(await this.evaluateNodeAsync(property.key))
           : this.extractPropertyKey(property.key);
 
         validatePropertyName(key);
 
-        const value = await this.evaluateNodeAsync(property.value);
-        obj[key] = value;
+        if (property.kind === "get" || property.kind === "set") {
+          // Getter/setter property
+          const funcValue = (await this.evaluateNodeAsync(property.value)) as FunctionValue;
+          const descriptor = Object.getOwnPropertyDescriptor(obj, key) || {
+            configurable: true,
+            enumerable: true,
+          };
+          if (property.kind === "get") {
+            descriptor.get = () => this.executeSandboxFunction(funcValue, [], obj);
+          } else {
+            descriptor.set = (v: any) => this.executeSandboxFunction(funcValue, [v], obj);
+          }
+          Object.defineProperty(obj, key, descriptor);
+        } else {
+          // Regular property or method shorthand
+          const value = await this.evaluateNodeAsync(property.value);
+          obj[key] = value;
+        }
       } else {
         const propertyType = (property as ESTree.Node).type;
         throw new InterpreterError(`Unsupported object property type: ${propertyType}`);
@@ -9798,33 +9987,9 @@ export class Interpreter {
    * Create a FunctionValue from a method's FunctionExpression.
    */
   private createMethodFunction(func: ESTree.FunctionExpression): FunctionValue {
-    const params: string[] = [];
-    let restParamIndex: number | null = null;
-    const defaultValues = new Map<number, ESTree.Expression>();
-
-    for (let i = 0; i < func.params.length; i++) {
-      const param = func.params[i]!;
-      if (param.type === "Identifier") {
-        params.push(param.name);
-      } else if (param.type === "RestElement") {
-        if (param.argument.type !== "Identifier") {
-          throw new InterpreterError("Rest parameter must be a simple identifier");
-        }
-        params.push((param.argument as ESTree.Identifier).name);
-        restParamIndex = i;
-      } else if (param.type === "AssignmentPattern") {
-        // Default parameter - extract name and store default value
-        if (param.left.type !== "Identifier") {
-          throw new InterpreterError("Destructuring in default parameters is not supported");
-        }
-        params.push((param.left as ESTree.Identifier).name);
-        if (param.right) {
-          defaultValues.set(i, param.right);
-        }
-      } else {
-        throw new InterpreterError(`Unsupported parameter type: ${param.type}`);
-      }
-    }
+    const { params, restParamIndex, defaultValues, destructuredParams } = this.parseFunctionParams(
+      func.params,
+    );
 
     // Make sure the body is a BlockStatement (methods should always have one)
     if (!func.body || func.body.type !== "BlockStatement") {
@@ -9839,6 +10004,9 @@ export class Interpreter {
       restParamIndex,
       func.generator ?? false,
       defaultValues,
+      null,
+      false,
+      destructuredParams,
     );
   }
 

@@ -2980,6 +2980,40 @@ class Parser {
 
   private parseObjectProperty(): ESTree.Property {
     const startValue = this.currentValue;
+
+    // Check for getter/setter: get name() { } or set name(v) { }
+    if (
+      (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+      (this.currentValue === "get" || this.currentValue === "set")
+    ) {
+      const kind = this.currentValue as "get" | "set";
+      // Peek: if next token is an identifier, string, number, or '[', it's an accessor
+      const nextType = this.tokenizer.peekType();
+      const nextValue = this.tokenizer.peekValue();
+      const isAccessor =
+        nextType === TOKEN.Identifier ||
+        nextType === TOKEN.String ||
+        nextType === TOKEN.Number ||
+        nextType === TOKEN.Keyword ||
+        (nextType === TOKEN.Punctuator && nextValue === "[");
+      if (isAccessor) {
+        this.next(); // consume 'get'/'set'
+        const keyResult = this.parsePropertyKey();
+        const accessorKey = keyResult.key;
+        const accessorComputed = keyResult.computed;
+        const value = this.parseMethodFunction(false, false);
+        return {
+          type: "Property",
+          key: accessorKey,
+          value,
+          kind,
+          method: false,
+          shorthand: false,
+          computed: accessorComputed,
+        };
+      }
+    }
+
     const keyResult = this.parsePropertyKey();
     const key = keyResult.key;
     const computed = keyResult.computed;
