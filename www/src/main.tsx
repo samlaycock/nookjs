@@ -37,11 +37,11 @@ function App() {
     () => `import { Interpreter, preset, ES2024 } from "nookjs";
 
 const interpreter = new Interpreter(
-preset(
-ES2024,
-{ globals: { console, alert: alert.bind(globalThis) } },
-{ security: { hideHostErrorMessages: false } },
-),
+  preset(
+    ES2024,
+    { globals: { console, alert: alert.bind(globalThis) } },
+    { security: { hideHostErrorMessages: false } },
+  ),
 );
 
 const code = \`${code.replace(/`/g, "\\`")}\`;
