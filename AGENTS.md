@@ -1,4 +1,4 @@
-This is Javascript library that implements a Javascript code interpreter.
+This is JavaScript library that implements a JavaScript code interpreter.
 This project uses Bun as the package manager.
 
 For how to contribute to the codebase, see [CONTRIBUTING.md](conventions/CONTRIBUTING.md)
