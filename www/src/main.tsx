@@ -46,7 +46,7 @@ const interpreter = new Interpreter(
 
 const code = \`${code.replace(/`/g, "\\`")}\`;
 
-const result = await interpreter.evaluate(code);`,
+const result = await interpreter.evaluateAsync(code);`,
     [code],
   );
   const [mode, setMode] = useState<"code" | "usage">("code");
@@ -64,7 +64,7 @@ const result = await interpreter.evaluate(code);`,
     );
 
     try {
-      const result = await interpreter.evaluate(code);
+      const result = await interpreter.evaluateAsync(code);
 
       if (result) {
         setOutput(String(result));
@@ -92,6 +92,7 @@ const result = await interpreter.evaluate(code);`,
   const [copyButtonText, setCopyButtonText] = useState("Copy");
   const onCopyToClipboard = useCallback(async () => {
     await navigator.clipboard.writeText(usageCode);
+
     setCopyButtonText("Copied!");
 
     setTimeout(() => {
