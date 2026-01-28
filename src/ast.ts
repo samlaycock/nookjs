@@ -3001,6 +3001,9 @@ class Parser {
         const keyResult = this.parsePropertyKey();
         const accessorKey = keyResult.key;
         const accessorComputed = keyResult.computed;
+        if (accessorKey.type === "PrivateIdentifier") {
+          throw new ParseError("Private identifiers are not valid in object literals");
+        }
         const value = this.parseMethodFunction(false, false);
         return {
           type: "Property",

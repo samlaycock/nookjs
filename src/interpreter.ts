@@ -3429,23 +3429,37 @@ export class Interpreter {
    * Returns the variable name, whether it's a declaration, and the variable kind.
    */
   private extractForOfVariable(left: ESTree.ForOfStatement["left"]): {
-    variableName: string;
+    variableName?: string;
+    pattern?: ESTree.ArrayPattern | ESTree.ObjectPattern;
     isDeclaration: boolean;
     variableKind?: "let" | "const";
   } {
     if (left.type === "VariableDeclaration") {
       const decl = left.declarations[0];
-      if (decl?.id.type !== "Identifier") {
+      if (decl?.id.type === "Identifier") {
+        return {
+          variableName: decl.id.name,
+          isDeclaration: true,
+          variableKind: left.kind as "let" | "const",
+        };
+      } else if (decl?.id.type === "ArrayPattern" || decl?.id.type === "ObjectPattern") {
+        return {
+          pattern: decl.id,
+          isDeclaration: true,
+          variableKind: left.kind as "let" | "const",
+        };
+      } else {
         throw new InterpreterError("Unsupported for...of variable pattern");
       }
-      return {
-        variableName: decl.id.name,
-        isDeclaration: true,
-        variableKind: left.kind as "let" | "const",
-      };
     } else if (left.type === "Identifier") {
       return {
         variableName: left.name,
+        isDeclaration: false,
+      };
+    } else if (left.type === "ArrayPattern" || left.type === "ObjectPattern") {
+      // Destructuring assignment: for ([a, b] of pairs)
+      return {
+        pattern: left,
         isDeclaration: false,
       };
     } else {
@@ -5214,7 +5228,9 @@ export class Interpreter {
       }
 
       // Extract variable information
-      const { variableName, isDeclaration, variableKind } = this.extractForOfVariable(node.left);
+      const { variableName, pattern, isDeclaration, variableKind } = this.extractForOfVariable(
+        node.left,
+      );
 
       let result: any = undefined;
       let iterations = 0;
@@ -5238,8 +5254,12 @@ export class Interpreter {
           const iterEnv = this.environment;
           this.environment = new Environment(iterEnv);
 
-          // Declare the variable with the current element
-          this.environment.declare(variableName, currentValue, variableKind!);
+          // Declare the variable(s) with the current element
+          if (pattern) {
+            this.destructurePattern(pattern, currentValue, true, variableKind);
+          } else {
+            this.environment.declare(variableName!, currentValue, variableKind!);
+          }
 
           // Execute loop body
           result = this.evaluateNode(node.body);
@@ -5249,7 +5269,11 @@ export class Interpreter {
         } else {
           // For existing variables (for (x of arr)), just reassign in the current scope
           // No new scope needed since we're updating an existing variable
-          this.environment.set(variableName, currentValue);
+          if (pattern) {
+            this.destructurePattern(pattern, currentValue, false);
+          } else {
+            this.environment.set(variableName!, currentValue);
+          }
 
           // Execute loop body
           result = this.evaluateNode(node.body);
@@ -8369,7 +8393,9 @@ export class Interpreter {
       }
 
       // Extract variable information
-      const { variableName, isDeclaration, variableKind } = this.extractForOfVariable(node.left);
+      const { variableName, pattern, isDeclaration, variableKind } = this.extractForOfVariable(
+        node.left,
+      );
 
       let result: any = undefined;
       let iterations = 0;
@@ -8391,8 +8417,12 @@ export class Interpreter {
           const iterEnv = this.environment;
           this.environment = new Environment(iterEnv);
 
-          // Declare the variable with the current element
-          this.environment.declare(variableName, currentValue, variableKind!);
+          // Declare the variable(s) with the current element
+          if (pattern) {
+            await this.destructurePatternAsync(pattern, currentValue, true, variableKind);
+          } else {
+            this.environment.declare(variableName!, currentValue, variableKind!);
+          }
 
           // Execute loop body
           result = await this.evaluateNodeAsync(node.body);
@@ -8401,7 +8431,11 @@ export class Interpreter {
           this.environment = iterEnv;
         } else {
           // For existing variables, just assign
-          this.environment.set(variableName, currentValue);
+          if (pattern) {
+            await this.destructurePatternAsync(pattern, currentValue, false);
+          } else {
+            this.environment.set(variableName!, currentValue);
+          }
 
           // Execute loop body
           result = await this.evaluateNodeAsync(node.body);
