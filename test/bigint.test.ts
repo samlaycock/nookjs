@@ -14,9 +14,7 @@ describe("BigInt literals", () => {
   it("should parse large BigInt values beyond Number.MAX_SAFE_INTEGER", () => {
     const interpreter = new Interpreter();
     expect(interpreter.evaluate("9007199254740993n")).toBe(9007199254740993n);
-    expect(interpreter.evaluate("99999999999999999999n")).toBe(
-      99999999999999999999n,
-    );
+    expect(interpreter.evaluate("99999999999999999999n")).toBe(99999999999999999999n);
   });
 
   it("should parse hexadecimal BigInt", () => {
@@ -167,9 +165,7 @@ describe("BigInt feature control", () => {
 
   it("should be disabled in ES2019 preset", () => {
     const interpreter = new Interpreter(ES2019);
-    expect(() => interpreter.evaluate("10n")).toThrow(
-      "BigIntLiteral is not enabled",
-    );
+    expect(() => interpreter.evaluate("10n")).toThrow("BigIntLiteral is not enabled");
   });
 
   it("can be explicitly disabled via blacklist", () => {
@@ -179,9 +175,7 @@ describe("BigInt feature control", () => {
         features: ["BigIntLiteral"],
       },
     });
-    expect(() => interpreter.evaluate("10n")).toThrow(
-      "BigIntLiteral is not enabled",
-    );
+    expect(() => interpreter.evaluate("10n")).toThrow("BigIntLiteral is not enabled");
   });
 
   it("can be explicitly enabled via whitelist", () => {
