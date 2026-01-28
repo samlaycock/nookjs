@@ -3109,6 +3109,9 @@ export class Interpreter {
         return !argument;
       case "~":
         return ~argument;
+      case "void":
+        // void evaluates its operand and returns undefined
+        return undefined;
       default:
         throw new InterpreterError(`Unsupported unary operator: ${operator}`);
     }

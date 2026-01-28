@@ -492,6 +492,7 @@ const isKeyword = (value: string): boolean => {
     case "false":
     case "null":
     case "typeof":
+    case "void":
       return true;
     default:
       return false;
@@ -2633,7 +2634,7 @@ class Parser {
         const argument = shouldParseArgument ? this.parseAssignmentExpression() : null;
         return { type: "YieldExpression", argument, delegate };
       }
-      if (value === "typeof" || value === "delete") {
+      if (value === "typeof" || value === "delete" || value === "void") {
         this.next();
         const argument = this.parseUnaryExpression();
         return {
