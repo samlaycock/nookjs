@@ -17,6 +17,9 @@
       "require": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "provenance": true
+  },
   "scripts": {
     "lint": "oxlint . --type-aware",
     "fmt": "oxfmt .",
