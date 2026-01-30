@@ -101,7 +101,7 @@ export class InterpreterError extends Error {
 }
 
 export class ParseError extends InterpreterError {
-  type: "parse" = "parse";
+  type: "parse" = "parse" as const;
   expectedToken?: string;
 
   constructor(
@@ -125,7 +125,7 @@ export class ParseError extends InterpreterError {
 }
 
 export class RuntimeError extends InterpreterError {
-  type: "runtime" = "runtime";
+  type: "runtime" = "runtime" as const;
   thrownValue: unknown;
 
   constructor(
@@ -148,7 +148,7 @@ export class RuntimeError extends InterpreterError {
 }
 
 export class SecurityError extends InterpreterError {
-  type: "security" = "security";
+  type: "security" = "security" as const;
   operation: string;
   blockedProperty?: string;
 
@@ -175,7 +175,7 @@ export class SecurityError extends InterpreterError {
 }
 
 export class FeatureError extends InterpreterError {
-  type: "feature" = "feature";
+  type: "feature" = "feature" as const;
   feature: string;
   suggestion?: string;
 
