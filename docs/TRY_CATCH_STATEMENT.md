@@ -13,4 +13,4 @@ Error handling with `try { } catch { } finally { }`.
 ## Gotchas
 
 - Thrown values are wrapped as `InterpreterError` messages.
-- Catch destructuring is not supported.
+- Catch destructuring is supported (e.g., `catch ({a, b}) {}`).
