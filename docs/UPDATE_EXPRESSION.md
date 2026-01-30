@@ -7,8 +7,8 @@ Increment and decrement operators `++` and `--`.
 ## Interpreter implementation
 
 - Implemented in `evaluateUpdateExpression`.
-- Only identifiers are supported.
+- Identifiers and member expressions are supported.
 
 ## Gotchas
 
-- `obj.prop++` is not supported.
+- `obj.prop++` and `obj["prop"]++` are supported.

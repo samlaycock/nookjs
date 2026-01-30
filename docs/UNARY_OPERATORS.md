@@ -11,4 +11,4 @@ Unary operators like `+`, `-`, `!`, and `typeof`.
 
 ## Gotchas
 
-- `delete`, `void`, and bitwise `~` are not supported.
+- `delete`, `void`, and bitwise `~` are supported.
