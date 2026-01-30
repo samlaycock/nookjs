@@ -18,12 +18,6 @@ import type { ESTree } from "./ast";
 import { parseModule } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
 import {
-  ReadOnlyProxy,
-  PROXY_TARGET,
-  setSecurityOptions,
-  sanitizeErrorStack,
-} from "./readonly-proxy";
-import {
   InterpreterError,
   RuntimeError,
   SecurityError,
@@ -33,6 +27,12 @@ import {
   type Location,
   formatError,
 } from "./errors";
+import {
+  ReadOnlyProxy,
+  PROXY_TARGET,
+  setSecurityOptions,
+  sanitizeErrorStack,
+} from "./readonly-proxy";
 
 type ASTNode = ESTree.Node;
 
@@ -49,7 +49,10 @@ function getNodeLocation(node: ESTree.Node): Location | undefined {
   return undefined;
 }
 
-function getLocationFromNode(node: ESTree.Node): { line: number; column: number } | undefined {
+function getLocationFromNode(node?: ESTree.Node): { line: number; column: number } | undefined {
+  if (!node) {
+    return undefined;
+  }
   const loc = getNodeLocation(node);
   if (loc) {
     return { line: loc.start.line, column: loc.start.column };
@@ -2952,24 +2955,24 @@ export class Interpreter {
   }
 
   /**
-    * Enhance an error with line number information if available.
-    */
-   private enhanceError(error: unknown): unknown {
-     if (error instanceof InterpreterError) {
-       if (error.line === undefined || error.column === undefined) {
-         if (this.currentLine > 0) {
-           error.line = this.currentLine;
-         }
-       }
-       if (!error.sourceCode && this.currentSourceCode) {
-         error.sourceCode = this.currentSourceCode;
-       }
-       if (error.callStack === undefined || error.callStack.length === 0) {
-         error.callStack = [...this.callStack];
-       }
-     }
-     return error;
-   }
+   * Enhance an error with line number information if available.
+   */
+  private enhanceError(error: unknown): unknown {
+    if (error instanceof InterpreterError) {
+      if (error.line === undefined || error.column === undefined) {
+        if (this.currentLine > 0) {
+          error.line = this.currentLine;
+        }
+      }
+      if (!error.sourceCode && this.currentSourceCode) {
+        error.sourceCode = this.currentSourceCode;
+      }
+      if (error.callStack === undefined || error.callStack.length === 0) {
+        error.callStack = [...this.callStack];
+      }
+    }
+    return error;
+  }
 
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
   public evaluateNode(node: ASTNode): any {
@@ -11538,3 +11541,5 @@ export class Interpreter {
     return undefined;
   }
 }
+
+export { InterpreterError };
