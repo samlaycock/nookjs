@@ -19,13 +19,10 @@ import { parseModule } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
 import {
   InterpreterError,
-  RuntimeError,
   SecurityError,
-  FeatureError,
   ErrorCode,
   type StackFrame,
   type Location,
-  formatError,
 } from "./errors";
 import {
   ReadOnlyProxy,
