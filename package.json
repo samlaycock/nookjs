@@ -29,7 +29,8 @@
     "benchmark:parse": "bun run benchmarks/parser-compare.ts",
     "benchmark:parse:micro": "bun run benchmarks/parser-micro.ts",
     "benchmark:parse:profile": "bun run benchmarks/parser-profile.ts",
-    "benchmark:all": "bun run benchmarks/index.ts"
+    "benchmark:all": "bun run benchmarks/index.ts",
+    "ci:publish": "bun run build && bunx @changesets/cli publish"
   },
   "devDependencies": {
     "@types/bun": "latest",
