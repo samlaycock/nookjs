@@ -3,6 +3,7 @@
 ## Security
 
 - [SECURITY](SECURITY.md) - Security sandboxing model, options, and recommendations
+- [RESOURCE_ATTRIBUTION](RESOURCE_ATTRIBUTION.md) - Resource tracking and attribution for multi-tenant environments
 
 ## Presets
 
