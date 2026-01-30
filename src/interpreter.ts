@@ -23,20 +23,41 @@ import {
   setSecurityOptions,
   sanitizeErrorStack,
 } from "./readonly-proxy";
+import {
+  InterpreterError,
+  RuntimeError,
+  SecurityError,
+  FeatureError,
+  ErrorCode,
+  type StackFrame,
+  type Location,
+  formatError,
+} from "./errors";
 
 type ASTNode = ESTree.Node;
 
-/**
- * Custom error class for interpreter-specific errors
- */
-export class InterpreterError extends Error {
-  line?: number;
-  thrownValue?: any;
-  constructor(message: string, line?: number) {
-    super(line ? `Line ${line}: ${message}` : message);
-    this.name = "InterpreterError";
-    this.line = line;
+function getNodeLocation(node: ESTree.Node): Location | undefined {
+  if (node.loc) {
+    return node.loc;
   }
+  if ("line" in node && typeof (node as any).line === "number") {
+    return {
+      start: { line: (node as any).line, column: 1 },
+      end: { line: (node as any).line, column: 1 },
+    };
+  }
+  return undefined;
+}
+
+function getLocationFromNode(node: ESTree.Node): { line: number; column: number } | undefined {
+  const loc = getNodeLocation(node);
+  if (loc) {
+    return { line: loc.start.line, column: loc.start.column };
+  }
+  if ("line" in node && typeof (node as any).line === "number") {
+    return { line: (node as any).line, column: 1 };
+  }
+  return undefined;
 }
 
 /**
@@ -50,9 +71,14 @@ class RawValue {
 
 class GlobalThisSentinel {}
 
-function validatePropertyName(name: string): void {
+function validatePropertyName(name: string, node?: ESTree.Node): void {
   if (isDangerousProperty(name)) {
-    throw new InterpreterError(`Property name '${name}' is not allowed for security reasons`);
+    const loc = getLocationFromNode(node);
+    throw new SecurityError("Property access", name, {
+      line: loc?.line,
+      column: loc?.column,
+      code: ErrorCode.PROPERTY_NAME_FORBIDDEN,
+    });
   }
 }
 
@@ -2312,6 +2338,13 @@ export class Interpreter {
 
   // Current line number for error reporting
   private currentLine = 0;
+  private currentColumn = 1;
+
+  // Call stack for error reporting and stack traces
+  private callStack: StackFrame[] = [];
+
+  // Current source code for error formatting
+  private currentSourceCode: string = "";
 
   // Generator yield handling - for passing values into yield expressions
   // When set, the next yield expression will return this value instead of YieldValue
@@ -2578,6 +2611,20 @@ export class Interpreter {
   }
 
   /**
+   * Push a call frame onto the call stack for error reporting.
+   */
+  private pushCallFrame(frame: StackFrame): void {
+    this.callStack.push(frame);
+  }
+
+  /**
+   * Pop the last call frame from the call stack.
+   */
+  private popCallFrame(): void {
+    this.callStack.pop();
+  }
+
+  /**
    * Check loop iteration count against limit.
    * @param iterations Current iteration count for the loop
    */
@@ -2689,6 +2736,8 @@ export class Interpreter {
   }
 
   evaluate(code: string, options?: EvaluateOptions): any {
+    this.currentSourceCode = code;
+    this.callStack = [];
     this.beginEvaluation(options);
     try {
       const ast = this.parseAndValidate(code, options);
@@ -2697,12 +2746,15 @@ export class Interpreter {
       throw this.enhanceError(error);
     } finally {
       this.endEvaluation(options);
+      this.currentSourceCode = "";
+      this.callStack = [];
     }
   }
 
   async evaluateAsync(code: string, options?: EvaluateOptions): Promise<any> {
+    this.currentSourceCode = code;
+    this.callStack = [];
     this.beginEvaluation(options);
-    // Set abort signal for async evaluation only.
     this.abortSignal = options?.signal;
     if (this.abortSignal?.aborted) {
       this.endEvaluation(options);
@@ -2711,12 +2763,13 @@ export class Interpreter {
     try {
       const ast = this.parseAndValidate(code, options);
       const result = await this.evaluateNodeAsync(ast);
-      // Unwrap RawValue (used to prevent Promise auto-awaiting from NewExpression)
       return result instanceof RawValue ? result.value : result;
     } catch (error) {
       throw this.enhanceError(error);
     } finally {
       this.endEvaluation(options);
+      this.currentSourceCode = "";
+      this.callStack = [];
     }
   }
 
@@ -2899,26 +2952,37 @@ export class Interpreter {
   }
 
   /**
-   * Enhance an error with line number information if available.
-   */
-  private enhanceError(error: unknown): unknown {
-    if (error instanceof InterpreterError && error.line === undefined && this.currentLine > 0) {
-      return new InterpreterError(error.message, this.currentLine);
-    }
-    return error;
-  }
+    * Enhance an error with line number information if available.
+    */
+   private enhanceError(error: unknown): unknown {
+     if (error instanceof InterpreterError) {
+       if (error.line === undefined || error.column === undefined) {
+         if (this.currentLine > 0) {
+           error.line = this.currentLine;
+         }
+       }
+       if (!error.sourceCode && this.currentSourceCode) {
+         error.sourceCode = this.currentSourceCode;
+       }
+       if (error.callStack === undefined || error.callStack.length === 0) {
+         error.callStack = [...this.callStack];
+       }
+     }
+     return error;
+   }
 
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
   public evaluateNode(node: ASTNode): any {
-    // Track statistics
     this.statsNodeCount++;
 
-    // Track line number for error reporting
-    if (node.line) {
-      this.currentLine = node.line;
+    const nodeLoc = getNodeLocation(node);
+    if (nodeLoc) {
+      this.currentLine = nodeLoc.start.line;
+      this.currentColumn = nodeLoc.start.column;
+    } else if ("line" in node && typeof (node as any).line === "number") {
+      this.currentLine = (node as any).line;
     }
 
-    // Check execution limits periodically
     this.checkExecutionLimits();
 
     switch (node.type) {
