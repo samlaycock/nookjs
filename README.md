@@ -348,4 +348,4 @@ See [CONTRIBUTING.md](conventions/CONTRIBUTING.md) for development setup and gui
 
 ## License
 
-MIT
+MIT License - see [LICENSE.md](LICENSE.md) for details.
