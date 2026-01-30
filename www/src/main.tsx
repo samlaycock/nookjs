@@ -3,8 +3,15 @@ import "./index.css";
 import CodeEditor from "@uiw/react-textarea-code-editor";
 import { StrictMode, useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { DiGithubBadge } from "react-icons/di";
 
-import { Interpreter, InterpreterError, ES2024, preset, ParseError } from "../../src/index";
+import {
+  Interpreter,
+  InterpreterError,
+  ES2024,
+  preset,
+  ParseError,
+} from "../../src/index";
 
 const CODE_LOCAL_STORAGE_KEY = "nookjs-code";
 const DEFAULT_CODE = `// Welcome to NookJS!
@@ -118,15 +125,31 @@ const result = await interpreter.evaluateAsync(code);`,
 
   return (
     <div className="flex flex-col h-screen w-screen font-mono bg-neutral-950">
-      <header className="flex flex-col p-6">
-        <h1 className="text-amber-50 text-xl font-semibold">
-          Nook<span className="text-amber-500">JS</span>
-        </h1>
-        <p className="text-neutral-50">JavaScript/TypeScript(ish) Interpreter</p>
+      <header className="flex flex-row justify-between gap-4 p-4 sm:gap-6 sm:p-6">
+        <div className="flex flex-col">
+          <h1 className="text-amber-50 text-xl font-semibold">
+            Nook<span className="text-amber-500">JS</span>
+          </h1>
+          <p className="text-neutral-50">
+            JavaScript/TypeScript(ish) Interpreter
+          </p>
+        </div>
+        <div>
+          <a
+            href="https://github.com/samlaycock/nookjs"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <DiGithubBadge
+              size={32}
+              className="fill-amber-500 hover:fill-amber-400"
+            />
+          </a>
+        </div>
       </header>
       <main className="flex-1 flex flex-col w-full">
         <section className="flex-1 flex flex-col w-full bg-neutral-900 border-t border-neutral-700">
-          <div className="relative flex-1 p-6 z-10 focus-within:ring-2 focus-within:ring-amber-500">
+          <div className="relative flex-1 p-4 z-10 focus-within:ring-2 focus-within:ring-amber-500 sm:p-6">
             {mode === "code" && (
               <form
                 className="h-full w-full"
@@ -162,7 +185,7 @@ const result = await interpreter.evaluateAsync(code);`,
                 />
               </form>
             )}
-            <div className="flex flex-row absolute top-6 right-6">
+            <div className="flex flex-row absolute top-4 right-4 sm:top-6 sm:right-6">
               <button
                 className={`px-3 py-1 text-neutral-50 text-sm ${mode === "code" ? "bg-neutral-500" : "bg-neutral-600 cursor-pointer hover:bg-neutral-500"}`}
                 onClick={() => onSetMode("code")}
@@ -177,7 +200,7 @@ const result = await interpreter.evaluateAsync(code);`,
               </button>
             </div>
             {mode === "usage" && (
-              <div className="absolute bottom-6 right-6">
+              <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6">
                 <button
                   className="px-3 py-1 bg-neutral-600 text-neutral-50 text-sm cursor-pointer hover:bg-neutral-500"
                   onClick={onCopyToClipboard}
@@ -187,18 +210,22 @@ const result = await interpreter.evaluateAsync(code);`,
               </div>
             )}
           </div>
-          <div className="flex flex-row gap-6 justify-between items-center p-6 border-t border-neutral-700">
+          <div className="flex flex-row gap-4 justify-between items-center p-4 border-t border-neutral-700 sm:gap-6 sm:p-6">
             <div className="flex-1 overflow-hidden">
               {output !== null && (
                 <div className="flex flex-row gap-4 overflow-hidden">
                   <span className="text-neutral-600">Output:</span>
-                  <pre className="text-neutral-50 whitespace-pre-wrap">{output}</pre>
+                  <pre className="text-neutral-50 whitespace-pre-wrap">
+                    {output}
+                  </pre>
                 </div>
               )}
               {error !== null && (
                 <div className="flex flex-row gap-4 overflow-hidden">
                   <span className="text-red-600">Error:</span>
-                  <pre className="text-red-500 whitespace-pre-wrap">{error}</pre>
+                  <pre className="text-red-500 whitespace-pre-wrap">
+                    {error}
+                  </pre>
                 </div>
               )}
             </div>
@@ -219,9 +246,18 @@ const result = await interpreter.evaluateAsync(code);`,
           </div>
         </section>
       </main>
-      <footer className="flex flex-row justify-center px-6 py-3 border-t border-neutral-700">
+      <footer className="flex flex-row justify-center py-2 px-4 border-t border-neutral-700">
         <span className="text-neutral-600 text-sm">
-          🧱 &copy; Samuel Laycock {new Date().getFullYear()}
+          🧱 &copy;{" "}
+          <a
+            href="https://github.com/samlaycock"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:underline hover:underline-offset-4"
+          >
+            Samuel Laycock
+          </a>{" "}
+          {new Date().getFullYear()}
         </span>
       </footer>
     </div>
