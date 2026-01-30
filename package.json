@@ -3,6 +3,7 @@
   "version": "0.0.10",
   "description": "A fast(ish), standards-compliant JavaScript/TypeScript(ish) parser and interpreter written in TypeScript.",
   "homepage": "https://nookjs.dev",
+  "license": "MIT",
   "files": [
     "dist"
   ],
@@ -37,6 +38,5 @@
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "license": "MIT"
+  }
 }

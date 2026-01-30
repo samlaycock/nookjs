@@ -63,23 +63,24 @@ The interpreter establishes a security boundary between your trusted host code a
 
 ```typescript
 // These all throw security errors
-obj.__proto__;           // Prototype pollution
-obj.constructor;         // Constructor access
-obj.prototype;           // Prototype access
-obj.__defineGetter__;    // Legacy methods
+obj.__proto__; // Prototype pollution
+obj.constructor; // Constructor access
+obj.prototype; // Prototype access
+obj.__defineGetter__; // Legacy methods
 obj.__defineSetter__;
 obj.__lookupGetter__;
 obj.__lookupSetter__;
 
-eval("dangerous()");     // No eval access
-Function("return x");    // No Function constructor
-globalThis.someVar;      // No host globals
-require("fs");           // No Node.js modules
+eval("dangerous()"); // No eval access
+Function("return x"); // No Function constructor
+globalThis.someVar; // No host globals
+require("fs"); // No Node.js modules
 ```
 
 ### What Sandboxed Code Can Access
 
 Sandboxed code has access only to:
+
 - Variables it declares itself
 - Injected globals you explicitly provide
 - Math operations, string/array methods you enable
@@ -102,13 +103,8 @@ interpreter.evaluate("Math.PI"); // Error: Math is not defined
 1. **Always use timeouts** to prevent infinite loops:
 
 ```typescript
-const timeout = new Promise((_, reject) => 
-  setTimeout(() => reject(new Error("Timeout")), 5000)
-);
-const result = await Promise.race([
-  interpreter.evaluateAsync(untrustedCode),
-  timeout,
-]);
+const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
+const result = await Promise.race([interpreter.evaluateAsync(untrustedCode), timeout]);
 ```
 
 2. **Clone sensitive data** before passing as globals:
@@ -134,20 +130,20 @@ Control exactly which JavaScript features are available using the feature contro
 ```typescript
 import { Interpreter, ES5, ES2015, ES2017, ES2020 } from "nookjs";
 
-const es5 = new Interpreter(ES5);           // var, functions, loops
-const es2015 = new Interpreter(ES2015);     // + let/const, arrow functions
-const es2017 = new Interpreter(ES2017);     // + async/await
-const es2020 = new Interpreter(ES2020);     // + nullish coalescing
+const es5 = new Interpreter(ES5); // var, functions, loops
+const es2015 = new Interpreter(ES2015); // + let/const, arrow functions
+const es2017 = new Interpreter(ES2017); // + async/await
+const es2020 = new Interpreter(ES2020); // + nullish coalescing
 ```
 
-| Preset | Description |
-|--------|-------------|
-| ES5 | Baseline JavaScript: var, functions, for/while loops, objects/arrays |
-| ES2015 | Modern JavaScript: let/const, arrow functions, template literals, destructuring |
-| ES2016 | + Exponentiation (`**`), Array.includes |
-| ES2017 | + async/await |
-| ES2018-2024 | Progressive enhancements |
-| ESNext | All features enabled |
+| Preset      | Description                                                                     |
+| ----------- | ------------------------------------------------------------------------------- |
+| ES5         | Baseline JavaScript: var, functions, for/while loops, objects/arrays            |
+| ES2015      | Modern JavaScript: let/const, arrow functions, template literals, destructuring |
+| ES2016      | + Exponentiation (`**`), Array.includes                                         |
+| ES2017      | + async/await                                                                   |
+| ES2018-2024 | Progressive enhancements                                                        |
+| ESNext      | All features enabled                                                            |
 
 ### Custom Feature Control
 
@@ -198,8 +194,8 @@ const interpreter = new Interpreter({
   },
 });
 
-interpreter.evaluate("PI * 2");        // 6.28318
-interpreter.evaluate("config.debug");  // true
+interpreter.evaluate("PI * 2"); // 6.28318
+interpreter.evaluate("config.debug"); // true
 ```
 
 ### Per-Call Globals (Temporary)
@@ -227,8 +223,8 @@ const interpreter = new Interpreter({
   },
 });
 
-interpreter.evaluate("double(5)");              // 10
-interpreter.evaluate('log("Hello sandbox!")');  // Logs to console
+interpreter.evaluate("double(5)"); // 10
+interpreter.evaluate('log("Hello sandbox!")'); // Logs to console
 ```
 
 ### Merged Globals
@@ -240,7 +236,7 @@ const interpreter = new Interpreter({
   globals: { multiplier: 10 },
 });
 
-interpreter.evaluate("multiplier * 5");  // 50
+interpreter.evaluate("multiplier * 5"); // 50
 interpreter.evaluate("multiplier * 5", {
   globals: { multiplier: 2 },
 }); // 10
@@ -255,8 +251,8 @@ const interpreter = new Interpreter({
   globals: { myFunc: () => "secret" },
 });
 
-myFunc.name;           // Error: Cannot access properties on host functions
-myFunc();              // "secret" (calling works)
+myFunc.name; // Error: Cannot access properties on host functions
+myFunc(); // "secret" (calling works)
 ```
 
 ## Async Support
@@ -295,6 +291,7 @@ interpreter.evaluate(`
 ```
 
 Supported (stripped):
+
 - Variable/parameter/property type annotations
 - Function return types
 - `as` assertions

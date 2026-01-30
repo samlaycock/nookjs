@@ -27,21 +27,25 @@ Thank you for your interest in contributing to NookJS! This document provides gu
 After making a change to the codebase:
 
 1. **Run tests**: Ensure all tests pass
+
    ```bash
    bun test
    ```
 
 2. **Format code**: Format code with Bun's formatter
+
    ```bash
    bun fmt
    ```
 
 3. **Lint**: Check for linting issues
+
    ```bash
    bun lint
    ```
 
 4. **Typecheck**: Verify TypeScript correctness
+
    ```bash
    bun typecheck
    ```
@@ -49,6 +53,7 @@ After making a change to the codebase:
 5. **Update documentation**: Add or update documentation as needed
 
 6. **Add changeset**: Document your change
+
    ```bash
    bunx @changesets/cli add
    ```
