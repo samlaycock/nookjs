@@ -73,8 +73,12 @@ export function formatTable(
   }
 }
 
-export function formatSummary(results: { name: string; slowdown?: number; timeMs?: number }[]): string {
-  const valid = results.filter((r): r is { name: string; slowdown: number } => r.slowdown !== undefined);
+export function formatSummary(
+  results: { name: string; slowdown?: number; timeMs?: number }[],
+): string {
+  const valid = results.filter(
+    (r): r is { name: string; slowdown: number } => r.slowdown !== undefined,
+  );
   if (valid.length === 0) return "";
 
   const avg = valid.reduce((sum, r) => sum + r.slowdown, 0) / valid.length;
