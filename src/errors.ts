@@ -41,12 +41,16 @@ export enum ErrorCode {
   FEATURE_NOT_ENABLED = "E2001",
 }
 
-export interface Location {
+// Base location type for error reporting
+export interface ErrorLocation {
   line: number;
   column: number;
   endLine?: number;
   endColumn?: number;
 }
+
+// Alias for backward compatibility with code expecting Location
+export interface Location extends ErrorLocation {}
 
 export interface StackFrame {
   functionName?: string;
@@ -69,6 +73,7 @@ export class InterpreterError extends Error {
   code?: ErrorCode;
   sourceCode?: string;
   callStack?: StackFrame[];
+  thrownValue?: unknown;
 
   constructor(
     message: string,
@@ -95,13 +100,13 @@ export class InterpreterError extends Error {
     }
   }
 
-  toString(): string {
+  override toString(): string {
     return formatError(this);
   }
 }
 
 export class ParseError extends InterpreterError {
-  type: "parse" = "parse" as const;
+  override type: "parse" = "parse" as const;
   expectedToken?: string;
 
   constructor(
@@ -125,8 +130,8 @@ export class ParseError extends InterpreterError {
 }
 
 export class RuntimeError extends InterpreterError {
-  type: "runtime" = "runtime" as const;
-  thrownValue: unknown;
+  override type: "runtime" = "runtime" as const;
+  override thrownValue: unknown;
 
   constructor(
     message: string,
@@ -148,7 +153,7 @@ export class RuntimeError extends InterpreterError {
 }
 
 export class SecurityError extends InterpreterError {
-  type: "security" = "security" as const;
+  override type: "security" = "security" as const;
   operation: string;
   blockedProperty?: string;
 
@@ -175,7 +180,7 @@ export class SecurityError extends InterpreterError {
 }
 
 export class FeatureError extends InterpreterError {
-  type: "feature" = "feature" as const;
+  override type: "feature" = "feature" as const;
   feature: string;
   suggestion?: string;
 
@@ -208,7 +213,8 @@ export function getSourceLine(sourceCode: string, line: number): string | null {
   if (line < 1 || line > lines.length) {
     return null;
   }
-  return lines[line - 1];
+  const result = lines[line - 1];
+  return result ?? null;
 }
 
 export function formatError(error: InterpreterError): string {
