@@ -1,4 +1,4 @@
-import { parseModuleWithProfile } from "./src/ast";
+import { parseModuleWithProfile } from "../src/ast";
 
 const samples: { name: string; code: string }[] = [
   { name: "Tiny Expression", code: "2 + 3" },

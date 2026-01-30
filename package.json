@@ -1,7 +1,7 @@
 {
   "name": "nookjs",
   "version": "0.0.9",
-  "description": "A fast, standards-compliant JavaScript/TypeScript parser and interpreter written in TypeScript.",
+  "description": "A fast(ish), standards-compliant JavaScript/TypeScript(ish) parser and interpreter written in TypeScript.",
   "homepage": "https://nookjs.dev",
   "files": [
     "dist"
@@ -21,10 +21,11 @@
     "fmt": "oxfmt .",
     "typecheck": "tsc --noEmit",
     "build": "tsdown",
-    "benchmark": "bun run benchmark.ts",
-    "benchmark:parse": "bun run benchmark-parse.ts",
-    "benchmark:parse:micro": "bun run benchmark-parse-micro.ts",
-    "benchmark:parse:profile": "bun run benchmark-parse-profile.ts"
+    "benchmark": "bun run benchmarks/interpreter.ts",
+    "benchmark:parse": "bun run benchmarks/parser-compare.ts",
+    "benchmark:parse:micro": "bun run benchmarks/parser-micro.ts",
+    "benchmark:parse:profile": "bun run benchmarks/parser-profile.ts",
+    "benchmark:all": "bun run benchmarks/index.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

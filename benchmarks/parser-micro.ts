@@ -1,4 +1,4 @@
-import { parseModule } from "./src/ast";
+import { parseModule } from "../src/ast";
 
 interface Sample {
   name: string;
