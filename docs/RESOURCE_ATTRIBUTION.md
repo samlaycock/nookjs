@@ -361,6 +361,8 @@ Memory tracking is a best-effort estimate based on:
 
 This is not precise memory accounting but serves to detect runaway allocations.
 
+**Performance considerations**: Memory tracking adds minimal overhead per allocation (a single addition operation). For most use cases, this stays under 1% additional evaluation time. However, code that creates millions of allocations may see higher overhead. If precise tracking isn't needed, consider using only iteration/call limits for better performance.
+
 ### CPU Time Notes
 
 CPU time is estimated using wall-clock time. This is a best-effort approximation since JavaScript doesn't expose precise CPU timing.
