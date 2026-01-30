@@ -3,7 +3,7 @@
 A fast, secure JavaScript/TypeScript interpreter written in TypeScript. Execute untrusted code safely with a zero-dependency custom AST parser, sandbox isolation, and fine-grained feature control.
 
 [![npm version](https://img.shields.io/npm/v/nookjs.svg)](https://npmjs.com/package/nookjs)
-[![License](https://img.shields.io/npm/l/nookjs.svg)](LICENSE)
+[![License](https://img.shields.io/npm/l/nookjs.svg)](LICENSE.md)
 
 ## What is NookJS?
 
