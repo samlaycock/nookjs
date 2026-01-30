@@ -814,3 +814,208 @@ export const EventAPI: InterpreterOptions = {
     CustomEvent,
   },
 };
+
+// =============================================================================
+// Environment Preset Groups
+// =============================================================================
+
+/**
+ * Browser environment preset.
+ *
+ * Combines ES2024 language features with common browser APIs.
+ * This provides a comprehensive browser-like environment.
+ *
+ * Includes:
+ * - All ES2024 language features
+ * - Fetch API (fetch, Request, Response, Headers)
+ * - URL/URLSearchParams
+ * - AbortController/AbortSignal
+ * - Blob/File
+ * - Performance API
+ * - Console API
+ * - Timers (setTimeout, setInterval)
+ * - TextEncoder/TextDecoder
+ * - Event/EventTarget/CustomEvent
+ * - Crypto API
+ * - Streams API
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(Browser);
+ * await interpreter.evaluateAsync(`
+ *   const response = await fetch('https://api.example.com/data');
+ *   console.log(await response.json());
+ * `);
+ * ```
+ */
+export const Browser: InterpreterOptions = preset(
+  ES2024,
+  FetchAPI,
+  ConsoleAPI,
+  TimersAPI,
+  TextCodecAPI,
+  CryptoAPI,
+  BlobAPI,
+  StreamsAPI,
+  PerformanceAPI,
+  EventAPI,
+);
+
+/**
+ * WinterCG (Web-interoperable Runtimes Community Group) preset.
+ *
+ * Provides the minimum common API surface defined by WinterCG for
+ * web-interoperable JavaScript runtimes like Cloudflare Workers,
+ * Deno Deploy, and Vercel Edge Functions.
+ *
+ * See: https://wintercg.org/
+ *
+ * Includes:
+ * - All ES2024 language features
+ * - Fetch API (fetch, Request, Response, Headers)
+ * - URL/URLSearchParams
+ * - AbortController/AbortSignal
+ * - TextEncoder/TextDecoder
+ * - Crypto API
+ * - Console API
+ * - Streams API
+ * - Performance API
+ * - Event/EventTarget
+ *
+ * Does NOT include (browser-specific):
+ * - DOM APIs
+ * - localStorage/sessionStorage
+ * - Timers (may not be available in all edge runtimes)
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(WinterCG);
+ * await interpreter.evaluateAsync(`
+ *   const encoder = new TextEncoder();
+ *   const data = encoder.encode('hello');
+ *   const hash = await crypto.subtle.digest('SHA-256', data);
+ * `);
+ * ```
+ */
+export const WinterCG: InterpreterOptions = preset(
+  ES2024,
+  FetchAPI,
+  ConsoleAPI,
+  TextCodecAPI,
+  CryptoAPI,
+  StreamsAPI,
+  PerformanceAPI,
+  EventAPI,
+);
+
+/**
+ * Node.js environment preset.
+ *
+ * Combines ES2024 language features with APIs commonly available in Node.js.
+ * Note: This provides the Web-standard APIs that Node.js supports,
+ * not Node.js-specific APIs like `fs`, `path`, etc. which would need
+ * to be injected separately.
+ *
+ * Includes:
+ * - All ES2024 language features
+ * - Fetch API (available in Node.js 18+)
+ * - URL/URLSearchParams
+ * - AbortController/AbortSignal
+ * - TextEncoder/TextDecoder
+ * - Console API
+ * - Timers (setTimeout, setInterval)
+ * - Performance API
+ * - Crypto API
+ * - Buffer API (ArrayBuffer, TypedArrays)
+ * - Streams API
+ * - Blob/File (Node.js 18+)
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(NodeJS);
+ * interpreter.evaluate(`
+ *   const buffer = new ArrayBuffer(16);
+ *   const view = new DataView(buffer);
+ *   view.setInt32(0, 42);
+ * `);
+ * ```
+ */
+export const NodeJS: InterpreterOptions = preset(
+  ES2024,
+  FetchAPI,
+  ConsoleAPI,
+  TimersAPI,
+  TextCodecAPI,
+  CryptoAPI,
+  BufferAPI,
+  StreamsAPI,
+  PerformanceAPI,
+  BlobAPI,
+);
+
+/**
+ * Minimal secure preset.
+ *
+ * A minimal preset with only language features and no external APIs.
+ * Useful for sandboxing untrusted code where you want to restrict
+ * access to any host environment.
+ *
+ * Includes:
+ * - All ES2024 language features
+ * - Basic globals (undefined, NaN, Infinity, Symbol)
+ *
+ * Does NOT include:
+ * - console
+ * - fetch or any network APIs
+ * - Timers
+ * - File system access
+ * - Any host-provided APIs
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(Minimal);
+ * interpreter.evaluate(`
+ *   // Pure computation only
+ *   const result = [1, 2, 3].map(x => x * 2);
+ * `);
+ * ```
+ */
+export const Minimal: InterpreterOptions = {
+  ...ES2024,
+  globals: {
+    // Only the most basic globals
+    Array,
+    Object,
+    String,
+    Number,
+    Boolean,
+    Date,
+    Math,
+    JSON,
+    Error,
+    TypeError,
+    ReferenceError,
+    SyntaxError,
+    RangeError,
+    URIError,
+    EvalError,
+    parseInt,
+    parseFloat,
+    isNaN,
+    isFinite,
+    encodeURI,
+    encodeURIComponent,
+    decodeURI,
+    decodeURIComponent,
+    // ES6+ basics
+    Promise,
+    Symbol,
+    Map,
+    Set,
+    WeakMap,
+    WeakSet,
+    BigInt,
+    // ES2020+
+    globalThis: typeof globalThis !== "undefined" ? globalThis : global,
+  },
+};

@@ -2208,6 +2208,62 @@ export type EvaluateOptions = {
 };
 
 /**
+ * Statistics from the last evaluation
+ */
+export type ExecutionStats = {
+  /**
+   * Total number of AST nodes evaluated
+   */
+  nodeCount: number;
+
+  /**
+   * Number of function/method calls made
+   */
+  functionCalls: number;
+
+  /**
+   * Total number of loop iterations executed
+   */
+  loopIterations: number;
+
+  /**
+   * Execution time in milliseconds
+   */
+  executionTimeMs: number;
+};
+
+/**
+ * Represents a single step in the execution process.
+ * Yielded by the step-by-step evaluator.
+ */
+export type ExecutionStep = {
+  /**
+   * The type of the current AST node being evaluated
+   */
+  nodeType: string;
+
+  /**
+   * The line number of the current node (if available)
+   */
+  line?: number;
+
+  /**
+   * The current value in scope (for expressions) or undefined (for statements)
+   */
+  value?: any;
+
+  /**
+   * Whether execution has completed
+   */
+  done: boolean;
+
+  /**
+   * The final result (only when done is true)
+   */
+  result?: any;
+};
+
+/**
  * Main Interpreter class
  *
  * Evaluates JavaScript code by parsing it into an AST and walking the AST nodes.
@@ -2278,6 +2334,13 @@ export class Interpreter {
     new WeakMap();
   private thisInitStack: boolean[] = [];
   private constructorStack: ClassValue[] = [];
+
+  // Execution statistics tracking
+  private statsNodeCount = 0;
+  private statsFunctionCalls = 0;
+  private statsLoopIterations = 0;
+  private statsStartTime = 0;
+  private statsEndTime = 0;
 
   constructor(options?: InterpreterOptions) {
     this.environment = new Environment();
@@ -2497,6 +2560,8 @@ export class Interpreter {
       }
     }
     this.currentCallStackDepth++;
+    // Track function call statistics
+    this.statsFunctionCalls++;
   }
 
   /**
@@ -2512,6 +2577,9 @@ export class Interpreter {
    * @param iterations Current iteration count for the loop
    */
   private checkLoopIterations(iterations: number): void {
+    // Track loop iteration statistics
+    this.statsLoopIterations++;
+
     if (this.maxLoopIterations !== undefined && iterations >= this.maxLoopIterations) {
       throw new InterpreterError("Maximum loop iterations exceeded");
     }
@@ -2560,9 +2628,19 @@ export class Interpreter {
 
     // Reset line tracking.
     this.currentLine = 0;
+
+    // Reset execution statistics.
+    this.statsNodeCount = 0;
+    this.statsFunctionCalls = 0;
+    this.statsLoopIterations = 0;
+    this.statsStartTime = performance.now();
+    this.statsEndTime = 0;
   }
 
   private endEvaluation(options?: EvaluateOptions): void {
+    // Record end time for statistics.
+    this.statsEndTime = performance.now();
+
     // Always clean up per-call globals after execution.
     if (options?.globals) {
       this.removePerCallGlobals();
@@ -2638,6 +2716,184 @@ export class Interpreter {
   }
 
   /**
+   * Clears all user-declared variables from the environment, keeping only
+   * the built-in globals (undefined, NaN, Infinity, Symbol) and constructor-provided globals.
+   *
+   * This is useful when you want to reset the interpreter state between evaluations
+   * without creating a new Interpreter instance.
+   *
+   * @example
+   * ```typescript
+   * const interpreter = new Interpreter({ globals: { Math } });
+   * interpreter.evaluate('let x = 10; let y = 20;');
+   * interpreter.clearGlobals();
+   * // x and y are now cleared, but Math is still available
+   * interpreter.evaluate('x'); // throws: Undefined variable 'x'
+   * ```
+   */
+  clearGlobals(): void {
+    // Create a fresh environment
+    this.environment = new Environment();
+    // Re-inject built-in globals
+    this.injectBuiltinGlobals();
+    // Re-inject constructor-provided globals
+    this.injectGlobals(this.constructorGlobals);
+  }
+
+  /**
+   * Parses JavaScript code and returns the AST (Abstract Syntax Tree).
+   *
+   * This is useful for inspecting the structure of code before execution,
+   * or for building custom validators and transformations.
+   *
+   * @param code - The JavaScript code to parse
+   * @returns The parsed AST (ESTree.Program)
+   * @throws ParseError if the code has syntax errors
+   *
+   * @example
+   * ```typescript
+   * const interpreter = new Interpreter();
+   * const ast = interpreter.parse('const x = 1 + 2;');
+   * console.log(ast.body[0].type); // 'VariableDeclaration'
+   * ```
+   */
+  parse(code: string): ESTree.Program {
+    return parseModule(code, { next: true });
+  }
+
+  /**
+   * Returns statistics from the last evaluation.
+   *
+   * Statistics include:
+   * - `nodeCount`: Total number of AST nodes evaluated
+   * - `functionCalls`: Number of function/method calls made
+   * - `loopIterations`: Total number of loop iterations executed
+   * - `executionTimeMs`: Execution time in milliseconds
+   *
+   * @returns Statistics object from the last evaluate() or evaluateAsync() call
+   *
+   * @example
+   * ```typescript
+   * const interpreter = new Interpreter();
+   * interpreter.evaluate(`
+   *   for (let i = 0; i < 100; i++) {
+   *     Math.sqrt(i);
+   *   }
+   * `);
+   * const stats = interpreter.getStats();
+   * console.log(stats.loopIterations); // 100
+   * console.log(stats.functionCalls); // 100 (Math.sqrt calls)
+   * ```
+   */
+  getStats(): ExecutionStats {
+    return {
+      nodeCount: this.statsNodeCount,
+      functionCalls: this.statsFunctionCalls,
+      loopIterations: this.statsLoopIterations,
+      executionTimeMs: this.statsEndTime - this.statsStartTime,
+    };
+  }
+
+  /**
+   * Returns a generator that yields execution steps for debugging/inspection.
+   *
+   * This allows you to step through code execution one statement at a time,
+   * inspecting the interpreter state at each step.
+   *
+   * @param code - The JavaScript code to evaluate
+   * @returns A generator that yields ExecutionStep objects
+   *
+   * @example
+   * ```typescript
+   * const interpreter = new Interpreter();
+   * const stepper = interpreter.evaluateSteps(`
+   *   let x = 1;
+   *   let y = 2;
+   *   x + y;
+   * `);
+   *
+   * for (const step of stepper) {
+   *   console.log(`Step: ${step.nodeType}, line: ${step.line}`);
+   *   if (step.done) {
+   *     console.log(`Result: ${step.result}`);
+   *   }
+   * }
+   * ```
+   */
+  *evaluateSteps(code: string): Generator<ExecutionStep, void, void> {
+    const ast = this.parse(code);
+
+    // Reset statistics
+    this.statsNodeCount = 0;
+    this.statsFunctionCalls = 0;
+    this.statsLoopIterations = 0;
+    this.statsStartTime = performance.now();
+
+    let result: any;
+
+    for (const statement of ast.body) {
+      // Yield before executing each top-level statement
+      yield {
+        nodeType: statement.type,
+        line: statement.line,
+        done: false,
+      };
+
+      result = this.evaluateNode(statement);
+
+      // Handle control flow values
+      if (result instanceof ReturnValue) {
+        result = result.value;
+        break;
+      }
+    }
+
+    this.statsEndTime = performance.now();
+
+    // Final step with the result
+    yield {
+      nodeType: "Program",
+      done: true,
+      result,
+    };
+  }
+
+  /**
+   * Returns the current scope's variables for debugging.
+   *
+   * This is useful when stepping through code to inspect variable values.
+   *
+   * @returns An object containing all variables in the current scope
+   *
+   * @example
+   * ```typescript
+   * const interpreter = new Interpreter();
+   * interpreter.evaluate('let x = 10; let y = 20;');
+   * const scope = interpreter.getScope();
+   * console.log(scope); // { x: 10, y: 20 }
+   * ```
+   */
+  getScope(): Record<string, any> {
+    const scope: Record<string, any> = {};
+    // Get variables from current environment
+    // Note: We walk the environment chain to collect all visible variables
+    let env: any = this.environment;
+    while (env) {
+      const vars = env.variables;
+      if (vars instanceof Map) {
+        for (const [name, entry] of vars) {
+          // Don't overwrite variables from inner scopes
+          if (!(name in scope)) {
+            scope[name] = (entry as any).value;
+          }
+        }
+      }
+      env = env.parent;
+    }
+    return scope;
+  }
+
+  /**
    * Enhance an error with line number information if available.
    */
   private enhanceError(error: unknown): unknown {
@@ -2649,6 +2905,9 @@ export class Interpreter {
 
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
   public evaluateNode(node: ASTNode): any {
+    // Track statistics
+    this.statsNodeCount++;
+
     // Track line number for error reporting
     if (node.line) {
       this.currentLine = node.line;
@@ -2799,6 +3058,9 @@ export class Interpreter {
 
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
   public async evaluateNodeAsync(node: ASTNode): Promise<any> {
+    // Track statistics
+    this.statsNodeCount++;
+
     // Track line number for error reporting
     if (node.line) {
       this.currentLine = node.line;
@@ -3742,6 +4004,9 @@ export class Interpreter {
       return;
     }
     if (object instanceof RegExp) {
+      return;
+    }
+    if (propName === "then") {
       return;
     }
     if (propName in object && !Object.prototype.hasOwnProperty.call(object, propName)) {
