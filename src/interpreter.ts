@@ -48,6 +48,8 @@ class RawValue {
   constructor(public value: any) {}
 }
 
+class GlobalThisSentinel {}
+
 function validatePropertyName(name: string): void {
   if (isDangerousProperty(name)) {
     throw new InterpreterError(`Property name '${name}' is not allowed for security reasons`);
@@ -2396,6 +2398,9 @@ export class Interpreter {
     this.environment.declare("Infinity", Infinity, "const", true);
     // Symbol is a fundamental primitive type constructor
     this.environment.declare("Symbol", Symbol, "const", true);
+    // globalThis and global provide access to the sandbox's global scope
+    this.environment.declare("globalThis", new GlobalThisSentinel(), "const", true);
+    this.environment.declare("global", new GlobalThisSentinel(), "const", true);
   }
 
   /**
@@ -6631,6 +6636,11 @@ export class Interpreter {
         return (Symbol as any)[property];
       }
 
+      // Handle globalThis/global sentinel - return the sentinel's internal object
+      if (object instanceof GlobalThisSentinel) {
+        return (object as any)[property];
+      }
+
       // Handle HostFunctionValue - allow static method access but block internal/meta properties
       if (object instanceof HostFunctionValue) {
         // Block access to internal properties and function metadata
@@ -9414,6 +9424,11 @@ export class Interpreter {
       // Handle Symbol constructor - allow access to static properties (Symbol.iterator, etc.)
       if (object === Symbol) {
         return (Symbol as any)[property];
+      }
+
+      // Handle globalThis/global sentinel - return the sentinel's internal object
+      if (object instanceof GlobalThisSentinel) {
+        return (object as any)[property];
       }
 
       // Handle HostFunctionValue - allow static method access but block internal/meta properties

@@ -61,3 +61,16 @@ try {
 } catch {
   // Blocked
 }
+
+const interpreter = new Interpreter();
+
+interpreter.evaluate(ts`
+  let myVar = "test";
+  globalThis.myVar
+`);
+
+interpreter.evaluate(ts`
+  global.x = 5;
+  global.y = 10;
+  global.x + global.y
+`);

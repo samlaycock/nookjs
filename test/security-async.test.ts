@@ -171,16 +171,15 @@ describe("Security: Async/Await Features", () => {
       ).rejects.toThrow("Undefined variable 'eval'");
     });
 
-    it("should not have access to globalThis", async () => {
+    it("should have access to globalThis", async () => {
       const interpreter = new Interpreter();
-      return expect(
-        interpreter.evaluateAsync(`
-          async function test() {
-            return globalThis;
-          }
-          test()
-        `),
-      ).rejects.toThrow("Undefined variable 'globalThis'");
+      const result = await interpreter.evaluateAsync(`
+        async function test() {
+          return globalThis;
+        }
+        test()
+      `);
+      expect(result).toBeDefined();
     });
   });
 

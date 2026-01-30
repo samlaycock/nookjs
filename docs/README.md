@@ -8,6 +8,10 @@
 
 - [PRESETS](PRESETS.md) - ECMAScript version presets, API addons, and the `preset()` function
 
+## Builtin Globals
+
+- [BUILTIN_GLOBALS](BUILTIN_GLOBALS.md) - Built-in global variables (undefined, NaN, Infinity, globalThis, global)
+
 ## Language Features
 
 Each file below documents one `LanguageFeature` flag supported by the interpreter. Every doc covers:
