@@ -165,7 +165,7 @@ export class SecurityError extends InterpreterError {
     },
   ) {
     const message = blockedProperty
-      ? `${operation}: '${blockedProperty}' is blocked for security reasons`
+      ? `Property name '${blockedProperty}' is not allowed for security reasons`
       : `${operation} is blocked for security reasons`;
     super(message, options);
     this.name = "SecurityError";
@@ -225,7 +225,8 @@ export function formatError(error: InterpreterError): string {
       result += "\n  |";
       result += `\n${error.line} | ${sourceLine}`;
       const caretColumn = error.column > 0 ? error.column - 1 : 0;
-      const caretLength = error.endColumn && error.endColumn > error.column ? error.endColumn - error.column : 1;
+      const caretLength =
+        error.endColumn && error.endColumn > error.column ? error.endColumn - error.column : 1;
       const spaces = " ".repeat(caretColumn);
       const carets = "^".repeat(caretLength);
       result += `\n  | ${spaces}${carets}`;
@@ -243,7 +244,10 @@ export function formatError(error: InterpreterError): string {
   return result;
 }
 
-export function parseErrorToInterpreterError(parseError: ParseError, sourceCode: string): InterpreterError {
+export function parseErrorToInterpreterError(
+  parseError: ParseError,
+  sourceCode: string,
+): InterpreterError {
   return new InterpreterError(parseError.message, {
     line: parseError.line,
     column: parseError.column,

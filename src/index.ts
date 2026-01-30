@@ -1,9 +1,6 @@
 export { ParseError } from "./ast";
 export type { ESTree } from "./ast";
-export {
-  Interpreter,
-  InterpreterError,
-} from "./interpreter";
+export { Interpreter, InterpreterError } from "./interpreter";
 export type {
   InterpreterOptions,
   EvaluateOptions,
