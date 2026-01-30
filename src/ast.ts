@@ -1,18 +1,12 @@
-// Placeholder for API parity with external parsers and future hooks.
-interface ParseOptions {
-  readonly next?: boolean;
-  readonly profile?: boolean;
-}
-
-export interface ParseProfile {
-  readonly tokens: number;
-  readonly tokenizeMs: number;
-  readonly parseMs: number;
+export interface Location {
+  start: { line: number; column: number };
+  end: { line: number; column: number };
 }
 
 export namespace ESTree {
   export interface Node {
     readonly type: string;
+    readonly loc?: Location;
     readonly line?: number;
   }
 
@@ -549,7 +543,8 @@ class Tokenizer {
   private lookaheadLineBreakBefore = false;
   private hasLookahead = false;
   private readonly profiler?: { tokens: number; tokenizeMs: number };
-  currentLine = 1; // 1-based line number for error reporting
+  currentLine = 1;
+  currentColumn = 1;
 
   constructor(input: string, profiler?: { tokens: number; tokenizeMs: number }) {
     this.input = input;
@@ -922,11 +917,15 @@ class Tokenizer {
     type: TokenType,
     value: string,
     lineBreakBefore: boolean,
+    column?: number,
   ): void {
     if (setCurrent) {
       this.currentType = type;
       this.currentValue = value;
       this.currentLineBreakBefore = lineBreakBefore;
+      if (column !== undefined) {
+        this.currentColumn = column;
+      }
       return;
     }
     this.lookaheadType = type;
@@ -955,18 +954,29 @@ class Tokenizer {
       switch (code) {
         case 32: // space
         case 9: // \t
+          index += 1;
+          this.currentColumn++;
+          continue;
         case 13: // \r
           index += 1;
+          this.currentColumn++;
+          if (index < length && input.charCodeAt(index) === 10) {
+            index++;
+            this.currentColumn++;
+          }
+          lineBreak = true;
+          this.currentLine = 1;
+          this.currentColumn = 1;
           continue;
         case 10: // \n
           lineBreak = true;
           this.currentLine++;
           index += 1;
+          this.currentColumn = 1;
           continue;
         case 47: {
           const next = input.charCodeAt(index + 1);
           if (next === 47) {
-            // Jump to the end of line comment to avoid per-char scanning.
             const end = input.indexOf("\n", index + 2);
             if (end === -1) {
               this.index = length;
@@ -975,13 +985,12 @@ class Tokenizer {
             lineBreak = true;
             this.currentLine++;
             index = end + 1;
+            this.currentColumn = 1;
             continue;
           }
           if (next === 42) {
-            // Jump to the end of block comment; detect line breaks in one scan.
             const end = input.indexOf("*/", index + 2);
             if (end === -1) {
-              // Count newlines in unterminated block comment
               for (let i = index + 2; i < length; i++) {
                 if (input.charCodeAt(i) === 10) {
                   lineBreak = true;
@@ -991,7 +1000,6 @@ class Tokenizer {
               this.index = length;
               return lineBreak;
             }
-            // Count newlines within block comment
             for (let i = index + 2; i < end; i++) {
               if (input.charCodeAt(i) === 10) {
                 lineBreak = true;
@@ -999,6 +1007,7 @@ class Tokenizer {
               }
             }
             index = end + 2;
+            this.currentColumn = index - input.lastIndexOf("\n", index - 1);
             continue;
           }
           break;
@@ -1010,6 +1019,7 @@ class Tokenizer {
     }
 
     this.index = index;
+    this.currentColumn = index - input.lastIndexOf("\n", index - 1);
     return lineBreak;
   }
 
