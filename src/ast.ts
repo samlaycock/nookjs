@@ -3,6 +3,17 @@ export interface Location {
   end: { line: number; column: number };
 }
 
+interface ParseOptions {
+  readonly next?: boolean;
+  readonly profile?: boolean;
+}
+
+interface ParseProfile {
+  readonly tokens: number;
+  readonly tokenizeMs: number;
+  readonly parseMs: number;
+}
+
 export namespace ESTree {
   export interface Node {
     readonly type: string;

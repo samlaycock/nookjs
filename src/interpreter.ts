@@ -13,17 +13,12 @@
  * - Control flow: if/else, while, for, for...of, break, continue, return
  */
 
-import type { ESTree } from "./ast";
+import type { ESTree, Location } from "./ast";
+import type { StackFrame } from "./errors";
 
 import { parseModule } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
-import {
-  InterpreterError,
-  SecurityError,
-  ErrorCode,
-  type StackFrame,
-  type Location,
-} from "./errors";
+import { InterpreterError, SecurityError, ErrorCode } from "./errors";
 import {
   ReadOnlyProxy,
   PROXY_TARGET,
@@ -11539,4 +11534,5 @@ export class Interpreter {
   }
 }
 
+// Re-export InterpreterError for use in tests and public API
 export { InterpreterError };
