@@ -79,8 +79,8 @@ These presets configure the interpreter for specific ECMAScript versions by whit
 | `ES2020`         | 2020 | Optional chaining, nullish coalescing, BigInt             |
 | `ES2021`         | 2021 | Logical assignment operators                              |
 | `ES2022`         | 2022 | Class fields, private fields, static blocks               |
-| `ES2023`         | 2023 | (No new interpreter features)                             |
-| `ES2024`         | 2024 | (No new interpreter features)                             |
+| `ES2023`         | 2023 | (No new interpreter features) - Hashbang grammar support, Array methods (findLast, toReversed, etc.) |
+| `ES2024`         | 2024 | (No new interpreter features) - Promise.withResolvers(), ArrayBuffer transfer |
 | `ESNext`         | -    | All features enabled, no restrictions                     |
 
 ### Included Globals

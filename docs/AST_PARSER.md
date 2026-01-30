@@ -15,6 +15,8 @@ This interpreter ships with a zero-dependency JavaScript parser implemented in `
 - The tokenizer tracks `current` and `lookahead` token fields instead of allocating token objects.
 - `snapshot()`/`restore()` support limited backtracking (used for arrow lookahead).
 - Minimal string and template escape handling; full Unicode escape support is intentionally limited.
+- **Hashbang (`#!`)** is automatically stripped and ignored at the start of the input (ES2023+).
+- **Numeric separators** (`1_000_000`) are automatically stripped before parsing numeric literals.
 
 ## TypeScript Annotations (Stripped)
 
