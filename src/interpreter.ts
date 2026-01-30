@@ -19,6 +19,7 @@ import type { StackFrame } from "./errors";
 import { parseModule } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
 import { InterpreterError, SecurityError, ErrorCode } from "./errors";
+import { ResourceTracker } from "./resource-tracker";
 import {
   ReadOnlyProxy,
   PROXY_TARGET,
@@ -2196,6 +2197,11 @@ export type InterpreterOptions = {
    * Controls error sanitization and other security behaviors
    */
   security?: SecurityOptions;
+  /**
+   * Resource tracker for monitoring cumulative resource usage across evaluations
+   * Enables multi-tenant scenarios where multiple untrusted code snippets execute concurrently
+   */
+  resourceTracker?: ResourceTracker;
 };
 
 export type EvaluateOptions = {
@@ -2365,6 +2371,9 @@ export class Interpreter {
   private thisInitStack: boolean[] = [];
   private constructorStack: ClassValue[] = [];
 
+  private resourceTracker?: ResourceTracker;
+  private evaluationStartTime = 0;
+
   // Execution statistics tracking
   private statsNodeCount = 0;
   private statsFunctionCalls = 0;
@@ -2393,6 +2402,8 @@ export class Interpreter {
     // Inject built-in globals that should always be available
     this.injectBuiltinGlobals();
     this.injectGlobals(this.constructorGlobals);
+
+    this.resourceTracker = options?.resourceTracker;
   }
 
   /**
@@ -2647,6 +2658,10 @@ export class Interpreter {
   }
 
   private beginEvaluation(options?: EvaluateOptions): void {
+    if (this.resourceTracker) {
+      this.resourceTracker.beginEvaluation();
+    }
+
     // Inject per-call globals if provided (with override capability).
     if (options?.globals) {
       this.injectGlobals(options.globals, true, true);
@@ -2682,11 +2697,22 @@ export class Interpreter {
     this.statsLoopIterations = 0;
     this.statsStartTime = performance.now();
     this.statsEndTime = 0;
+    this.evaluationStartTime = performance.now();
   }
 
   private endEvaluation(options?: EvaluateOptions): void {
     // Record end time for statistics.
     this.statsEndTime = performance.now();
+
+    if (this.resourceTracker) {
+      const cpuTimeMs = this.statsEndTime - this.evaluationStartTime;
+      this.resourceTracker.endEvaluation(
+        this.currentMemoryUsage,
+        this.statsLoopIterations,
+        this.statsFunctionCalls,
+        cpuTimeMs
+      );
+    }
 
     // Always clean up per-call globals after execution.
     if (options?.globals) {

@@ -23,5 +23,13 @@ export {
   formatError,
 } from "./errors";
 
+export {
+  ResourceTracker,
+  ResourceExhaustedError,
+  type ResourceLimits,
+  type ResourceStats,
+  type ResourceHistoryEntry,
+} from "./resource-tracker";
+
 export * from "./presets";
 export * from "./utils";
