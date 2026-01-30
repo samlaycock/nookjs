@@ -344,7 +344,7 @@ evaluateAsync(code: string, options?: EvaluateOptions): Promise<unknown>
 
 ## Contributing
 
-See [CONTRIBUTING.md](conventions/CONTRIBUTING.md) for development setup and guidelines.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 
