@@ -4,13 +4,13 @@ The interpreter provides full support for all `String.prototype` methods that wo
 
 ## Supported Methods
 
-| Method | Description | Example |
-|--------|-------------|---------|
-| `String.prototype.match()` | Tests for a match and returns the result | `"hello".match(/l/)` |
-| `String.prototype.matchAll()` | Returns an iterator of all matches | `"test".matchAll(/t/g)` |
-| `String.prototype.search()` | Tests for a match and returns the index | `"hello".search(/l/)` |
-| `String.prototype.replace()` | Replaces matched substrings | `"hello".replace(/l/, "x")` |
-| `String.prototype.replaceAll()` | Replaces all matched substrings | `"hello".replaceAll("l", "x")` |
+| Method                          | Description                              | Example                        |
+| ------------------------------- | ---------------------------------------- | ------------------------------ |
+| `String.prototype.match()`      | Tests for a match and returns the result | `"hello".match(/l/)`           |
+| `String.prototype.matchAll()`   | Returns an iterator of all matches       | `"test".matchAll(/t/g)`        |
+| `String.prototype.search()`     | Tests for a match and returns the index  | `"hello".search(/l/)`          |
+| `String.prototype.replace()`    | Replaces matched substrings              | `"hello".replace(/l/, "x")`    |
+| `String.prototype.replaceAll()` | Replaces all matched substrings          | `"hello".replaceAll("l", "x")` |
 
 ## Usage Examples
 
@@ -99,6 +99,7 @@ try {
 ### Security
 
 All String.prototype methods are wrapped via `ReadOnlyProxy`, which:
+
 - Makes properties read-only
 - Wraps functions as `HostFunctionValue`
 - Blocks dangerous properties like `__proto__`, `constructor`
@@ -107,6 +108,7 @@ All String.prototype methods are wrapped via `ReadOnlyProxy`, which:
 ### Well-Known Symbols
 
 The following well-known symbols are intentionally blocked to prevent sandbox code from overriding regex behavior:
+
 - `Symbol.match`
 - `Symbol.matchAll`
 - `Symbol.replace`
@@ -118,6 +120,7 @@ Direct method calls on `String.prototype` work fine.
 ### Host Function Arguments
 
 When using replacement functions with `replace()`, the arguments are passed correctly:
+
 1. `match` - The matched substring
 2. `p1, p2, ...` - Captured groups (if any)
 3. `offset` - The position of the matched substring
@@ -129,10 +132,10 @@ These methods are available in all presets that include the `String` global (ES5
 
 ## Compatibility
 
-| Method | ECMAScript Version |
-|--------|-------------------|
-| `match()` | ES3 |
-| `search()` | ES3 |
-| `replace()` | ES3 |
-| `matchAll()` | ES2020 |
-| `replaceAll()` | ES2021 |
+| Method         | ECMAScript Version |
+| -------------- | ------------------ |
+| `match()`      | ES3                |
+| `search()`     | ES3                |
+| `replace()`    | ES3                |
+| `matchAll()`   | ES2020             |
+| `replaceAll()` | ES2021             |
