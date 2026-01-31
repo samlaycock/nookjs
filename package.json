@@ -32,7 +32,7 @@
     "benchmark:parse:micro": "bun run benchmarks/parser-micro.ts",
     "benchmark:parse:profile": "bun run benchmarks/parser-profile.ts",
     "benchmark:all": "bun run benchmarks/index.ts",
-    "ci:publish": "bun run build && changeset publish --access public"
+    "ci:publish": "bun run build && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "2.29.8",
