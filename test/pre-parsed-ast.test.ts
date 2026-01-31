@@ -214,12 +214,19 @@ describe("Pre-parsed AST Support", () => {
     });
 
     test("works with AbortSignal", async () => {
+      const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
       const controller = new AbortController();
-      const interpreter = new Interpreter();
+      const interpreter = new Interpreter({ globals: { delay } });
 
-      const ast = interpreter.parse("await new Promise(r => setTimeout(r, 100)); 42");
+      const ast = interpreter.parse(`
+        let count = 0;
+        while (true) {
+          count = count + 1;
+          await delay(1);
+        }
+      `);
 
-      setTimeout(() => controller.abort(), 10);
+      setTimeout(() => controller.abort(), 25);
 
       await expect(
         interpreter.evaluateAsync(ast, { signal: controller.signal }),

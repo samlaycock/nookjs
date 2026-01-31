@@ -135,16 +135,16 @@ describe("Security: Async/Await Features", () => {
   });
 
   describe("Built-in object access", () => {
-    it("should not have access to Promise constructor", async () => {
+    it("should have access to Promise constructor for async/await support", async () => {
       const interpreter = new Interpreter();
-      return expect(
-        interpreter.evaluateAsync(`
-          async function test() {
-            return Promise;
-          }
-          test()
-        `),
-      ).rejects.toThrow("Undefined variable 'Promise'");
+      const result = await interpreter.evaluateAsync(`
+        async function test() {
+          return Promise;
+        }
+        test()
+      `);
+      expect(result).toBeDefined();
+      expect(typeof result).toBe("object");
     });
 
     it("should not have access to Function constructor", async () => {
