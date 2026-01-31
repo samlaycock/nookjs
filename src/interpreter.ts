@@ -25,7 +25,7 @@ import {
   setSecurityOptions,
   sanitizeErrorStack,
 } from "./readonly-proxy";
-import { ResourceTracker, ResourceExhaustedError } from "./resource-tracker";
+import { ResourceExhaustedError } from "./resource-tracker";
 
 type ASTNode = ESTree.Node;
 
