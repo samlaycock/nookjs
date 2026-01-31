@@ -2238,6 +2238,10 @@ export type EvaluateOptions = {
   maxMemory?: number;
 };
 
+export type ParseOptions = {
+  validator?: ASTValidator;
+};
+
 /**
  * Statistics from the last evaluation
  */
@@ -2832,13 +2836,17 @@ export class Interpreter {
     this.currentMemoryUsage = 0;
   }
 
-  private parseAndValidate(code: string, options?: EvaluateOptions): ESTree.Program {
-    // Use parseModule to support top-level await in async context.
-    const ast = parseModule(code, {
-      next: true, // Enable newer JavaScript features like async generators
-    });
+  private parseAndValidate(input: string | ESTree.Program, options?: EvaluateOptions): ESTree.Program {
+    let ast: ESTree.Program;
 
-    // Run validator - per-call validator takes precedence over constructor validator.
+    if (typeof input === "string") {
+      ast = parseModule(input, {
+        next: true,
+      });
+    } else {
+      ast = input;
+    }
+
     const validator = options?.validator || this.constructorValidator;
     if (validator) {
       const isValid = validator(ast);
@@ -2850,12 +2858,13 @@ export class Interpreter {
     return ast;
   }
 
-  evaluate(code: string, options?: EvaluateOptions): any {
-    this.currentSourceCode = code;
+  evaluate(input: string | ESTree.Program, options?: EvaluateOptions): any {
+    const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
+    this.currentSourceCode = sourceCode;
     this.callStack = [];
     this.beginEvaluation(options);
     try {
-      const ast = this.parseAndValidate(code, options);
+      const ast = this.parseAndValidate(input, options);
       return this.evaluateNode(ast);
     } catch (error) {
       throw this.enhanceError(error);
@@ -2866,8 +2875,9 @@ export class Interpreter {
     }
   }
 
-  async evaluateAsync(code: string, options?: EvaluateOptions): Promise<any> {
-    this.currentSourceCode = code;
+  async evaluateAsync(input: string | ESTree.Program, options?: EvaluateOptions): Promise<any> {
+    const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
+    this.currentSourceCode = sourceCode;
     this.callStack = [];
     this.beginEvaluation(options);
     this.abortSignal = options?.signal;
@@ -2876,7 +2886,7 @@ export class Interpreter {
       throw new InterpreterError("Execution aborted");
     }
     try {
-      const ast = this.parseAndValidate(code, options);
+      const ast = this.parseAndValidate(input, options);
       const result = await this.evaluateNodeAsync(ast);
       return result instanceof RawValue ? result.value : result;
     } catch (error) {
@@ -2913,25 +2923,46 @@ export class Interpreter {
     this.injectGlobals(this.constructorGlobals);
   }
 
-  /**
-   * Parses JavaScript code and returns the AST (Abstract Syntax Tree).
-   *
-   * This is useful for inspecting the structure of code before execution,
-   * or for building custom validators and transformations.
-   *
-   * @param code - The JavaScript code to parse
-   * @returns The parsed AST (ESTree.Program)
-   * @throws ParseError if the code has syntax errors
-   *
-   * @example
-   * ```typescript
-   * const interpreter = new Interpreter();
-   * const ast = interpreter.parse('const x = 1 + 2;');
-   * console.log(ast.body[0].type); // 'VariableDeclaration'
-   * ```
-   */
-  parse(code: string): ESTree.Program {
-    return parseModule(code, { next: true });
+/**
+    * Parses JavaScript code and returns the AST (Abstract Syntax Tree).
+    *
+    * This is useful for inspecting the structure of code before execution,
+    * or for building custom validators and transformations.
+    *
+    * @param code - The JavaScript code to parse
+    * @param options - Optional parsing options including a validator
+    * @returns The parsed AST (ESTree.Program)
+    * @throws ParseError if the code has syntax errors
+    *
+    * @example
+    * ```typescript
+    * const interpreter = new Interpreter();
+    * const ast = interpreter.parse('const x = 1 + 2;');
+    * console.log(ast.body[0].type); // 'VariableDeclaration'
+    * ```
+    *
+    * @example
+    * ```typescript
+    * const interpreter = new Interpreter();
+    * const ast = interpreter.parse(code, {
+    *   validator: (ast) => {
+    *     // Custom validation logic
+    *     return isAllowed(ast);
+    *   }
+    * });
+    * ```
+    */
+  parse(code: string, options?: ParseOptions): ESTree.Program {
+    const ast = parseModule(code, { next: true });
+
+    if (options?.validator) {
+      const isValid = options.validator(ast);
+      if (!isValid) {
+        throw new InterpreterError("AST validation failed: code is not allowed");
+      }
+    }
+
+    return ast;
   }
 
   /**

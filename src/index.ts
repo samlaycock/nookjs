@@ -4,6 +4,7 @@ export { Interpreter, InterpreterError } from "./interpreter";
 export type {
   InterpreterOptions,
   EvaluateOptions,
+  ParseOptions,
   LanguageFeature,
   FeatureControl,
   SecurityOptions,
