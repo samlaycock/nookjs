@@ -5,8 +5,10 @@ import type { ESTree } from "../src/ast";
 import { Interpreter } from "../src/interpreter";
 
 declare const setTimeout: (handler: (...args: unknown[]) => void, ms: number) => number;
-declare const AbortController: new () => { abort: () => void; signal: { aborted: boolean } };
-type AbortSignal = { aborted: boolean };
+declare const AbortController: new () => { abort: () => void; signal: AbortSignal };
+interface AbortSignal {
+  aborted: boolean;
+}
 
 describe("Pre-parsed AST Support", () => {
   describe("parse() method", () => {
