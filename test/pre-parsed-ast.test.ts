@@ -4,12 +4,6 @@ import type { ESTree } from "../src/ast";
 
 import { Interpreter } from "../src/interpreter";
 
-declare const setTimeout: (handler: (...args: unknown[]) => void, ms: number) => number;
-declare const AbortController: new () => { abort: () => void; signal: AbortSignal };
-interface AbortSignal {
-  aborted: boolean;
-}
-
 describe("Pre-parsed AST Support", () => {
   describe("parse() method", () => {
     test("returns valid ESTree.Program", () => {
@@ -209,7 +203,7 @@ describe("Pre-parsed AST Support", () => {
         return !code.includes('"WhileStatement"');
       };
 
-      await expect(interpreter.evaluateAsync(ast, { validator: noLoopsValidator })).rejects.toThrow(
+      expect(interpreter.evaluateAsync(ast, { validator: noLoopsValidator })).rejects.toThrow(
         "AST validation failed",
       );
     });
@@ -235,7 +229,7 @@ describe("Pre-parsed AST Support", () => {
 
       setTimeout(() => controller.abort(), 25);
 
-      await expect(interpreter.evaluateAsync(ast, { signal: controller.signal })).rejects.toThrow(
+      expect(interpreter.evaluateAsync(ast, { signal: controller.signal })).rejects.toThrow(
         "Execution aborted",
       );
     });
