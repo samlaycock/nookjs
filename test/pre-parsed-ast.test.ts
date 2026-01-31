@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
 
 import type { ESTree } from "../src/ast";
+
 import { Interpreter } from "../src/interpreter";
 
 describe("Pre-parsed AST Support", () => {
@@ -61,9 +62,9 @@ describe("Pre-parsed AST Support", () => {
       const interpreter = new Interpreter();
       const rejectAllValidator = () => false;
 
-      expect(() =>
-        interpreter.parse("let x = 5", { validator: rejectAllValidator }),
-      ).toThrow("AST validation failed");
+      expect(() => interpreter.parse("let x = 5", { validator: rejectAllValidator })).toThrow(
+        "AST validation failed",
+      );
     });
   });
 
@@ -228,9 +229,9 @@ describe("Pre-parsed AST Support", () => {
 
       setTimeout(() => controller.abort(), 25);
 
-      await expect(
-        interpreter.evaluateAsync(ast, { signal: controller.signal }),
-      ).rejects.toThrow("Execution aborted");
+      await expect(interpreter.evaluateAsync(ast, { signal: controller.signal })).rejects.toThrow(
+        "Execution aborted",
+      );
     });
   });
 
