@@ -58,7 +58,9 @@ describe("ResourceTracker", () => {
       const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
 
       interpreter.evaluate("const small = {a: 1, b: 2, c: 3}");
-      interpreter.evaluate("const large = {}; for (let i = 0; i < 1000; i++) large['key' + i] = i;");
+      interpreter.evaluate(
+        "const large = {}; for (let i = 0; i < 1000; i++) large['key' + i] = i;",
+      );
 
       const stats = tracker.getStats();
       expect(stats.evaluations).toBe(2);
@@ -69,8 +71,12 @@ describe("ResourceTracker", () => {
       const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
 
       interpreter.evaluate("const small = {a: 1}");
-      interpreter.evaluate("const large = {}; for (let i = 0; i < 1000; i++) large['key' + i] = i * 2;");
-      interpreter.evaluate("const medium = {}; for (let i = 0; i < 100; i++) medium['key' + i] = i;");
+      interpreter.evaluate(
+        "const large = {}; for (let i = 0; i < 1000; i++) large['key' + i] = i * 2;",
+      );
+      interpreter.evaluate(
+        "const medium = {}; for (let i = 0; i < 100; i++) medium['key' + i] = i;",
+      );
 
       const stats = tracker.getStats();
       expect(stats.largestEvaluation.iterations).toBeGreaterThanOrEqual(1000);
@@ -294,9 +300,9 @@ describe("ResourceTracker", () => {
 
       expect(tracker.getStats().evaluations).toBe(2);
 
-      await expect(
-        interpreter.evaluateAsync("Promise.resolve(3 + 3)"),
-      ).rejects.toThrow(ResourceExhaustedError);
+      await expect(interpreter.evaluateAsync("Promise.resolve(3 + 3)")).rejects.toThrow(
+        ResourceExhaustedError,
+      );
     });
 
     test("should track resources across multiple evaluations", () => {

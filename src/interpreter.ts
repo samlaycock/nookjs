@@ -19,13 +19,13 @@ import type { StackFrame } from "./errors";
 import { parseModule } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
 import { InterpreterError, SecurityError, ErrorCode } from "./errors";
-import { ResourceTracker, ResourceExhaustedError } from "./resource-tracker";
 import {
   ReadOnlyProxy,
   PROXY_TARGET,
   setSecurityOptions,
   sanitizeErrorStack,
 } from "./readonly-proxy";
+import { ResourceTracker, ResourceExhaustedError } from "./resource-tracker";
 
 type ASTNode = ESTree.Node;
 
@@ -2199,17 +2199,11 @@ export type InterpreterOptions = {
   security?: SecurityOptions;
   /**
    * Enable integrated resource tracking directly on the Interpreter.
-   * When true, exposes getStats(), resetStats(), getHistory() methods on the Interpreter.
+   * When true, exposes getResourceStats(), resetResourceStats(), getResourceHistory() methods on the Interpreter.
    * Also allows setting resource limits via setResourceLimit().
    * Default: false
    */
   resourceTracking?: boolean;
-  /**
-   * Resource tracker for monitoring cumulative resource usage across evaluations.
-   * Enables multi-tenant scenarios where multiple untrusted code snippets execute concurrently.
-   * Use this to share a tracker across multiple interpreters.
-   */
-  resourceTracker?: ResourceTracker;
 };
 
 export type EvaluateOptions = {
@@ -2425,7 +2419,6 @@ export class Interpreter {
   private thisInitStack: boolean[] = [];
   private constructorStack: ClassValue[] = [];
 
-  private resourceTracker?: ResourceTracker;
   private evaluationStartTime = 0;
 
   // Execution statistics tracking
@@ -2472,7 +2465,6 @@ export class Interpreter {
     this.injectBuiltinGlobals();
     this.injectGlobals(this.constructorGlobals);
 
-    this.resourceTracker = options?.resourceTracker;
     this.integratedResourceTracking = options?.resourceTracking ?? false;
   }
 
@@ -2728,15 +2720,11 @@ export class Interpreter {
   }
 
   private beginEvaluation(options?: EvaluateOptions): void {
-    if (this.resourceTracker) {
-      this.resourceTracker.beginEvaluation();
-    }
-
     if (this.integratedResourceTracking && this.integratedExhaustedLimit !== null) {
       throw new ResourceExhaustedError(
         this.integratedExhaustedLimit,
         this.getResourceStats().limitStatus[this.integratedExhaustedLimit]?.used ?? 0,
-        this.integratedLimits[this.integratedExhaustedLimit] ?? 0
+        this.integratedLimits[this.integratedExhaustedLimit] ?? 0,
       );
     }
 
@@ -2781,16 +2769,6 @@ export class Interpreter {
   private endEvaluation(options?: EvaluateOptions): void {
     // Record end time for statistics.
     this.statsEndTime = performance.now();
-
-    if (this.resourceTracker) {
-      const cpuTimeMs = this.statsEndTime - this.evaluationStartTime;
-      this.resourceTracker.endEvaluation(
-        this.currentMemoryUsage,
-        this.statsLoopIterations,
-        this.statsFunctionCalls,
-        cpuTimeMs
-      );
-    }
 
     if (this.integratedResourceTracking) {
       const cpuTimeMs = this.statsEndTime - this.evaluationStartTime;
@@ -3019,7 +2997,9 @@ export class Interpreter {
    */
   getResourceStats(): ResourceStats {
     if (!this.integratedResourceTracking) {
-      throw new InterpreterError("Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.");
+      throw new InterpreterError(
+        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
+      );
     }
 
     const limitStatus: ResourceStats["limitStatus"] = {};
@@ -3086,7 +3066,9 @@ export class Interpreter {
    */
   resetResourceStats(): void {
     if (!this.integratedResourceTracking) {
-      throw new InterpreterError("Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.");
+      throw new InterpreterError(
+        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
+      );
     }
 
     this.integratedCumulativeMemory = 0;
@@ -3119,7 +3101,9 @@ export class Interpreter {
    */
   getResourceHistory(): ResourceHistoryEntry[] {
     if (!this.integratedResourceTracking) {
-      throw new InterpreterError("Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.");
+      throw new InterpreterError(
+        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
+      );
     }
 
     return [...this.integratedHistory];
@@ -3141,7 +3125,9 @@ export class Interpreter {
    */
   setResourceLimit(key: keyof ResourceLimits, value: number): void {
     if (!this.integratedResourceTracking) {
-      throw new InterpreterError("Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.");
+      throw new InterpreterError(
+        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
+      );
     }
 
     this.integratedLimits[key] = value;
@@ -3164,7 +3150,9 @@ export class Interpreter {
    */
   getResourceLimit(key: keyof ResourceLimits): number | undefined {
     if (!this.integratedResourceTracking) {
-      throw new InterpreterError("Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.");
+      throw new InterpreterError(
+        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
+      );
     }
 
     return this.integratedLimits[key];
