@@ -26,7 +26,9 @@ describe("ES2019+ Array Methods", () => {
 
   describe("Array.prototype.flatMap", () => {
     it("should map and flatten", () => {
-      expect(interpreter.evaluate("[1, 2, 3].flatMap(x => [x, x * 2])")).toEqual([1, 2, 2, 4, 3, 6]);
+      expect(interpreter.evaluate("[1, 2, 3].flatMap(x => [x, x * 2])")).toEqual([
+        1, 2, 2, 4, 3, 6,
+      ]);
     });
 
     it("should handle returning empty array", () => {
@@ -82,11 +84,13 @@ describe("ES2019+ Array Methods", () => {
 
   describe("Array.prototype.toReversed", () => {
     it("should return reversed array without modifying original", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const arr = [1, 2, 3];
         const reversed = arr.toReversed();
         arr[0] + "-" + reversed[0]
-      `)).toBe("1-3");
+      `),
+      ).toBe("1-3");
     });
 
     it("should reverse array correctly", () => {
@@ -96,11 +100,13 @@ describe("ES2019+ Array Methods", () => {
 
   describe("Array.prototype.toSorted", () => {
     it("should return sorted array without modifying original", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const arr = [3, 1, 2];
         const sorted = arr.toSorted();
         arr[0] + "-" + sorted[0]
-      `)).toBe("3-1");
+      `),
+      ).toBe("3-1");
     });
 
     it("should sort array correctly", () => {
@@ -110,7 +116,13 @@ describe("ES2019+ Array Methods", () => {
 
   describe("Array.prototype.toSpliced", () => {
     it("should insert elements", () => {
-      expect(interpreter.evaluate("[1, 2, 3].toSpliced(1, 0, 'a', 'b')")).toEqual([1, "a", "b", 2, 3]);
+      expect(interpreter.evaluate("[1, 2, 3].toSpliced(1, 0, 'a', 'b')")).toEqual([
+        1,
+        "a",
+        "b",
+        2,
+        3,
+      ]);
     });
 
     it("should remove elements", () => {
@@ -120,11 +132,13 @@ describe("ES2019+ Array Methods", () => {
 
   describe("Array.prototype.with", () => {
     it("should return new array with modified element", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const arr = [1, 2, 3];
         const newArr = arr.with(1, "modified");
         arr[1] + "-" + newArr[1]
-      `)).toBe("2-modified");
+      `),
+      ).toBe("2-modified");
     });
 
     it("should modify at index", () => {

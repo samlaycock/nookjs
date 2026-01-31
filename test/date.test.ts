@@ -71,11 +71,13 @@ describe("Date", () => {
 
   describe("Date comparison", () => {
     it("should compare dates with getTime", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const d1 = new Date(2020, 0, 1);
         const d2 = new Date(2020, 0, 2);
         d1.getTime() < d2.getTime()
-      `)).toBe(true);
+      `),
+      ).toBe(true);
     });
   });
 });

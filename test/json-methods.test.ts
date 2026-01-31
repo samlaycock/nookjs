@@ -33,12 +33,14 @@ describe("JSON Methods", () => {
     });
 
     it("should stringify an object", () => {
-      const result = interpreter.evaluate('JSON.stringify({ a: 1, b: 2 })');
+      const result = interpreter.evaluate("JSON.stringify({ a: 1, b: 2 })");
       expect(result).toMatch(/\{.*"a":1.*"b":2.*\}/);
     });
 
     it("should handle mixed types in object", () => {
-      const result = interpreter.evaluate('JSON.stringify({ str: "hello", num: 42, bool: true, nullVal: null })');
+      const result = interpreter.evaluate(
+        'JSON.stringify({ str: "hello", num: 42, bool: true, nullVal: null })',
+      );
       expect(result).toBe('{"str":"hello","num":42,"bool":true,"nullVal":null}');
     });
 

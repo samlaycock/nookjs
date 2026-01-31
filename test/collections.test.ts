@@ -20,57 +20,71 @@ describe("Collections (Map, Set, WeakMap, WeakSet)", () => {
     });
 
     it("should set a key-value pair", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const map = new Map();
         map.set('key', 'value');
         map.get('key')
-      `)).toBe("value");
+      `),
+      ).toBe("value");
     });
 
     it("should get value by key", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const map = new Map([['a', 1], ['b', 2]]);
         map.get('b')
-      `)).toBe(2);
+      `),
+      ).toBe(2);
     });
 
     it("should return undefined for missing key", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const map = new Map();
         map.get('missing')
-      `)).toBeUndefined();
+      `),
+      ).toBeUndefined();
     });
 
     it("should return true for existing key with has", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const map = new Map([['a', 1]]);
         map.has('a')
-      `)).toBe(true);
+      `),
+      ).toBe(true);
     });
 
     it("should delete a key", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const map = new Map([['a', 1]]);
         map.delete('a');
         map.has('a')
-      `)).toBe(false);
+      `),
+      ).toBe(false);
     });
 
     it("should return size of map", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const map = new Map();
         map.set('a', 1);
         map.set('b', 2);
         map.size
-      `)).toBe(2);
+      `),
+      ).toBe(2);
     });
 
     it("should clear all entries", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const map = new Map([['a', 1], ['b', 2]]);
         map.clear();
         map.size
-      `)).toBe(0);
+      `),
+      ).toBe(0);
     });
   });
 
