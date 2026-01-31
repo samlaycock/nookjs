@@ -2501,8 +2501,10 @@ export class Interpreter {
     this.environment.declare("undefined", undefined, "const", true);
     this.environment.declare("NaN", NaN, "const", true);
     this.environment.declare("Infinity", Infinity, "const", true);
-    // Symbol is a fundamental primitive type constructor
-    this.environment.declare("Symbol", Symbol, "const", true);
+    // Symbol is a fundamental primitive type constructor - wrap in HostFunctionValue
+    this.environment.declare("Symbol", new HostFunctionValue(Symbol, "Symbol"), "const", true);
+    // Promise is needed for async/await support - wrap in HostFunctionValue
+    this.environment.declare("Promise", new HostFunctionValue(Promise, "Promise"), "const", true);
     // globalThis and global provide access to the sandbox's global scope
     this.environment.declare("globalThis", new GlobalThisSentinel(), "const", true);
     this.environment.declare("global", new GlobalThisSentinel(), "const", true);
@@ -2865,7 +2867,18 @@ export class Interpreter {
     this.beginEvaluation(options);
     try {
       const ast = this.parseAndValidate(input, options);
-      return this.evaluateNode(ast);
+      const needsFreshScope = typeof input !== "string";
+      const previousEnv = this.environment;
+      if (needsFreshScope) {
+        this.environment = new Environment(this.environment);
+      }
+      try {
+        return this.evaluateNode(ast);
+      } finally {
+        if (needsFreshScope) {
+          this.environment = previousEnv;
+        }
+      }
     } catch (error) {
       throw this.enhanceError(error);
     } finally {
@@ -2887,8 +2900,19 @@ export class Interpreter {
     }
     try {
       const ast = this.parseAndValidate(input, options);
-      const result = await this.evaluateNodeAsync(ast);
-      return result instanceof RawValue ? result.value : result;
+      const needsFreshScope = typeof input !== "string";
+      const previousEnv = this.environment;
+      if (needsFreshScope) {
+        this.environment = new Environment(this.environment);
+      }
+      try {
+        const result = await this.evaluateNodeAsync(ast);
+        return result instanceof RawValue ? result.value : result;
+      } finally {
+        if (needsFreshScope) {
+          this.environment = previousEnv;
+        }
+      }
     } catch (error) {
       throw this.enhanceError(error);
     } finally {
