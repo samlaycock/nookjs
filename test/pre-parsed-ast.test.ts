@@ -4,7 +4,10 @@ import type { ESTree } from "../src/ast";
 
 import { Interpreter } from "../src/interpreter";
 
-declare const setTimeout: (handler: (value: unknown) => void, ms: number) => ReturnType<typeof setTimeout>;
+declare const setTimeout: (
+  handler: (value: unknown) => void,
+  ms: number,
+) => ReturnType<typeof setTimeout>;
 declare const AbortController: typeof globalThis.AbortController;
 
 describe("Pre-parsed AST Support", () => {
