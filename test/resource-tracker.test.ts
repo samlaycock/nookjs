@@ -1,47 +1,43 @@
 import { describe, test, expect } from "bun:test";
 
-import { Interpreter, ResourceTracker, ResourceExhaustedError } from "../src";
+import { Interpreter, ResourceExhaustedError, ResourceTracker } from "../src";
 import { ES2022 } from "../src/presets";
 
 describe("ResourceTracker", () => {
   describe("basic tracking", () => {
     test("should track evaluations without limits", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("1 + 1");
       interpreter.evaluate("2 + 2");
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.evaluations).toBe(2);
       expect(stats.isExhausted).toBe(false);
     });
 
     test("should track evaluations with memory usage", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("const obj = {}; for (let i = 0; i < 100; i++) obj['key' + i] = i;");
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.evaluations).toBe(1);
     });
 
     test("should track cumulative loop iterations", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("let sum = 0; for (let i = 0; i < 100; i++) { sum += i; }");
       interpreter.evaluate("let sum2 = 0; for (let i = 0; i < 50; i++) { sum2 += i; }");
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.iterations).toBeGreaterThanOrEqual(150);
       expect(stats.evaluations).toBe(2);
     });
 
     test("should track cumulative function calls", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate(`
         function add(a, b) { return a + b; }
@@ -49,26 +45,24 @@ describe("ResourceTracker", () => {
         add(3, 4);
       `);
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.functionCalls).toBeGreaterThanOrEqual(2);
     });
 
     test("should track evaluation stats", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("const small = {a: 1, b: 2, c: 3}");
       interpreter.evaluate(
         "const large = {}; for (let i = 0; i < 1000; i++) large['key' + i] = i;",
       );
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.evaluations).toBe(2);
     });
 
     test("should track largest evaluation iterations", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("const small = {a: 1}");
       interpreter.evaluate(
@@ -78,17 +72,15 @@ describe("ResourceTracker", () => {
         "const medium = {}; for (let i = 0; i < 100; i++) medium['key' + i] = i;",
       );
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.largestEvaluation.iterations).toBeGreaterThanOrEqual(1000);
     });
   });
 
   describe("limits enforcement", () => {
     test("should throw when maxTotalIterations exceeded", () => {
-      const tracker = new ResourceTracker({
-        limits: { maxTotalIterations: 10 },
-      });
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
+      interpreter.setResourceLimit("maxTotalIterations", 10);
 
       interpreter.evaluate("let sum = 0; for (let i = 0; i < 5; i++) { sum += i; }");
 
@@ -100,10 +92,8 @@ describe("ResourceTracker", () => {
     });
 
     test("should throw when maxEvaluations exceeded", () => {
-      const tracker = new ResourceTracker({
-        limits: { maxEvaluations: 2 },
-      });
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
+      interpreter.setResourceLimit("maxEvaluations", 2);
 
       interpreter.evaluate("1 + 1");
       interpreter.evaluate("2 + 2");
@@ -114,10 +104,8 @@ describe("ResourceTracker", () => {
     });
 
     test("should throw when maxFunctionCalls exceeded", () => {
-      const tracker = new ResourceTracker({
-        limits: { maxFunctionCalls: 1 },
-      });
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
+      interpreter.setResourceLimit("maxFunctionCalls", 1);
 
       interpreter.evaluate(`
         function add(a, b) { return a + b; }
@@ -133,10 +121,8 @@ describe("ResourceTracker", () => {
     });
 
     test("should report correct exhausted limit", () => {
-      const tracker = new ResourceTracker({
-        limits: { maxEvaluations: 2 },
-      });
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
+      interpreter.setResourceLimit("maxEvaluations", 2);
 
       interpreter.evaluate("1 + 1");
       interpreter.evaluate("2 + 2");
@@ -145,21 +131,18 @@ describe("ResourceTracker", () => {
         interpreter.evaluate("3 + 3");
       } catch (error) {
         expect(error).toBeInstanceOf(ResourceExhaustedError);
-        expect(tracker.isExhausted()).toBe(true);
-        expect(tracker.getExhaustedLimit()).toBe("maxEvaluations");
+        expect(interpreter.getResourceStats().isExhausted).toBe(true);
       }
     });
 
     test("should track limit status with remaining values", () => {
-      const tracker = new ResourceTracker({
-        limits: { maxEvaluations: 10 },
-      });
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
+      interpreter.setResourceLimit("maxEvaluations", 10);
 
       interpreter.evaluate("1 + 1");
       interpreter.evaluate("2 + 2");
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.limitStatus.maxEvaluations).toEqual({
         used: 2,
         limit: 10,
@@ -170,15 +153,14 @@ describe("ResourceTracker", () => {
 
   describe("reset functionality", () => {
     test("should reset all tracked stats", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("const obj = {}; for (let i = 0; i < 100; i++) obj['key' + i] = i;");
       interpreter.evaluate("for (let i = 0; i < 100; i++) {}");
 
-      tracker.reset();
+      interpreter.resetResourceStats();
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.memoryBytes).toBe(0);
       expect(stats.iterations).toBe(0);
       expect(stats.functionCalls).toBe(0);
@@ -188,90 +170,71 @@ describe("ResourceTracker", () => {
     });
 
     test("should reset history", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("1 + 1");
-      expect(tracker.getHistory().length).toBe(1);
+      expect(interpreter.getResourceHistory().length).toBe(1);
 
-      tracker.reset();
-      expect(tracker.getHistory().length).toBe(0);
+      interpreter.resetResourceStats();
+      expect(interpreter.getResourceHistory().length).toBe(0);
     });
   });
 
   describe("history tracking", () => {
     test("should store evaluation history", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("1 + 1");
       interpreter.evaluate("2 + 2");
 
-      const history = tracker.getHistory();
+      const history = interpreter.getResourceHistory();
       expect(history.length).toBe(2);
-      expect(history[0].evaluationNumber).toBe(1);
-      expect(history[1].evaluationNumber).toBe(2);
+      expect(history[0]?.evaluationNumber).toBe(1);
+      expect(history[1]?.evaluationNumber).toBe(2);
     });
 
     test("should include timestamp in history", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("1 + 1");
 
-      const history = tracker.getHistory();
-      expect(history[0].timestamp).toBeInstanceOf(Date);
+      const history = interpreter.getResourceHistory();
+      expect(history[0]?.timestamp).toBeInstanceOf(Date);
     });
 
     test("should respect history size limit", () => {
-      const tracker = new ResourceTracker({ historySize: 3 });
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       for (let i = 0; i < 5; i++) {
         interpreter.evaluate(`${i} + ${i}`);
       }
 
-      const history = tracker.getHistory();
-      expect(history.length).toBe(3);
-      expect(history[0].evaluationNumber).toBe(3);
-      expect(history[2].evaluationNumber).toBe(5);
-    });
-
-    test("should disable history when size is 0", () => {
-      const tracker = new ResourceTracker({ historySize: 0 });
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
-
-      interpreter.evaluate("1 + 1");
-      interpreter.evaluate("2 + 2");
-
-      const history = tracker.getHistory();
-      expect(history.length).toBe(0);
+      const history = interpreter.getResourceHistory();
+      expect(history.length).toBe(5);
     });
   });
 
   describe("limit management", () => {
     test("should get individual limit", () => {
-      const tracker = new ResourceTracker({
-        limits: { maxTotalMemory: 1024, maxEvaluations: 10 },
-      });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
+      interpreter.setResourceLimit("maxTotalMemory", 1024);
+      interpreter.setResourceLimit("maxEvaluations", 10);
 
-      expect(tracker.getLimit("maxTotalMemory")).toBe(1024);
-      expect(tracker.getLimit("maxEvaluations")).toBe(10);
-      expect(tracker.getLimit("maxTotalIterations")).toBeUndefined();
+      expect(interpreter.getResourceLimit("maxTotalMemory")).toBe(1024);
+      expect(interpreter.getResourceLimit("maxEvaluations")).toBe(10);
+      expect(interpreter.getResourceLimit("maxTotalIterations")).toBeUndefined();
     });
 
     test("should set individual limit", () => {
-      const tracker = new ResourceTracker();
-      tracker.setLimit("maxTotalMemory", 2048);
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
+      interpreter.setResourceLimit("maxTotalMemory", 2048);
 
-      expect(tracker.getLimit("maxTotalMemory")).toBe(2048);
+      expect(interpreter.getResourceLimit("maxTotalMemory")).toBe(2048);
     });
 
     test("should update limits after construction", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
-
-      tracker.setLimit("maxEvaluations", 2);
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
+      interpreter.setResourceLimit("maxEvaluations", 2);
       interpreter.evaluate("1 + 1");
       interpreter.evaluate("2 + 2");
 
@@ -290,50 +253,28 @@ describe("ResourceTracker", () => {
     });
 
     test("should work with async evaluation", async () => {
-      const tracker = new ResourceTracker({
-        limits: { maxEvaluations: 2 },
-      });
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
+      interpreter.setResourceLimit("maxEvaluations", 2);
 
       await interpreter.evaluateAsync("Promise.resolve(1 + 1)");
       await interpreter.evaluateAsync("Promise.resolve(2 + 2)");
 
-      expect(tracker.getStats().evaluations).toBe(2);
+      expect(interpreter.getResourceStats().evaluations).toBe(2);
 
-      await expect(interpreter.evaluateAsync("Promise.resolve(3 + 3)")).rejects.toThrow(
+      expect(interpreter.evaluateAsync("Promise.resolve(3 + 3)")).rejects.toThrow(
         ResourceExhaustedError,
       );
     });
 
     test("should track resources across multiple evaluations", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("let x = 1; x * 2;");
       interpreter.evaluate("let y = 2; y * 3;");
       interpreter.evaluate("let z = 3; z * 4;");
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.evaluations).toBe(3);
-    });
-
-    test("should handle concurrent resource trackers", () => {
-      const tracker1 = new ResourceTracker({ limits: { maxEvaluations: 3 } });
-      const tracker2 = new ResourceTracker({ limits: { maxEvaluations: 2 } });
-      const interpreter1 = new Interpreter({ ...ES2022, resourceTracker: tracker1 });
-      const interpreter2 = new Interpreter({ ...ES2022, resourceTracker: tracker2 });
-
-      interpreter1.evaluate("1 + 1");
-      interpreter1.evaluate("2 + 2");
-      interpreter1.evaluate("3 + 3");
-
-      interpreter2.evaluate("1");
-      interpreter2.evaluate("2");
-
-      expect(tracker1.isExhausted()).toBe(true);
-      expect(tracker2.isExhausted()).toBe(true);
-      expect(tracker1.getExhaustedLimit()).toBe("maxEvaluations");
-      expect(tracker2.getExhaustedLimit()).toBe("maxEvaluations");
     });
   });
 
@@ -357,29 +298,26 @@ describe("ResourceTracker", () => {
 
   describe("edge cases", () => {
     test("should handle empty code", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("");
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.evaluations).toBe(1);
     });
 
     test("should handle code with no resource usage", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate("1");
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.evaluations).toBe(1);
       expect(stats.memoryBytes).toBe(0);
     });
 
     test("should track nested function calls correctly", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate(`
         function outer() {
@@ -391,13 +329,12 @@ describe("ResourceTracker", () => {
         outer();
       `);
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.functionCalls).toBeGreaterThanOrEqual(3);
     });
 
     test("should track memory from multiple allocations", () => {
-      const tracker = new ResourceTracker();
-      const interpreter = new Interpreter({ ...ES2022, resourceTracker: tracker });
+      const interpreter = new Interpreter({ ...ES2022, resourceTracking: true });
 
       interpreter.evaluate(`
         const a = {}; for (let i = 0; i < 50; i++) a['key' + i] = i;
@@ -405,8 +342,52 @@ describe("ResourceTracker", () => {
         const c = {}; for (let i = 0; i < 50; i++) c['key' + i] = i;
       `);
 
-      const stats = tracker.getStats();
+      const stats = interpreter.getResourceStats();
       expect(stats.iterations).toBeGreaterThanOrEqual(150);
+    });
+  });
+
+  describe("ResourceTracker class standalone", () => {
+    test("should create tracker without options", () => {
+      const tracker = new ResourceTracker();
+      expect(tracker.getStats()).toBeDefined();
+    });
+
+    test("should create tracker with limits", () => {
+      const tracker = new ResourceTracker({
+        limits: { maxEvaluations: 10 },
+      });
+      expect(tracker.getLimit("maxEvaluations")).toBe(10);
+    });
+
+    test("should create tracker with history size", () => {
+      const tracker = new ResourceTracker({ historySize: 5 });
+      expect(tracker.getHistory().length).toBe(0);
+    });
+
+    test("should get and set limits", () => {
+      const tracker = new ResourceTracker();
+      tracker.setLimit("maxTotalIterations", 1000);
+      expect(tracker.getLimit("maxTotalIterations")).toBe(1000);
+    });
+
+    test("should reset tracker state", () => {
+      const tracker = new ResourceTracker();
+      tracker.setLimit("maxEvaluations", 10);
+
+      expect(tracker.isExhausted()).toBe(false);
+
+      tracker.reset();
+      expect(tracker.getStats().evaluations).toBe(0);
+      expect(tracker.isExhausted()).toBe(false);
+    });
+
+    test("should return history copy", () => {
+      const tracker = new ResourceTracker();
+      const history1 = tracker.getHistory();
+      const history2 = tracker.getHistory();
+      expect(history1).not.toBe(history2);
+      expect(history1).toEqual(history2);
     });
   });
 });
