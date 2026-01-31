@@ -492,8 +492,6 @@ const isKeyword = (value: string): boolean => {
     case "async":
     case "await":
     case "yield":
-    case "get":
-    case "set":
     case "static":
     case "true":
     case "false":
@@ -2134,12 +2132,24 @@ class Parser {
       break;
     }
 
-    if (this.currentType === TOKEN.Keyword && this.currentValue === "get") {
-      this.next();
-      kind = "get";
-    } else if (this.currentType === TOKEN.Keyword && this.currentValue === "set") {
-      this.next();
-      kind = "set";
+    if (
+      (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+      (this.currentValue === "get" || this.currentValue === "set")
+    ) {
+      const peekType = this.tokenizer.peekType();
+      const peekValue = this.tokenizer.peekValue();
+      const isAccessor =
+        peekType === TOKEN.Identifier ||
+        peekType === TOKEN.String ||
+        peekType === TOKEN.Number ||
+        peekType === TOKEN.Keyword ||
+        peekType === TOKEN.PrivateIdentifier ||
+        (peekType === TOKEN.Punctuator && peekValue === "[");
+      if (isAccessor) {
+        const accessorKind = this.currentValue as "get" | "set";
+        this.next();
+        kind = accessorKind;
+      }
     } else if (this.currentType === TOKEN.Keyword && this.currentValue === "async") {
       this.next();
       asyncFlag = true;
@@ -3156,7 +3166,7 @@ class Parser {
   }
 
   private parseBindingPattern(): ESTree.Pattern {
-    if (this.currentType === TOKEN.Identifier) {
+    if (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) {
       return this.parseIdentifier();
     }
     if (this.currentType === TOKEN.Punctuator) {

@@ -26,27 +26,33 @@ describe("ES2020+ Features", () => {
 
   describe("Logical Assignment Operators", () => {
     it("should use ||=", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         let x = null;
         x ||= 5;
         x
-      `)).toBe(5);
+      `),
+      ).toBe(5);
     });
 
     it("should use &&=", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         let x = 10;
         x &&= 5;
         x
-      `)).toBe(5);
+      `),
+      ).toBe(5);
     });
 
     it("should use ??=", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         let x = null;
         x ??= 5;
         x
-      `)).toBe(5);
+      `),
+      ).toBe(5);
     });
   });
 
@@ -66,11 +72,13 @@ describe("ES2020+ Features", () => {
     });
 
     it("should use **=", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         let x = 2;
         x **= 3;
         x
-      `)).toBe(8);
+      `),
+      ).toBe(8);
     });
   });
 

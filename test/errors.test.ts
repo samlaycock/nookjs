@@ -20,13 +20,15 @@ describe("Error Subclasses", () => {
     });
 
     it("should be throwable and catchable", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         try {
           throw new TypeError('type error');
         } catch (e) {
           typeof e
         }
-      `)).toBe("object");
+      `),
+      ).toBe("object");
     });
 
     it("should be instance of Error", () => {
@@ -36,7 +38,9 @@ describe("Error Subclasses", () => {
 
   describe("ReferenceError", () => {
     it("should create a ReferenceError", () => {
-      expect(interpreter.evaluate("new ReferenceError('undefined var').message")).toBe("undefined var");
+      expect(interpreter.evaluate("new ReferenceError('undefined var').message")).toBe(
+        "undefined var",
+      );
     });
 
     it("should have correct name", () => {

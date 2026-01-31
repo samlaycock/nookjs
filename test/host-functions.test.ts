@@ -318,6 +318,17 @@ describe("Host Functions", () => {
       }).toThrow("Cannot access __proto__");
     });
 
+    it("should prevent accessing constructor via computed property", () => {
+      const interpreter = new Interpreter({
+        globals: {
+          myFunc: () => 42,
+        },
+      });
+      expect(() => {
+        interpreter.evaluate('myFunc["constructor"]');
+      }).toThrow("Cannot access constructor");
+    });
+
     it("should prevent accessing constructor on host functions", () => {
       const interpreter = new Interpreter({
         globals: {
