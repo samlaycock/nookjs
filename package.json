@@ -4,6 +4,9 @@
   "description": "A fast(ish), standards-compliant JavaScript/TypeScript(ish) parser and interpreter written in TypeScript.",
   "homepage": "https://nookjs.dev",
   "license": "MIT",
+  "repository": {
+    "url": "https://github.com/samlaycock/nookjs"
+  },
   "files": [
     "dist"
   ],
