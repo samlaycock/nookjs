@@ -79,6 +79,11 @@ describe("Variables and Assignments", () => {
       interpreter.evaluate("const x = 5");
       expect(() => interpreter.evaluate("const x = 10")).toThrow(InterpreterError);
     });
+
+    test("allows keywords like set as identifiers", () => {
+      interpreter.evaluate("const set = 5");
+      expect(interpreter.evaluate("set")).toBe(5);
+    });
   });
 
   describe("Variable Access", () => {

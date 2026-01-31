@@ -4372,6 +4372,9 @@ export class Interpreter {
 
   private ensureNoPrototypeAccessForSymbol(object: any, property: symbol): void {
     // Mirror inherited-property checks for symbol keys to prevent prototype probing.
+    if (this.isReadOnlyProxyObject(object)) {
+      return;
+    }
     if (object === null || typeof object !== "object") {
       return;
     }
@@ -4430,6 +4433,9 @@ export class Interpreter {
   }
 
   private ensureNoPrototypeAccess(object: any, propName: string): void {
+    if (this.isReadOnlyProxyObject(object)) {
+      return;
+    }
     if (object === null || typeof object !== "object") {
       return;
     }
@@ -4462,6 +4468,23 @@ export class Interpreter {
 
   private shouldForcePropertyValidation(property: string): boolean {
     return property === "__proto__" || property === "constructor" || property === "prototype";
+  }
+
+  private isReadOnlyProxyObject(value: any): boolean {
+    if (value instanceof HostFunctionValue) {
+      return false;
+    }
+    return value !== null && typeof value === "object" && Boolean((value as any)[PROXY_TARGET]);
+  }
+
+  private isPrimitiveValue(value: any): boolean {
+    return (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint" ||
+      typeof value === "symbol"
+    );
   }
 
   private getInstanceClass(object: any): ClassValue | null {
@@ -7003,10 +7026,26 @@ export class Interpreter {
       const property = this.evaluateNode(node.property);
       if (typeof property === "symbol") {
         this.validateSymbolProperty(property);
+        if (this.isReadOnlyProxyObject(object)) {
+          return (object as any)[property];
+        }
         if (typeof object === "object" && object !== null) {
           return this.accessObjectProperty(object, property);
         }
         throw new InterpreterError("Computed property access requires an array or object");
+      }
+      const propName = String(property);
+      if (this.isReadOnlyProxyObject(object) && !Array.isArray(object)) {
+        validatePropertyName(propName);
+        return (object as any)[propName];
+      }
+      if (this.isPrimitiveValue(object)) {
+        validatePropertyName(propName);
+        const nativeMember = this.getNativeMethod(object, propName);
+        if (nativeMember !== undefined) {
+          return nativeMember;
+        }
+        throw new InterpreterError(`Property '${propName}' not supported`);
       }
 
       // Handle Symbol constructor - allow access to static properties
@@ -7017,6 +7056,9 @@ export class Interpreter {
       // Handle HostFunctionValue computed access - block internal/meta properties
       if (object instanceof HostFunctionValue) {
         const propName = String(property);
+        if (isDangerousProperty(propName)) {
+          throw new InterpreterError(`Cannot access ${propName} on host function '${object.name}'`);
+        }
         if (
           propName === "hostFunc" ||
           propName === "isAsync" ||
@@ -7139,6 +7181,18 @@ export class Interpreter {
           return nativeMethod;
         }
         throw new InterpreterError(`String property '${property}' not supported`);
+      }
+
+      if (this.isReadOnlyProxyObject(object)) {
+        return (object as any)[property];
+      }
+
+      if (this.isPrimitiveValue(object)) {
+        const nativeMethod = this.getNativeMethod(object, property);
+        if (nativeMethod !== undefined) {
+          return nativeMethod;
+        }
+        throw new InterpreterError(`Property '${property}' not supported`);
       }
 
       // Handle object property access
@@ -9800,10 +9854,26 @@ export class Interpreter {
       const property = await this.evaluateNodeAsync(node.property);
       if (typeof property === "symbol") {
         this.validateSymbolProperty(property);
+        if (this.isReadOnlyProxyObject(object)) {
+          return (object as any)[property];
+        }
         if (typeof object === "object" && object !== null) {
           return this.accessObjectProperty(object, property);
         }
         throw new InterpreterError("Computed property access requires an array or object");
+      }
+      const propName = String(property);
+      if (this.isReadOnlyProxyObject(object) && !Array.isArray(object)) {
+        validatePropertyName(propName);
+        return (object as any)[propName];
+      }
+      if (this.isPrimitiveValue(object)) {
+        validatePropertyName(propName);
+        const nativeMember = this.getNativeMethod(object, propName);
+        if (nativeMember !== undefined) {
+          return nativeMember;
+        }
+        throw new InterpreterError(`Property '${propName}' not supported`);
       }
 
       // Handle Symbol constructor - allow access to static properties
@@ -9814,6 +9884,9 @@ export class Interpreter {
       // Handle HostFunctionValue computed access - block internal/meta properties
       if (object instanceof HostFunctionValue) {
         const propName = String(property);
+        if (isDangerousProperty(propName)) {
+          throw new InterpreterError(`Cannot access ${propName} on host function '${object.name}'`);
+        }
         if (
           propName === "hostFunc" ||
           propName === "isAsync" ||
@@ -9927,6 +10000,18 @@ export class Interpreter {
           return nativeMethod;
         }
         throw new InterpreterError(`String property '${property}' not supported`);
+      }
+
+      if (this.isReadOnlyProxyObject(object)) {
+        return (object as any)[property];
+      }
+
+      if (this.isPrimitiveValue(object)) {
+        const nativeMethod = this.getNativeMethod(object, property);
+        if (nativeMethod !== undefined) {
+          return nativeMethod;
+        }
+        throw new InterpreterError(`Property '${property}' not supported`);
       }
 
       if (typeof object === "object" && object !== null && !Array.isArray(object)) {

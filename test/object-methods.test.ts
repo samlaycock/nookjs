@@ -12,7 +12,7 @@ describe("Object Static Methods", () => {
 
   describe("Object.values", () => {
     it("should return array of object values", () => {
-      expect(interpreter.evaluate('Object.values({ a: 1, b: 2 })')).toEqual([1, 2]);
+      expect(interpreter.evaluate("Object.values({ a: 1, b: 2 })")).toEqual([1, 2]);
     });
 
     it("should return empty array for empty object", () => {
@@ -26,10 +26,12 @@ describe("Object Static Methods", () => {
 
   describe("Object.entries", () => {
     it("should return array of entries", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const entries = Object.entries({ a: 1, b: 2 });
         entries.length
-      `)).toBe(2);
+      `),
+      ).toBe(2);
     });
 
     it("should return empty array for empty object", () => {
@@ -39,7 +41,10 @@ describe("Object Static Methods", () => {
 
   describe("Object.fromEntries", () => {
     it("should create object from entries", () => {
-      expect(interpreter.evaluate("Object.fromEntries([['a', 1], ['b', 2]])")).toEqual({ a: 1, b: 2 });
+      expect(interpreter.evaluate("Object.fromEntries([['a', 1], ['b', 2]])")).toEqual({
+        a: 1,
+        b: 2,
+      });
     });
 
     it("should handle empty entries", () => {
@@ -49,23 +54,27 @@ describe("Object Static Methods", () => {
 
   describe("Object.hasOwn", () => {
     it("should return true for own property", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const obj = { a: 1 };
         Object.hasOwn(obj, 'a')
-      `)).toBe(true);
+      `),
+      ).toBe(true);
     });
 
     it("should return false for inherited property", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const obj = { a: 1 };
         Object.hasOwn(obj, 'toString')
-      `)).toBe(false);
+      `),
+      ).toBe(false);
     });
   });
 
   describe("Object.keys", () => {
     it("should return array of property keys", () => {
-      expect(interpreter.evaluate('Object.keys({ a: 1, b: 2 })')).toEqual(["a", "b"]);
+      expect(interpreter.evaluate("Object.keys({ a: 1, b: 2 })")).toEqual(["a", "b"]);
     });
 
     it("should return empty array for empty object", () => {
@@ -75,20 +84,24 @@ describe("Object Static Methods", () => {
 
   describe("Object.assign", () => {
     it("should copy properties from source to target", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const target = {};
         const source = { a: 1, b: 2 };
         Object.assign(target, source);
         target.a + target.b
-      `)).toBe(3);
+      `),
+      ).toBe(3);
     });
 
     it("should copy from multiple sources", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const obj = {};
         Object.assign(obj, { a: 1 }, { b: 2 }, { c: 3 });
         obj.a + obj.b + obj.c
-      `)).toBe(6);
+      `),
+      ).toBe(6);
     });
   });
 
@@ -98,10 +111,12 @@ describe("Object Static Methods", () => {
     });
 
     it("should return true for same object", () => {
-      expect(interpreter.evaluate(`
+      expect(
+        interpreter.evaluate(`
         const obj = {};
         Object.is(obj, obj)
-      `)).toBe(true);
+      `),
+      ).toBe(true);
     });
 
     it("should return false for different objects", () => {
