@@ -4,6 +4,9 @@ import type { ESTree } from "../src/ast";
 
 import { Interpreter } from "../src/interpreter";
 
+declare const setTimeout: (handler: (value: unknown) => void, ms: number) => ReturnType<typeof setTimeout>;
+declare const AbortController: typeof globalThis.AbortController;
+
 describe("Pre-parsed AST Support", () => {
   describe("parse() method", () => {
     test("returns valid ESTree.Program", () => {
@@ -21,7 +24,7 @@ describe("Pre-parsed AST Support", () => {
       const ast = interpreter.parse("2 + 2");
 
       expect(ast.body.length).toBe(1);
-      expect(ast.body[0].type).toBe("ExpressionStatement");
+      expect(ast.body[0]?.type).toBe("ExpressionStatement");
     });
 
     test("parses complex code with functions", () => {
@@ -35,8 +38,8 @@ describe("Pre-parsed AST Support", () => {
       `);
 
       expect(ast.body.length).toBe(2);
-      expect(ast.body[0].type).toBe("FunctionDeclaration");
-      expect(ast.body[1].type).toBe("ExpressionStatement");
+      expect(ast.body[0]?.type).toBe("FunctionDeclaration");
+      expect(ast.body[1]?.type).toBe("ExpressionStatement");
     });
 
     test("throws ParseError on invalid syntax", () => {
