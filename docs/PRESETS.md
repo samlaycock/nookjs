@@ -68,20 +68,20 @@ const opts = preset(ES2022, {
 
 These presets configure the interpreter for specific ECMAScript versions by whitelisting appropriate language features and providing era-appropriate globals.
 
-| Preset           | Year | Key Features                                              |
-| ---------------- | ---- | --------------------------------------------------------- |
-| `ES5`            | 2009 | var, functions, basic control flow                        |
-| `ES2015` / `ES6` | 2015 | let/const, arrow functions, classes, Promises, generators |
-| `ES2016`         | 2016 | Exponentiation operator                                   |
-| `ES2017`         | 2017 | async/await                                               |
-| `ES2018`         | 2018 | Async generators                                          |
-| `ES2019`         | 2019 | Optional catch binding                                    |
-| `ES2020`         | 2020 | Optional chaining, nullish coalescing, BigInt             |
-| `ES2021`         | 2021 | Logical assignment operators                              |
-| `ES2022`         | 2022 | Class fields, private fields, static blocks               |
+| Preset           | Year | Key Features                                                                                         |
+| ---------------- | ---- | ---------------------------------------------------------------------------------------------------- |
+| `ES5`            | 2009 | var, functions, basic control flow                                                                   |
+| `ES2015` / `ES6` | 2015 | let/const, arrow functions, classes, Promises, generators                                            |
+| `ES2016`         | 2016 | Exponentiation operator                                                                              |
+| `ES2017`         | 2017 | async/await                                                                                          |
+| `ES2018`         | 2018 | Async generators                                                                                     |
+| `ES2019`         | 2019 | Optional catch binding                                                                               |
+| `ES2020`         | 2020 | Optional chaining, nullish coalescing, BigInt                                                        |
+| `ES2021`         | 2021 | Logical assignment operators                                                                         |
+| `ES2022`         | 2022 | Class fields, private fields, static blocks                                                          |
 | `ES2023`         | 2023 | (No new interpreter features) - Hashbang grammar support, Array methods (findLast, toReversed, etc.) |
-| `ES2024`         | 2024 | (No new interpreter features) - Promise.withResolvers(), ArrayBuffer transfer |
-| `ESNext`         | -    | All features enabled, no restrictions                     |
+| `ES2024`         | 2024 | (No new interpreter features) - Promise.withResolvers(), ArrayBuffer transfer                        |
+| `ESNext`         | -    | All features enabled, no restrictions                                                                |
 
 ### Included Globals
 

@@ -14,16 +14,16 @@ The `ResourceTracker` class provides:
 ## Quick Start
 
 ```typescript
-import { Interpreter, ResourceTracker, ResourceExhaustedError } from 'nookjs';
+import { Interpreter, ResourceTracker, ResourceExhaustedError } from "nookjs";
 
 const tracker = new ResourceTracker({
   limits: {
-    maxTotalMemory: 100 * 1024 * 1024,  // 100 MB cumulative
-    maxTotalIterations: 1000000,         // 1M total loop iterations
-    maxFunctionCalls: 10000,             // 10K function calls
-    maxCpuTime: 30000,                   // 30 seconds cumulative CPU
-    maxEvaluations: 100,                 // 100 evaluations
-  }
+    maxTotalMemory: 100 * 1024 * 1024, // 100 MB cumulative
+    maxTotalIterations: 1000000, // 1M total loop iterations
+    maxFunctionCalls: 10000, // 10K function calls
+    maxCpuTime: 30000, // 30 seconds cumulative CPU
+    maxEvaluations: 100, // 100 evaluations
+  },
 });
 
 const interpreter = new Interpreter({
@@ -50,10 +50,7 @@ console.log(`Iterations: ${stats.iterations}`);
 
 ```typescript
 class ResourceTracker {
-  constructor(options?: {
-    limits?: ResourceLimits;
-    historySize?: number;
-  });
+  constructor(options?: { limits?: ResourceLimits; historySize?: number });
 
   getStats(): ResourceStats;
   isExhausted(): boolean;
@@ -69,11 +66,11 @@ class ResourceTracker {
 
 ```typescript
 type ResourceLimits = {
-  maxTotalMemory?: number;        // bytes (cumulative)
-  maxTotalIterations?: number;    // loop iterations (cumulative)
-  maxFunctionCalls?: number;      // function invocations (cumulative)
-  maxCpuTime?: number;            // milliseconds (best-effort)
-  maxEvaluations?: number;        // number of evaluate() calls
+  maxTotalMemory?: number; // bytes (cumulative)
+  maxTotalIterations?: number; // loop iterations (cumulative)
+  maxFunctionCalls?: number; // function invocations (cumulative)
+  maxCpuTime?: number; // milliseconds (best-effort)
+  maxEvaluations?: number; // number of evaluate() calls
 };
 ```
 
@@ -81,17 +78,18 @@ type ResourceLimits = {
 
 ```typescript
 type ResourceStats = {
-  memoryBytes: number;            // current estimated memory
-  iterations: number;             // total loop iterations
-  functionCalls: number;          // total function calls
-  cpuTimeMs: number;              // cumulative CPU time
-  evaluations: number;            // number of evaluations
-  peakMemoryBytes: number;        // highest memory seen
-  largestEvaluation: {            // heaviest single evaluation
+  memoryBytes: number; // current estimated memory
+  iterations: number; // total loop iterations
+  functionCalls: number; // total function calls
+  cpuTimeMs: number; // cumulative CPU time
+  evaluations: number; // number of evaluations
+  peakMemoryBytes: number; // highest memory seen
+  largestEvaluation: {
+    // heaviest single evaluation
     memory: number;
     iterations: number;
   };
-  isExhausted: boolean;           // any limit exceeded
+  isExhausted: boolean; // any limit exceeded
   limitStatus: {
     [key in keyof ResourceLimits]?: {
       used: number;
@@ -123,7 +121,7 @@ Track resource usage per plugin:
 ```typescript
 const createPluginInterpreter = (pluginId: string, memoryLimit: number) => {
   const tracker = new ResourceTracker({
-    limits: { maxTotalMemory: memoryLimit }
+    limits: { maxTotalMemory: memoryLimit },
   });
 
   return new Interpreter({
@@ -133,8 +131,8 @@ const createPluginInterpreter = (pluginId: string, memoryLimit: number) => {
 };
 
 const plugins = {
-  payment: createPluginInterpreter('payment', 50 * 1024 * 1024),
-  analytics: createPluginInterpreter('analytics', 50 * 1024 * 1024),
+  payment: createPluginInterpreter("payment", 50 * 1024 * 1024),
+  analytics: createPluginInterpreter("analytics", 50 * 1024 * 1024),
 };
 
 plugins.payment.evaluate(paymentCode);
@@ -156,7 +154,7 @@ class StudentSession {
         maxEvaluations: 50,
         maxTotalIterations: 100000,
         maxCpuTime: 5000,
-      }
+      },
     });
 
     this.interpreter = new Interpreter({
@@ -173,7 +171,7 @@ class StudentSession {
       if (error instanceof ResourceExhaustedError) {
         return {
           success: false,
-          reason: 'resource_limit_exceeded',
+          reason: "resource_limit_exceeded",
           limit: error.resourceType,
         };
       }
@@ -203,7 +201,7 @@ class RateLimitedInterpreter {
 
   constructor() {
     this.tracker = new ResourceTracker({
-      limits: { maxEvaluations: 1000 }
+      limits: { maxEvaluations: 1000 },
     });
 
     this.interpreter = new Interpreter({
@@ -213,7 +211,7 @@ class RateLimitedInterpreter {
 
   evaluate(code: string): any {
     if (this.tokens <= 0) {
-      throw new Error('Rate limit exceeded');
+      throw new Error("Rate limit exceeded");
     }
 
     const result = this.interpreter.evaluate(code);
@@ -285,7 +283,7 @@ const createMonitoringEndpoint = () => {
     limits: {
       maxTotalMemory: 500 * 1024 * 1024,
       maxTotalIterations: 10000000,
-    }
+    },
   });
 
   const interpreter = new Interpreter({
@@ -298,8 +296,8 @@ const createMonitoringEndpoint = () => {
       current: tracker.getStats(),
       history: tracker.getHistory(),
       limits: {
-        memory: tracker.getLimit('maxTotalMemory'),
-        iterations: tracker.getLimit('maxTotalIterations'),
+        memory: tracker.getLimit("maxTotalMemory"),
+        iterations: tracker.getLimit("maxTotalIterations"),
       },
     }),
     reset: () => tracker.reset(),
@@ -323,7 +321,7 @@ Example:
 
 ```typescript
 const tracker = new ResourceTracker({
-  limits: { maxEvaluations: 5 }
+  limits: { maxEvaluations: 5 },
 });
 const interpreter = new Interpreter({ resourceTracker: tracker });
 
@@ -345,16 +343,17 @@ try {
 
 ## Performance Characteristics
 
-| Operation | Overhead |
-|-----------|----------|
-| `getStats()` | O(1) |
-| `isExhausted()` | O(1) |
-| `getHistory()` | O(n) where n = history size |
+| Operation               | Overhead                       |
+| ----------------------- | ------------------------------ |
+| `getStats()`            | O(1)                           |
+| `isExhausted()`         | O(1)                           |
+| `getHistory()`          | O(n) where n = history size    |
 | Per-evaluation tracking | Minimal (< 1% additional time) |
 
 ### Memory Tracking Notes
 
 Memory tracking is a best-effort estimate based on:
+
 - Array allocations: ~16 bytes per element
 - Object allocations: ~64 bytes base + 32 bytes per property
 - String allocations (via template literals): ~2 bytes per character
@@ -369,14 +368,14 @@ CPU time is estimated using wall-clock time. This is a best-effort approximation
 
 ## Comparison with Per-Evaluation Limits
 
-| Feature | Per-Evaluation Limit | ResourceTracker |
-|---------|---------------------|-----------------|
-| Memory | `maxMemory` | `maxTotalMemory` |
-| Loop iterations | `maxLoopIterations` | `maxTotalIterations` |
-| Call stack depth | `maxCallStackDepth` | Not tracked |
-| Function calls | Not available | `maxFunctionCalls` |
-| CPU time | Not available | `maxCpuTime` |
-| Evaluation count | Not available | `maxEvaluations` |
-| Scope | Single call | Cumulative |
+| Feature          | Per-Evaluation Limit | ResourceTracker      |
+| ---------------- | -------------------- | -------------------- |
+| Memory           | `maxMemory`          | `maxTotalMemory`     |
+| Loop iterations  | `maxLoopIterations`  | `maxTotalIterations` |
+| Call stack depth | `maxCallStackDepth`  | Not tracked          |
+| Function calls   | Not available        | `maxFunctionCalls`   |
+| CPU time         | Not available        | `maxCpuTime`         |
+| Evaluation count | Not available        | `maxEvaluations`     |
+| Scope            | Single call          | Cumulative           |
 
 Use per-evaluation limits for immediate protection against single runaway scripts, and ResourceTracker for multi-tenant resource accounting and billing.

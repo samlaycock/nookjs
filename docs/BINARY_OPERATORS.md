@@ -13,11 +13,11 @@ Binary operations such as `+`, `-`, comparisons, bitwise operators, and `**`.
 
 ## Supported Operators
 
-| Category | Operators | Example |
-|----------|-----------|---------|
-| Arithmetic | `+`, `-`, `*`, `/`, `%`, `**` | `2 ** 3` → `8` |
+| Category   | Operators                                      | Example          |
+| ---------- | ---------------------------------------------- | ---------------- |
+| Arithmetic | `+`, `-`, `*`, `/`, `%`, `**`                  | `2 ** 3` → `8`   |
 | Comparison | `==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=` | `1 < 2` → `true` |
-| Bitwise | `&`, `\|`, `^`, `<<`, `>>`, `>>>` | `5 << 1` → `10` |
+| Bitwise    | `&`, `\|`, `^`, `<<`, `>>`, `>>>`              | `5 << 1` → `10`  |
 
 ## Gotchas
 

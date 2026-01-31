@@ -20,7 +20,7 @@ Tagged template literals like `tag`hello ${world}``.
 
 ```javascript
 function tag(strings, ...values) {
-  let result = '';
+  let result = "";
   strings.forEach((str, i) => {
     result += str;
     if (i < values.length) {
@@ -30,7 +30,7 @@ function tag(strings, ...values) {
   return result;
 }
 
-const name = 'world';
+const name = "world";
 tag`hello ${name}`; // "hello WORLD"
 ```
 

@@ -41,13 +41,13 @@ class Child extends Parent {
 ```javascript
 class Parent {
   greet() {
-    return 'Hello';
+    return "Hello";
   }
 }
 
 class Child extends Parent {
   greet() {
-    return super.greet() + ', World!';
+    return super.greet() + ", World!";
   }
 }
 ```

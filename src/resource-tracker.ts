@@ -160,12 +160,17 @@ export class ResourceTracker {
       throw new ResourceExhaustedError(
         this.exhaustedLimit,
         this.getStats().limitStatus[this.exhaustedLimit]?.used ?? 0,
-        this.limits[this.exhaustedLimit] ?? 0
+        this.limits[this.exhaustedLimit] ?? 0,
       );
     }
   }
 
-  endEvaluation(memoryBytes: number, iterations: number, functionCalls: number, cpuTimeMs: number): void {
+  endEvaluation(
+    memoryBytes: number,
+    iterations: number,
+    functionCalls: number,
+    cpuTimeMs: number,
+  ): void {
     this.evaluationNumber++;
 
     if (memoryBytes > this.peakMemory) {

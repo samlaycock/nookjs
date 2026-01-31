@@ -28,7 +28,7 @@ for (let i = 0, j = 10; i < j; i++, j--) {
 }
 
 // Shorthand for multiple statements in arrow function body
-const fn = (console.log('init'), () => 'result');
+const fn = (console.log("init"), () => "result");
 fn(); // Logs "init", returns "result"
 ```
 
