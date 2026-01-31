@@ -9,6 +9,9 @@ export type {
   SecurityOptions,
   ExecutionStats,
   ExecutionStep,
+  ResourceLimits,
+  ResourceStats,
+  ResourceHistoryEntry,
 } from "./interpreter";
 
 export {
