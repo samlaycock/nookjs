@@ -22,7 +22,9 @@
   },
   "scripts": {
     "lint": "oxlint . --type-aware",
+    "lint:fix": "oxlint . --type-aware --fix",
     "fmt": "oxfmt .",
+    "fmt:check": "oxfmt . --check",
     "typecheck": "tsc --noEmit",
     "build": "tsdown",
     "benchmark": "bun run benchmarks/interpreter.ts",
