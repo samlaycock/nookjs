@@ -915,6 +915,20 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual({ 1: 2, 2: 4, 3: 6 });
         });
+
+        it("should skip holes in sparse arrays", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, , 3];
+                    let visited = [];
+                    arr.reduce((acc, val, idx) => {
+                      visited.push(idx);
+                      return acc + (val || 0);
+                    }, 0);
+                    visited
+                  `);
+          expect(result).toEqual([0, 1, 2]);
+        });
       });
 
       describe("every", () => {

@@ -17,6 +17,11 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("parseInt('10', 16)")).toBe(16);
       });
 
+      it("should parse up to first non-digit", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseInt('10px')")).toBe(10);
+      });
+
       it("should return NaN for invalid input", () => {
         const interpreter = new Interpreter(ES5);
         expect(Number.isNaN(interpreter.evaluate("parseInt('abc')"))).toBe(true);
@@ -37,6 +42,11 @@ describe("Numbers", () => {
       it("should parse integer", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseFloat('42')")).toBe(42);
+      });
+
+      it("should parse float up to first non-digit", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseFloat('3.14px')")).toBeCloseTo(3.14, 2);
       });
 
       it("should return NaN for invalid input", () => {

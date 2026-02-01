@@ -1110,6 +1110,14 @@ describe("Strings", () => {
             `);
           expect(result).toBe(false);
         });
+
+        it("should return false when position exceeds length", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "Hello".startsWith("Hello", 10)
+            `);
+          expect(result).toBe(false);
+        });
       });
 
       describe("endsWith", () => {

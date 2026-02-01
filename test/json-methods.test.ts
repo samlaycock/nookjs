@@ -45,6 +45,11 @@ describe("JSON", () => {
         expect(result).toBe('{"str":"hello","num":42,"bool":true,"nullVal":null}');
       });
 
+      it("should support replacer array to select keys", () => {
+        const result = interpreter.evaluate("JSON.stringify({ a: 1, b: 2, c: 3 }, ['a', 'c'])");
+        expect(result).toBe('{"a":1,"c":3}');
+      });
+
       it("should handle NaN and Infinity", () => {
         expect(interpreter.evaluate("JSON.stringify(NaN)")).toBe("null");
         expect(interpreter.evaluate("JSON.stringify(Infinity)")).toBe("null");

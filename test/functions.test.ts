@@ -145,6 +145,16 @@ describe("Functions", () => {
           const result = interpreter.evaluate(code);
           expect(result).toBe(15);
         });
+
+        test("supports immediately-invoked function expression (IIFE)", () => {
+          const code = `
+            (function () {
+              let value = 40;
+              return value + 2;
+            })()
+          `;
+          expect(interpreter.evaluate(code)).toBe(42);
+        });
       });
 
       describe("Return statements", () => {

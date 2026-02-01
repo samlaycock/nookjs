@@ -1430,6 +1430,15 @@ describe("Objects", () => {
           `);
           expect(result).toBe("a,b");
         });
+
+        it("should skip null and undefined sources", () => {
+          const result = interpreter.evaluate(`
+            const target = { a: 1 };
+            Object.assign(target, null, undefined, { b: 2 });
+            target.a + target.b
+          `);
+          expect(result).toBe(3);
+        });
       });
 
       describe("Object.is", () => {
