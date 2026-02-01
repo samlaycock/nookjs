@@ -59,9 +59,7 @@ describe("AST", () => {
         expect(forIn.type).toBe("ForInStatement");
         const forInExisting = parseFirstStatement("for (k in obj) {}");
         expect(forInExisting.type).toBe("ForInStatement");
-        expect((forInExisting as ESTree.ForInStatement).left.type).toBe(
-          "Identifier"
-        );
+        expect((forInExisting as ESTree.ForInStatement).left.type).toBe("Identifier");
         const forOf = parseFirstStatement("for (let v of arr) {}");
         expect(forOf.type).toBe("ForOfStatement");
       });
@@ -80,9 +78,7 @@ describe("AST", () => {
       });
 
       it("parses switch/case/default", () => {
-        const stmt = parseFirstStatement(
-          "switch (x) { case 1: x; break; default: x; }"
-        );
+        const stmt = parseFirstStatement("switch (x) { case 1: x; break; default: x; }");
         expect(stmt.type).toBe("SwitchStatement");
         const sw = stmt as ESTree.SwitchStatement;
         expect(sw.cases.length).toBe(2);
@@ -115,9 +111,7 @@ describe("AST", () => {
       it("parses throw/try/catch/finally", () => {
         const thr = parseFirstStatement("throw new Error('x');");
         expect(thr.type).toBe("ThrowStatement");
-        const tri = parseFirstStatement(
-          "try { x; } catch (e) { y; } finally { z; }"
-        );
+        const tri = parseFirstStatement("try { x; } catch (e) { y; } finally { z; }");
         expect(tri.type).toBe("TryStatement");
         const triNode = tri as ESTree.TryStatement;
         expect(triNode.handler?.param?.type).toBe("Identifier");
@@ -193,18 +187,14 @@ describe("AST", () => {
 
     describe("Functions and arrows", () => {
       it("parses function declarations/expressions", () => {
-        const decl = parseFirstStatement(
-          "function add(a, b) { return a + b; }"
-        );
+        const decl = parseFirstStatement("function add(a, b) { return a + b; }");
         expect(decl.type).toBe("FunctionDeclaration");
         const expr = parseFirstExpression("(function named() { return 1; });");
         expect(expr.type).toBe("FunctionExpression");
       });
 
       it("parses async + generator functions", () => {
-        const asyncDecl = parseFirstStatement(
-          "async function f() { return 1; }"
-        );
+        const asyncDecl = parseFirstStatement("async function f() { return 1; }");
         expect(asyncDecl.type).toBe("FunctionDeclaration");
         expect((asyncDecl as ESTree.FunctionDeclaration).async).toBe(true);
         const gen = parseFirstStatement("function* g(){ yield 1; }");
@@ -239,7 +229,7 @@ describe("AST", () => {
     describe("TypeScript annotations (stripped)", () => {
       it("parses variable and parameter type annotations", () => {
         const ast = parseModule(
-          "let x: number = 1; function f(a: string, b?: number): void { return; }"
+          "let x: number = 1; function f(a: string, b?: number): void { return; }",
         );
         expect(ast.type).toBe("Program");
         expect(ast.body.length).toBe(2);
@@ -249,11 +239,10 @@ describe("AST", () => {
 
       it("parses arrow return types and as-assertions", () => {
         const ast = parseModule(
-          "const f = (a: number): number => a as number; const g = a: number => a;"
+          "const f = (a: number): number => a as number; const g = a: number => a;",
         );
         const decl = ast.body[0] as ESTree.VariableDeclaration;
-        const init = decl.declarations[0]
-          ?.init as ESTree.ArrowFunctionExpression;
+        const init = decl.declarations[0]?.init as ESTree.ArrowFunctionExpression;
         expect(init.type).toBe("ArrowFunctionExpression");
       });
 
@@ -266,15 +255,11 @@ describe("AST", () => {
       `);
         expect(stmt.type).toBe("ClassDeclaration");
         const cls = stmt as ESTree.ClassDeclaration;
-        expect(
-          cls.body.body.some((node) => node.type === "PropertyDefinition")
-        ).toBe(true);
+        expect(cls.body.body.some((node) => node.type === "PropertyDefinition")).toBe(true);
       });
 
       it("drops type and interface declarations", () => {
-        const ast = parseModule(
-          "type Foo = { a: number }; interface Bar { b: string } let x = 1;"
-        );
+        const ast = parseModule("type Foo = { a: number }; interface Bar { b: string } let x = 1;");
         expect(ast.body.length).toBe(1);
         expect(ast.body[0]?.type).toBe("VariableDeclaration");
       });
@@ -303,9 +288,7 @@ describe("AST", () => {
         const decl = stmt as ESTree.VariableDeclaration;
         const pattern = decl.declarations[0]?.id as ESTree.ObjectPattern;
         expect(pattern.type).toBe("ObjectPattern");
-        expect(pattern.properties.some((p) => p.type === "RestElement")).toBe(
-          true
-        );
+        expect(pattern.properties.some((p) => p.type === "RestElement")).toBe(true);
       });
 
       it("parses array pattern destructuring", () => {
@@ -313,9 +296,7 @@ describe("AST", () => {
         const decl = stmt as ESTree.VariableDeclaration;
         const pattern = decl.declarations[0]?.id as ESTree.ArrayPattern;
         expect(pattern.type).toBe("ArrayPattern");
-        expect(pattern.elements.some((e) => e?.type === "RestElement")).toBe(
-          true
-        );
+        expect(pattern.elements.some((e) => e?.type === "RestElement")).toBe(true);
       });
 
       it("parses template literals", () => {
@@ -343,12 +324,8 @@ describe("AST", () => {
         const cls = stmt as ESTree.ClassDeclaration;
         expect(cls.superClass?.type).toBe("Identifier");
         const body = cls.body.body;
-        expect(body.some((node) => node.type === "MethodDefinition")).toBe(
-          true
-        );
-        expect(body.some((node) => node.type === "PropertyDefinition")).toBe(
-          true
-        );
+        expect(body.some((node) => node.type === "MethodDefinition")).toBe(true);
+        expect(body.some((node) => node.type === "PropertyDefinition")).toBe(true);
         expect(body.some((node) => node.type === "StaticBlock")).toBe(true);
       });
 
@@ -464,9 +441,9 @@ describe("AST", () => {
         const interpreter = new Interpreter();
         const rejectAllValidator = () => false;
 
-        expect(() =>
-          interpreter.parse("let x = 5", { validator: rejectAllValidator })
-        ).toThrow("AST validation failed");
+        expect(() => interpreter.parse("let x = 5", { validator: rejectAllValidator })).toThrow(
+          "AST validation failed",
+        );
       });
     });
 
@@ -502,9 +479,9 @@ describe("AST", () => {
           return !code.includes('"WhileStatement"');
         };
 
-        expect(() =>
-          interpreter.evaluate(ast, { validator: noLoopsValidator })
-        ).toThrow("AST validation failed");
+        expect(() => interpreter.evaluate(ast, { validator: noLoopsValidator })).toThrow(
+          "AST validation failed",
+        );
       });
 
       it("maintains existing behavior for string input", () => {
@@ -546,12 +523,8 @@ describe("AST", () => {
 
         expect(interpreter.evaluate(ast)).toBe(8);
 
-        const astWithLoop = interpreter.parse(
-          "let i = 0; while (false) { i = 1; }"
-        );
-        expect(() => interpreter.evaluate(astWithLoop)).toThrow(
-          "AST validation failed"
-        );
+        const astWithLoop = interpreter.parse("let i = 0; while (false) { i = 1; }");
+        expect(() => interpreter.evaluate(astWithLoop)).toThrow("AST validation failed");
       });
 
       it("per-call validator overrides constructor validator", () => {
@@ -563,9 +536,7 @@ describe("AST", () => {
         });
         const ast = interpreter.parse("2 + 2");
 
-        expect(interpreter.evaluate(ast, { validator: allowAllPerCall })).toBe(
-          4
-        );
+        expect(interpreter.evaluate(ast, { validator: allowAllPerCall })).toBe(4);
       });
     });
 
@@ -613,9 +584,9 @@ describe("AST", () => {
           return !code.includes('"WhileStatement"');
         };
 
-        await expect(
-          interpreter.evaluateAsync(ast, { validator: noLoopsValidator })
-        ).rejects.toThrow("AST validation failed");
+        expect(interpreter.evaluateAsync(ast, { validator: noLoopsValidator })).rejects.toThrow(
+          "AST validation failed",
+        );
       });
 
       it("maintains existing behavior for string input", async () => {
@@ -625,8 +596,7 @@ describe("AST", () => {
       });
 
       it("works with AbortSignal", async () => {
-        const delay = (ms: number) =>
-          new Promise((resolve) => setTimeout(resolve, ms));
+        const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
         const controller = new AbortController();
         const interpreter = new Interpreter({ globals: { delay } });
 
@@ -640,9 +610,9 @@ describe("AST", () => {
 
         setTimeout(() => controller.abort(), 25);
 
-        await expect(
-          interpreter.evaluateAsync(ast, { signal: controller.signal })
-        ).rejects.toThrow("Execution aborted");
+        expect(interpreter.evaluateAsync(ast, { signal: controller.signal })).rejects.toThrow(
+          "Execution aborted",
+        );
       });
     });
 
@@ -659,9 +629,9 @@ describe("AST", () => {
         const ast = interpreter.parse("2 + 2");
 
         const failValidator = () => false;
-        expect(() =>
-          interpreter.evaluate(ast, { validator: failValidator })
-        ).toThrow("AST validation failed");
+        expect(() => interpreter.evaluate(ast, { validator: failValidator })).toThrow(
+          "AST validation failed",
+        );
       });
 
       it("empty AST body evaluates correctly", () => {
