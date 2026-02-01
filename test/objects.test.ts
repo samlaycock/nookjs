@@ -1410,6 +1410,26 @@ describe("Objects", () => {
           `);
           expect(result).toBe(42);
         });
+
+        it("should evaluate getters while assigning", () => {
+          const result = interpreter.evaluate(`
+            let calls = [];
+            const source = {
+              get a() {
+                calls.push("a");
+                return 1;
+              },
+              get b() {
+                calls.push("b");
+                return 2;
+              },
+            };
+            const target = {};
+            Object.assign(target, source);
+            calls.join(",");
+          `);
+          expect(result).toBe("a,b");
+        });
       });
 
       describe("Object.is", () => {

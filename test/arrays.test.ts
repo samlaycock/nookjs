@@ -838,6 +838,20 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual([]);
         });
+
+        it("should skip holes in sparse arrays", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, , 3];
+                    let visited = [];
+                    arr.filter((val, idx) => {
+                      visited.push(idx);
+                      return true;
+                    });
+                    visited
+                  `);
+          expect(result).toEqual([0, 1, 2]);
+        });
       });
 
       describe("reduce", () => {

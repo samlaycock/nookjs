@@ -753,6 +753,22 @@ describe("Strings", () => {
                 `);
           expect(result).toEqual(["a", "b", "c"]);
         });
+
+        it("should split with empty regex", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "abc".split(/(?:)/)
+                `);
+          expect(result).toEqual(["a", "b", "c"]);
+        });
+
+        it("should honor limit when using regex separator", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "a1b2c3".split(/\\d/, 2)
+                `);
+          expect(result).toEqual(["a", "b"]);
+        });
       });
 
       describe("replace", () => {
