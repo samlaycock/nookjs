@@ -118,6 +118,11 @@ describe("Math", () => {
         expect(interpreter.evaluate("Math.min(1, 5, 3, 9, 2)")).toBe(1);
       });
 
+      it("should handle negative values", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Math.min(-5, -2, -10)")).toBe(-10);
+      });
+
       it("should return Infinity for no arguments", () => {
         const interpreter = new Interpreter(ES5);
         const result = interpreter.evaluate("Math.min()");

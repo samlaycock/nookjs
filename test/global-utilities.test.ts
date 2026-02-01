@@ -53,6 +53,11 @@ describe("Global Utilities", () => {
         expect(interpreter.evaluate('encodeURIComponent("a:b/c")')).toBe("a%3Ab%2Fc");
       });
 
+      it("should encode unicode characters", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('encodeURIComponent("✓")')).toBe("%E2%9C%93");
+      });
+
       it("should encode spaces as %20", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate('encodeURIComponent("a b")')).toBe("a%20b");

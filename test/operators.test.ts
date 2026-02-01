@@ -83,6 +83,12 @@ describe("Operators", () => {
           expect(interpreter.evaluate("undefined == 0")).toBe(false);
         });
 
+        test("NaN is not equal to itself", () => {
+          expect(interpreter.evaluate("NaN === NaN")).toBe(false);
+          expect(interpreter.evaluate("NaN !== NaN")).toBe(true);
+          expect(interpreter.evaluate("NaN == NaN")).toBe(false);
+        });
+
         test("loose inequality with same types", () => {
           expect(interpreter.evaluate("5 != 3")).toBe(true);
           expect(interpreter.evaluate("5 != 5")).toBe(false);
@@ -642,6 +648,7 @@ describe("Operators", () => {
           expect(interpreter.evaluate("typeof 3.14")).toBe("number");
           expect(interpreter.evaluate("typeof 0")).toBe("number");
           expect(interpreter.evaluate("typeof -5")).toBe("number");
+          expect(interpreter.evaluate("typeof NaN")).toBe("number");
         });
 
         it("should return 'string' for strings", () => {

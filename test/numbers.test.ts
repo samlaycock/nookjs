@@ -64,6 +64,11 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("parseFloat('42')")).toBe(42);
       });
 
+      it("should parse scientific notation", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseFloat('1e2')")).toBe(100);
+      });
+
       it("should parse float up to first non-digit", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseFloat('3.14px')")).toBeCloseTo(3.14, 2);
@@ -179,6 +184,11 @@ describe("Numbers", () => {
       it("should return true for integer", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("Number.isInteger(42)")).toBe(true);
+      });
+
+      it("should return true for -0", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isInteger(-0)")).toBe(true);
       });
 
       it("should return false for float", () => {

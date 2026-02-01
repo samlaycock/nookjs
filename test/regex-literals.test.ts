@@ -105,6 +105,16 @@ describe("RegExp", () => {
         expect(result).toBe(true);
       });
 
+      test("non-global regex does not advance lastIndex", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate(`
+          var re = /a/;
+          re.test("a");
+          re.lastIndex;
+        `);
+        expect(result).toBe(0);
+      });
+
       test("regex.test() with no match", () => {
         const interpreter = new Interpreter(ES5);
         const result = interpreter.evaluate(`/xyz/.test("hello world")`);

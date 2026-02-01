@@ -647,6 +647,15 @@ describe("Arrays", () => {
           expect(result).toEqual([]);
         });
 
+        it("should return empty array when end is before start", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3];
+                    arr.slice(2, 1)
+                  `);
+          expect(result).toEqual([]);
+        });
+
         it("should not modify original array", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -673,6 +682,15 @@ describe("Arrays", () => {
                     arr.slice()
                   `);
           expect(result).toEqual([1, 2, 3]);
+        });
+
+        it("should clamp end beyond length", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3];
+                    arr.slice(1, 10)
+                  `);
+          expect(result).toEqual([2, 3]);
         });
 
         it("should clamp negative start beyond length", () => {
@@ -1340,6 +1358,15 @@ describe("Arrays", () => {
                     arr.lastIndexOf(2, 2);
                   `);
           expect(result).toBe(1);
+        });
+
+        it("should handle negative fromIndex", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2, 3, 2, 1];
+                    arr.lastIndexOf(2, -1);
+                  `);
+          expect(result).toBe(3);
         });
       });
     });
