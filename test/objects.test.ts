@@ -815,6 +815,16 @@ describe("Objects", () => {
           `);
           expect(result).toEqual(["1", "2", "b", "a"]);
         });
+
+        it("should return indices for arrays", () => {
+          const result = interpreter.evaluate(`Object.keys(["a", "b"])`);
+          expect(result).toEqual(["0", "1"]);
+        });
+
+        it("should include keys with undefined values", () => {
+          const result = interpreter.evaluate(`Object.keys({ a: undefined, b: 1 })`);
+          expect(result).toEqual(["a", "b"]);
+        });
       });
     });
 

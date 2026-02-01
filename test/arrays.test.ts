@@ -674,6 +674,15 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual([1, 2, 3]);
         });
+
+        it("should clamp negative start beyond length", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3];
+                    arr.slice(-10)
+                  `);
+          expect(result).toEqual([1, 2, 3]);
+        });
       });
 
       describe("concat", () => {
@@ -781,6 +790,15 @@ describe("Arrays", () => {
                   `);
           expect(result).toBe(3);
         });
+
+        it("should handle negative fromIndex", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3, 2, 1];
+                    arr.indexOf(2, -2)
+                  `);
+          expect(result).toBe(3);
+        });
       });
 
       describe("join", () => {
@@ -791,6 +809,12 @@ describe("Arrays", () => {
                     arr.join()
                   `);
           expect(result).toBe("1,2,3");
+        });
+
+        it("should treat undefined separator as default", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`["a", "b"].join(undefined)`);
+          expect(result).toBe("a,b");
         });
 
         it("should join with custom separator", () => {

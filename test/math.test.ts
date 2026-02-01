@@ -95,6 +95,11 @@ describe("Math", () => {
         expect(interpreter.evaluate("Math.max(1, 5, 3, 9, 2)")).toBe(9);
       });
 
+      it("should handle negative values", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Math.max(-5, -2, -10)")).toBe(-2);
+      });
+
       it("should return -Infinity for no arguments", () => {
         const interpreter = new Interpreter(ES5);
         const result = interpreter.evaluate("Math.max()");
@@ -142,6 +147,11 @@ describe("Math", () => {
       it("should return 1 for exponent 0", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("Math.pow(5, 0)")).toBe(1);
+      });
+
+      it("should handle negative exponent", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Math.pow(2, -1)")).toBeCloseTo(0.5, 5);
       });
     });
 

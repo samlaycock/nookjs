@@ -434,6 +434,14 @@ describe("Strings", () => {
     });
 
     describe("String Methods", () => {
+      describe("concat", () => {
+        it("should concatenate multiple strings", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`"hello".concat(" ", "world")`);
+          expect(result).toBe("hello world");
+        });
+      });
+
       describe("substring", () => {
         it("should extract substring with start and end", () => {
           const interpreter = new Interpreter();
@@ -701,6 +709,18 @@ describe("Strings", () => {
                   str.trim()
                 `);
           expect(result).toBe("hello");
+        });
+
+        it("should return same string when no whitespace", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`"hello".trim()`);
+          expect(result).toBe("hello");
+        });
+
+        it("should handle empty string", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`"".trim()`);
+          expect(result).toBe("");
         });
 
         it("should not modify middle whitespace", () => {

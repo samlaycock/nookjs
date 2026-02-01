@@ -82,10 +82,18 @@ describe("JSON", () => {
         expect(interpreter.evaluate('JSON.parse("42")')).toBe(42);
       });
 
+      it("should parse a JSON string value", () => {
+        expect(interpreter.evaluate('JSON.parse("\\"hello\\"")')).toBe("hello");
+      });
+
       it("should parse with surrounding whitespace", () => {
         expect(interpreter.evaluate("JSON.parse('  {\"a\":1}  ')")).toEqual({
           a: 1,
         });
+      });
+
+      it("should parse numbers with surrounding whitespace", () => {
+        expect(interpreter.evaluate('JSON.parse(" 42 ")')).toBe(42);
       });
 
       it("should apply reviver function", () => {

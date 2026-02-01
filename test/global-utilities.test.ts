@@ -35,6 +35,11 @@ describe("Global Utilities", () => {
         expect(interpreter.evaluate('decodeURI("hello%20world")')).toBe("hello world");
       });
 
+      it("should decode spaces", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('decodeURI("a%20b")')).toBe("a b");
+      });
+
       it("should leave encoded fragment identifiers intact", () => {
         const interpreter = new Interpreter(ES5);
         const result = interpreter.evaluate('decodeURI("https://example.com%23section")');

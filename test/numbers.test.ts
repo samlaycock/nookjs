@@ -17,6 +17,11 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("parseInt('10', 16)")).toBe(16);
       });
 
+      it("should parse hex with 0x prefix", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseInt('0x10')")).toBe(16);
+      });
+
       it("should parse up to first non-digit", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseInt('10px')")).toBe(10);
@@ -49,6 +54,11 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("parseFloat('3.14')")).toBeCloseTo(3.14, 2);
       });
 
+      it("should handle leading plus sign", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseFloat('+3.5')")).toBeCloseTo(3.5, 2);
+      });
+
       it("should parse integer", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseFloat('42')")).toBe(42);
@@ -74,6 +84,11 @@ describe("Numbers", () => {
       it("should return true for NaN", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("isNaN(NaN)")).toBe(true);
+      });
+
+      it("should return true for non-numeric string", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isNaN('foo')")).toBe(true);
       });
 
       it("should return false for number", () => {
@@ -106,6 +121,11 @@ describe("Numbers", () => {
       it("should return true for regular number", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("isFinite(42)")).toBe(true);
+      });
+
+      it("should return true for null", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isFinite(null)")).toBe(true);
       });
 
       it("should return true for numeric string", () => {
