@@ -673,6 +673,15 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual([1, 2, 3, 4, 5]);
         });
+
+        it("should only flatten one level of nested arrays", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1];
+                    arr.concat([2, [3]])
+                  `);
+          expect(result).toEqual([1, 2, [3]]);
+        });
       });
 
       describe("indexOf", () => {

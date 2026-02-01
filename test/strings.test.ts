@@ -788,6 +788,14 @@ describe("Strings", () => {
                 `);
           expect(result).toBe("Hello World");
         });
+
+        it("should support replacement with capture groups", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "John Doe".replace(/(\\w+)\\s(\\w+)/, "$2, $1")
+                `);
+          expect(result).toBe("Doe, John");
+        });
       });
 
       describe("Method chaining", () => {

@@ -456,5 +456,21 @@ describe("Global Objects (via ReadOnlyProxy)", () => {
         expect(result).toBe(3);
       });
     });
+
+    describe("Object.prototype.toString.call", () => {
+      it("should return [object Array] for arrays", () => {
+        const interpreter = new Interpreter({ globals: { Object } });
+        expect(() => {
+          interpreter.evaluate("Object.prototype.toString.call([1, 2])");
+        }).toThrow("Property name 'prototype' is not allowed for security reasons");
+      });
+
+      it("should return [object Date] for dates", () => {
+        const interpreter = new Interpreter({ globals: { Object, Date } });
+        expect(() => {
+          interpreter.evaluate("Object.prototype.toString.call(new Date())");
+        }).toThrow("Property name 'prototype' is not allowed for security reasons");
+      });
+    });
   });
 });
