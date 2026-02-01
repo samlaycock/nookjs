@@ -736,12 +736,24 @@ describe("Strings", () => {
           expect(result).toEqual([]);
         });
 
+        it("should treat undefined as missing separator", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`"aundefinedb".split(undefined)`);
+          expect(result).toEqual(["aundefinedb"]);
+        });
+
         it("should split by space", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
                   "hello world foo".split(" ")
                 `);
           expect(result).toEqual(["hello", "world", "foo"]);
+        });
+
+        it("should respect split limit", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`"a,b,c".split(",", 1)`);
+          expect(result).toEqual(["a"]);
         });
 
         it("should work with limit", () => {
@@ -801,6 +813,14 @@ describe("Strings", () => {
                   str.replace("world", "there")
                 `);
           expect(result).toBe("hello there");
+        });
+
+        it("should treat string pattern as literal, not regex", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "a.b".replace(".", "-")
+                `);
+          expect(result).toBe("a-b");
         });
 
         it("should only replace first occurrence", () => {

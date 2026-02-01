@@ -57,12 +57,27 @@ describe("Global Utilities", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate('encodeURIComponent("a+b")')).toBe("a%2Bb");
       });
+
+      it("should not encode tilde", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('encodeURIComponent("~")')).toBe("~");
+      });
     });
 
     describe("decodeURIComponent", () => {
       it("should decode URI component", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate('decodeURIComponent("a%3Ab%2Fc")')).toBe("a:b/c");
+      });
+
+      it("should decode plus sign", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('decodeURIComponent("%2B")')).toBe("+");
+      });
+
+      it("should decode spaces", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('decodeURIComponent("%20")')).toBe(" ");
       });
 
       it("should round-trip through encodeURIComponent", () => {

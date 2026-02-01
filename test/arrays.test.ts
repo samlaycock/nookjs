@@ -1,7 +1,7 @@
 import { describe, it, test, expect, beforeEach } from "bun:test";
 
 import { Interpreter } from "../src/interpreter";
-import { ES2023, ES2024 } from "../src/presets";
+import { ES5, ES2023, ES2024 } from "../src/presets";
 
 describe("Arrays", () => {
   describe("ES5", () => {
@@ -16,6 +16,12 @@ describe("Arrays", () => {
         const result = interpreter.evaluate("[]");
         expect(Array.isArray(result)).toBe(true);
         expect(result.length).toBe(0);
+      });
+
+      test("Array.isArray returns false for non-arrays", () => {
+        const es5Interpreter = new Interpreter(ES5);
+        const result = es5Interpreter.evaluate("Array.isArray({ length: 1 })");
+        expect(result).toBe(false);
       });
 
       test("array with numbers", () => {
@@ -139,6 +145,15 @@ describe("Arrays", () => {
               arr[1]
             `;
         expect(interpreter.evaluate(code)).toBe(99);
+      });
+
+      test("append using length index", () => {
+        const code = `
+              let arr = [1, 2];
+              arr[arr.length] = 3;
+              arr
+            `;
+        expect(interpreter.evaluate(code)).toEqual([1, 2, 3]);
       });
 
       test("modify first element", () => {
@@ -614,6 +629,24 @@ describe("Arrays", () => {
           expect(result).toEqual([4, 5]);
         });
 
+        it("should handle negative end index", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3, 4, 5];
+                    arr.slice(0, -1)
+                  `);
+          expect(result).toEqual([1, 2, 3, 4]);
+        });
+
+        it("should return empty array when start exceeds length", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3];
+                    arr.slice(10)
+                  `);
+          expect(result).toEqual([]);
+        });
+
         it("should not modify original array", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -652,6 +685,25 @@ describe("Arrays", () => {
                     arr1.concat(arr2)
                   `);
           expect(result).toEqual([1, 2, 3, 4]);
+        });
+
+        it("should preserve null and undefined values", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1];
+                    arr.concat(undefined, null)
+                  `);
+          expect(result).toEqual([1, undefined, null]);
+        });
+
+        it("should not flatten array-like objects", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1];
+                    let arrayLike = { 0: 2, 1: 3, length: 2 };
+                    arr.concat(arrayLike)
+                  `);
+          expect(result).toEqual([1, { 0: 2, 1: 3, length: 2 }]);
         });
 
         it("should not modify original arrays", () => {

@@ -358,6 +358,12 @@ describe("Operators", () => {
           expect(interpreter.evaluate("1 || 2")).toBe(1);
         });
 
+        test("truthy objects in logical operations", () => {
+          const result = interpreter.evaluate("({} || 5) === {}");
+          expect(result).toBe(false);
+          expect(interpreter.evaluate("[] || 5")).toEqual([]);
+        });
+
         test("comparison with expression results", () => {
           expect(interpreter.evaluate("(2 + 3) === (1 + 4)")).toBe(true);
           expect(interpreter.evaluate("(10 / 2) > (3 * 1)")).toBe(true);

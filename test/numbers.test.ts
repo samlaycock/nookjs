@@ -36,6 +36,11 @@ describe("Numbers", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseInt('-42')")).toBe(-42);
       });
+
+      it("should handle leading plus sign", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseInt('+42')")).toBe(42);
+      });
     });
 
     describe("parseFloat", () => {
@@ -88,6 +93,11 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("isFinite(Infinity)")).toBe(false);
       });
 
+      it("should return false for NaN", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isFinite(NaN)")).toBe(false);
+      });
+
       it("should return false for -Infinity", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("isFinite(-Infinity)")).toBe(false);
@@ -96,6 +106,11 @@ describe("Numbers", () => {
       it("should return true for regular number", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("isFinite(42)")).toBe(true);
+      });
+
+      it("should return true for numeric string", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isFinite('42')")).toBe(true);
       });
 
       it("should return true for zero", () => {
@@ -166,6 +181,11 @@ describe("Numbers", () => {
       it("should parse hex", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("Number.parseInt('FF', 16)")).toBe(255);
+      });
+
+      it("should parse up to first non-digit", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.parseInt('10px')")).toBe(10);
       });
     });
 

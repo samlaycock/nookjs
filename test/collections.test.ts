@@ -99,6 +99,16 @@ describe("Collections", () => {
         ).toBe(false);
       });
 
+      it("should return false when deleting missing key", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(
+          interpreter.evaluate(`
+          const map = new Map([['a', 1]]);
+          map.delete('b')
+        `),
+        ).toBe(false);
+      });
+
       it("should return size of map", () => {
         const interpreter = new Interpreter(ES2015);
         expect(
@@ -195,6 +205,15 @@ describe("Collections", () => {
         expect(result).toEqual([true, 2]);
       });
 
+      it("should return false for missing value with has", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const mySet = new Set([1, 2]);
+          mySet.has(3);
+        `);
+        expect(result).toBe(false);
+      });
+
       it("should return false when deleting missing value", () => {
         const interpreter = new Interpreter(ES2015);
         const result = interpreter.evaluate(`
@@ -225,6 +244,17 @@ describe("Collections", () => {
           [map.get(key), map.has(key)];
         `);
         expect(result).toEqual([99, true]);
+      });
+
+      it("should return false for missing key with has", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const key = {};
+          const map = new WeakMap();
+          map.set(key, 99);
+          map.has({});
+        `);
+        expect(result).toBe(false);
       });
 
       it("should allow deleting entries from WeakMap", () => {

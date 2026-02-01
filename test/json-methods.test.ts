@@ -37,9 +37,19 @@ describe("JSON", () => {
         expect(interpreter.evaluate("JSON.stringify([1, undefined, 2])")).toBe("[1,null,2]");
       });
 
+      it("should return undefined for top-level undefined", () => {
+        const result = interpreter.evaluate("JSON.stringify(undefined)");
+        expect(result).toBeUndefined();
+      });
+
       it("should stringify an object", () => {
         const result = interpreter.evaluate("JSON.stringify({ a: 1, b: 2 })");
         expect(result).toMatch(/\{.*"a":1.*"b":2.*\}/);
+      });
+
+      it("should omit undefined properties in objects", () => {
+        const result = interpreter.evaluate("JSON.stringify({ a: 1, b: undefined })");
+        expect(result).toBe('{"a":1}');
       });
 
       it("should handle mixed types in object", () => {

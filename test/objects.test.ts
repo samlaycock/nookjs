@@ -1400,6 +1400,15 @@ describe("Objects", () => {
           ).toBe(6);
         });
 
+        it("should overwrite existing keys with later sources", () => {
+          const result = interpreter.evaluate(`
+            const target = { a: 1 };
+            Object.assign(target, { a: 2, b: 3 });
+            [target.a, target.b];
+          `);
+          expect(result).toEqual([2, 3]);
+        });
+
         it("should copy symbol-keyed enumerable properties", () => {
           const result = interpreter.evaluate(`
             const key = Symbol("k");
