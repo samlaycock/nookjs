@@ -297,12 +297,8 @@ describe("Operators", () => {
         });
 
         test("nested logical expressions", () => {
-          expect(
-            interpreter.evaluate("(true && true) && (false || true)")
-          ).toBe(true);
-          expect(
-            interpreter.evaluate("(true || false) && (true || false)")
-          ).toBe(true);
+          expect(interpreter.evaluate("(true && true) && (false || true)")).toBe(true);
+          expect(interpreter.evaluate("(true || false) && (true || false)")).toBe(true);
         });
       });
 
@@ -603,7 +599,7 @@ describe("Operators", () => {
 
           test("power of 2 check", () => {
             interpreter.evaluate(
-              "let isPowerOf2 = function(n) { return n > 0 && (n & (n - 1)) === 0; }"
+              "let isPowerOf2 = function(n) { return n > 0 && (n & (n - 1)) === 0; }",
             );
             expect(interpreter.evaluate("isPowerOf2(8)")).toBe(true);
             expect(interpreter.evaluate("isPowerOf2(16)")).toBe(true);
@@ -615,12 +611,8 @@ describe("Operators", () => {
             interpreter.evaluate("const WRITE = 2");
             interpreter.evaluate("const EXECUTE = 4");
             interpreter.evaluate("let permissions = READ | WRITE");
-            expect(interpreter.evaluate("(permissions & READ) !== 0")).toBe(
-              true
-            );
-            expect(interpreter.evaluate("(permissions & EXECUTE) !== 0")).toBe(
-              false
-            );
+            expect(interpreter.evaluate("(permissions & READ) !== 0")).toBe(true);
+            expect(interpreter.evaluate("(permissions & EXECUTE) !== 0")).toBe(false);
           });
 
           test("clear lowest set bit", () => {
@@ -708,9 +700,7 @@ describe("Operators", () => {
           const interpreter = new Interpreter();
           // typeof on undefined variable should return "undefined", not throw
           expect(interpreter.evaluate("typeof undefinedVar")).toBe("undefined");
-          expect(interpreter.evaluate("typeof neverDeclared")).toBe(
-            "undefined"
-          );
+          expect(interpreter.evaluate("typeof neverDeclared")).toBe("undefined");
         });
 
         it("should work with const variables", () => {
@@ -736,29 +726,19 @@ describe("Operators", () => {
 
         it("should work with logical expressions", () => {
           const interpreter = new Interpreter();
-          expect(interpreter.evaluate("typeof (true && false)")).toBe(
-            "boolean"
-          );
-          expect(interpreter.evaluate("typeof (true || false)")).toBe(
-            "boolean"
-          );
+          expect(interpreter.evaluate("typeof (true && false)")).toBe("boolean");
+          expect(interpreter.evaluate("typeof (true || false)")).toBe("boolean");
         });
 
         it("should work with string concatenation", () => {
           const interpreter = new Interpreter();
-          expect(interpreter.evaluate('typeof ("hello" + " world")')).toBe(
-            "string"
-          );
+          expect(interpreter.evaluate('typeof ("hello" + " world")')).toBe("string");
         });
 
         it("should work with ternary expressions", () => {
           const interpreter = new Interpreter();
-          expect(interpreter.evaluate("typeof (true ? 42 : 'string')")).toBe(
-            "number"
-          );
-          expect(interpreter.evaluate('typeof (false ? 42 : "string")')).toBe(
-            "string"
-          );
+          expect(interpreter.evaluate("typeof (true ? 42 : 'string')")).toBe("number");
+          expect(interpreter.evaluate('typeof (false ? 42 : "string")')).toBe("string");
         });
       });
 
@@ -836,9 +816,7 @@ describe("Operators", () => {
         it("should work in ternary expressions", () => {
           const interpreter = new Interpreter();
           interpreter.evaluate("let x = 42");
-          const result = interpreter.evaluate(
-            'typeof x === "number" ? "numeric" : "non-numeric"'
-          );
+          const result = interpreter.evaluate('typeof x === "number" ? "numeric" : "non-numeric"');
           expect(result).toBe("numeric");
         });
       });
@@ -914,9 +892,7 @@ describe("Operators", () => {
           const interpreter = new Interpreter({
             globals: { asyncGetNumber },
           });
-          const result = await interpreter.evaluateAsync(
-            "typeof asyncGetNumber()"
-          );
+          const result = await interpreter.evaluateAsync("typeof asyncGetNumber()");
           expect(result).toBe("number");
         });
 
@@ -973,9 +949,7 @@ describe("Operators", () => {
         it("should work in object literals", () => {
           const interpreter = new Interpreter();
           interpreter.evaluate("let x = 42");
-          const result = interpreter.evaluate(
-            "let obj = { type: typeof x }; obj"
-          );
+          const result = interpreter.evaluate("let obj = { type: typeof x }; obj");
           expect(result).toEqual({ type: "number" });
         });
 
@@ -1001,7 +975,7 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("[1, 2, 3] instanceof Array", {
               globals: { Array },
-            })
+            }),
           ).toBe(true);
         });
 
@@ -1009,7 +983,7 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("({}) instanceof Array", {
               globals: { Array },
-            })
+            }),
           ).toBe(false);
         });
 
@@ -1017,7 +991,7 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("({a: 1}) instanceof Object", {
               globals: { Object },
-            })
+            }),
           ).toBe(true);
         });
 
@@ -1025,7 +999,7 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("[] instanceof Object", {
               globals: { Object },
-            })
+            }),
           ).toBe(true);
         });
 
@@ -1033,7 +1007,7 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("new Date() instanceof Date", {
               globals: { Date },
-            })
+            }),
           ).toBe(true);
         });
 
@@ -1041,23 +1015,21 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("new Error('test') instanceof Error", {
               globals: { Error },
-            })
+            }),
           ).toBe(true);
         });
       });
 
       describe("Primitives", () => {
         test("number is not instanceof Number", () => {
-          expect(
-            interpreter.evaluate("5 instanceof Number", { globals: { Number } })
-          ).toBe(false);
+          expect(interpreter.evaluate("5 instanceof Number", { globals: { Number } })).toBe(false);
         });
 
         test("string is not instanceof String", () => {
           expect(
             interpreter.evaluate("'hello' instanceof String", {
               globals: { String },
-            })
+            }),
           ).toBe(false);
         });
 
@@ -1065,7 +1037,7 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("true instanceof Boolean", {
               globals: { Boolean },
-            })
+            }),
           ).toBe(false);
         });
 
@@ -1073,7 +1045,7 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("null instanceof Object", {
               globals: { Object },
-            })
+            }),
           ).toBe(false);
         });
 
@@ -1081,7 +1053,7 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("undefined instanceof Object", {
               globals: { Object },
-            })
+            }),
           ).toBe(false);
         });
       });
@@ -1129,27 +1101,21 @@ describe("Operators", () => {
               'not an array';
             }
           `,
-            { globals: { Array } }
+            { globals: { Array } },
           );
           expect(result).toBe("is an array");
         });
 
         test("works with logical operators", () => {
           expect(
-            interpreter.evaluate(
-              "[] instanceof Array || ({}) instanceof Array",
-              {
-                globals: { Array },
-              }
-            )
+            interpreter.evaluate("[] instanceof Array || ({}) instanceof Array", {
+              globals: { Array },
+            }),
           ).toBe(true);
           expect(
-            interpreter.evaluate(
-              "[] instanceof Array && ({}) instanceof Array",
-              {
-                globals: { Array },
-              }
-            )
+            interpreter.evaluate("[] instanceof Array && ({}) instanceof Array", {
+              globals: { Array },
+            }),
           ).toBe(false);
         });
 
@@ -1157,7 +1123,7 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("!(5 instanceof Number)", {
               globals: { Number },
-            })
+            }),
           ).toBe(true);
         });
 
@@ -1167,7 +1133,7 @@ describe("Operators", () => {
             let val = [];
             val instanceof Array && val instanceof Object;
           `,
-            { globals: { Array, Object } }
+            { globals: { Array, Object } },
           );
           expect(result).toBe(true);
         });
@@ -1175,22 +1141,16 @@ describe("Operators", () => {
 
       describe("Async evaluation", () => {
         test("works with async evaluation", async () => {
-          const result = await interpreter.evaluateAsync(
-            "[1,2,3] instanceof Array",
-            {
-              globals: { Array },
-            }
-          );
+          const result = await interpreter.evaluateAsync("[1,2,3] instanceof Array", {
+            globals: { Array },
+          });
           expect(result).toBe(true);
         });
 
         test("async with object check", async () => {
-          const result = await interpreter.evaluateAsync(
-            "({a:1}) instanceof Object",
-            {
-              globals: { Object },
-            }
-          );
+          const result = await interpreter.evaluateAsync("({a:1}) instanceof Object", {
+            globals: { Object },
+          });
           expect(result).toBe(true);
         });
       });
@@ -1199,16 +1159,14 @@ describe("Operators", () => {
         test("works with arrow functions as constructor check", () => {
           // Arrow functions are not constructors but are still functions
           // instanceof should still accept them on the right side
-          expect(
-            interpreter.evaluate("[] instanceof (() => {})", { globals: {} })
-          ).toBe(false);
+          expect(interpreter.evaluate("[] instanceof (() => {})", { globals: {} })).toBe(false);
         });
 
         test("works with nested arrays", () => {
           expect(
             interpreter.evaluate("[[1, 2], [3, 4]][0] instanceof Array", {
               globals: { Array },
-            })
+            }),
           ).toBe(true);
         });
 
@@ -1216,7 +1174,7 @@ describe("Operators", () => {
           expect(
             interpreter.evaluate("new Date() instanceof Date", {
               globals: { Date },
-            })
+            }),
           ).toBe(true);
         });
       });
@@ -1360,7 +1318,7 @@ describe("Operators", () => {
             interpreter.evaluate(`
               let obj = { a: 1, b: 2 };
               delete obj.a;
-            `)
+            `),
           ).toBe(true);
         });
 
@@ -1370,7 +1328,7 @@ describe("Operators", () => {
               let obj = { a: 1, b: 2 };
               delete obj.a;
               obj.a;
-            `)
+            `),
           ).toBe(undefined);
         });
 
@@ -1380,7 +1338,7 @@ describe("Operators", () => {
               let obj = { a: 1, b: 2 };
               delete obj.a;
               obj.b;
-            `)
+            `),
           ).toBe(2);
         });
 
@@ -1389,7 +1347,7 @@ describe("Operators", () => {
             interpreter.evaluate(`
               let obj = { a: 1 };
               delete obj.b;
-            `)
+            `),
           ).toBe(true);
         });
 
@@ -1400,7 +1358,7 @@ describe("Operators", () => {
               let key = 'a';
               delete obj[key];
               obj.a;
-            `)
+            `),
           ).toBe(undefined);
         });
 
@@ -1410,7 +1368,7 @@ describe("Operators", () => {
               let obj = { a: 1, b: 2 };
               delete obj['a'];
               'a' in obj;
-            `)
+            `),
           ).toBe(false);
         });
 
@@ -1420,7 +1378,7 @@ describe("Operators", () => {
               let arr = [1, 2, 3];
               delete arr[1];
               arr[1];
-            `)
+            `),
           ).toBe(undefined);
         });
 
@@ -1430,7 +1388,7 @@ describe("Operators", () => {
               let arr = [1, 2, 3];
               delete arr[1];
               arr.length;
-            `)
+            `),
           ).toBe(3);
         });
 
@@ -1440,7 +1398,7 @@ describe("Operators", () => {
               let obj = { a: { b: 1 } };
               delete obj.a.b;
               obj.a.b;
-            `)
+            `),
           ).toBe(undefined);
         });
 
@@ -1450,7 +1408,7 @@ describe("Operators", () => {
               let obj = { a: { b: 1 } };
               delete obj.a.b;
               typeof obj.a;
-            `)
+            `),
           ).toBe("object");
         });
       });
@@ -1481,7 +1439,7 @@ describe("Operators", () => {
             interpreter.evaluate(`
               let x = 5;
               delete x;
-            `)
+            `),
           ).toBe(true);
         });
 
@@ -1491,7 +1449,7 @@ describe("Operators", () => {
               let x = 5;
               delete x;
               x;
-            `)
+            `),
           ).toBe(5);
         });
       });
@@ -1517,7 +1475,7 @@ describe("Operators", () => {
               let obj = { a: 1, b: 2, c: 3 };
               delete obj.b;
               'b' in obj;
-            `)
+            `),
           ).toBe(false);
         });
 
@@ -1527,7 +1485,7 @@ describe("Operators", () => {
               let obj = { a: 1, b: 2, c: 3 };
               delete obj.b;
               'a' in obj && 'c' in obj;
-            `)
+            `),
           ).toBe(true);
         });
       });
@@ -1756,9 +1714,7 @@ describe("Operators", () => {
 
         test(">>>= unsigned right shift assignment", () => {
           const interpreter = new Interpreter();
-          expect(interpreter.evaluate(`let x = -8; x >>>= 2; x`)).toBe(
-            1073741822
-          );
+          expect(interpreter.evaluate(`let x = -8; x >>>= 2; x`)).toBe(1073741822);
         });
 
         test("&= bitwise AND assignment", () => {
@@ -1780,67 +1736,53 @@ describe("Operators", () => {
       describe("String concatenation", () => {
         test("+= string concatenation", () => {
           const interpreter = new Interpreter();
-          expect(
-            interpreter.evaluate(`let s = "hello"; s += " world"; s`)
-          ).toBe("hello world");
+          expect(interpreter.evaluate(`let s = "hello"; s += " world"; s`)).toBe("hello world");
         });
 
         test("+= mixed string and number", () => {
           const interpreter = new Interpreter();
-          expect(interpreter.evaluate(`let s = "count: "; s += 42; s`)).toBe(
-            "count: 42"
-          );
+          expect(interpreter.evaluate(`let s = "count: "; s += 42; s`)).toBe("count: 42");
         });
       });
 
       describe("Array element assignment", () => {
         test("+= on array element", () => {
           const interpreter = new Interpreter();
-          expect(
-            interpreter.evaluate(`let arr = [1, 2, 3]; arr[1] += 10; arr[1]`)
-          ).toBe(12);
+          expect(interpreter.evaluate(`let arr = [1, 2, 3]; arr[1] += 10; arr[1]`)).toBe(12);
         });
 
         test("-= on array element", () => {
           const interpreter = new Interpreter();
-          expect(
-            interpreter.evaluate(`let arr = [10, 20, 30]; arr[0] -= 5; arr[0]`)
-          ).toBe(5);
+          expect(interpreter.evaluate(`let arr = [10, 20, 30]; arr[0] -= 5; arr[0]`)).toBe(5);
         });
 
         test("*= on array element with computed index", () => {
           const interpreter = new Interpreter();
-          expect(
-            interpreter.evaluate(
-              `let arr = [1, 2, 3]; let i = 2; arr[i] *= 4; arr[2]`
-            )
-          ).toBe(12);
+          expect(interpreter.evaluate(`let arr = [1, 2, 3]; let i = 2; arr[i] *= 4; arr[2]`)).toBe(
+            12,
+          );
         });
       });
 
       describe("Object property assignment", () => {
         test("+= on object property", () => {
           const interpreter = new Interpreter();
-          expect(
-            interpreter.evaluate(`let obj = { x: 5 }; obj.x += 3; obj.x`)
-          ).toBe(8);
+          expect(interpreter.evaluate(`let obj = { x: 5 }; obj.x += 3; obj.x`)).toBe(8);
         });
 
         test("-= on object property", () => {
           const interpreter = new Interpreter();
-          expect(
-            interpreter.evaluate(
-              `let obj = { value: 100 }; obj.value -= 25; obj.value`
-            )
-          ).toBe(75);
+          expect(interpreter.evaluate(`let obj = { value: 100 }; obj.value -= 25; obj.value`)).toBe(
+            75,
+          );
         });
 
         test("+= on computed object property", () => {
           const interpreter = new Interpreter();
           expect(
             interpreter.evaluate(
-              `let obj = { key: 10 }; let prop = "key"; obj[prop] += 5; obj.key`
-            )
+              `let obj = { key: 10 }; let prop = "key"; obj[prop] += 5; obj.key`,
+            ),
           ).toBe(15);
         });
 
@@ -1848,8 +1790,8 @@ describe("Operators", () => {
           const interpreter = new Interpreter();
           expect(
             interpreter.evaluate(
-              `let obj = { inner: { value: 7 } }; obj.inner.value *= 3; obj.inner.value`
-            )
+              `let obj = { inner: { value: 7 } }; obj.inner.value *= 3; obj.inner.value`,
+            ),
           ).toBe(21);
         });
       });
@@ -1920,9 +1862,7 @@ describe("Operators", () => {
 
         test("compound assignment in expression context", () => {
           const interpreter = new Interpreter();
-          expect(
-            interpreter.evaluate(`let x = 5; let y = (x += 3) * 2; y`)
-          ).toBe(16);
+          expect(interpreter.evaluate(`let x = 5; let y = (x += 3) * 2; y`)).toBe(16);
         });
       });
 
@@ -2141,7 +2081,7 @@ describe("Operators", () => {
           interpreter.evaluate("let a = 5");
           interpreter.evaluate("let b = 3");
           const result = interpreter.evaluate(
-            'a > 0 ? (b > 0 ? "both positive" : "a positive") : "a negative"'
+            'a > 0 ? (b > 0 ? "both positive" : "a positive") : "a negative"',
           );
           expect(result).toBe("both positive");
         });
@@ -2151,7 +2091,7 @@ describe("Operators", () => {
           interpreter.evaluate("let a = -1");
           interpreter.evaluate("let b = 3");
           const result = interpreter.evaluate(
-            'a > 0 ? "a positive" : (b > 0 ? "only b positive" : "both negative")'
+            'a > 0 ? "a positive" : (b > 0 ? "only b positive" : "both negative")',
           );
           expect(result).toBe("only b positive");
         });
@@ -2160,7 +2100,7 @@ describe("Operators", () => {
           const interpreter = new Interpreter();
           interpreter.evaluate("let score = 85");
           const result = interpreter.evaluate(
-            'score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : "F"'
+            'score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : "F"',
           );
           expect(result).toBe("B");
         });
@@ -2180,9 +2120,7 @@ describe("Operators", () => {
             function triple(x) { return x * 3; }
           `);
           expect(interpreter.evaluate("true ? double(5) : triple(5)")).toBe(10);
-          expect(interpreter.evaluate("false ? double(5) : triple(5)")).toBe(
-            15
-          );
+          expect(interpreter.evaluate("false ? double(5) : triple(5)")).toBe(15);
         });
 
         it("should evaluate complex condition", () => {
@@ -2190,18 +2128,14 @@ describe("Operators", () => {
           interpreter.evaluate("let x = 10");
           interpreter.evaluate("let y = 20");
           expect(interpreter.evaluate("x > 5 && y < 30 ? 100 : 200")).toBe(100);
-          expect(interpreter.evaluate("x > 15 || y < 10 ? 100 : 200")).toBe(
-            200
-          );
+          expect(interpreter.evaluate("x > 15 || y < 10 ? 100 : 200")).toBe(200);
         });
       });
 
       describe("Ternary with objects and arrays", () => {
         it("should return object from ternary", () => {
           const interpreter = new Interpreter();
-          const result = interpreter.evaluate(
-            'true ? { name: "Alice" } : { name: "Bob" }'
-          );
+          const result = interpreter.evaluate('true ? { name: "Alice" } : { name: "Bob" }');
           expect(result).toEqual({ name: "Alice" });
         });
 
@@ -2215,7 +2149,7 @@ describe("Operators", () => {
           const interpreter = new Interpreter();
           interpreter.evaluate("let isAdmin = true");
           const result = interpreter.evaluate(
-            '(isAdmin ? { role: "admin" } : { role: "user" }).role'
+            '(isAdmin ? { role: "admin" } : { role: "user" }).role',
           );
           expect(result).toBe("admin");
         });
@@ -2229,9 +2163,7 @@ describe("Operators", () => {
 
         it("should handle empty string as falsy", () => {
           const interpreter = new Interpreter();
-          expect(interpreter.evaluate("\"\" ? 'truthy' : 'falsy'")).toBe(
-            "falsy"
-          );
+          expect(interpreter.evaluate("\"\" ? 'truthy' : 'falsy'")).toBe("falsy");
         });
 
         it("should handle null as falsy", () => {
@@ -2249,17 +2181,11 @@ describe("Operators", () => {
         it("should handle truthy values correctly", () => {
           const interpreter = new Interpreter();
           expect(interpreter.evaluate("1 ? 'truthy' : 'falsy'")).toBe("truthy");
-          expect(interpreter.evaluate("\"hello\" ? 'truthy' : 'falsy'")).toBe(
-            "truthy"
-          );
+          expect(interpreter.evaluate("\"hello\" ? 'truthy' : 'falsy'")).toBe("truthy");
           interpreter.evaluate("let arr = []");
-          expect(interpreter.evaluate("arr ? 'truthy' : 'falsy'")).toBe(
-            "truthy"
-          );
+          expect(interpreter.evaluate("arr ? 'truthy' : 'falsy'")).toBe("truthy");
           interpreter.evaluate("let obj = {}");
-          expect(interpreter.evaluate("obj ? 'truthy' : 'falsy'")).toBe(
-            "truthy"
-          );
+          expect(interpreter.evaluate("obj ? 'truthy' : 'falsy'")).toBe("truthy");
         });
       });
 
@@ -2323,13 +2249,11 @@ describe("Operators", () => {
           const interpreter = new Interpreter({
             globals: { asyncDouble, asyncTriple },
           });
-          const result1 = await interpreter.evaluateAsync(
-            "true ? asyncDouble(5) : asyncTriple(5)"
-          );
+          const result1 = await interpreter.evaluateAsync("true ? asyncDouble(5) : asyncTriple(5)");
           expect(result1).toBe(10);
 
           const result2 = await interpreter.evaluateAsync(
-            "false ? asyncDouble(5) : asyncTriple(5)"
+            "false ? asyncDouble(5) : asyncTriple(5)",
           );
           expect(result2).toBe(15);
         });
@@ -2378,23 +2302,19 @@ describe("Operators", () => {
         it("should work with ternary as function argument", () => {
           const interpreter = new Interpreter();
           interpreter.evaluate("function add(a, b) { return a + b; }");
-          expect(
-            interpreter.evaluate("add(true ? 5 : 10, false ? 3 : 7)")
-          ).toBe(12);
+          expect(interpreter.evaluate("add(true ? 5 : 10, false ? 3 : 7)")).toBe(12);
         });
 
         it("should work with ternary in array literal", () => {
           const interpreter = new Interpreter();
-          const result = interpreter.evaluate(
-            "let arr = [true ? 1 : 2, false ? 3 : 4]; arr"
-          );
+          const result = interpreter.evaluate("let arr = [true ? 1 : 2, false ? 3 : 4]; arr");
           expect(result).toEqual([1, 4]);
         });
 
         it("should work with ternary in object literal", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(
-            'let obj = { a: true ? 10 : 20, b: false ? "x" : "y" }; obj'
+            'let obj = { a: true ? 10 : 20, b: false ? "x" : "y" }; obj',
           );
           expect(result).toEqual({ a: 10, b: "y" });
         });
@@ -2420,7 +2340,7 @@ describe("Operators", () => {
                   let x = 2;
                   x **= 3;
                   x
-                `)
+                `),
         ).toBe(8);
       });
     });
@@ -2461,7 +2381,7 @@ describe("Operators", () => {
         test("short-circuits evaluation", () => {
           interpreter.evaluate("let counter = 0");
           interpreter.evaluate(
-            "let getValue = function() { counter = counter + 1; return 'evaluated'; }"
+            "let getValue = function() { counter = counter + 1; return 'evaluated'; }",
           );
           interpreter.evaluate("let result = 'existing' ?? getValue()");
           expect(interpreter.evaluate("counter")).toBe(0);
@@ -2469,12 +2389,8 @@ describe("Operators", () => {
         });
 
         test("chains correctly", () => {
-          expect(interpreter.evaluate("null ?? undefined ?? 'final'")).toBe(
-            "final"
-          );
-          expect(interpreter.evaluate("null ?? 'middle' ?? 'final'")).toBe(
-            "middle"
-          );
+          expect(interpreter.evaluate("null ?? undefined ?? 'final'")).toBe("final");
+          expect(interpreter.evaluate("null ?? 'middle' ?? 'final'")).toBe("middle");
         });
 
         test("works with variables", () => {
@@ -2530,7 +2446,7 @@ describe("Operators", () => {
         test("short-circuits when truthy", () => {
           interpreter.evaluate("let counter = 0");
           interpreter.evaluate(
-            "let getValue = function() { counter = counter + 1; return 'new'; }"
+            "let getValue = function() { counter = counter + 1; return 'new'; }",
           );
           interpreter.evaluate("let x = 'existing'");
           interpreter.evaluate("x ||= getValue()");
@@ -2613,7 +2529,7 @@ describe("Operators", () => {
         test("short-circuits when falsy", () => {
           interpreter.evaluate("let counter = 0");
           interpreter.evaluate(
-            "let getValue = function() { counter = counter + 1; return 'new'; }"
+            "let getValue = function() { counter = counter + 1; return 'new'; }",
           );
           interpreter.evaluate("let x = null");
           interpreter.evaluate("x &&= getValue()");
@@ -2702,7 +2618,7 @@ describe("Operators", () => {
         test("short-circuits when not nullish", () => {
           interpreter.evaluate("let counter = 0");
           interpreter.evaluate(
-            "let getValue = function() { counter = counter + 1; return 'new'; }"
+            "let getValue = function() { counter = counter + 1; return 'new'; }",
           );
           interpreter.evaluate("let x = 0"); // falsy but not nullish
           interpreter.evaluate("x ??= getValue()");
@@ -2764,12 +2680,8 @@ describe("Operators", () => {
               return cache[key];
             }
           `);
-          interpreter.evaluate(
-            "let result1 = getOrCompute('a', function() { return 42; })"
-          );
-          interpreter.evaluate(
-            "let result2 = getOrCompute('a', function() { return 99; })"
-          );
+          interpreter.evaluate("let result1 = getOrCompute('a', function() { return 42; })");
+          interpreter.evaluate("let result2 = getOrCompute('a', function() { return 99; })");
           expect(interpreter.evaluate("result1")).toBe(42);
           expect(interpreter.evaluate("result2")).toBe(42);
         });

@@ -27,23 +27,17 @@ describe("Symbol", () => {
     describe("Symbol.for and Symbol.keyFor", () => {
       it("should support Symbol.for for global symbol registry", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(
-          interpreter.evaluate("Symbol.for('shared') === Symbol.for('shared')")
-        ).toBe(true);
+        expect(interpreter.evaluate("Symbol.for('shared') === Symbol.for('shared')")).toBe(true);
       });
 
       it("should support Symbol.keyFor to retrieve key", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("Symbol.keyFor(Symbol.for('myKey'))")).toBe(
-          "myKey"
-        );
+        expect(interpreter.evaluate("Symbol.keyFor(Symbol.for('myKey'))")).toBe("myKey");
       });
 
       it("should return undefined for non-global symbols", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("Symbol.keyFor(Symbol('local'))")).toBe(
-          undefined
-        );
+        expect(interpreter.evaluate("Symbol.keyFor(Symbol('local'))")).toBe(undefined);
       });
     });
 
@@ -55,23 +49,17 @@ describe("Symbol", () => {
 
       it("should allow accessing Symbol.iterator on arrays", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("typeof [1,2,3][Symbol.iterator]")).toBe(
-          "function"
-        );
+        expect(interpreter.evaluate("typeof [1,2,3][Symbol.iterator]")).toBe("function");
       });
 
       it("should expose Symbol.asyncIterator", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("typeof Symbol.asyncIterator")).toBe(
-          "symbol"
-        );
+        expect(interpreter.evaluate("typeof Symbol.asyncIterator")).toBe("symbol");
       });
 
       it("should be Symbol.hasInstance", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("Symbol.hasInstance")).toBe(
-          Symbol.hasInstance
-        );
+        expect(interpreter.evaluate("Symbol.hasInstance")).toBe(Symbol.hasInstance);
       });
 
       it("should work with instanceof", () => {
@@ -81,16 +69,12 @@ describe("Symbol", () => {
 
       it("should expose Symbol.toStringTag", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("typeof Symbol.toStringTag")).toBe(
-          "symbol"
-        );
+        expect(interpreter.evaluate("typeof Symbol.toStringTag")).toBe("symbol");
       });
 
       it("should exist", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("typeof Symbol.toStringTag")).toBe(
-          "symbol"
-        );
+        expect(interpreter.evaluate("typeof Symbol.toStringTag")).toBe("symbol");
       });
     });
 

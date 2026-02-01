@@ -1113,25 +1113,23 @@ describe("Async", () => {
   });
 
   describe("ES2020", () => {
+    let interpreter: Interpreter;
 
-          let interpreter: Interpreter;
+    beforeEach(() => {
+      interpreter = new Interpreter(ES2024);
+    });
 
-          beforeEach(() => {
-            interpreter = new Interpreter(ES2024);
-          });
-
-            describe("Promise.allSettled", () => {
-              it("should resolve with all results", async () => {
-                const result = await interpreter.evaluateAsync(`
+    describe("Promise.allSettled", () => {
+      it("should resolve with all results", async () => {
+        const result = await interpreter.evaluateAsync(`
                   Promise.allSettled([
                     Promise.resolve(1),
                     Promise.resolve(2)
                   ])
                 `);
-                expect(result).toBeInstanceOf(Array);
-                expect(result.length).toBe(2);
-              });
-            });
-
+        expect(result).toBeInstanceOf(Array);
+        expect(result.length).toBe(2);
+      });
+    });
   });
 });

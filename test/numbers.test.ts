@@ -19,9 +19,7 @@ describe("Numbers", () => {
 
       it("should return NaN for invalid input", () => {
         const interpreter = new Interpreter(ES5);
-        expect(Number.isNaN(interpreter.evaluate("parseInt('abc')"))).toBe(
-          true
-        );
+        expect(Number.isNaN(interpreter.evaluate("parseInt('abc')"))).toBe(true);
       });
 
       it("should handle negative numbers", () => {
@@ -43,9 +41,7 @@ describe("Numbers", () => {
 
       it("should return NaN for invalid input", () => {
         const interpreter = new Interpreter(ES5);
-        expect(Number.isNaN(interpreter.evaluate("parseFloat('abc')"))).toBe(
-          true
-        );
+        expect(Number.isNaN(interpreter.evaluate("parseFloat('abc')"))).toBe(true);
       });
     });
 
@@ -141,19 +137,14 @@ describe("Numbers", () => {
     describe("Number.parseFloat", () => {
       it("should parse float", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("Number.parseFloat('3.14')")).toBeCloseTo(
-          3.14,
-          2
-        );
+        expect(interpreter.evaluate("Number.parseFloat('3.14')")).toBeCloseTo(3.14, 2);
       });
     });
 
     describe("Number.MAX_SAFE_INTEGER", () => {
       it("should have correct value", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("Number.MAX_SAFE_INTEGER")).toBe(
-          9007199254740991
-        );
+        expect(interpreter.evaluate("Number.MAX_SAFE_INTEGER")).toBe(9007199254740991);
       });
     });
 
@@ -183,10 +174,7 @@ describe("Numbers", () => {
 
       it("Number.parseFloat should parse float", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("Number.parseFloat('3.14')")).toBeCloseTo(
-          3.14,
-          2
-        );
+        expect(interpreter.evaluate("Number.parseFloat('3.14')")).toBeCloseTo(3.14, 2);
       });
     });
   });
@@ -220,9 +208,7 @@ describe("Numbers", () => {
       it("should support underscores in binary", () => {
         const interpreter = new Interpreter(ES2021);
         expect(interpreter.evaluate("0b1010_1010")).toBe(0b10101010);
-        expect(interpreter.evaluate("0b1111_0000_1111_0000")).toBe(
-          0b1111000011110000
-        );
+        expect(interpreter.evaluate("0b1111_0000_1111_0000")).toBe(0b1111000011110000);
       });
 
       it("should support underscores in octal", () => {

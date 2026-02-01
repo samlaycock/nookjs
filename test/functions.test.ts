@@ -128,7 +128,9 @@ describe("Functions", () => {
             }
             add(5)
           `;
-          expect(() => interpreter.evaluate(code)).toThrow("Expected at least 2 arguments but got 1");
+          expect(() => interpreter.evaluate(code)).toThrow(
+            "Expected at least 2 arguments but got 1",
+          );
         });
 
         test("allows extra arguments (for compatibility with rest parameters)", () => {
@@ -648,7 +650,9 @@ describe("Functions", () => {
               return 2;
             }
           `;
-          expect(() => interpreter.evaluate(code)).toThrow("Variable 'foo' has already been declared");
+          expect(() => interpreter.evaluate(code)).toThrow(
+            "Variable 'foo' has already been declared",
+          );
         });
       });
     });

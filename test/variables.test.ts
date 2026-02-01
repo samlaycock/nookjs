@@ -303,11 +303,9 @@ describe("Variables", () => {
 
         test("throws error on duplicate declaration", () => {
           interpreter.evaluate("let x = 5");
+          expect(() => interpreter.evaluate("let x = 10")).toThrow(InterpreterError);
           expect(() => interpreter.evaluate("let x = 10")).toThrow(
-            InterpreterError
-          );
-          expect(() => interpreter.evaluate("let x = 10")).toThrow(
-            "Variable 'x' has already been declared"
+            "Variable 'x' has already been declared",
           );
         });
 
@@ -332,17 +330,15 @@ describe("Variables", () => {
 
         test("throws error on const without initializer", () => {
           expect(() => interpreter.evaluate("const x")).toThrow(
-            "Missing initializer in const declaration"
+            "Missing initializer in const declaration",
           );
         });
 
         test("throws error on const reassignment", () => {
           interpreter.evaluate("const x = 5");
+          expect(() => interpreter.evaluate("x = 10")).toThrow(InterpreterError);
           expect(() => interpreter.evaluate("x = 10")).toThrow(
-            InterpreterError
-          );
-          expect(() => interpreter.evaluate("x = 10")).toThrow(
-            "Cannot assign to const variable 'x'"
+            "Cannot assign to const variable 'x'",
           );
         });
 
@@ -353,9 +349,7 @@ describe("Variables", () => {
 
         test("throws error on duplicate const declaration", () => {
           interpreter.evaluate("const x = 5");
-          expect(() => interpreter.evaluate("const x = 10")).toThrow(
-            InterpreterError
-          );
+          expect(() => interpreter.evaluate("const x = 10")).toThrow(InterpreterError);
         });
 
         test("allows keywords like set as identifiers", () => {
@@ -367,16 +361,12 @@ describe("Variables", () => {
       describe("Variable Access", () => {
         test("throws error on undefined variable", () => {
           expect(() => interpreter.evaluate("x")).toThrow(InterpreterError);
-          expect(() => interpreter.evaluate("x")).toThrow(
-            "Undefined variable 'x'"
-          );
+          expect(() => interpreter.evaluate("x")).toThrow("Undefined variable 'x'");
         });
 
         test("throws error on assignment to undefined variable", () => {
           expect(() => interpreter.evaluate("x = 5")).toThrow(InterpreterError);
-          expect(() => interpreter.evaluate("x = 5")).toThrow(
-            "Undefined variable 'x'"
-          );
+          expect(() => interpreter.evaluate("x = 5")).toThrow("Undefined variable 'x'");
         });
 
         test("can reference variable in same statement after declaration", () => {
@@ -411,7 +401,7 @@ describe("Variables", () => {
 
         test("throws error on invalid assignment target", () => {
           expect(() => interpreter.evaluate("5 = 10")).toThrow(
-            "Invalid left-hand side in assignment"
+            "Invalid left-hand side in assignment",
           );
         });
       });
@@ -456,23 +446,17 @@ describe("Variables", () => {
       describe("Variable Shadowing Prevention", () => {
         test("cannot redeclare with let", () => {
           interpreter.evaluate("let x = 5");
-          expect(() => interpreter.evaluate("let x = 10")).toThrow(
-            InterpreterError
-          );
+          expect(() => interpreter.evaluate("let x = 10")).toThrow(InterpreterError);
         });
 
         test("cannot redeclare with const", () => {
           interpreter.evaluate("const x = 5");
-          expect(() => interpreter.evaluate("const x = 10")).toThrow(
-            InterpreterError
-          );
+          expect(() => interpreter.evaluate("const x = 10")).toThrow(InterpreterError);
         });
 
         test("cannot mix let and const with same name", () => {
           interpreter.evaluate("let x = 5");
-          expect(() => interpreter.evaluate("const x = 10")).toThrow(
-            InterpreterError
-          );
+          expect(() => interpreter.evaluate("const x = 10")).toThrow(InterpreterError);
         });
       });
 
@@ -572,9 +556,7 @@ describe("Variables", () => {
             x
           `;
           expect(() => interpreter.evaluate(code)).toThrow(InterpreterError);
-          expect(() => interpreter.evaluate(code)).toThrow(
-            "Undefined variable 'x'"
-          );
+          expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'x'");
         });
 
         test("can access outer variable from inner block", () => {
@@ -629,9 +611,7 @@ describe("Variables", () => {
             }
           `;
           expect(() => interpreter.evaluate(code)).toThrow(InterpreterError);
-          expect(() => interpreter.evaluate(code)).toThrow(
-            "Cannot assign to const variable"
-          );
+          expect(() => interpreter.evaluate(code)).toThrow("Cannot assign to const variable");
         });
 
         test("multiple variables in block", () => {
@@ -745,9 +725,7 @@ describe("Variables", () => {
             }
             x
           `;
-          expect(() => interpreter.evaluate(code)).toThrow(
-            "Undefined variable 'x'"
-          );
+          expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'x'");
         });
 
         test("else block creates separate scope", () => {
@@ -864,9 +842,7 @@ describe("Variables", () => {
             }
             temp
           `;
-          expect(() => interpreter.evaluate(code)).toThrow(
-            "Undefined variable 'temp'"
-          );
+          expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'temp'");
         });
       });
 
@@ -890,9 +866,7 @@ describe("Variables", () => {
               x = 20;
             }
           `;
-          expect(() => interpreter.evaluate(code)).toThrow(
-            "Cannot assign to const variable"
-          );
+          expect(() => interpreter.evaluate(code)).toThrow("Cannot assign to const variable");
         });
 
         test("const shadowing outer let", () => {
@@ -1037,7 +1011,7 @@ describe("Variables", () => {
             }
           `;
           expect(() => interpreter.evaluate(code)).toThrow(
-            "Variable 'x' has already been declared"
+            "Variable 'x' has already been declared",
           );
         });
 
@@ -2655,9 +2629,7 @@ describe("Variables", () => {
         });
 
         test("works with optional object and method call", () => {
-          interpreter.evaluate(
-            "let obj = { fn: function() { return 'hello'; } }"
-          );
+          interpreter.evaluate("let obj = { fn: function() { return 'hello'; } }");
           expect(interpreter.evaluate("obj?.fn?.()")).toBe("hello");
         });
 
@@ -2667,9 +2639,7 @@ describe("Variables", () => {
         });
 
         test("passes arguments correctly", () => {
-          interpreter.evaluate(
-            "let obj = { add: function(a, b) { return a + b; } }"
-          );
+          interpreter.evaluate("let obj = { add: function(a, b) { return a + b; } }");
           expect(interpreter.evaluate("obj.add?.(2, 3)")).toBe(5);
         });
       });
@@ -2688,9 +2658,7 @@ describe("Variables", () => {
 
         test("short-circuits entire chain on null", () => {
           interpreter.evaluate("let obj = { nested: null }");
-          expect(interpreter.evaluate("obj?.nested?.getValue?.()")).toBe(
-            undefined
-          );
+          expect(interpreter.evaluate("obj?.nested?.getValue?.()")).toBe(undefined);
         });
 
         test("works with computed and dot access mixed", () => {
@@ -2772,9 +2740,7 @@ describe("Variables", () => {
               }
             }
           `);
-          expect(interpreter.evaluate("config?.database?.host")).toBe(
-            "localhost"
-          );
+          expect(interpreter.evaluate("config?.database?.host")).toBe("localhost");
           expect(interpreter.evaluate("config?.cache?.host")).toBe(undefined);
         });
 
@@ -2797,15 +2763,9 @@ describe("Variables", () => {
               }
             }
           `);
-          expect(
-            interpreter.evaluate("response?.data?.users?.[0]?.profile?.age")
-          ).toBe(30);
-          expect(
-            interpreter.evaluate("response?.data?.users?.[1]?.profile?.age")
-          ).toBe(undefined);
-          expect(
-            interpreter.evaluate("response?.data?.users?.[2]?.profile?.age")
-          ).toBe(undefined);
+          expect(interpreter.evaluate("response?.data?.users?.[0]?.profile?.age")).toBe(30);
+          expect(interpreter.evaluate("response?.data?.users?.[1]?.profile?.age")).toBe(undefined);
+          expect(interpreter.evaluate("response?.data?.users?.[2]?.profile?.age")).toBe(undefined);
         });
       });
 

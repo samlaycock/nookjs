@@ -1,4 +1,4 @@
-import { describe, it, test, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach } from "bun:test";
 
 import { Interpreter } from "../src/interpreter";
 import { ES2024 } from "../src/presets";
@@ -801,10 +801,7 @@ describe("Objects", () => {
     describe("Object Static Methods", () => {
       describe("Object.keys", () => {
         it("should return array of property keys", () => {
-          expect(interpreter.evaluate("Object.keys({ a: 1, b: 2 })")).toEqual([
-            "a",
-            "b",
-          ]);
+          expect(interpreter.evaluate("Object.keys({ a: 1, b: 2 })")).toEqual(["a", "b"]);
         });
 
         it("should return empty array for empty object", () => {
@@ -1306,7 +1303,7 @@ describe("Objects", () => {
         it("should support template literal as computed key", () => {
           const interpreter = new Interpreter(ES2024);
           const result = interpreter.evaluate(
-            'const prefix = `item`; const obj = { [`${prefix}_1`]: "first" }; obj.item_1;'
+            'const prefix = `item`; const obj = { [`${prefix}_1`]: "first" }; obj.item_1;',
           );
           expect(result).toBe("first");
         });
@@ -1381,7 +1378,7 @@ describe("Objects", () => {
                   const source = { a: 1, b: 2 };
                   Object.assign(target, source);
                   target.a + target.b
-                `)
+                `),
           ).toBe(3);
         });
 
@@ -1391,7 +1388,7 @@ describe("Objects", () => {
                   const obj = {};
                   Object.assign(obj, { a: 1 }, { b: 2 }, { c: 3 });
                   obj.a + obj.b + obj.c
-                `)
+                `),
           ).toBe(6);
         });
       });
@@ -1406,7 +1403,7 @@ describe("Objects", () => {
             interpreter.evaluate(`
                   const obj = {};
                   Object.is(obj, obj)
-                `)
+                `),
           ).toBe(true);
         });
 
@@ -1462,9 +1459,7 @@ describe("Objects", () => {
     describe("Object Static Methods", () => {
       describe("Object.values", () => {
         it("should return array of object values", () => {
-          expect(interpreter.evaluate("Object.values({ a: 1, b: 2 })")).toEqual(
-            [1, 2]
-          );
+          expect(interpreter.evaluate("Object.values({ a: 1, b: 2 })")).toEqual([1, 2]);
         });
 
         it("should return empty array for empty object", () => {
@@ -1472,9 +1467,7 @@ describe("Objects", () => {
         });
 
         it("should work with arrays", () => {
-          expect(interpreter.evaluate("Object.values([1, 2, 3])")).toEqual([
-            1, 2, 3,
-          ]);
+          expect(interpreter.evaluate("Object.values([1, 2, 3])")).toEqual([1, 2, 3]);
         });
       });
 
@@ -1484,7 +1477,7 @@ describe("Objects", () => {
             interpreter.evaluate(`
                   const entries = Object.entries({ a: 1, b: 2 });
                   entries.length
-                `)
+                `),
           ).toBe(2);
         });
 
@@ -1504,9 +1497,7 @@ describe("Objects", () => {
     describe("Object Static Methods", () => {
       describe("Object.fromEntries", () => {
         it("should create object from entries", () => {
-          expect(
-            interpreter.evaluate("Object.fromEntries([['a', 1], ['b', 2]])")
-          ).toEqual({
+          expect(interpreter.evaluate("Object.fromEntries([['a', 1], ['b', 2]])")).toEqual({
             a: 1,
             b: 2,
           });
@@ -1532,7 +1523,7 @@ describe("Objects", () => {
             interpreter.evaluate(`
                   const obj = { a: 1 };
                   Object.hasOwn(obj, 'a')
-                `)
+                `),
           ).toBe(true);
         });
 
@@ -1541,7 +1532,7 @@ describe("Objects", () => {
             interpreter.evaluate(`
                   const obj = { a: 1 };
                   Object.hasOwn(obj, 'toString')
-                `)
+                `),
           ).toBe(false);
         });
       });
