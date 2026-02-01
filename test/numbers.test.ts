@@ -22,6 +22,11 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("parseInt('10px')")).toBe(10);
       });
 
+      it("should ignore leading whitespace", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseInt('   42')")).toBe(42);
+      });
+
       it("should return NaN for invalid input", () => {
         const interpreter = new Interpreter(ES5);
         expect(Number.isNaN(interpreter.evaluate("parseInt('abc')"))).toBe(true);
@@ -47,6 +52,11 @@ describe("Numbers", () => {
       it("should parse float up to first non-digit", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseFloat('3.14px')")).toBeCloseTo(3.14, 2);
+      });
+
+      it("should ignore leading whitespace", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseFloat('   2.5')")).toBeCloseTo(2.5, 2);
       });
 
       it("should return NaN for invalid input", () => {
@@ -106,6 +116,11 @@ describe("Numbers", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("Number.isNaN(42)")).toBe(false);
       });
+
+      it("should return false for numeric string", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isNaN('NaN')")).toBe(false);
+      });
     });
 
     describe("Number.isFinite", () => {
@@ -118,6 +133,11 @@ describe("Numbers", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("Number.isFinite(Infinity)")).toBe(false);
       });
+
+      it("should return false for numeric string", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isFinite('42')")).toBe(false);
+      });
     });
 
     describe("Number.isInteger", () => {
@@ -129,6 +149,11 @@ describe("Numbers", () => {
       it("should return false for float", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("Number.isInteger(3.14)")).toBe(false);
+      });
+
+      it("should return false for numeric string", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isInteger('42')")).toBe(false);
       });
     });
 

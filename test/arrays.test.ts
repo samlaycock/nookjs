@@ -605,6 +605,15 @@ describe("Arrays", () => {
           expect(result).toEqual([2, 3]);
         });
 
+        it("should handle negative indices", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3, 4, 5];
+                    arr.slice(-2)
+                  `);
+          expect(result).toEqual([4, 5]);
+        });
+
         it("should not modify original array", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -692,6 +701,15 @@ describe("Arrays", () => {
                     arr.indexOf(30)
                   `);
           expect(result).toBe(2);
+        });
+
+        it("should not find NaN", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, NaN, 3];
+                    arr.indexOf(NaN)
+                  `);
+          expect(result).toBe(-1);
         });
 
         it("should return -1 when not found", () => {
@@ -1221,6 +1239,15 @@ describe("Arrays", () => {
           expect(result).toBe(3);
         });
 
+        it("should not find NaN", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, NaN, 3];
+                    arr.lastIndexOf(NaN);
+                  `);
+          expect(result).toBe(-1);
+        });
+
         it("should return -1 when not found", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -1379,6 +1406,15 @@ describe("Arrays", () => {
           const result = interpreter.evaluate(`
                     let arr = [1, 2, 3];
                     arr.includes(2)
+                  `);
+          expect(result).toBe(true);
+        });
+
+        it("should find NaN", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, NaN, 3];
+                    arr.includes(NaN)
                   `);
           expect(result).toBe(true);
         });

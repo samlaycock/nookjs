@@ -15,6 +15,18 @@ describe("Variables", () => {
           expect(result).toBe(10);
         });
 
+        test("var is hoisted and initialized to undefined", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function test() {
+              return typeof x;
+              var x = 10;
+            }
+            test();
+          `);
+          expect(result).toBe("undefined");
+        });
+
         test("var allows re-declaration", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`

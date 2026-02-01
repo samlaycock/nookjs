@@ -33,6 +33,10 @@ describe("JSON", () => {
         expect(interpreter.evaluate("JSON.stringify([1, 2, 3])")).toBe("[1,2,3]");
       });
 
+      it("should convert undefined in arrays to null", () => {
+        expect(interpreter.evaluate("JSON.stringify([1, undefined, 2])")).toBe("[1,null,2]");
+      });
+
       it("should stringify an object", () => {
         const result = interpreter.evaluate("JSON.stringify({ a: 1, b: 2 })");
         expect(result).toMatch(/\{.*"a":1.*"b":2.*\}/);
@@ -50,6 +54,13 @@ describe("JSON", () => {
         expect(result).toBe('{"a":1,"c":3}');
       });
 
+      it("should support replacer function to filter keys", () => {
+        const result = interpreter.evaluate(
+          "JSON.stringify({ a: 1, b: 2 }, function(key, value) { if (key === 'b') return undefined; return value; })",
+        );
+        expect(result).toBe('{"a":1}');
+      });
+
       it("should handle NaN and Infinity", () => {
         expect(interpreter.evaluate("JSON.stringify(NaN)")).toBe("null");
         expect(interpreter.evaluate("JSON.stringify(Infinity)")).toBe("null");
@@ -59,6 +70,19 @@ describe("JSON", () => {
     describe("JSON.parse", () => {
       it("should parse a JSON string", () => {
         expect(interpreter.evaluate('JSON.parse("42")')).toBe(42);
+      });
+
+      it("should parse with surrounding whitespace", () => {
+        expect(interpreter.evaluate("JSON.parse('  {\"a\":1}  ')")).toEqual({
+          a: 1,
+        });
+      });
+
+      it("should apply reviver function", () => {
+        const result = interpreter.evaluate(
+          "JSON.parse('{\"a\":1,\"b\":2}', function(key, value) { if (typeof value === 'number') { return value * 2; } return value; })",
+        );
+        expect(result).toEqual({ a: 2, b: 4 });
       });
 
       it("should parse a boolean", () => {

@@ -730,6 +730,12 @@ describe("Strings", () => {
           expect(result).toEqual(["a", "b", "c"]);
         });
 
+        it("should return empty array when limit is 0", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`"a,b".split(",", 0)`);
+          expect(result).toEqual([]);
+        });
+
         it("should split by space", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -1052,6 +1058,14 @@ describe("Strings", () => {
           expect(result).toBe(true);
         });
 
+        it("should return true for empty search string", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "Hello".includes("")
+            `);
+          expect(result).toBe(true);
+        });
+
         it("should return false when substring doesn't exist", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -1083,6 +1097,14 @@ describe("Strings", () => {
           const result = interpreter.evaluate(`
               let str = "Hello World";
               str.startsWith("Hello")
+            `);
+          expect(result).toBe(true);
+        });
+
+        it("should return true for empty search string", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "Hello".startsWith("")
             `);
           expect(result).toBe(true);
         });
@@ -1126,6 +1148,14 @@ describe("Strings", () => {
           const result = interpreter.evaluate(`
               let str = "Hello World";
               str.endsWith("World")
+            `);
+          expect(result).toBe(true);
+        });
+
+        it("should return true for empty search string", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "Hello".endsWith("")
             `);
           expect(result).toBe(true);
         });

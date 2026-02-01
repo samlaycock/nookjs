@@ -43,6 +43,11 @@ describe("Date", () => {
       it("should parse ISO date string", () => {
         expect(interpreter.evaluate("Date.parse('2020-01-01')")).toBe(1577836800000);
       });
+
+      it("should return NaN for invalid date string", () => {
+        const result = interpreter.evaluate("Date.parse('not-a-date')");
+        expect(Number.isNaN(result)).toBe(true);
+      });
     });
 
     describe("Date.UTC()", () => {

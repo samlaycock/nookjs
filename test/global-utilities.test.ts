@@ -21,12 +21,24 @@ describe("Global Utilities", () => {
         const result = interpreter.evaluate('encodeURI("https://example.com?a=1&b=2")');
         expect(result).toContain("?a=1&b=2");
       });
+
+      it("should preserve fragment identifiers", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate('encodeURI("https://example.com#section")');
+        expect(result).toContain("#section");
+      });
     });
 
     describe("decodeURI", () => {
       it("should decode URI components", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate('decodeURI("hello%20world")')).toBe("hello world");
+      });
+
+      it("should leave encoded fragment identifiers intact", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate('decodeURI("https://example.com%23section")');
+        expect(result).toBe("https://example.com%23section");
       });
     });
 
@@ -39,6 +51,11 @@ describe("Global Utilities", () => {
       it("should encode spaces as %20", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate('encodeURIComponent("a b")')).toBe("a%20b");
+      });
+
+      it("should encode plus sign", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('encodeURIComponent("a+b")')).toBe("a%2Bb");
       });
     });
 

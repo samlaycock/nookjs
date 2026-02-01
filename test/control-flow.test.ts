@@ -3924,6 +3924,23 @@ describe("Control Flow", () => {
           expect(result).toBe("try finally");
         });
 
+        it("should execute finally when returning from try", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            let log = "";
+            function test() {
+              try {
+                return "value";
+              } finally {
+                log = "finally";
+              }
+            }
+            let out = test();
+            [out, log];
+          `);
+          expect(result).toEqual(["value", "finally"]);
+        });
+
         it("should execute finally even when error is thrown", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`

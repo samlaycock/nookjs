@@ -27,6 +27,16 @@ describe("Collections", () => {
         ).toBe("value");
       });
 
+      it("should handle NaN keys", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const map = new Map();
+          map.set(NaN, "value");
+          map.get(NaN);
+        `);
+        expect(result).toBe("value");
+      });
+
       it("should get value by key", () => {
         const interpreter = new Interpreter(ES2015);
         expect(
@@ -66,6 +76,16 @@ describe("Collections", () => {
           map.has('a')
         `),
         ).toBe(true);
+      });
+
+      it("should return false for missing key with has", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(
+          interpreter.evaluate(`
+          const map = new Map([['a', 1]]);
+          map.has('b')
+        `),
+        ).toBe(false);
       });
 
       it("should delete a key", () => {
@@ -151,6 +171,19 @@ describe("Collections", () => {
         expect(result).toEqual([1, true]);
       });
 
+      it("should treat object references as unique values", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const a = { id: 1 };
+          const b = { id: 1 };
+          const set = new Set();
+          set.add(a);
+          set.add(b);
+          [set.size, set.has(a), set.has(b), set.has({ id: 1 })];
+        `);
+        expect(result).toEqual([2, true, true, false]);
+      });
+
       it("should allow basic Set prototype methods", () => {
         const interpreter = new Interpreter(ES2015);
         const result = interpreter.evaluate(`
@@ -160,6 +193,15 @@ describe("Collections", () => {
           [mySet.has(2), mySet.size];
         `);
         expect(result).toEqual([true, 2]);
+      });
+
+      it("should return false when deleting missing value", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const mySet = new Set([1, 2]);
+          mySet.delete(3);
+        `);
+        expect(result).toBe(false);
       });
 
       it("should allow computed Set prototype methods", () => {

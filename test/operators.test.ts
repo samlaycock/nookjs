@@ -384,6 +384,12 @@ describe("Operators", () => {
           expect(interpreter.evaluate("value")).toBe(10);
         });
 
+        test("default value pattern with empty string", () => {
+          interpreter.evaluate("let x = ''");
+          interpreter.evaluate("let value = x || 'default'");
+          expect(interpreter.evaluate("value")).toBe("default");
+        });
+
         test("guard pattern", () => {
           interpreter.evaluate("let x = 5");
           interpreter.evaluate("let result = x > 0 && x * 2");
