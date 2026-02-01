@@ -1394,6 +1394,17 @@ describe("Objects", () => {
                 `)
           ).toBe(6);
         });
+
+        it("should copy symbol-keyed enumerable properties", () => {
+          const result = interpreter.evaluate(`
+            const key = Symbol("k");
+            const target = {};
+            const source = { [key]: 42 };
+            Object.assign(target, source);
+            target[key];
+          `);
+          expect(result).toBe(42);
+        });
       });
 
       describe("Object.is", () => {

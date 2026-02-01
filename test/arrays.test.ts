@@ -1005,6 +1005,16 @@ describe("Arrays", () => {
           expect(result).toEqual([1, 2, 3]);
         });
 
+        it("should sort lexicographically by default", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [10, 2, 1];
+                    arr.sort();
+                    arr;
+                  `);
+          expect(result).toEqual([1, 10, 2]);
+        });
+
         it("should sort with a comparison function", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
