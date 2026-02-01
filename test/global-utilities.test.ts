@@ -15,6 +15,12 @@ describe("Global Utilities", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate('encodeURI("https://example.com")')).toContain("https://");
       });
+
+      it("should preserve query string delimiters", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate('encodeURI("https://example.com?a=1&b=2")');
+        expect(result).toContain("?a=1&b=2");
+      });
     });
 
     describe("decodeURI", () => {
@@ -40,6 +46,13 @@ describe("Global Utilities", () => {
       it("should decode URI component", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate('decodeURIComponent("a%3Ab%2Fc")')).toBe("a:b/c");
+      });
+
+      it("should round-trip through encodeURIComponent", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('decodeURIComponent(encodeURIComponent("a+b=c"))')).toBe(
+          "a+b=c",
+        );
       });
     });
   });

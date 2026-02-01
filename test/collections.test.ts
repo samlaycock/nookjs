@@ -37,6 +37,17 @@ describe("Collections", () => {
         ).toBe(2);
       });
 
+      it("should treat object keys by reference", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const key = { id: 1 };
+          const map = new Map();
+          map.set(key, "value");
+          [map.get(key), map.get({ id: 1 })];
+        `);
+        expect(result).toEqual(["value", undefined]);
+      });
+
       it("should return undefined for missing key", () => {
         const interpreter = new Interpreter(ES2015);
         expect(
@@ -127,6 +138,17 @@ describe("Collections", () => {
       it("should remove duplicates", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("new Set([1, 2, 2, 3]).size")).toBe(3);
+      });
+
+      it("should treat NaN as the same value", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const set = new Set();
+          set.add(NaN);
+          set.add(NaN);
+          [set.size, set.has(NaN)];
+        `);
+        expect(result).toEqual([1, true]);
       });
 
       it("should allow basic Set prototype methods", () => {

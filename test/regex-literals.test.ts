@@ -110,6 +110,18 @@ describe("RegExp", () => {
         const result = interpreter.evaluate(`/xyz/.test("hello world")`);
         expect(result).toBe(false);
       });
+
+      test("regex.exec() advances lastIndex for global regex", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate(`
+          var re = /a/g;
+          var str = "aba";
+          var first = re.exec(str)[0];
+          var second = re.exec(str)[0];
+          [first, second, re.lastIndex];
+        `);
+        expect(result).toEqual(["a", "a", 3]);
+      });
     });
 
     describe("regex vs division disambiguation", () => {

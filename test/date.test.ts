@@ -45,6 +45,12 @@ describe("Date", () => {
       });
     });
 
+    describe("Date.UTC()", () => {
+      it("should return UTC timestamp", () => {
+        expect(interpreter.evaluate("Date.UTC(2020, 0, 1)")).toBe(1577836800000);
+      });
+    });
+
     describe("Date instance methods", () => {
       it("getFullYear should return the full year", () => {
         expect(interpreter.evaluate("new Date(2020, 5, 15).getFullYear()")).toBe(2020);
