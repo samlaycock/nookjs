@@ -577,6 +577,15 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual([2, 3]);
         });
+
+        it("should return undefined for empty array", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [];
+                    arr.shift()
+                  `);
+          expect(result).toBeUndefined();
+        });
       });
 
       describe("unshift", () => {
@@ -827,6 +836,12 @@ describe("Arrays", () => {
                     arr.join()
                   `);
           expect(result).toBe("1,2,3");
+        });
+
+        it("should join empty array to empty string", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`[ ].join()`);
+          expect(result).toBe("");
         });
 
         it("should treat undefined separator as default", () => {

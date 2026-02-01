@@ -37,6 +37,24 @@ describe("Error Subclasses", () => {
       });
     });
 
+    describe("Error", () => {
+      it("should create an Error with a message", () => {
+        expect(interpreter.evaluate("new Error('boom').message")).toBe("boom");
+      });
+
+      it("should have correct name", () => {
+        expect(interpreter.evaluate("new Error().name")).toBe("Error");
+      });
+
+      it("should be instance of Error", () => {
+        expect(interpreter.evaluate("new Error() instanceof Error")).toBe(true);
+      });
+
+      it("should default message to empty string", () => {
+        expect(interpreter.evaluate("new Error().message")).toBe("");
+      });
+    });
+
     describe("ReferenceError", () => {
       it("should create a ReferenceError", () => {
         expect(interpreter.evaluate("new ReferenceError('undefined var').message")).toBe(

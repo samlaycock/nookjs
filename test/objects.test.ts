@@ -1537,6 +1537,13 @@ describe("Objects", () => {
           expect(interpreter.evaluate("Object.values([1, 2, 3])")).toEqual([1, 2, 3]);
         });
 
+        it("should include undefined values", () => {
+          expect(interpreter.evaluate("Object.values({ a: undefined, b: 1 })")).toEqual([
+            undefined,
+            1,
+          ]);
+        });
+
         it("should skip symbol keys", () => {
           const result = interpreter.evaluate(`
             const sym = Symbol("s");
@@ -1560,6 +1567,14 @@ describe("Objects", () => {
 
         it("should return empty array for empty object", () => {
           expect(interpreter.evaluate("Object.entries({})")).toEqual([]);
+        });
+
+        it("should include undefined values", () => {
+          const result = interpreter.evaluate("Object.entries({ a: undefined, b: 1 })");
+          expect(result).toEqual([
+            ["a", undefined],
+            ["b", 1],
+          ]);
         });
 
         it("should support for...of iteration over entries", () => {

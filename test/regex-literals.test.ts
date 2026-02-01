@@ -115,6 +115,16 @@ describe("RegExp", () => {
         expect(result).toBe(0);
       });
 
+      test("global regex test advances lastIndex", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate(`
+          var re = /a/g;
+          re.test("a");
+          re.lastIndex;
+        `);
+        expect(result).toBe(1);
+      });
+
       test("regex.test() with no match", () => {
         const interpreter = new Interpreter(ES5);
         const result = interpreter.evaluate(`/xyz/.test("hello world")`);

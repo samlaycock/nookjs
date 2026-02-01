@@ -75,6 +75,18 @@ describe("JSON", () => {
         expect(interpreter.evaluate("JSON.stringify(NaN)")).toBe("null");
         expect(interpreter.evaluate("JSON.stringify(Infinity)")).toBe("null");
       });
+
+      it("should support pretty printing with space number", () => {
+        const result = interpreter.evaluate("JSON.stringify({ a: 1 }, null, 2)");
+        expect(result).toContain("\n");
+        expect(result).toContain('"a": 1');
+      });
+
+      it("should support pretty printing with space string", () => {
+        const result = interpreter.evaluate("JSON.stringify({ a: 1 }, null, '\\t')");
+        expect(result).toContain("\n");
+        expect(result).toContain('\t"a": 1');
+      });
     });
 
     describe("JSON.parse", () => {
@@ -101,6 +113,13 @@ describe("JSON", () => {
           "JSON.parse('{\"a\":1,\"b\":2}', function(key, value) { if (typeof value === 'number') { return value * 2; } return value; })",
         );
         expect(result).toEqual({ a: 2, b: 4 });
+      });
+
+      it("should delete properties when reviver returns undefined", () => {
+        const result = interpreter.evaluate(
+          "JSON.parse('{\"a\":1,\"b\":2}', function(key, value) { if (key === 'b') return undefined; return value; })",
+        );
+        expect(result).toEqual({ a: 1 });
       });
 
       it("should parse a boolean", () => {

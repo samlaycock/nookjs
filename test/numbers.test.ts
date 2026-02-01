@@ -11,6 +11,11 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("parseInt('42')")).toBe(42);
       });
 
+      it("should coerce number input to string", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseInt(42)")).toBe(42);
+      });
+
       it("should parse with radix", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseInt('10', 2)")).toBe(2);
@@ -46,12 +51,33 @@ describe("Numbers", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseInt('+42')")).toBe(42);
       });
+
+      it("should parse decimal strings with leading zeros", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseInt('08')")).toBe(8);
+        expect(interpreter.evaluate("parseInt('010')")).toBe(10);
+      });
     });
 
     describe("parseFloat", () => {
       it("should parse float from string", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseFloat('3.14')")).toBeCloseTo(3.14, 2);
+      });
+
+      it("should coerce number input to string", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseFloat(3.14)")).toBeCloseTo(3.14, 2);
+      });
+
+      it("should parse leading decimal point", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseFloat('.5')")).toBeCloseTo(0.5, 2);
+      });
+
+      it("should parse trailing decimal point", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseFloat('3.')")).toBe(3);
       });
 
       it("should handle leading plus sign", () => {
@@ -85,6 +111,34 @@ describe("Numbers", () => {
       });
     });
 
+    describe("Number", () => {
+      it("should convert numeric strings to numbers", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Number('42')")).toBe(42);
+      });
+
+      it("should ignore surrounding whitespace in numeric strings", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Number('  42  ')")).toBe(42);
+      });
+
+      it("should convert booleans to numbers", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Number(true)")).toBe(1);
+        expect(interpreter.evaluate("Number(false)")).toBe(0);
+      });
+
+      it("should convert empty string to 0", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Number('')")).toBe(0);
+      });
+
+      it("should convert null to 0", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Number(null)")).toBe(0);
+      });
+    });
+
     describe("isNaN", () => {
       it("should return true for NaN", () => {
         const interpreter = new Interpreter(ES5);
@@ -94,6 +148,11 @@ describe("Numbers", () => {
       it("should return true for non-numeric string", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("isNaN('foo')")).toBe(true);
+      });
+
+      it("should return true for undefined", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isNaN(undefined)")).toBe(true);
       });
 
       it("should return false for number", () => {
@@ -121,6 +180,11 @@ describe("Numbers", () => {
       it("should return false for -Infinity", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("isFinite(-Infinity)")).toBe(false);
+      });
+
+      it("should return false for undefined", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isFinite(undefined)")).toBe(false);
       });
 
       it("should return true for regular number", () => {

@@ -27,6 +27,11 @@ describe("Global Utilities", () => {
         const result = interpreter.evaluate('encodeURI("https://example.com#section")');
         expect(result).toContain("#section");
       });
+
+      it("should encode unicode characters", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('encodeURI("✓")')).toBe("%E2%9C%93");
+      });
     });
 
     describe("decodeURI", () => {
@@ -44,6 +49,11 @@ describe("Global Utilities", () => {
         const interpreter = new Interpreter(ES5);
         const result = interpreter.evaluate('decodeURI("https://example.com%23section")');
         expect(result).toBe("https://example.com%23section");
+      });
+
+      it("should decode unicode characters", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('decodeURI("%E2%9C%93")')).toBe("✓");
       });
     });
 

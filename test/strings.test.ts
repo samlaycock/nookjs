@@ -484,6 +484,14 @@ describe("Strings", () => {
                 `);
           expect(result).toBe("llo");
         });
+
+        it("should treat NaN as 0", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "Hello".substring(NaN, 2)
+                `);
+          expect(result).toBe("He");
+        });
       });
 
       describe("slice", () => {
@@ -528,6 +536,14 @@ describe("Strings", () => {
                 `);
           expect(result).toBe("");
         });
+
+        it("should treat NaN as 0", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "Hello".slice(NaN, 2)
+                `);
+          expect(result).toBe("He");
+        });
       });
 
       describe("charAt", () => {
@@ -565,6 +581,32 @@ describe("Strings", () => {
         });
       });
 
+      describe("charCodeAt", () => {
+        it("should return code of first character", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "ABC".charCodeAt(0)
+                `);
+          expect(result).toBe(65);
+        });
+
+        it("should return NaN for out of bounds", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "ABC".charCodeAt(10)
+                `);
+          expect(Number.isNaN(result)).toBe(true);
+        });
+
+        it("should return NaN for empty string", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "".charCodeAt(0)
+                `);
+          expect(Number.isNaN(result)).toBe(true);
+        });
+      });
+
       describe("indexOf", () => {
         it("should find first occurrence", () => {
           const interpreter = new Interpreter();
@@ -581,6 +623,12 @@ describe("Strings", () => {
                   "Hello World".indexOf("x")
                 `);
           expect(result).toBe(-1);
+        });
+
+        it("should find empty string at position 0", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`"Hello".indexOf("")`);
+          expect(result).toBe(0);
         });
 
         it("should work with fromIndex", () => {
@@ -632,6 +680,14 @@ describe("Strings", () => {
                   "Hello World".lastIndexOf("x")
                 `);
           expect(result).toBe(-1);
+        });
+
+        it("should return string length for empty search string", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "Hello".lastIndexOf("")
+                `);
+          expect(result).toBe(5);
         });
 
         it("should work with fromIndex", () => {
