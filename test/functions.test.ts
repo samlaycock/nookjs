@@ -129,7 +129,7 @@ describe("Functions", () => {
             add(5)
           `;
           expect(() => interpreter.evaluate(code)).toThrow(
-            "Expected at least 2 arguments but got 1"
+            "Expected at least 2 arguments but got 1",
           );
         });
 
@@ -396,9 +396,7 @@ describe("Functions", () => {
             foo();
             x
           `;
-          expect(() => interpreter.evaluate(code)).toThrow(
-            "Undefined variable 'x'"
-          );
+          expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'x'");
         });
 
         test("local variable shadows outer", () => {
@@ -632,9 +630,7 @@ describe("Functions", () => {
 
       describe("Error handling", () => {
         test("calling undefined function throws", () => {
-          expect(() => interpreter.evaluate("foo()")).toThrow(
-            "Undefined variable 'foo'"
-          );
+          expect(() => interpreter.evaluate("foo()")).toThrow("Undefined variable 'foo'");
         });
 
         test("calling non-function throws", () => {
@@ -642,9 +638,7 @@ describe("Functions", () => {
             let x = 5;
             x()
           `;
-          expect(() => interpreter.evaluate(code)).toThrow(
-            "Callee is not a function"
-          );
+          expect(() => interpreter.evaluate(code)).toThrow("Callee is not a function");
         });
 
         test("cannot redeclare function", () => {
@@ -657,7 +651,7 @@ describe("Functions", () => {
             }
           `;
           expect(() => interpreter.evaluate(code)).toThrow(
-            "Variable 'foo' has already been declared"
+            "Variable 'foo' has already been declared",
           );
         });
       });
@@ -1923,12 +1917,7 @@ describe("Functions", () => {
             g.return();
             log;
           `);
-          expect(result).toEqual([
-            "outer-try",
-            "inner-try",
-            "inner-finally",
-            "outer-finally",
-          ]);
+          expect(result).toEqual(["outer-try", "inner-try", "inner-finally", "outer-finally"]);
         });
 
         test("async return() executes finally block", async () => {
@@ -2201,12 +2190,7 @@ describe("Functions", () => {
             log.push('value: ' + g.throw(new Error('injected')).value);  // caught, yields 2
             log;
           `);
-          expect(result).toEqual([
-            "value: 1",
-            "caught: injected",
-            "finally",
-            "value: 2",
-          ]);
+          expect(result).toEqual(["value: 1", "caught: injected", "finally", "value: 2"]);
         });
 
         test("async generator throw() basic", async () => {

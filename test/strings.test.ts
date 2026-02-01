@@ -91,9 +91,7 @@ describe("Strings", () => {
       });
 
       test("concatenate number with string", () => {
-        expect(interpreter.evaluate('42 + " is the answer"')).toBe(
-          "42 is the answer"
-        );
+        expect(interpreter.evaluate('42 + " is the answer"')).toBe("42 is the answer");
       });
 
       test("build string with multiple concatenations", () => {
@@ -747,6 +745,14 @@ describe("Strings", () => {
                 `);
           expect(result).toEqual(["hello"]);
         });
+
+        it("should split with regex separator", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "a  b   c".split(/\\s+/)
+                `);
+          expect(result).toEqual(["a", "b", "c"]);
+        });
       });
 
       describe("replace", () => {
@@ -963,23 +969,17 @@ describe("Strings", () => {
         });
 
         test("works with string pattern", () => {
-          const result = interpreter.evaluate(
-            `"hello hello".replace("hello", "world")`
-          );
+          const result = interpreter.evaluate(`"hello hello".replace("hello", "world")`);
           expect(result).toBe("world hello");
         });
 
         test("replaces all with string pattern and replaceAll", () => {
-          const result = interpreter.evaluate(
-            `"hello hello".replaceAll("hello", "world")`
-          );
+          const result = interpreter.evaluate(`"hello hello".replaceAll("hello", "world")`);
           expect(result).toBe("world world");
         });
 
         test("calls replacement function with match", () => {
-          const result = interpreter.evaluate(
-            `"3+3".replace(/\\d/g, (m) => m + m)`
-          );
+          const result = interpreter.evaluate(`"3+3".replace(/\\d/g, (m) => m + m)`);
           expect(result).toBe("33+33");
         });
 
@@ -1510,8 +1510,7 @@ Goodbye\`
         });
 
         test("host tag function receives values", () => {
-          const collect = (_strings: TemplateStringsArray, ...values: any[]) =>
-            values;
+          const collect = (_strings: TemplateStringsArray, ...values: any[]) => values;
           const interp = new Interpreter({ globals: { collect } });
           const result = interp.evaluate("collect`a${10}b${20}c`");
           expect(result).toEqual([10, 20]);
@@ -1801,9 +1800,7 @@ Goodbye\`
     describe("String.prototype RegExp Methods", () => {
       describe("String.prototype.replaceAll", () => {
         test("replaces all occurrences with string", () => {
-          const result = interpreter.evaluate(
-            `"foo bar foo".replaceAll("foo", "baz")`
-          );
+          const result = interpreter.evaluate(`"foo bar foo".replaceAll("foo", "baz")`);
           expect(result).toBe("baz bar baz");
         });
 
@@ -1814,9 +1811,7 @@ Goodbye\`
         });
 
         test("works with global regex", () => {
-          const result = interpreter.evaluate(
-            `"foo foo".replaceAll(/foo/g, "bar")`
-          );
+          const result = interpreter.evaluate(`"foo foo".replaceAll(/foo/g, "bar")`);
           expect(result).toBe("bar bar");
         });
       });
@@ -1824,9 +1819,7 @@ Goodbye\`
 
     describe("String.prototype.replaceAll", () => {
       it("should replace all occurrences", () => {
-        expect(
-          interpreter.evaluate('"foo foo foo".replaceAll("foo", "bar")')
-        ).toBe("bar bar bar");
+        expect(interpreter.evaluate('"foo foo foo".replaceAll("foo", "bar")')).toBe("bar bar bar");
       });
 
       it("should replace with empty string", () => {
@@ -1834,9 +1827,7 @@ Goodbye\`
       });
 
       it("should work with global regex", () => {
-        expect(interpreter.evaluate('"a1b2c3".replaceAll(/\\d/g, "-")')).toBe(
-          "a-b-c-"
-        );
+        expect(interpreter.evaluate('"a1b2c3".replaceAll(/\\d/g, "-")')).toBe("a-b-c-");
       });
     });
   });

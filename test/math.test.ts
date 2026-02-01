@@ -213,5 +213,33 @@ describe("Math", () => {
         expect(interpreter.evaluate("Math.trunc(-4.9)")).toBe(-4);
       });
     });
+
+    describe("Math.sign", () => {
+      it("should return sign for positive, negative, and zero", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          [Math.sign(3), Math.sign(-3), Math.sign(0)]
+        `);
+        expect(result).toEqual([1, -1, 0]);
+      });
+
+      it("should preserve negative zero", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate("Object.is(Math.sign(-0), -0)");
+        expect(result).toBe(true);
+      });
+    });
+
+    describe("Math.hypot", () => {
+      it("should compute hypotenuse for two numbers", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Math.hypot(3, 4)")).toBe(5);
+      });
+
+      it("should compute hypotenuse for multiple numbers", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Math.hypot(3, 4, 12)")).toBe(13);
+      });
+    });
   });
 });
