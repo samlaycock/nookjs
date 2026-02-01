@@ -1537,6 +1537,16 @@ describe("Objects", () => {
           `);
           expect(result).toBe(4);
         });
+
+        it("should skip symbol keys", () => {
+          const result = interpreter.evaluate(`
+            const sym = Symbol("s");
+            const obj = { a: 1 };
+            obj[sym] = 2;
+            Object.entries(obj).length;
+          `);
+          expect(result).toBe(1);
+        });
       });
     });
   });

@@ -590,6 +590,22 @@ describe("Strings", () => {
                 `);
           expect(result).toBe(6);
         });
+
+        it("should clamp negative fromIndex to 0", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "abc".indexOf("b", -5)
+                `);
+          expect(result).toBe(1);
+        });
+
+        it("should return -1 when fromIndex exceeds length", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "abc".indexOf("a", 5)
+                `);
+          expect(result).toBe(-1);
+        });
       });
 
       describe("lastIndexOf", () => {

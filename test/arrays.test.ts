@@ -809,6 +809,16 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual([1, 2, 3]);
         });
+
+        it("should preserve holes in sparse arrays", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, , 3];
+                    let mapped = arr.map(x => x * 2);
+                    [mapped.length, 1 in mapped, mapped[0], mapped[2]]
+                  `);
+          expect(result).toEqual([3, true, 2, 6]);
+        });
       });
 
       describe("filter", () => {
