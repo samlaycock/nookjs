@@ -129,7 +129,7 @@ describe("Functions", () => {
             add(5)
           `;
           expect(() => interpreter.evaluate(code)).toThrow(
-            "Expected at least 2 arguments but got 1",
+            "Expected at least 2 arguments but got 1"
           );
         });
 
@@ -396,7 +396,9 @@ describe("Functions", () => {
             foo();
             x
           `;
-          expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'x'");
+          expect(() => interpreter.evaluate(code)).toThrow(
+            "Undefined variable 'x'"
+          );
         });
 
         test("local variable shadows outer", () => {
@@ -630,7 +632,9 @@ describe("Functions", () => {
 
       describe("Error handling", () => {
         test("calling undefined function throws", () => {
-          expect(() => interpreter.evaluate("foo()")).toThrow("Undefined variable 'foo'");
+          expect(() => interpreter.evaluate("foo()")).toThrow(
+            "Undefined variable 'foo'"
+          );
         });
 
         test("calling non-function throws", () => {
@@ -638,7 +642,9 @@ describe("Functions", () => {
             let x = 5;
             x()
           `;
-          expect(() => interpreter.evaluate(code)).toThrow("Callee is not a function");
+          expect(() => interpreter.evaluate(code)).toThrow(
+            "Callee is not a function"
+          );
         });
 
         test("cannot redeclare function", () => {
@@ -651,7 +657,7 @@ describe("Functions", () => {
             }
           `;
           expect(() => interpreter.evaluate(code)).toThrow(
-            "Variable 'foo' has already been declared",
+            "Variable 'foo' has already been declared"
           );
         });
       });
@@ -1082,6 +1088,98 @@ describe("Functions", () => {
           `;
           expect(interpreter.evaluate(code)).toBeUndefined();
         });
+      });
+    });
+
+    describe("Default parameters", () => {
+      it("should use default when argument is missing", () => {
+        const interpreter = new Interpreter();
+        const code = `
+            function greet(name = "world") {
+              return "hi " + name;
+            }
+            greet()
+          `;
+        expect(interpreter.evaluate(code)).toBe("hi world");
+      });
+
+      it("should use default when argument is undefined", () => {
+        const interpreter = new Interpreter();
+        const code = `
+            function value(x = 5) {
+              return x;
+            }
+            value(undefined)
+          `;
+        expect(interpreter.evaluate(code)).toBe(5);
+      });
+
+      it("should allow default to reference earlier parameter", () => {
+        const interpreter = new Interpreter();
+        const code = `
+            function calc(a, b = a * 2) {
+              return b;
+            }
+            calc(3)
+          `;
+        expect(interpreter.evaluate(code)).toBe(6);
+      });
+
+      it("should allow default with object destructuring", () => {
+        const interpreter = new Interpreter();
+        const code = `
+            function getPort({ port = 3000 } = {}) {
+              return port;
+            }
+            getPort()
+          `;
+        expect(interpreter.evaluate(code)).toBe(3000);
+      });
+
+      it("should allow nested destructuring defaults", () => {
+        const interpreter = new Interpreter();
+        const code = `
+            function getHost({ db: { host = "localhost" } = {} } = {}) {
+              return host;
+            }
+            getHost()
+          `;
+        expect(interpreter.evaluate(code)).toBe("localhost");
+      });
+    });
+
+    describe("Rest parameters", () => {
+      it("should collect remaining arguments into an array", () => {
+        const interpreter = new Interpreter();
+        const code = `
+            function sum(...nums) {
+              return nums.reduce((acc, n) => acc + n, 0);
+            }
+            sum(1, 2, 3)
+          `;
+        expect(interpreter.evaluate(code)).toBe(6);
+      });
+
+      it("should work with leading parameters", () => {
+        const interpreter = new Interpreter();
+        const code = `
+            function join(sep, ...parts) {
+              return parts.join(sep);
+            }
+            join("-", "a", "b", "c")
+          `;
+        expect(interpreter.evaluate(code)).toBe("a-b-c");
+      });
+
+      it("should handle zero rest arguments", () => {
+        const interpreter = new Interpreter();
+        const code = `
+            function count(...items) {
+              return items.length;
+            }
+            count()
+          `;
+        expect(interpreter.evaluate(code)).toBe(0);
       });
     });
 
@@ -1825,7 +1923,12 @@ describe("Functions", () => {
             g.return();
             log;
           `);
-          expect(result).toEqual(["outer-try", "inner-try", "inner-finally", "outer-finally"]);
+          expect(result).toEqual([
+            "outer-try",
+            "inner-try",
+            "inner-finally",
+            "outer-finally",
+          ]);
         });
 
         test("async return() executes finally block", async () => {
@@ -2098,7 +2201,12 @@ describe("Functions", () => {
             log.push('value: ' + g.throw(new Error('injected')).value);  // caught, yields 2
             log;
           `);
-          expect(result).toEqual(["value: 1", "caught: injected", "finally", "value: 2"]);
+          expect(result).toEqual([
+            "value: 1",
+            "caught: injected",
+            "finally",
+            "value: 2",
+          ]);
         });
 
         test("async generator throw() basic", async () => {
