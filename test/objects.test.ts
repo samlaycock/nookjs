@@ -1508,6 +1508,16 @@ describe("Objects", () => {
         it("should work with arrays", () => {
           expect(interpreter.evaluate("Object.values([1, 2, 3])")).toEqual([1, 2, 3]);
         });
+
+        it("should skip symbol keys", () => {
+          const result = interpreter.evaluate(`
+            const sym = Symbol("s");
+            const obj = { a: 1 };
+            obj[sym] = 2;
+            Object.values(obj).length;
+          `);
+          expect(result).toBe(1);
+        });
       });
 
       describe("Object.entries", () => {

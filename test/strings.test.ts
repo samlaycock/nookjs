@@ -1145,6 +1145,14 @@ describe("Strings", () => {
             `);
           expect(result).toBe(false);
         });
+
+        it("should return false when length exceeds string length", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "Hello".endsWith("Hello", 10)
+            `);
+          expect(result).toBe(true);
+        });
       });
 
       describe("repeat", () => {

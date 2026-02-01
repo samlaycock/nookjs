@@ -944,6 +944,20 @@ describe("Arrays", () => {
                   `);
           expect(result).toBe(true);
         });
+
+        it("should skip holes in sparse arrays", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, , 3];
+                    let visited = [];
+                    arr.every((val, idx) => {
+                      visited.push(idx);
+                      return true;
+                    });
+                    visited
+                  `);
+          expect(result).toEqual([0, 1, 2]);
+        });
       });
 
       describe("some", () => {
@@ -972,6 +986,20 @@ describe("Arrays", () => {
                     arr.some(x => true)
                   `);
           expect(result).toBe(false);
+        });
+
+        it("should skip holes in sparse arrays", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, , 3];
+                    let visited = [];
+                    arr.some((val, idx) => {
+                      visited.push(idx);
+                      return false;
+                    });
+                    visited
+                  `);
+          expect(result).toEqual([0, 1, 2]);
         });
       });
 
