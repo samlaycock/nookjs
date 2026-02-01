@@ -1,0 +1,247 @@
+import { describe, it, expect } from "bun:test";
+
+import { Interpreter } from "../src/interpreter";
+import { ES5, ES2015, ES2021 } from "../src/presets";
+
+describe("Numbers", () => {
+  describe("ES5", () => {
+    describe("parseInt", () => {
+      it("should parse integer from string", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseInt('42')")).toBe(42);
+      });
+
+      it("should parse with radix", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseInt('10', 2)")).toBe(2);
+        expect(interpreter.evaluate("parseInt('10', 16)")).toBe(16);
+      });
+
+      it("should return NaN for invalid input", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(Number.isNaN(interpreter.evaluate("parseInt('abc')"))).toBe(
+          true
+        );
+      });
+
+      it("should handle negative numbers", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseInt('-42')")).toBe(-42);
+      });
+    });
+
+    describe("parseFloat", () => {
+      it("should parse float from string", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseFloat('3.14')")).toBeCloseTo(3.14, 2);
+      });
+
+      it("should parse integer", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseFloat('42')")).toBe(42);
+      });
+
+      it("should return NaN for invalid input", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(Number.isNaN(interpreter.evaluate("parseFloat('abc')"))).toBe(
+          true
+        );
+      });
+    });
+
+    describe("isNaN", () => {
+      it("should return true for NaN", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isNaN(NaN)")).toBe(true);
+      });
+
+      it("should return false for number", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isNaN(42)")).toBe(false);
+      });
+
+      it("should return false for null", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isNaN(null)")).toBe(false);
+      });
+    });
+
+    describe("isFinite", () => {
+      it("should return false for Infinity", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isFinite(Infinity)")).toBe(false);
+      });
+
+      it("should return false for -Infinity", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isFinite(-Infinity)")).toBe(false);
+      });
+
+      it("should return true for regular number", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isFinite(42)")).toBe(true);
+      });
+
+      it("should return true for zero", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isFinite(0)")).toBe(true);
+      });
+    });
+  });
+
+  describe("ES2015", () => {
+    describe("Number.isNaN", () => {
+      it("should return true for NaN", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isNaN(NaN)")).toBe(true);
+      });
+
+      it("should return false for number", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isNaN(42)")).toBe(false);
+      });
+    });
+
+    describe("Number.isFinite", () => {
+      it("should return true for finite number", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isFinite(42)")).toBe(true);
+      });
+
+      it("should return false for Infinity", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isFinite(Infinity)")).toBe(false);
+      });
+    });
+
+    describe("Number.isInteger", () => {
+      it("should return true for integer", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isInteger(42)")).toBe(true);
+      });
+
+      it("should return false for float", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isInteger(3.14)")).toBe(false);
+      });
+    });
+
+    describe("Number.parseInt", () => {
+      it("should parse integer", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.parseInt('42')")).toBe(42);
+      });
+
+      it("should parse hex", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.parseInt('FF', 16)")).toBe(255);
+      });
+    });
+
+    describe("Number.parseFloat", () => {
+      it("should parse float", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.parseFloat('3.14')")).toBeCloseTo(
+          3.14,
+          2
+        );
+      });
+    });
+
+    describe("Number.MAX_SAFE_INTEGER", () => {
+      it("should have correct value", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.MAX_SAFE_INTEGER")).toBe(
+          9007199254740991
+        );
+      });
+    });
+
+    describe("Number constructors and methods", () => {
+      it("Number.isNaN should return true only for NaN", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isNaN(NaN)")).toBe(true);
+        expect(interpreter.evaluate("Number.isNaN(42)")).toBe(false);
+      });
+
+      it("Number.isFinite should return true only for finite numbers", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isFinite(42)")).toBe(true);
+        expect(interpreter.evaluate("Number.isFinite(Infinity)")).toBe(false);
+      });
+
+      it("Number.isInteger should check if value is integer", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isInteger(42)")).toBe(true);
+        expect(interpreter.evaluate("Number.isInteger(3.14)")).toBe(false);
+      });
+
+      it("Number.parseInt should parse integer", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.parseInt('42')")).toBe(42);
+      });
+
+      it("Number.parseFloat should parse float", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.parseFloat('3.14')")).toBeCloseTo(
+          3.14,
+          2
+        );
+      });
+    });
+  });
+
+  describe("ES2021", () => {
+    describe("Numeric separators", () => {
+      it("should support numeric separators", () => {
+        const interpreter = new Interpreter(ES2021);
+        expect(interpreter.evaluate("1_000_000")).toBe(1000000);
+      });
+
+      it("should support in hex", () => {
+        const interpreter = new Interpreter(ES2021);
+        expect(interpreter.evaluate("0x1_000")).toBe(4096);
+      });
+
+      it("should support underscores in decimal integers", () => {
+        const interpreter = new Interpreter(ES2021);
+        expect(interpreter.evaluate("1_000")).toBe(1000);
+        expect(interpreter.evaluate("1_000_000")).toBe(1000000);
+        expect(interpreter.evaluate("1_234_567_890")).toBe(1234567890);
+      });
+
+      it("should support underscores in hexadecimal", () => {
+        const interpreter = new Interpreter(ES2021);
+        expect(interpreter.evaluate("0xFF_FF")).toBe(0xffff);
+        expect(interpreter.evaluate("0x00_FF_00_FF")).toBe(0x00ff00ff);
+        expect(interpreter.evaluate("0xDEAD_BEEF")).toBe(0xdeadbeef);
+      });
+
+      it("should support underscores in binary", () => {
+        const interpreter = new Interpreter(ES2021);
+        expect(interpreter.evaluate("0b1010_1010")).toBe(0b10101010);
+        expect(interpreter.evaluate("0b1111_0000_1111_0000")).toBe(
+          0b1111000011110000
+        );
+      });
+
+      it("should support underscores in octal", () => {
+        const interpreter = new Interpreter(ES2021);
+        expect(interpreter.evaluate("0o77_77")).toBe(0o7777);
+        expect(interpreter.evaluate("0o12_34_56")).toBe(0o123456);
+      });
+
+      it("should support underscores in decimal floats", () => {
+        const interpreter = new Interpreter(ES2021);
+        expect(interpreter.evaluate("1_000.5")).toBe(1000.5);
+        expect(interpreter.evaluate("1_000.123_456")).toBe(1000.123456);
+      });
+
+      it("should work in expressions", () => {
+        const interpreter = new Interpreter(ES2021);
+        expect(interpreter.evaluate("1_000 + 2_000")).toBe(3000);
+        expect(interpreter.evaluate("0xFF_00 | 0x00_FF")).toBe(0xffff);
+      });
+    });
+  });
+});
