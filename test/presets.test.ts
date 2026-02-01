@@ -214,7 +214,9 @@ describe("Presets", () => {
           const logs: any[] = [];
           const mockConsole = { log: (...args: any[]) => logs.push(args) };
 
-          const interpreter = new Interpreter(preset(ES2022, { globals: { console: mockConsole } }));
+          const interpreter = new Interpreter(
+            preset(ES2022, { globals: { console: mockConsole } }),
+          );
           interpreter.evaluate(`console.log('hello', 42)`);
 
           expect(logs).toEqual([["hello", 42]]);
