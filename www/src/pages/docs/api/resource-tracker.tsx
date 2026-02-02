@@ -5,39 +5,28 @@ import { CodeBlock } from "../../../components/code-block";
 export function ResourceTrackerAPI() {
   return (
     <article className="prose prose-invert max-w-none">
-      <h1 className="text-3xl font-bold text-neutral-50 mb-4">
-        Resource Tracking
-      </h1>
+      <h1 className="text-3xl font-bold text-neutral-50 mb-4">Resource Tracking</h1>
       <p className="text-xl text-neutral-300 mb-8">
         Monitor and limit cumulative resource usage across multiple evaluations.
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Overview
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Overview</h2>
         <p className="text-neutral-300 mb-4">
-          NookJS provides integrated resource tracking for monitoring resource
-          consumption across multiple{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-            evaluate()
-          </code>{" "}
-          calls. This is essential for multi-tenant environments where you need
-          to track and limit cumulative usage.
+          NookJS provides integrated resource tracking for monitoring resource consumption across
+          multiple <code className="text-amber-400 bg-neutral-800 px-1 rounded">evaluate()</code>{" "}
+          calls. This is essential for multi-tenant environments where you need to track and limit
+          cumulative usage.
         </p>
         <p className="text-neutral-300 mb-4">
           Enable tracking with{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-            resourceTracking: true
-          </code>{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">resourceTracking: true</code>{" "}
           when creating the Interpreter:
         </p>
         <ul className="space-y-2 text-neutral-300">
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
-            <span>
-              Tracks aggregate resource usage across the interpreter's lifetime
-            </span>
+            <span>Tracks aggregate resource usage across the interpreter's lifetime</span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
@@ -45,17 +34,13 @@ export function ResourceTrackerAPI() {
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
-            <span>
-              Supports billing, rate-limiting, and fairness enforcement
-            </span>
+            <span>Supports billing, rate-limiting, and fairness enforcement</span>
           </li>
         </ul>
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Quick Start
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Quick Start</h2>
         <CodeBlock
           code={`import { Interpreter, ES2024, preset, ResourceExhaustedError } from "nookjs";
 
@@ -92,22 +77,16 @@ console.log(\`Evaluations: \${stats.evaluations}\`);`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Interpreter Methods
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Interpreter Methods</h2>
         <p className="text-neutral-300 mb-4">
           When{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-            resourceTracking: true
-          </code>{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">resourceTracking: true</code>{" "}
           is set, the Interpreter exposes these methods:
         </p>
 
         <div className="space-y-8">
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">
-              getResourceStats()
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">getResourceStats()</h3>
             <p className="text-neutral-400 text-sm mb-3">
               Returns current cumulative resource statistics.
             </p>
@@ -139,12 +118,8 @@ console.log(stats);
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">
-              resetResourceStats()
-            </h3>
-            <p className="text-neutral-400 text-sm mb-3">
-              Clears all statistics and history.
-            </p>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">resetResourceStats()</h3>
+            <p className="text-neutral-400 text-sm mb-3">Clears all statistics and history.</p>
             <CodeBlock
               code={`// Reset at the start of each billing cycle
 setInterval(() => {
@@ -154,9 +129,7 @@ setInterval(() => {
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">
-              getResourceHistory()
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">getResourceHistory()</h3>
             <p className="text-neutral-400 text-sm mb-3">
               Returns array of past evaluation statistics.
             </p>
@@ -181,9 +154,7 @@ setInterval(() => {
             <h3 className="text-lg font-medium text-neutral-100 mb-2">
               setResourceLimit(key, value) / getResourceLimit(key)
             </h3>
-            <p className="text-neutral-400 text-sm mb-3">
-              Get or set specific limits dynamically.
-            </p>
+            <p className="text-neutral-400 text-sm mb-3">Get or set specific limits dynamically.</p>
             <CodeBlock
               code={`// Set limits
 interpreter.setResourceLimit("maxTotalMemory", 100 * 1024 * 1024);
@@ -202,9 +173,7 @@ if (user.isPremium) {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          ResourceLimits
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">ResourceLimits</h2>
         <p className="text-neutral-300 mb-4">Available limits you can set:</p>
         <CodeBlock
           code={`type ResourceLimits = {
@@ -218,14 +187,10 @@ if (user.isPremium) {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Error Handling
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Error Handling</h2>
         <p className="text-neutral-300 mb-4">
           When a limit is exceeded, a{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-            ResourceExhaustedError
-          </code>{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">ResourceExhaustedError</code>{" "}
           is thrown:
         </p>
         <CodeBlock
@@ -248,15 +213,11 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Use Cases
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Use Cases</h2>
 
         <div className="space-y-6">
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">
-              Plugin Systems
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">Plugin Systems</h3>
             <p className="text-neutral-400 text-sm mb-3">
               Track resource usage per plugin to enforce fair allocation:
             </p>
@@ -285,9 +246,7 @@ console.log(\`Plugin memory: \${stats.memoryBytes} bytes\`);`}
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">
-              Rate Limiting
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">Rate Limiting</h3>
             <p className="text-neutral-400 text-sm mb-3">
               Implement evaluation-count-based rate limiting:
             </p>
@@ -324,12 +283,8 @@ console.log(\`Plugin memory: \${stats.memoryBytes} bytes\`);`}
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">
-              Monitoring Dashboard
-            </h3>
-            <p className="text-neutral-400 text-sm mb-3">
-              Expose stats for monitoring:
-            </p>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">Monitoring Dashboard</h3>
+            <p className="text-neutral-400 text-sm mb-3">Expose stats for monitoring:</p>
             <CodeBlock
               code={`// API endpoint for monitoring
 app.get("/api/sandbox/:userId/stats", (req, res) => {
@@ -366,15 +321,9 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-700">
-                <th className="text-left py-2 pr-4 text-neutral-300">
-                  Feature
-                </th>
-                <th className="text-left py-2 pr-4 text-neutral-300">
-                  Per-Evaluation
-                </th>
-                <th className="text-left py-2 text-neutral-300">
-                  resourceTracking
-                </th>
+                <th className="text-left py-2 pr-4 text-neutral-300">Feature</th>
+                <th className="text-left py-2 pr-4 text-neutral-300">Per-Evaluation</th>
+                <th className="text-left py-2 text-neutral-300">resourceTracking</th>
               </tr>
             </thead>
             <tbody className="text-neutral-400">
@@ -414,8 +363,7 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
                 <td className="py-2 pr-4">Statistics</td>
                 <td className="py-2 pr-4">None</td>
                 <td className="py-2">
-                  Detailed stats via{" "}
-                  <code className="text-amber-400">getResourceStats()</code>
+                  Detailed stats via <code className="text-amber-400">getResourceStats()</code>
                 </td>
               </tr>
               <tr>
@@ -429,15 +377,11 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Standalone ResourceTracker
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Standalone ResourceTracker</h2>
         <p className="text-neutral-300 mb-4">
           For advanced scenarios, NookJS also exports a standalone{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-            ResourceTracker
-          </code>{" "}
-          class that can be used independently for custom resource accounting:
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">ResourceTracker</code> class
+          that can be used independently for custom resource accounting:
         </p>
         <CodeBlock
           code={`import { ResourceTracker } from "nookjs";
@@ -463,10 +407,9 @@ if (tracker.isExhausted()) {
 tracker.reset();`}
         />
         <p className="text-neutral-400 text-sm mt-4">
-          Note: The standalone ResourceTracker is not automatically integrated
-          with the Interpreter. Use{" "}
-          <code className="text-amber-400">resourceTracking: true</code> for
-          automatic tracking during evaluation.
+          Note: The standalone ResourceTracker is not automatically integrated with the Interpreter.
+          Use <code className="text-amber-400">resourceTracking: true</code> for automatic tracking
+          during evaluation.
         </p>
       </section>
 
