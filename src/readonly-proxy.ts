@@ -1,5 +1,5 @@
 import { isDangerousProperty } from "./constants";
-import { InterpreterError, HostFunctionValue } from "./interpreter";
+import { InterpreterError, HostFunctionValue, FunctionValue } from "./interpreter";
 
 /**
  * Symbol used to retrieve the underlying target from a ReadOnlyProxy.
@@ -215,6 +215,11 @@ export class ReadOnlyProxy {
 
     // Already wrapped as HostFunctionValue - don't double wrap
     if (value instanceof HostFunctionValue) {
+      return value;
+    }
+
+    // FunctionValue is an interpreter-internal function - pass through unchanged
+    if (value instanceof FunctionValue) {
       return value;
     }
 
