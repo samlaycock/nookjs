@@ -27,6 +27,15 @@ describe("Collections", () => {
         ).toBe("value");
       });
 
+      it("should allow chaining set calls", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const map = new Map();
+          map.set("a", 1).set("b", 2).size;
+        `);
+        expect(result).toBe(2);
+      });
+
       it("should handle NaN keys", () => {
         const interpreter = new Interpreter(ES2015);
         const result = interpreter.evaluate(`
@@ -268,6 +277,15 @@ describe("Collections", () => {
           [mySet.has(2), mySet.size];
         `);
         expect(result).toEqual([true, 2]);
+      });
+
+      it("should allow chaining add calls", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const set = new Set();
+          set.add(1).add(2).size;
+        `);
+        expect(result).toBe(2);
       });
 
       it("should return false for missing value with has", () => {

@@ -276,6 +276,18 @@ describe("Objects", () => {
       });
     });
 
+    describe("Property deletion", () => {
+      it("should remove a property from the object", () => {
+        const interpreter = new Interpreter(ES2024);
+        const code = `
+            let obj = { a: 1, b: 2 };
+            delete obj.a;
+            obj.a
+          `;
+        expect(interpreter.evaluate(code)).toBeUndefined();
+      });
+    });
+
     describe("Objects with functions", () => {
       it("should pass object as function parameter", () => {
         const interpreter = new Interpreter(ES2024);
@@ -370,6 +382,19 @@ describe("Objects", () => {
             sum
           `;
         expect(interpreter.evaluate(code)).toBe(14); // 2+3+4+5
+      });
+
+      it("should iterate properties with for...in", () => {
+        const interpreter = new Interpreter(ES2024);
+        const code = `
+            let obj = { a: 1, b: 2, c: 3 };
+            let sum = 0;
+            for (let key in obj) {
+              sum = sum + obj[key];
+            }
+            sum
+          `;
+        expect(interpreter.evaluate(code)).toBe(6);
       });
     });
 
@@ -1409,6 +1434,15 @@ describe("Objects", () => {
                   target.a + target.b
                 `),
           ).toBe(3);
+        });
+
+        it("should keep existing properties when source is empty", () => {
+          const result = interpreter.evaluate(`
+            const target = { a: 1 };
+            Object.assign(target, {});
+            target.a;
+          `);
+          expect(result).toBe(1);
         });
 
         it("should copy from multiple sources", () => {

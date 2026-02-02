@@ -1212,6 +1212,14 @@ describe("Strings", () => {
           expect(result).toBe(false);
         });
 
+        it("should coerce non-string search value", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "123".includes(2)
+            `);
+          expect(result).toBe(true);
+        });
+
         it("should work with position", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -1261,6 +1269,14 @@ describe("Strings", () => {
               "Hello World".startsWith("World")
             `);
           expect(result).toBe(false);
+        });
+
+        it("should coerce non-string search value", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "123".startsWith(1)
+            `);
+          expect(result).toBe(true);
         });
 
         it("should work with position", () => {
@@ -1322,6 +1338,14 @@ describe("Strings", () => {
           expect(result).toBe(false);
         });
 
+        it("should coerce non-string search value", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "123".endsWith(3)
+            `);
+          expect(result).toBe(true);
+        });
+
         it("should work with length", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -1363,6 +1387,14 @@ describe("Strings", () => {
               "abc".repeat(0)
             `);
           expect(result).toBe("");
+        });
+
+        it("should truncate fractional counts", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "ha".repeat(2.5)
+            `);
+          expect(result).toBe("haha");
         });
 
         it("should work with single character", () => {
@@ -1926,6 +1958,14 @@ Goodbye\`
                   "hello".padEnd(3, "0")
                 `);
           expect(result).toBe("hello");
+        });
+
+        it("should return original when pad string is empty", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "x".padEnd(5, "")
+                `);
+          expect(result).toBe("x");
         });
 
         it("should repeat pad string if needed", () => {

@@ -250,6 +250,12 @@ describe("Math", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("Math.trunc(-4.9)")).toBe(-4);
       });
+
+      it("should preserve negative zero", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate("Object.is(Math.trunc(-0), -0)");
+        expect(result).toBe(true);
+      });
     });
 
     describe("Math.sign", () => {
@@ -265,6 +271,12 @@ describe("Math", () => {
         const interpreter = new Interpreter(ES2015);
         const result = interpreter.evaluate("Object.is(Math.sign(-0), -0)");
         expect(result).toBe(true);
+      });
+
+      it("should return NaN for NaN input", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate("Math.sign(NaN)");
+        expect(Number.isNaN(result)).toBe(true);
       });
     });
 

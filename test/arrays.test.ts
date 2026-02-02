@@ -693,6 +693,16 @@ describe("Arrays", () => {
           expect(result).toEqual([1, 2, 3]);
         });
 
+        it("should return a new array instance", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3];
+                    let copy = arr.slice();
+                    copy === arr
+                  `);
+          expect(result).toBe(false);
+        });
+
         it("should clamp end beyond length", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -709,6 +719,15 @@ describe("Arrays", () => {
                     arr.slice(-10)
                   `);
           expect(result).toEqual([1, 2, 3]);
+        });
+
+        it("should truncate fractional indices", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3, 4];
+                    arr.slice(1.8, 3.2)
+                  `);
+          expect(result).toEqual([2, 3]);
         });
       });
 
@@ -751,6 +770,16 @@ describe("Arrays", () => {
                     arr1
                   `);
           expect(result).toEqual([1, 2]);
+        });
+
+        it("should return a new array when called with no arguments", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3];
+                    let copy = arr.concat();
+                    copy === arr
+                  `);
+          expect(result).toBe(false);
         });
 
         it("should concatenate multiple arrays", () => {
@@ -834,6 +863,15 @@ describe("Arrays", () => {
                     arr.indexOf(2, -2)
                   `);
           expect(result).toBe(3);
+        });
+
+        it("should return -1 when fromIndex exceeds length", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3];
+                    arr.indexOf(2, 10)
+                  `);
+          expect(result).toBe(-1);
         });
       });
 
@@ -1032,6 +1070,15 @@ describe("Arrays", () => {
                     arr.reduce((acc, val) => acc + val, 0)
                   `);
           expect(result).toBe(10);
+        });
+
+        it("should return initial value for empty array", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [];
+                    arr.reduce((acc, val) => acc + val, 5)
+                  `);
+          expect(result).toBe(5);
         });
 
         it("should reduce without initial value", () => {
@@ -1286,6 +1333,15 @@ describe("Arrays", () => {
           expect(result).toBe("cba");
         });
 
+        it("should return initial value for empty array", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [];
+                    arr.reduceRight((acc, val) => acc + val, 7);
+                  `);
+          expect(result).toBe(7);
+        });
+
         it("should use last element as initial when no initialValue", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -1445,6 +1501,15 @@ describe("Arrays", () => {
                   `);
           expect(result).toBe(3);
         });
+
+        it("should clamp fromIndex beyond length", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2, 3, 2, 1];
+                    arr.lastIndexOf(2, 100);
+                  `);
+          expect(result).toBe(3);
+        });
       });
     });
   });
@@ -1587,6 +1652,16 @@ describe("Arrays", () => {
                     arr;
                   `);
           expect(result).toEqual([1, 0, 0, 4]);
+        });
+
+        it("should leave array unchanged when start is beyond length", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2, 3];
+                    arr.fill(9, 10);
+                    arr;
+                  `);
+          expect(result).toEqual([1, 2, 3]);
         });
       });
     });

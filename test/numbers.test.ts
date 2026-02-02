@@ -330,6 +330,11 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("Number.isFinite(Infinity)")).toBe(false);
       });
 
+      it("should return false for NaN", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isFinite(NaN)")).toBe(false);
+      });
+
       it("should return false for numeric string", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("Number.isFinite('42')")).toBe(false);
@@ -355,6 +360,11 @@ describe("Numbers", () => {
       it("should return false for numeric string", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("Number.isInteger('42')")).toBe(false);
+      });
+
+      it("should return false for Infinity", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Number.isInteger(Infinity)")).toBe(false);
       });
     });
 
