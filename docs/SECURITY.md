@@ -133,6 +133,67 @@ This prevents host objects from leaking sensitive data through custom `valueOf` 
 
 ## Known Limitations
 
+### TypedArrays Have Special Handling
+
+TypedArrays (e.g., `Uint8Array`, `Int32Array`) and `ArrayBuffer` instances have special security handling to balance usability with sandbox protection.
+
+#### Element Mutation is Allowed
+
+Unlike other host objects which are fully read-only, TypedArrays allow **element mutation via numeric indices**. This enables common patterns like:
+
+```typescript
+interpreter.evaluate(`
+  const arr = new Uint8Array(3);
+  arr[0] = 10;  // Allowed - numeric index write
+  arr[1] = 20;  // Allowed
+  
+  const encoder = new TextEncoder();
+  const buffer = new Uint8Array(100);
+  encoder.encodeInto('Hello', buffer);  // Allowed - writes to buffer
+`);
+```
+
+However, non-index property modifications are still blocked:
+
+```typescript
+interpreter.evaluate(`
+  const arr = new Uint8Array(3);
+  arr.foo = 'bar';  // Blocked - not a numeric index
+`);
+```
+
+#### Unwrapped for Native Methods
+
+When TypedArrays or `ArrayBuffer` instances are passed to host functions, they are **automatically unwrapped** from their `ReadOnlyProxy` wrapper. This is necessary because native methods like `TextDecoder.decode()` require actual TypedArray instances, not Proxy objects.
+
+```typescript
+const interpreter = new Interpreter(preset(ES2024, TextCodecAPI, BufferAPI));
+
+interpreter.evaluate(`
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const bytes = encoder.encode('hello');  // Returns proxied Uint8Array
+  decoder.decode(bytes);                   // bytes is unwrapped for native decode()
+`);
+```
+
+**What this means:**
+
+- Native host methods receive the real TypedArray, not a Proxy
+- Element mutation is allowed within the sandbox via numeric indices
+- The underlying `ArrayBuffer` memory is shared - the proxy never creates a copy
+
+**Risk Assessment:** Low
+
+1. **Host functions are trusted** - They are provided by the embedder, not the sandbox. If an embedder injects a malicious host function, they've already compromised their own sandbox.
+2. **TypedArrays are value containers** - Unlike objects with methods that could be exploited, TypedArrays are essentially byte buffers with no dangerous capabilities.
+3. **No new data exposed** - The `ReadOnlyProxy` wraps the same underlying `ArrayBuffer`. Unwrapping doesn't expose new data, just removes the proxy layer.
+4. **Narrow scope** - Only TypedArrays and ArrayBuffers receive this special handling, not arbitrary objects.
+
+**If you need stronger isolation:**
+
+If your use case requires preventing sandbox code from mutating TypedArrays or preventing native host code from seeing sandbox-created data, avoid providing TypedArray-related APIs, or implement your own copying wrapper that creates a fresh TypedArray from the data before passing to sensitive operations.
+
 ### Promises Pass Through Unwrapped
 
 Promise objects are passed through `ReadOnlyProxy.wrap()` without wrapping. This is **intentional** because:

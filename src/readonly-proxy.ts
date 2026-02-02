@@ -9,6 +9,76 @@ import { InterpreterError, HostFunctionValue } from "./interpreter";
 export const PROXY_TARGET = Symbol("ReadOnlyProxy.target");
 
 /**
+ * TypedArray constructors that need unwrapping when passed to native methods.
+ * Native methods like TextDecoder.decode() require actual TypedArray instances,
+ * not Proxy objects wrapping them.
+ */
+const TYPED_ARRAY_CONSTRUCTORS = [
+  Int8Array,
+  Uint8Array,
+  Uint8ClampedArray,
+  Int16Array,
+  Uint16Array,
+  Int32Array,
+  Uint32Array,
+  Float32Array,
+  Float64Array,
+  BigInt64Array,
+  BigUint64Array,
+] as const;
+
+/**
+ * Check if a value is a TypedArray instance.
+ */
+function isTypedArray(value: unknown): value is ArrayBufferView {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  for (const TypedArrayCtor of TYPED_ARRAY_CONSTRUCTORS) {
+    if (value instanceof TypedArrayCtor) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Unwrap a value for passing to native host functions.
+ *
+ * Native methods like TextDecoder.decode() require actual TypedArray instances,
+ * not Proxy objects. This function extracts the underlying target from
+ * ReadOnlyProxy-wrapped values when necessary.
+ *
+ * @param value - The value to potentially unwrap
+ * @returns The unwrapped value if it was a proxy wrapping a TypedArray/ArrayBuffer, otherwise the original value
+ */
+export function unwrapForNative(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  // Check if this is a proxy by attempting to access PROXY_TARGET
+  const target = (value as any)[PROXY_TARGET];
+  if (target === undefined) {
+    // Not a ReadOnlyProxy, return as-is
+    return value;
+  }
+
+  // It's a proxy - check if the target needs unwrapping
+  // TypedArrays and ArrayBuffers must be unwrapped for native methods
+  if (isTypedArray(target) || target instanceof ArrayBuffer) {
+    return target;
+  }
+
+  // For other proxy types, return the original proxy
+  return value;
+}
+
+/**
  * Security options for ReadOnlyProxy
  */
 export interface SecurityOptions {
@@ -255,8 +325,19 @@ export class ReadOnlyProxy {
         return val;
       },
 
-      set(target, prop, _value) {
-        // Enforce read-only for ALL properties on globals
+      set(target, prop, value) {
+        // Allow element mutation on TypedArrays via numeric indices
+        // TypedArrays need to be writable for common use cases like encoder.encodeInto()
+        if (isTypedArray(target)) {
+          // Allow numeric index writes (element mutation)
+          const index = typeof prop === "string" ? Number(prop) : prop;
+          if (typeof index === "number" && Number.isInteger(index) && index >= 0) {
+            (target as any)[prop] = value;
+            return true;
+          }
+        }
+
+        // Enforce read-only for all other properties on globals
         // This prevents any modification to global objects, regardless of their internal descriptors
         throw new InterpreterError(
           `Cannot modify property '${String(prop)}' on global '${name}' (read-only)`,
