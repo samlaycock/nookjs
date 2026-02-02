@@ -21,7 +21,8 @@ export function Layout() {
                 location.pathname === "/" ? "text-amber-500" : "text-neutral-400"
               }`}
             >
-              Playground
+              <span className="sm:hidden">Play</span>
+              <span className="hidden sm:inline">Playground</span>
             </Link>
             <Link
               to="/docs"
@@ -29,7 +30,8 @@ export function Layout() {
                 isDocsPage ? "text-amber-500" : "text-neutral-400"
               }`}
             >
-              Documentation
+              <span className="sm:hidden">Docs</span>
+              <span className="hidden sm:inline">Documentation</span>
             </Link>
           </nav>
         </div>

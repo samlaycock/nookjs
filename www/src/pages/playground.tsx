@@ -2,6 +2,7 @@ import CodeEditor from "@uiw/react-textarea-code-editor";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Interpreter, InterpreterError, ES2024, preset, ParseError } from "../../../src/index";
+import { Button } from "../components/button";
 
 const CODE_LOCAL_STORAGE_KEY = "nookjs-code";
 const DEFAULT_CODE = `// Welcome to NookJS!
@@ -148,13 +149,21 @@ const result = await interpreter.evaluateAsync(code);`,
           )}
           <div className="flex flex-row absolute top-4 right-4 sm:top-6 sm:right-6">
             <button
-              className={`px-3 py-1 text-neutral-50 text-sm ${mode === "code" ? "bg-neutral-500" : "bg-neutral-600 cursor-pointer hover:bg-neutral-500"}`}
+              className={`px-3 py-1 text-neutral-50 text-sm ${
+                mode === "code"
+                  ? "bg-neutral-500"
+                  : "bg-neutral-600 cursor-pointer hover:bg-neutral-500"
+              }`}
               onClick={() => onSetMode("code")}
             >
               Code
             </button>
             <button
-              className={`px-3 py-1 text-neutral-50 text-sm ${mode === "usage" ? "bg-neutral-500" : "bg-neutral-600 cursor-pointer hover:bg-neutral-500"}`}
+              className={`px-3 py-1 text-neutral-50 text-sm ${
+                mode === "usage"
+                  ? "bg-neutral-500"
+                  : "bg-neutral-600 cursor-pointer hover:bg-neutral-500"
+              }`}
               onClick={() => onSetMode("usage")}
             >
               Usage
@@ -187,18 +196,10 @@ const result = await interpreter.evaluateAsync(code);`,
             )}
           </div>
           <div className="shrink-0 flex flex-row gap-4">
-            <button
-              className="px-4 py-2 bg-neutral-600 text-neutral-50 cursor-pointer hover:bg-neutral-500"
-              onClick={onClear}
-            >
+            <Button variant="secondary" onClick={onClear}>
               Clear
-            </button>
-            <button
-              className="px-4 py-2 bg-amber-500 text-amber-950 cursor-pointer hover:bg-amber-400"
-              onClick={onRun}
-            >
-              Run
-            </button>
+            </Button>
+            <Button onClick={onRun}>Run</Button>
           </div>
         </div>
       </section>

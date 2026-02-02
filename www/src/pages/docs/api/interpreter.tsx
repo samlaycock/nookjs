@@ -11,17 +11,13 @@ export function InterpreterAPI() {
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Constructor
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Constructor</h2>
         <CodeBlock code={`new Interpreter(options?: InterpreterOptions)`} />
         <p className="text-neutral-300 mt-4 mb-4">
           Creates a new interpreter instance with optional configuration.
         </p>
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3">
-          InterpreterOptions
-        </h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3">InterpreterOptions</h3>
         <CodeBlock
           code={`interface InterpreterOptions {
   // Global variables and functions to inject into the sandbox
@@ -43,9 +39,7 @@ export function InterpreterAPI() {
 }`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">
-          Example
-        </h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">Example</h3>
         <CodeBlock
           code={`import { Interpreter, ES2024, preset } from "nookjs";
 
@@ -71,40 +65,28 @@ const custom = new Interpreter(
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Methods
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Methods</h2>
 
         <div className="space-y-8">
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">
-              evaluate(code, options?)
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">evaluate(code, options?)</h3>
             <p className="text-neutral-400 text-sm mb-3">
               Synchronously evaluates JavaScript code and returns the result.
             </p>
-            <CodeBlock
-              code={`evaluate(code: string, options?: EvaluateOptions): unknown`}
-            />
+            <CodeBlock code={`evaluate(code: string, options?: EvaluateOptions): unknown`} />
             <div className="mt-4">
-              <h4 className="text-sm font-medium text-neutral-300 mb-2">
-                Parameters
-              </h4>
+              <h4 className="text-sm font-medium text-neutral-300 mb-2">Parameters</h4>
               <ul className="text-sm text-neutral-400 space-y-1">
                 <li>
-                  <code className="text-amber-400">code</code> - The JavaScript
-                  code to evaluate
+                  <code className="text-amber-400">code</code> - The JavaScript code to evaluate
                 </li>
                 <li>
-                  <code className="text-amber-400">options</code> - Optional
-                  per-call configuration
+                  <code className="text-amber-400">options</code> - Optional per-call configuration
                 </li>
               </ul>
             </div>
             <div className="mt-4">
-              <h4 className="text-sm font-medium text-neutral-300 mb-2">
-                Returns
-              </h4>
+              <h4 className="text-sm font-medium text-neutral-300 mb-2">Returns</h4>
               <p className="text-sm text-neutral-400">
                 The value of the last expression in the code
               </p>
@@ -140,24 +122,18 @@ const value = interpreter.evaluate("x * multiplier", {
               code={`evaluateAsync(code: string, options?: EvaluateOptions): Promise<unknown>`}
             />
             <div className="mt-4">
-              <h4 className="text-sm font-medium text-neutral-300 mb-2">
-                Parameters
-              </h4>
+              <h4 className="text-sm font-medium text-neutral-300 mb-2">Parameters</h4>
               <ul className="text-sm text-neutral-400 space-y-1">
                 <li>
-                  <code className="text-amber-400">code</code> - The JavaScript
-                  code to evaluate
+                  <code className="text-amber-400">code</code> - The JavaScript code to evaluate
                 </li>
                 <li>
-                  <code className="text-amber-400">options</code> - Optional
-                  per-call configuration
+                  <code className="text-amber-400">options</code> - Optional per-call configuration
                 </li>
               </ul>
             </div>
             <div className="mt-4">
-              <h4 className="text-sm font-medium text-neutral-300 mb-2">
-                Returns
-              </h4>
+              <h4 className="text-sm font-medium text-neutral-300 mb-2">Returns</h4>
               <p className="text-sm text-neutral-400">
                 Promise resolving to the value of the last expression
               </p>
@@ -183,9 +159,7 @@ const name = await interpreter.evaluateAsync(\`
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          EvaluateOptions
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">EvaluateOptions</h2>
         <p className="text-neutral-300 mb-4">
           Per-call options that override or extend constructor options:
         </p>
@@ -207,9 +181,7 @@ const name = await interpreter.evaluateAsync(\`
 }`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">
-          Execution Limits
-        </h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">Execution Limits</h3>
         <CodeBlock
           code={`// Protect against runaway code
 const result = interpreter.evaluate(untrustedCode, {
@@ -235,9 +207,7 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          SecurityOptions
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">SecurityOptions</h2>
         <CodeBlock
           code={`interface SecurityOptions {
   // Sanitize error stack traces to hide host paths
@@ -251,10 +221,7 @@ try {
         />
         <p className="text-neutral-300 mt-4">
           See the{" "}
-          <Link
-            to="/docs/security"
-            className="text-amber-500 hover:text-amber-400"
-          >
+          <Link to="/docs/security" className="text-amber-500 hover:text-amber-400">
             Security Model
           </Link>{" "}
           documentation for details.
@@ -262,9 +229,7 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          FeatureControl
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">FeatureControl</h2>
         <CodeBlock
           code={`interface FeatureControl {
   // "whitelist" - only allow listed features
@@ -277,10 +242,7 @@ try {
         />
         <p className="text-neutral-300 mt-4">
           See the{" "}
-          <Link
-            to="/docs/features"
-            className="text-amber-500 hover:text-amber-400"
-          >
+          <Link to="/docs/features" className="text-amber-500 hover:text-amber-400">
             Feature Control
           </Link>{" "}
           documentation for the full list of features.
@@ -288,9 +250,7 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Custom Validators
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Custom Validators</h2>
         <p className="text-neutral-300 mb-4">
           Validators allow you to inspect and reject code before execution:
         </p>

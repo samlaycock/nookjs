@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 
+import { Button } from "../../components/button";
 import { CodeBlock } from "../../components/code-block";
 
 export function Introduction() {
@@ -156,20 +157,18 @@ console.log(result); // 80`}
       </section>
 
       <div className="flex gap-4 pt-8 border-t border-neutral-800">
-        <Link
-          to="/docs/installation"
-          className="px-4 py-2 bg-amber-500 text-amber-950 font-medium rounded hover:bg-amber-400 transition-colors"
-        >
+        <Button as="link" to="/docs/installation">
           Get Started
-        </Link>
-        <a
+        </Button>
+        <Button
+          as="anchor"
           href="https://github.com/samlaycock/nookjs"
           target="_blank"
           rel="noreferrer"
-          className="px-4 py-2 bg-neutral-800 text-neutral-200 font-medium rounded hover:bg-neutral-700 transition-colors"
+          variant="secondary"
         >
           View on GitHub
-        </a>
+        </Button>
       </div>
     </article>
   );
