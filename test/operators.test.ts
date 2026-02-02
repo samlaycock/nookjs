@@ -2362,6 +2362,10 @@ describe("Operators", () => {
                 `),
         ).toBe(8);
       });
+
+      it("should be right-associative", () => {
+        expect(interpreter.evaluate("2 ** 3 ** 2")).toBe(512);
+      });
     });
   });
 

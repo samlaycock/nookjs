@@ -194,6 +194,19 @@ describe("Collections", () => {
           ],
         ]);
       });
+
+      it("should iterate with for...of over entries", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const map = new Map([["a", 1], ["b", 2]]);
+          const out = [];
+          for (const [k, v] of map) {
+            out.push(k + v);
+          }
+          out;
+        `);
+        expect(result).toEqual(["a1", "b2"]);
+      });
     });
 
     describe("Set", () => {
@@ -210,6 +223,16 @@ describe("Collections", () => {
       it("should remove duplicates", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("new Set([1, 2, 2, 3]).size")).toBe(3);
+      });
+
+      it("should treat same object reference as duplicate", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const obj = { id: 1 };
+          const set = new Set([obj, obj]);
+          set.size;
+        `);
+        expect(result).toBe(1);
       });
 
       it("should treat NaN as the same value", () => {
@@ -265,6 +288,16 @@ describe("Collections", () => {
         expect(result).toBe(false);
       });
 
+      it("should delete existing values", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const mySet = new Set([1, 2]);
+          const removed = mySet.delete(2);
+          [removed, mySet.has(2), mySet.size];
+        `);
+        expect(result).toEqual([true, false, 1]);
+      });
+
       it("should allow computed Set prototype methods", () => {
         const interpreter = new Interpreter(ES2015);
         const result = interpreter.evaluate(`
@@ -301,6 +334,19 @@ describe("Collections", () => {
             [2, 2],
           ],
         ]);
+      });
+
+      it("should iterate with for...of", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const set = new Set([1, 2, 3]);
+          const out = [];
+          for (const value of set) {
+            out.push(value);
+          }
+          out;
+        `);
+        expect(result).toEqual([1, 2, 3]);
       });
     });
 

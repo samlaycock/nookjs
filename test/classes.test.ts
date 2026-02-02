@@ -893,6 +893,24 @@ describe("Classes", () => {
         expect(result).toBe(5);
       });
 
+      it("should allow fluent chaining by returning this", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Counter {
+              constructor() {
+                this.count = 0;
+              }
+              inc() {
+                this.count = this.count + 1;
+                return this;
+              }
+            }
+            const c = new Counter();
+            c.inc().inc().count;
+          `);
+        expect(result).toBe(2);
+      });
+
       it("should support methods calling other methods", () => {
         const interpreter = new Interpreter();
         const result = interpreter.evaluate(`

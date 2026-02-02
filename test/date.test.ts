@@ -73,6 +73,15 @@ describe("Date", () => {
       it("getTime should return timestamp", () => {
         expect(interpreter.evaluate("new Date(0).getTime()")).toBe(0);
       });
+
+      it("setTime should update timestamp", () => {
+        const result = interpreter.evaluate(`
+          var d = new Date(0);
+          d.setTime(1000);
+          d.getTime();
+        `);
+        expect(result).toBe(1000);
+      });
     });
 
     describe("UTC date methods", () => {
@@ -115,6 +124,14 @@ describe("Date", () => {
     describe("toISOString", () => {
       it("should return ISO format string", () => {
         expect(interpreter.evaluate("new Date(0).toISOString()")).toBe("1970-01-01T00:00:00.000Z");
+      });
+    });
+
+    describe("toUTCString", () => {
+      it("should return UTC string", () => {
+        expect(interpreter.evaluate("new Date(0).toUTCString()")).toBe(
+          "Thu, 01 Jan 1970 00:00:00 GMT",
+        );
       });
     });
 

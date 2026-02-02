@@ -1220,6 +1220,14 @@ describe("Strings", () => {
           expect(result).toBe(false);
         });
 
+        it("should treat negative position as 0", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "Hello".includes("He", -1)
+            `);
+          expect(result).toBe(true);
+        });
+
         it("should be case sensitive", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -1259,6 +1267,14 @@ describe("Strings", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
               "Hello World".startsWith("World", 6)
+            `);
+          expect(result).toBe(true);
+        });
+
+        it("should treat negative position as 0", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+              "Hello".startsWith("He", -1)
             `);
           expect(result).toBe(true);
         });
@@ -1867,6 +1883,14 @@ Goodbye\`
                   "hello".padStart(3, "0")
                 `);
           expect(result).toBe("hello");
+        });
+
+        it("should return original when pad string is empty", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "x".padStart(5, "")
+                `);
+          expect(result).toBe("x");
         });
 
         it("should repeat pad string if needed", () => {

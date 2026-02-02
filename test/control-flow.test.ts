@@ -1871,6 +1871,21 @@ describe("Control Flow", () => {
         `;
         expect(interpreter.evaluate(code)).toEqual([2, 4]);
       });
+
+      it("should support break inside do-while", () => {
+        const interpreter = new Interpreter();
+        const code = `
+          let i = 0;
+          do {
+            i = i + 1;
+            if (i === 2) {
+              break;
+            }
+          } while (true);
+          i
+        `;
+        expect(interpreter.evaluate(code)).toBe(2);
+      });
     });
 
     describe("For Loops", () => {

@@ -799,6 +799,17 @@ describe("Objects", () => {
     });
 
     describe("Object Static Methods", () => {
+      describe("Object.create", () => {
+        it("should create object with prototype properties", () => {
+          const result = interpreter.evaluate(`
+            const proto = { a: 1 };
+            const obj = Object.create(proto);
+            obj.a;
+          `);
+          expect(result).toBe(1);
+        });
+      });
+
       describe("Object.keys", () => {
         it("should return array of property keys", () => {
           expect(interpreter.evaluate("Object.keys({ a: 1, b: 2 })")).toEqual(["a", "b"]);
@@ -1533,6 +1544,14 @@ describe("Objects", () => {
           expect(interpreter.evaluate("Object.values({})")).toEqual([]);
         });
 
+        it("should order numeric-like keys before string keys", () => {
+          const result = interpreter.evaluate(`
+            const obj = { b: 1, "2": 2, "1": 1, a: 3 };
+            Object.values(obj);
+          `);
+          expect(result).toEqual([1, 2, 1, 3]);
+        });
+
         it("should work with arrays", () => {
           expect(interpreter.evaluate("Object.values([1, 2, 3])")).toEqual([1, 2, 3]);
         });
@@ -1567,6 +1586,19 @@ describe("Objects", () => {
 
         it("should return empty array for empty object", () => {
           expect(interpreter.evaluate("Object.entries({})")).toEqual([]);
+        });
+
+        it("should order numeric-like keys before string keys", () => {
+          const result = interpreter.evaluate(`
+            const obj = { b: 1, "2": 2, "1": 1, a: 3 };
+            Object.entries(obj);
+          `);
+          expect(result).toEqual([
+            ["1", 1],
+            ["2", 2],
+            ["b", 1],
+            ["a", 3],
+          ]);
         });
 
         it("should work with arrays", () => {

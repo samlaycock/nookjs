@@ -74,6 +74,11 @@ describe("JSON", () => {
         expect(result).toBe('{"a":1,"b":2}');
       });
 
+      it("should ignore missing keys in replacer array", () => {
+        const result = interpreter.evaluate("JSON.stringify({ a: 1 }, ['a', 'b'])");
+        expect(result).toBe('{"a":1}');
+      });
+
       it("should support replacer function to filter keys", () => {
         const result = interpreter.evaluate(
           "JSON.stringify({ a: 1, b: 2 }, function(key, value) { if (key === 'b') return undefined; return value; })",
@@ -130,6 +135,13 @@ describe("JSON", () => {
           "JSON.parse('{\"d\":\"2020-01-01T00:00:00.000Z\"}', function(key, value) { if (key === 'd') { return new Date(value).getUTCFullYear(); } return value; })",
         );
         expect(result).toEqual({ d: 2020 });
+      });
+
+      it("should apply reviver to array elements", () => {
+        const result = interpreter.evaluate(
+          "JSON.parse('[1,2,3]', function(key, value) { if (key !== '') { return value * 2; } return value; })",
+        );
+        expect(result).toEqual([2, 4, 6]);
       });
 
       it("should delete properties when reviver returns undefined", () => {

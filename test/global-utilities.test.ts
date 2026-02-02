@@ -32,6 +32,12 @@ describe("Global Utilities", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate('encodeURI("✓")')).toBe("%E2%9C%93");
       });
+
+      it("should round-trip through decodeURI", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate('decodeURI(encodeURI("https://example.com/a b"))');
+        expect(result).toBe("https://example.com/a b");
+      });
     });
 
     describe("decodeURI", () => {

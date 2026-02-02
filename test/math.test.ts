@@ -48,6 +48,11 @@ describe("Math", () => {
         expect(interpreter.evaluate("Math.round(-4.3)")).toBe(-4);
         expect(interpreter.evaluate("Math.round(-4.7)")).toBe(-5);
       });
+
+      it("should round half away from zero for negatives", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Math.round(-1.5)")).toBe(-1);
+      });
     });
 
     describe("Math.floor", () => {
@@ -272,6 +277,27 @@ describe("Math", () => {
       it("should compute hypotenuse for multiple numbers", () => {
         const interpreter = new Interpreter(ES2015);
         expect(interpreter.evaluate("Math.hypot(3, 4, 12)")).toBe(13);
+      });
+    });
+
+    describe("Math.imul", () => {
+      it("should multiply 32-bit integers", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Math.imul(2, 4)")).toBe(8);
+      });
+    });
+
+    describe("Math.clz32", () => {
+      it("should count leading zero bits", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Math.clz32(1)")).toBe(31);
+      });
+    });
+
+    describe("Math.fround", () => {
+      it("should round to 32-bit float precision", () => {
+        const interpreter = new Interpreter(ES2015);
+        expect(interpreter.evaluate("Math.fround(1.337)")).toBe(Math.fround(1.337));
       });
     });
   });

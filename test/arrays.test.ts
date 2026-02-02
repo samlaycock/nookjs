@@ -1295,6 +1295,15 @@ describe("Arrays", () => {
           // 3 - 2 - 1 = 0
           expect(result).toBe(0);
         });
+
+        it("should return single element when no initialValue", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [5];
+                    arr.reduceRight((acc, val) => acc + val);
+                  `);
+          expect(result).toBe(5);
+        });
       });
 
       describe("forEach", () => {
@@ -1349,6 +1358,16 @@ describe("Arrays", () => {
                     arr;
                   `);
           expect(result).toEqual([1, 4, 5]);
+        });
+
+        it("should handle negative start index", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2, 3, 4];
+                    const removed = arr.splice(-2, 1);
+                    [removed, arr];
+                  `);
+          expect(result).toEqual([[3], [1, 2, 4]]);
         });
 
         it("should insert elements", () => {
@@ -1559,12 +1578,28 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual([1, 2, 0, 0]);
         });
+
+        it("should support negative end index", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2, 3, 4];
+                    arr.fill(0, 1, -1);
+                    arr;
+                  `);
+          expect(result).toEqual([1, 0, 0, 4]);
+        });
       });
     });
 
     describe("Array.prototype.copyWithin", () => {
       it("should copy within array", () => {
         expect(interpreter.evaluate("[1, 2, 3, 4, 5].copyWithin(0, 3)")).toEqual([4, 5, 3, 4, 5]);
+      });
+
+      it("should support negative target index", () => {
+        expect(interpreter.evaluate("[1, 2, 3, 4, 5].copyWithin(-2, 0, 2)")).toEqual([
+          1, 2, 3, 1, 2,
+        ]);
       });
     });
   });
@@ -1613,6 +1648,15 @@ describe("Arrays", () => {
           const result = interpreter.evaluate(`
                     let arr = [1, 2, 3];
                     arr.includes(2, -2)
+                  `);
+          expect(result).toBe(true);
+        });
+
+        it("should treat large negative fromIndex as 0", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3];
+                    arr.includes(1, -100)
                   `);
           expect(result).toBe(true);
         });

@@ -142,6 +142,26 @@ describe("RegExp", () => {
         `);
         expect(result).toEqual(["a", "a", 3]);
       });
+
+      test("regex.exec() returns null when no match", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate(`
+          var re = /z/;
+          re.exec("abc");
+        `);
+        expect(result).toBe(null);
+      });
+
+      test("global regex.exec() resets lastIndex on no match", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate(`
+          var re = /z/g;
+          re.lastIndex = 2;
+          re.exec("abc");
+          re.lastIndex;
+        `);
+        expect(result).toBe(0);
+      });
     });
 
     describe("regex vs division disambiguation", () => {
