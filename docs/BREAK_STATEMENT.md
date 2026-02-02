@@ -11,4 +11,4 @@ Exits loops or switch cases.
 
 ## Gotchas
 
-- Labeled breaks are not supported.
+- Labeled breaks are fully supported. See [LABELED_STATEMENT.md](./LABELED_STATEMENT.md) for details.
