@@ -275,6 +275,110 @@ const result = await interpreter.evaluateAsync(`
 `);
 ```
 
+## ES Module Support
+
+NookJS supports ES module syntax (`import`/`export`) through a custom module resolver system. This enables modular code organization while maintaining full sandbox security.
+
+### Basic Usage
+
+```typescript
+import { Interpreter, ModuleResolver } from "nookjs";
+
+// Define your modules
+const files = new Map([
+  ["math.js", "export const add = (a, b) => a + b; export const PI = 3.14159;"],
+  ["utils.js", "export function double(x) { return x * 2; }"],
+]);
+
+// Create a resolver that provides module source code
+const resolver: ModuleResolver = {
+  resolve(specifier) {
+    const code = files.get(specifier);
+    if (!code) return null;
+    return { type: "source", code, path: specifier };
+  },
+};
+
+const interpreter = new Interpreter({
+  modules: { enabled: true, resolver },
+});
+
+// Evaluate module code
+const exports = await interpreter.evaluateModuleAsync(
+  `import { add, PI } from "math.js";
+   import { double } from "utils.js";
+   export const result = double(add(1, 2));
+   export const circumference = 2 * PI * 5;`,
+  { path: "main.js" },
+);
+
+console.log(exports.result); // 6
+console.log(exports.circumference); // 31.4159
+```
+
+### Supported Syntax
+
+```typescript
+// Named imports
+import { foo, bar } from "module.js";
+import { foo as renamed } from "module.js";
+
+// Default imports
+import myDefault from "module.js";
+
+// Namespace imports
+import * as utils from "module.js";
+
+// Side-effect only imports
+import "polyfill.js";
+
+// Named exports
+export const value = 42;
+export function helper() {}
+export class MyClass {}
+
+// Default exports
+export default function () {}
+export default { key: "value" };
+
+// Re-exports
+export { foo, bar } from "other.js";
+export * from "other.js";
+export * as namespace from "other.js";
+```
+
+### Pre-built Modules
+
+Inject host modules directly without source code parsing:
+
+```typescript
+const resolver: ModuleResolver = {
+  resolve(specifier) {
+    if (specifier === "lodash") {
+      return {
+        type: "namespace",
+        exports: { map, filter, reduce }, // Host functions
+        path: "lodash",
+      };
+    }
+    return null;
+  },
+};
+```
+
+### Module Introspection
+
+Query the module cache and metadata:
+
+```typescript
+interpreter.isModuleCached("math.js"); // true
+interpreter.getLoadedModuleSpecifiers(); // ["math.js", "utils.js"]
+interpreter.getModuleMetadata("math.js"); // { path, status, loadedAt }
+interpreter.clearModuleCache(); // Clear all cached modules
+```
+
+See [Module Documentation](docs/MODULES.md) for complete details including security considerations, lifecycle hooks, and advanced resolver patterns.
+
 ## TypeScript Support
 
 TypeScript-style type annotations are automatically stripped at parse time:
@@ -301,6 +405,7 @@ Supported (stripped):
 
 - [Security Guide](docs/SECURITY.md) - Sandboxing model and recommendations
 - [Presets Guide](docs/PRESETS.md) - ECMAScript versions and feature control
+- [Module System](docs/MODULES.md) - ES module support with import/export syntax
 - [Language Features](docs/README.md) - Detailed documentation for each supported feature
 - [Builtin Globals](docs/BUILTIN_GLOBALS.md) - Available built-in globals
 

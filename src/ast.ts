@@ -190,7 +190,7 @@ export namespace ESTree {
 
   export interface FunctionDeclaration extends Node {
     readonly type: "FunctionDeclaration";
-    readonly id: Identifier;
+    readonly id: Identifier | null; // null for anonymous export default functions
     readonly params: Pattern[];
     readonly body: BlockStatement;
     readonly async: boolean;
@@ -2014,6 +2014,25 @@ class Parser {
     };
   }
 
+  // For export default - returns FunctionDeclaration with optional id
+  private parseExportDefaultFunction(): ESTree.FunctionDeclaration {
+    const { id, params, body, asyncFlag, generator } = this.parseFunctionSignature(false);
+    return {
+      type: "FunctionDeclaration",
+      id,
+      params,
+      body,
+      async: asyncFlag,
+      generator,
+    };
+  }
+
+  // For export default - returns ClassDeclaration with optional id
+  private parseExportDefaultClass(): ESTree.ClassDeclaration {
+    const { id, superClass, body } = this.parseClassSignature();
+    return { type: "ClassDeclaration", id, superClass, body };
+  }
+
   private parseFunctionSignature(requireId: true): {
     id: ESTree.Identifier;
     params: ESTree.Pattern[];
@@ -2295,7 +2314,18 @@ class Parser {
   private parseImportDeclaration(): ESTree.ImportDeclaration {
     this.expectKeyword("import");
 
-    if (this.currentType === TOKEN.String || this.currentType === TOKEN.Number) {
+    // Side-effect only import: import "module.js"
+    if (this.currentType === TOKEN.String) {
+      const source = this.parseLiteral();
+      this.consumeSemicolon();
+      return {
+        type: "ImportDeclaration",
+        source,
+        specifiers: [],
+      };
+    }
+
+    if (this.currentType === TOKEN.Number) {
       throw new ParseError("Module source must be a string literal");
     }
 
@@ -2531,8 +2561,8 @@ class Parser {
             this.tokenizer.peekType() === TOKEN.Keyword &&
             this.tokenizer.peekValue() === "function"
           ) {
-            this.next();
-            const func = this.parseFunctionDeclaration();
+            // Parse async function - allow anonymous for export default
+            const func = this.parseExportDefaultFunction();
             return {
               type: "ExportDefaultDeclaration",
               declaration: func,
@@ -2540,24 +2570,22 @@ class Parser {
           }
           break;
         case "function": {
-          const func = this.parseFunctionDeclaration();
+          // Parse function - allow anonymous for export default
+          const func = this.parseExportDefaultFunction();
           return {
             type: "ExportDefaultDeclaration",
             declaration: func,
           };
         }
         case "class": {
-          const cls = this.parseClassDeclaration();
+          // Parse class - allow anonymous for export default
+          const cls = this.parseExportDefaultClass();
           return {
             type: "ExportDefaultDeclaration",
             declaration: cls,
           };
         }
       }
-    }
-
-    if (this.currentType === TOKEN.Punctuator && this.currentValue === "{") {
-      throw new ParseError("Cannot export destructuring pattern as default");
     }
 
     const expression = this.parseAssignmentExpression();

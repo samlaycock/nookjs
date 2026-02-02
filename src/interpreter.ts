@@ -15,7 +15,7 @@
 
 import type { ESTree, Location } from "./ast";
 import type { StackFrame } from "./errors";
-import type { ModuleOptions } from "./modules";
+import type { ModuleOptions, ModuleMetadata } from "./modules";
 
 import { parseModule } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
@@ -166,7 +166,7 @@ interface ClassFieldInitializer {
  * Represents a class defined in the sandbox (interpreted JavaScript)
  * Stores the class's constructor, methods, static members, and parent class
  */
-class ClassValue {
+export class ClassValue {
   // WeakMap to store private instance field values per instance
   // Key is the instance object, value is a Map of private field name -> value
   public privateFieldStorage: WeakMap<object, Map<string, any>> = new WeakMap();
@@ -3356,13 +3356,55 @@ export class Interpreter {
   }
 
   /**
-   * Evaluate code as an ES module with custom resolver support.
-   * Requires modules option to be enabled with a resolver.
+   * Evaluate JavaScript code as an ES module.
+   *
+   * This method parses and evaluates the provided code as an ES module, supporting
+   * import/export statements. Any imports will be resolved using the configured
+   * module resolver.
+   *
+   * **Terminology:**
+   * - `specifier`: The string in an import statement (e.g., `"./utils"`, `"lodash"`)
+   * - `path`: The resolved, canonical identifier for a module (returned by your resolver)
+   *
+   * The `options.path` parameter identifies THIS module (the entry point you're evaluating).
+   * When this module imports other modules, those specifiers are passed to your resolver.
    *
    * @param code - The JavaScript module code to evaluate
-   * @param options - Evaluation options including path for module resolution
-   * @returns The module's exported values
-   * @throws Error if module system is not enabled
+   * @param options - Options object
+   * @param options.path - The path/identifier for this module (used as `importer` when resolving its imports)
+   * @returns The module's exported values as an object
+   * @throws InterpreterError if module system is not enabled
+   *
+   * @example
+   * ```typescript
+   * const files = new Map([
+   *   ["utils.js", "export const add = (a, b) => a + b;"],
+   *   ["math.js", "export const PI = 3.14159;"]
+   * ]);
+   *
+   * const interpreter = new Interpreter({
+   *   modules: {
+   *     enabled: true,
+   *     resolver: {
+   *       resolve(specifier, importer) {
+   *         const code = files.get(specifier);
+   *         if (!code) return null; // Block unknown modules
+   *         return { type: "source", code, path: specifier };
+   *       }
+   *     }
+   *   }
+   * });
+   *
+   * const exports = await interpreter.evaluateModuleAsync(
+   *   `import { add } from "utils.js";
+   *    import { PI } from "math.js";
+   *    export const circumference = (r) => 2 * PI * r;
+   *    export const sum = add(1, 2);`,
+   *   { path: "main.js" }
+   * );
+   *
+   * console.log(exports.sum); // 3
+   * ```
    */
   async evaluateModuleAsync(code: string, options: { path: string }): Promise<Record<string, any>> {
     if (!this.moduleSystem) {
@@ -3387,30 +3429,38 @@ export class Interpreter {
       throw new InterpreterError("Module system is not enabled");
     }
 
-    const exports: Record<string, any> = {};
-    const moduleEnv = new Environment(this.environment);
+    // Push this module onto the evaluation stack for depth tracking
+    this.moduleSystem.pushEvaluation(path);
 
-    for (const statement of ast.body) {
-      if (statement.type === "ImportDeclaration") {
-        await this.evaluateImportDeclaration(statement, moduleEnv, path);
-      } else if (statement.type === "ExportNamedDeclaration") {
-        await this.evaluateExportNamedDeclaration(statement, moduleEnv, exports, path);
-      } else if (statement.type === "ExportDefaultDeclaration") {
-        await this.evaluateExportDefaultDeclaration(statement, moduleEnv, exports);
-      } else if (statement.type === "ExportAllDeclaration") {
-        await this.evaluateExportAllDeclaration(statement, moduleEnv, path);
-      } else {
-        const prevEnv = this.environment;
-        this.environment = moduleEnv;
-        try {
-          await this.evaluateNodeAsync(statement);
-        } finally {
-          this.environment = prevEnv;
+    try {
+      const exports: Record<string, any> = {};
+      const moduleEnv = new Environment(this.environment);
+
+      for (const statement of ast.body) {
+        if (statement.type === "ImportDeclaration") {
+          await this.evaluateImportDeclaration(statement, moduleEnv, path);
+        } else if (statement.type === "ExportNamedDeclaration") {
+          await this.evaluateExportNamedDeclaration(statement, moduleEnv, exports, path);
+        } else if (statement.type === "ExportDefaultDeclaration") {
+          await this.evaluateExportDefaultDeclaration(statement, moduleEnv, exports);
+        } else if (statement.type === "ExportAllDeclaration") {
+          await this.evaluateExportAllDeclaration(statement, moduleEnv, exports, path);
+        } else {
+          const prevEnv = this.environment;
+          this.environment = moduleEnv;
+          try {
+            await this.evaluateNodeAsync(statement);
+          } finally {
+            this.environment = prevEnv;
+          }
         }
       }
-    }
 
-    return ReadOnlyProxy.wrap(exports, "module.exports");
+      return ReadOnlyProxy.wrap(exports, "module.exports");
+    } finally {
+      // Always pop from evaluation stack, even on error
+      this.moduleSystem.popEvaluation();
+    }
   }
 
   private async evaluateImportDeclaration(
@@ -3433,7 +3483,7 @@ export class Interpreter {
 
     if (moduleRecord.status === "initializing") {
       let ast: ESTree.Program;
-      if (moduleRecord.source) {
+      if (moduleRecord.source !== undefined) {
         ast = parseModule(moduleRecord.source, { next: true });
       } else if (moduleRecord.ast) {
         ast = moduleRecord.ast;
@@ -3452,15 +3502,23 @@ export class Interpreter {
           "const",
         );
       } else if (spec.type === "ImportDefaultSpecifier") {
+        if (!("default" in importedExports)) {
+          throw new InterpreterError(`Module '${specifier}' does not have a default export`);
+        }
         moduleEnv.declare(
           spec.local.name,
-          ReadOnlyProxy.wrap(importedExports.default ?? undefined, spec.local.name),
+          ReadOnlyProxy.wrap(importedExports.default, spec.local.name),
           "const",
         );
       } else {
+        // Named import - check that the export exists
+        const importedName = spec.imported.name;
+        if (!(importedName in importedExports)) {
+          throw new InterpreterError(`Module '${specifier}' does not export '${importedName}'`);
+        }
         moduleEnv.declare(
           spec.local.name,
-          ReadOnlyProxy.wrap(importedExports[spec.imported.name] ?? undefined, spec.local.name),
+          ReadOnlyProxy.wrap(importedExports[importedName], spec.local.name),
           "const",
         );
       }
@@ -3471,7 +3529,7 @@ export class Interpreter {
     node: ESTree.ExportNamedDeclaration,
     moduleEnv: Environment,
     exports: Record<string, any>,
-    _currentPath: string,
+    currentPath: string,
   ): Promise<void> {
     if (node.declaration) {
       const prevEnv = this.environment;
@@ -3502,12 +3560,45 @@ export class Interpreter {
     }
 
     if (node.specifiers) {
-      for (const spec of node.specifiers) {
-        if (spec.type === "ExportSpecifier") {
-          const value = moduleEnv.get(spec.local.name);
-          exports[spec.exported.name] = value;
-        } else if (spec.type === "ExportDefaultSpecifier") {
-          exports[spec.exported.name] = moduleEnv.get(spec.exported.name);
+      // Handle re-exports: export { foo } from "module"
+      if (node.source) {
+        const specifier = (node.source as ESTree.Literal).value as string;
+        const moduleRecord = await this.moduleSystem!.resolveModule(specifier, currentPath);
+
+        if (!moduleRecord) {
+          throw new InterpreterError(`Cannot find module '${specifier}'`);
+        }
+
+        // Evaluate the module if it's still initializing
+        let sourceExports = moduleRecord.exports;
+        if (moduleRecord.status === "initializing") {
+          let ast: ESTree.Program;
+          if (moduleRecord.source !== undefined) {
+            ast = parseModule(moduleRecord.source, { next: true });
+          } else if (moduleRecord.ast) {
+            ast = moduleRecord.ast;
+          } else {
+            throw new InterpreterError(`Module '${specifier}' has no source or AST`);
+          }
+          sourceExports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
+          this.moduleSystem!.setModuleExports(specifier, sourceExports);
+        }
+
+        for (const spec of node.specifiers) {
+          if (spec.type === "ExportSpecifier") {
+            const value = sourceExports[spec.local.name];
+            exports[spec.exported.name] = value;
+          }
+        }
+      } else {
+        // Handle local exports: export { foo }
+        for (const spec of node.specifiers) {
+          if (spec.type === "ExportSpecifier") {
+            const value = moduleEnv.get(spec.local.name);
+            exports[spec.exported.name] = value;
+          } else if (spec.type === "ExportDefaultSpecifier") {
+            exports[spec.exported.name] = moduleEnv.get(spec.exported.name);
+          }
         }
       }
     }
@@ -3523,15 +3614,23 @@ export class Interpreter {
     try {
       if (node.declaration) {
         if (node.declaration.type === "FunctionDeclaration") {
-          const func = this.evaluateFunctionDeclaration(
-            node.declaration as ESTree.FunctionDeclaration,
-          );
+          const funcNode = node.declaration as ESTree.FunctionDeclaration;
+          // Create the function value directly
+          const func = this.createFunctionValue(funcNode);
           exports.default = func;
+          // If it has a name, also declare it in the module environment
+          if (funcNode.id) {
+            moduleEnv.declare(funcNode.id.name, func, "let");
+          }
         } else if (node.declaration.type === "ClassDeclaration") {
-          const cls = await this.evaluateClassDeclarationAsync(
-            node.declaration as ESTree.ClassDeclaration,
-          );
+          const classNode = node.declaration as ESTree.ClassDeclaration;
+          // Create the class value directly
+          const cls = await this.createClassValue(classNode);
           exports.default = cls;
+          // If it has a name, also declare it in the module environment
+          if (classNode.id) {
+            moduleEnv.declare(classNode.id.name, cls, "let");
+          }
         } else if (node.declaration.type === "VariableDeclaration") {
           await this.evaluateVariableDeclarationAsync(node.declaration);
           for (const declarator of node.declaration.declarations) {
@@ -3539,6 +3638,10 @@ export class Interpreter {
               exports.default = moduleEnv.get(declarator.id.name);
             }
           }
+        } else {
+          // Handle arbitrary expressions: export default 42, export default { a: 1 }, etc.
+          const value = await this.evaluateNodeAsync(node.declaration);
+          exports.default = value;
         }
       }
     } finally {
@@ -3546,9 +3649,56 @@ export class Interpreter {
     }
   }
 
+  // Helper to create a FunctionValue without declaring it
+  private createFunctionValue(node: ESTree.FunctionDeclaration): FunctionValue {
+    if (node.async && !this.isFeatureEnabled("AsyncAwait")) {
+      throw new InterpreterError("AsyncAwait is not enabled");
+    }
+    if (node.generator) {
+      if (node.async) {
+        if (!this.isFeatureEnabled("AsyncGenerators")) {
+          throw new InterpreterError("AsyncGenerators is not enabled");
+        }
+      } else if (!this.isFeatureEnabled("Generators")) {
+        throw new InterpreterError("Generators is not enabled");
+      }
+    }
+
+    if (!node.body) {
+      throw new InterpreterError("Function must have a body");
+    }
+
+    const { params, restParamIndex, defaultValues, destructuredParams } = this.parseFunctionParams(
+      node.params,
+    );
+
+    if (node.body.type !== "BlockStatement") {
+      throw new InterpreterError("Function body must be a block statement");
+    }
+
+    return new FunctionValue(
+      params,
+      node.body as ESTree.BlockStatement,
+      this.environment,
+      node.async || false,
+      restParamIndex,
+      node.generator || false,
+      defaultValues,
+      null,
+      false,
+      destructuredParams,
+    );
+  }
+
+  // Helper to create a ClassValue without declaring it (for export default)
+  private async createClassValue(node: ESTree.ClassDeclaration): Promise<ClassValue> {
+    return await this.buildClassValueAsync(node);
+  }
+
   private async evaluateExportAllDeclaration(
     node: ESTree.ExportAllDeclaration,
     moduleEnv: Environment,
+    exports: Record<string, any>,
     currentPath: string,
   ): Promise<void> {
     if (!this.moduleSystem) {
@@ -3562,23 +3712,101 @@ export class Interpreter {
       throw new InterpreterError(`Cannot find module '${specifier}'`);
     }
 
-    for (const [key, value] of Object.entries(moduleRecord.exports)) {
-      moduleEnv.declare(key, value, "const");
+    // Evaluate the module if it's still initializing
+    let sourceExports = moduleRecord.exports;
+    if (moduleRecord.status === "initializing") {
+      let ast: ESTree.Program;
+      if (moduleRecord.source !== undefined) {
+        ast = parseModule(moduleRecord.source, { next: true });
+      } else if (moduleRecord.ast) {
+        ast = moduleRecord.ast;
+      } else {
+        throw new InterpreterError(`Module '${specifier}' has no source or AST`);
+      }
+      sourceExports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
+      this.moduleSystem.setModuleExports(specifier, sourceExports);
+    }
+
+    // Handle "export * as namespace from 'module'"
+    if (node.exported) {
+      const namespace: Record<string, any> = {};
+      for (const [key, value] of Object.entries(sourceExports)) {
+        namespace[key] = value;
+      }
+      exports[node.exported.name] = namespace;
+      // Only declare in moduleEnv if not already declared
+      if (!moduleEnv.has(node.exported.name)) {
+        moduleEnv.declare(node.exported.name, namespace, "const");
+      }
+    } else {
+      // Handle "export * from 'module'" - re-export all named exports
+      // Note: For diamond dependencies, the same export may come from multiple paths
+      // We only add to exports (not moduleEnv) to avoid duplicate declaration errors
+      for (const [key, value] of Object.entries(sourceExports)) {
+        // Skip 'default' export per ES module spec
+        if (key !== "default") {
+          // Only add if not already exported (first one wins per ES spec)
+          if (!(key in exports)) {
+            exports[key] = value;
+          }
+        }
+      }
     }
   }
 
+  // ============================================================================
+  // MODULE SYSTEM PUBLIC API
+  // ============================================================================
+  //
+  // Terminology:
+  // - "specifier": The string used in import/export statements (e.g., "./utils", "lodash")
+  // - "path": The resolved, canonical path returned by the resolver (e.g., "/app/utils.js")
+  //
+  // The resolver receives a specifier and returns a path. The module cache is keyed by path
+  // to ensure the same module isn't loaded twice even if imported with different specifiers.
+  // ============================================================================
+
   /**
-   * Get the exports of a previously loaded module.
+   * Get the exports of a previously loaded module by its resolved path.
    *
-   * @param path - The module path
-   * @returns The module's exports, or undefined if not found
+   * @param path - The resolved module path (as returned by the resolver)
+   * @returns The module's exports, or undefined if not cached or not yet initialized
+   *
+   * @example
+   * ```typescript
+   * await interpreter.evaluateModuleAsync(
+   *   `import { x } from "./utils.js";`,
+   *   { path: "main.js" }
+   * );
+   * const utilsExports = interpreter.getModuleExports("utils.js");
+   * ```
    */
   getModuleExports(path: string): Record<string, any> | undefined {
     return this.moduleSystem?.getModuleExports(path);
   }
 
   /**
-   * Clear the module cache.
+   * Get the exports of a previously loaded module by its import specifier.
+   *
+   * @param specifier - The module specifier as used in import statements
+   * @returns The module's exports, or undefined if not cached or not yet initialized
+   *
+   * @example
+   * ```typescript
+   * await interpreter.evaluateModuleAsync(
+   *   `import { x } from "./utils.js";`,
+   *   { path: "main.js" }
+   * );
+   * const utilsExports = interpreter.getModuleExportsBySpecifier("./utils.js");
+   * ```
+   */
+  getModuleExportsBySpecifier(specifier: string): Record<string, any> | undefined {
+    return this.moduleSystem?.getModuleExportsBySpecifier(specifier);
+  }
+
+  /**
+   * Clear the module cache, forcing all modules to be re-resolved and re-evaluated
+   * on next import.
    */
   clearModuleCache(): void {
     this.moduleSystem?.clearCache();
@@ -3586,9 +3814,87 @@ export class Interpreter {
 
   /**
    * Check if the module system is enabled.
+   *
+   * @returns true if modules were configured with `enabled: true`
    */
   isModuleSystemEnabled(): boolean {
     return this.moduleSystem?.isEnabled() ?? false;
+  }
+
+  /**
+   * Check if a module is cached by its import specifier.
+   *
+   * @param specifier - The module specifier as used in import statements
+   * @returns true if the module has been resolved and cached
+   */
+  isModuleCached(specifier: string): boolean {
+    return this.moduleSystem?.isModuleCached(specifier) ?? false;
+  }
+
+  /**
+   * Check if a module is cached by its resolved path.
+   *
+   * @param path - The resolved module path
+   * @returns true if the module has been resolved and cached
+   */
+  isModuleCachedByPath(path: string): boolean {
+    return this.moduleSystem?.isModuleCachedByPath(path) ?? false;
+  }
+
+  /**
+   * Get a list of all loaded module paths.
+   *
+   * @returns Array of resolved module paths that are currently cached
+   */
+  getLoadedModulePaths(): string[] {
+    return this.moduleSystem?.getLoadedModules() ?? [];
+  }
+
+  /**
+   * Get a list of all registered module specifiers.
+   *
+   * @returns Array of specifiers that have been used to import modules
+   */
+  getLoadedModuleSpecifiers(): string[] {
+    return this.moduleSystem?.getLoadedSpecifiers() ?? [];
+  }
+
+  /**
+   * Get metadata about a loaded module by its specifier.
+   *
+   * @param specifier - The module specifier as used in import statements
+   * @returns Module metadata including path, status, and load time, or undefined if not cached
+   *
+   * @example
+   * ```typescript
+   * const metadata = interpreter.getModuleMetadata("./utils.js");
+   * if (metadata) {
+   *   console.log(`Module loaded at: ${new Date(metadata.loadedAt)}`);
+   *   console.log(`Status: ${metadata.status}`);
+   * }
+   * ```
+   */
+  getModuleMetadata(specifier: string): ModuleMetadata | undefined {
+    return this.moduleSystem?.getModuleMetadata(specifier);
+  }
+
+  /**
+   * Get metadata about a loaded module by its resolved path.
+   *
+   * @param path - The resolved module path
+   * @returns Module metadata including path, status, and load time, or undefined if not cached
+   */
+  getModuleMetadataByPath(path: string): ModuleMetadata | undefined {
+    return this.moduleSystem?.getModuleMetadataByPath(path);
+  }
+
+  /**
+   * Get the number of modules currently in the cache.
+   *
+   * @returns The count of cached modules
+   */
+  getModuleCacheSize(): number {
+    return this.moduleSystem?.getCacheSize() ?? 0;
   }
 
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
