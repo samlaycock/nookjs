@@ -35,6 +35,7 @@
     "benchmark:parse:micro": "bun run benchmarks/parser-micro.ts",
     "benchmark:parse:profile": "bun run benchmarks/parser-profile.ts",
     "benchmark:all": "bun run benchmarks/index.ts",
+    "benchmark:async": "bun run benchmarks/async.ts",
     "ci:publish": "bun run build && changeset publish"
   },
   "devDependencies": {
