@@ -16,6 +16,7 @@ import { Features } from "./pages/docs/features";
 import { Globals } from "./pages/docs/globals";
 import { Installation } from "./pages/docs/installation";
 import { Introduction } from "./pages/docs/introduction";
+import { Modules } from "./pages/docs/modules";
 import { Presets } from "./pages/docs/presets";
 import { QuickStart } from "./pages/docs/quick-start";
 import { Security } from "./pages/docs/security";
@@ -34,6 +35,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="security" element={<Security />} />
             <Route path="presets" element={<Presets />} />
             <Route path="globals" element={<Globals />} />
+            <Route path="modules" element={<Modules />} />
             <Route path="features" element={<Features />} />
             <Route path="api/interpreter" element={<InterpreterAPI />} />
             <Route path="api/errors" element={<ErrorsAPI />} />

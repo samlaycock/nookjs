@@ -1,5 +1,5 @@
 import { isDangerousProperty } from "./constants";
-import { InterpreterError, HostFunctionValue, FunctionValue } from "./interpreter";
+import { InterpreterError, HostFunctionValue, FunctionValue, ClassValue } from "./interpreter";
 
 /**
  * Symbol used to retrieve the underlying target from a ReadOnlyProxy.
@@ -220,6 +220,11 @@ export class ReadOnlyProxy {
 
     // FunctionValue is an interpreter-internal function - pass through unchanged
     if (value instanceof FunctionValue) {
+      return value;
+    }
+
+    // ClassValue is an interpreter-internal class - pass through unchanged
+    if (value instanceof ClassValue) {
       return value;
     }
 

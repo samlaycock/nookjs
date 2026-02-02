@@ -9,6 +9,10 @@
 
 - [PRESETS](PRESETS.md) - ECMAScript version presets, API addons, and the `preset()` function
 
+## Modules
+
+- [MODULES](MODULES.md) - ES module system with import/export syntax, custom resolvers, and module caching
+
 ## Builtin Globals
 
 - [BUILTIN_GLOBALS](BUILTIN_GLOBALS.md) - Built-in global variables (undefined, NaN, Infinity, globalThis, global)

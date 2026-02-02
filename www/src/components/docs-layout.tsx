@@ -16,6 +16,7 @@ const DOCS_NAV = [
       { title: "Security Model", path: "/docs/security" },
       { title: "Presets", path: "/docs/presets" },
       { title: "Global Injection", path: "/docs/globals" },
+      { title: "ES Modules", path: "/docs/modules" },
       { title: "Feature Control", path: "/docs/features" },
     ],
   },
