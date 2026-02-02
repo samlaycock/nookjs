@@ -24,6 +24,7 @@ import {
   PROXY_TARGET,
   setSecurityOptions,
   sanitizeErrorStack,
+  unwrapForNative,
 } from "./readonly-proxy";
 import { ResourceExhaustedError } from "./resource-tracker";
 
@@ -1804,9 +1805,11 @@ export class HostFunctionValue {
           );
         }
 
-        // Allow access to own properties on the underlying function (static methods)
-        // e.g., Promise.resolve, Array.isArray, Object.keys
-        if (Object.prototype.hasOwnProperty.call(target.hostFunc, prop)) {
+        // Allow access to properties on the underlying function (static methods)
+        // This includes both own properties and inherited ones (e.g., Uint8Array.from
+        // which is inherited from %TypedArray%)
+        // e.g., Promise.resolve, Array.isArray, Object.keys, Uint8Array.from
+        if (prop in target.hostFunc) {
           const val = (target.hostFunc as any)[prop];
           // For function properties (static methods), bind them to the parent
           // so that `Promise.resolve()` has correct `this` binding
@@ -1819,7 +1822,9 @@ export class HostFunctionValue {
         }
 
         // Block all other property access for security
-        throw new InterpreterError(`Cannot access properties on host functions`);
+        throw new InterpreterError(
+          `Cannot access property '${String(prop)}' on host function '${target.name}'`,
+        );
       },
 
       set() {
@@ -1840,7 +1845,8 @@ export class HostFunctionValue {
         if (isDangerousProperty(prop)) {
           return false;
         }
-        return Object.prototype.hasOwnProperty.call(target.hostFunc, prop);
+        // Check for both own and inherited properties (e.g., Uint8Array.from)
+        return prop in target.hostFunc;
       },
 
       ownKeys(target) {
@@ -4732,15 +4738,22 @@ export class Interpreter {
       return args;
     }
 
-    let hasFunctionValue = false;
+    // Check if any argument needs transformation (FunctionValue wrapping or proxy unwrapping)
+    let needsTransformation = false;
     for (let i = 0; i < count; i++) {
-      if (args[i] instanceof FunctionValue) {
-        hasFunctionValue = true;
+      const arg = args[i];
+      if (arg instanceof FunctionValue) {
+        needsTransformation = true;
+        break;
+      }
+      // Check if arg is an object that might be a proxy needing unwrapping
+      if (arg !== null && typeof arg === "object") {
+        needsTransformation = true;
         break;
       }
     }
 
-    if (!hasFunctionValue) {
+    if (!needsTransformation) {
       return args;
     }
 
@@ -4759,7 +4772,8 @@ export class Interpreter {
           };
         }
       } else {
-        wrappedArgs[i] = arg;
+        // Unwrap proxied TypedArrays/ArrayBuffers for native method compatibility
+        wrappedArgs[i] = unwrapForNative(arg);
       }
     }
     return wrappedArgs;

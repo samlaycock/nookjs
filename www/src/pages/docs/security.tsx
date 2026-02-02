@@ -395,6 +395,117 @@ interpreter.evaluate(\`
       </section>
 
       <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Known Limitations</h2>
+
+        <div className="space-y-8">
+          <div>
+            <h3 className="text-xl font-medium text-neutral-100 mb-3">
+              TypedArrays Have Special Handling
+            </h3>
+            <p className="text-neutral-300 mb-4">
+              TypedArrays (e.g.,{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">Uint8Array</code>,{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">Int32Array</code>) and{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">ArrayBuffer</code>{" "}
+              instances have special security handling to balance usability with sandbox protection.
+            </p>
+
+            <h4 className="text-lg font-medium text-neutral-200 mb-2 mt-6">
+              Element Mutation is Allowed
+            </h4>
+            <p className="text-neutral-300 mb-4">
+              Unlike other host objects which are fully read-only, TypedArrays allow{" "}
+              <strong className="text-neutral-100">element mutation via numeric indices</strong>.
+              This enables common patterns like{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+                encoder.encodeInto()
+              </code>
+              :
+            </p>
+            <CodeBlock
+              code={`interpreter.evaluate(\`
+  const arr = new Uint8Array(3);
+  arr[0] = 10;  // Allowed - numeric index write
+  arr[1] = 20;  // Allowed
+
+  const encoder = new TextEncoder();
+  const buffer = new Uint8Array(100);
+  encoder.encodeInto('Hello', buffer);  // Allowed - writes to buffer
+\`);`}
+            />
+
+            <h4 className="text-lg font-medium text-neutral-200 mb-2 mt-6">
+              Unwrapped for Native Methods
+            </h4>
+            <p className="text-neutral-300 mb-4">
+              When passed to host functions, TypedArrays are{" "}
+              <strong className="text-neutral-100">automatically unwrapped</strong> from their
+              ReadOnlyProxy wrapper. This is necessary because native methods like{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+                TextDecoder.decode()
+              </code>{" "}
+              require actual TypedArray instances, not Proxy objects.
+            </p>
+            <CodeBlock
+              code={`interpreter.evaluate(\`
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const bytes = encoder.encode('hello');  // Returns proxied Uint8Array
+  decoder.decode(bytes);                   // bytes is unwrapped for native decode()
+\`);`}
+            />
+            <div className="mt-4 p-4 bg-neutral-900 border border-neutral-800 rounded">
+              <h4 className="text-md font-medium text-neutral-100 mb-2">Risk Assessment: Low</h4>
+              <ul className="space-y-2 text-neutral-400 text-sm">
+                <li className="flex gap-3">
+                  <span className="text-amber-500">&#9632;</span>
+                  <span>
+                    <strong className="text-neutral-300">Host functions are trusted</strong> - They
+                    are provided by the embedder, not the sandbox
+                  </span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="text-amber-500">&#9632;</span>
+                  <span>
+                    <strong className="text-neutral-300">TypedArrays are value containers</strong> -
+                    Unlike objects with methods, they are byte buffers with no dangerous
+                    capabilities
+                  </span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="text-amber-500">&#9632;</span>
+                  <span>
+                    <strong className="text-neutral-300">No new data exposed</strong> - The proxy
+                    wraps the same underlying ArrayBuffer; unwrapping just removes the proxy layer
+                  </span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="text-amber-500">&#9632;</span>
+                  <span>
+                    <strong className="text-neutral-300">Narrow scope</strong> - Only TypedArrays
+                    and ArrayBuffers receive this special handling
+                  </span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xl font-medium text-neutral-100 mb-3">
+              Promises Pass Through Unwrapped
+            </h3>
+            <p className="text-neutral-300 mb-4">
+              Promise objects are passed through without wrapping. This is intentional because
+              wrapping breaks the thenable protocol that{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">await</code> relies on.
+              The risk is low since the Promise API doesn't provide access to dangerous
+              capabilities.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Best Practices</h2>
 
         <div className="space-y-6">
