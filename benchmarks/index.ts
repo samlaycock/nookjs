@@ -2,6 +2,7 @@ import { spawn } from "bun";
 
 const suites = [
   { name: "Interpreter", file: "interpreter.ts" },
+  { name: "Async/Promise", file: "async.ts" },
   { name: "Parser Compare", file: "parser-compare.ts" },
   { name: "Parser Micro", file: "parser-micro.ts" },
   { name: "Parser Profile", file: "parser-profile.ts" },
