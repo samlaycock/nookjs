@@ -15,10 +15,12 @@
 
 import type { ESTree, Location } from "./ast";
 import type { StackFrame } from "./errors";
+import type { ModuleOptions } from "./modules";
 
 import { parseModule } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
 import { InterpreterError, SecurityError, ErrorCode } from "./errors";
+import { ModuleSystem } from "./modules";
 import {
   ReadOnlyProxy,
   PROXY_TARGET,
@@ -27,12 +29,6 @@ import {
   unwrapForNative,
 } from "./readonly-proxy";
 import { ResourceExhaustedError } from "./resource-tracker";
-import type { ModuleOptions, ModuleResolver, ModuleSource, ModuleRecord } from "./modules";
-import {
-  ModuleSystem,
-  DEFAULT_MODULE_OPTIONS,
-  isModuleStatement,
-} from "./modules";
 
 type ASTNode = ESTree.Node;
 
@@ -139,7 +135,7 @@ class YieldValue {
  *
  * The closure is the environment where the function was defined, enabling proper closure semantics
  */
-class FunctionValue {
+export class FunctionValue {
   constructor(
     public params: string[],
     public body: ESTree.BlockStatement,
@@ -3368,10 +3364,7 @@ export class Interpreter {
    * @returns The module's exported values
    * @throws Error if module system is not enabled
    */
-  async evaluateModuleAsync(
-    code: string,
-    options: { path: string },
-  ): Promise<Record<string, any>> {
+  async evaluateModuleAsync(code: string, options: { path: string }): Promise<Record<string, any>> {
     if (!this.moduleSystem) {
       throw new InterpreterError(
         "Module system is not enabled. Create Interpreter with { modules: { enabled: true, resolver: ... } }.",
@@ -3389,10 +3382,7 @@ export class Interpreter {
    * @param path - The module path (for resolver)
    * @returns The module's exported values
    */
-  async evaluateModuleAstAsync(
-    ast: ESTree.Program,
-    path: string,
-  ): Promise<Record<string, any>> {
+  async evaluateModuleAstAsync(ast: ESTree.Program, path: string): Promise<Record<string, any>> {
     if (!this.moduleSystem) {
       throw new InterpreterError("Module system is not enabled");
     }
@@ -3439,11 +3429,28 @@ export class Interpreter {
       throw new InterpreterError(`Cannot find module '${specifier}'`);
     }
 
-    const importedExports = moduleRecord.exports;
+    let importedExports = moduleRecord.exports;
+
+    if (moduleRecord.status === "initializing") {
+      let ast: ESTree.Program;
+      if (moduleRecord.source) {
+        ast = parseModule(moduleRecord.source, { next: true });
+      } else if (moduleRecord.ast) {
+        ast = moduleRecord.ast;
+      } else {
+        throw new InterpreterError(`Module '${specifier}' has no source or AST`);
+      }
+      importedExports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
+      this.moduleSystem.setModuleExports(specifier, importedExports);
+    }
 
     for (const spec of node.specifiers) {
       if (spec.type === "ImportNamespaceSpecifier") {
-        moduleEnv.declare(spec.local.name, ReadOnlyProxy.wrap(importedExports, spec.local.name), "const");
+        moduleEnv.declare(
+          spec.local.name,
+          ReadOnlyProxy.wrap(importedExports, spec.local.name),
+          "const",
+        );
       } else if (spec.type === "ImportDefaultSpecifier") {
         moduleEnv.declare(
           spec.local.name,
@@ -3464,7 +3471,7 @@ export class Interpreter {
     node: ESTree.ExportNamedDeclaration,
     moduleEnv: Environment,
     exports: Record<string, any>,
-    currentPath: string,
+    _currentPath: string,
   ): Promise<void> {
     if (node.declaration) {
       const prevEnv = this.environment;
@@ -3516,10 +3523,14 @@ export class Interpreter {
     try {
       if (node.declaration) {
         if (node.declaration.type === "FunctionDeclaration") {
-          const func = this.evaluateFunctionDeclaration(node.declaration as ESTree.FunctionDeclaration);
+          const func = this.evaluateFunctionDeclaration(
+            node.declaration as ESTree.FunctionDeclaration,
+          );
           exports.default = func;
         } else if (node.declaration.type === "ClassDeclaration") {
-          const cls = await this.evaluateClassDeclarationAsync(node.declaration as ESTree.ClassDeclaration);
+          const cls = await this.evaluateClassDeclarationAsync(
+            node.declaration as ESTree.ClassDeclaration,
+          );
           exports.default = cls;
         } else if (node.declaration.type === "VariableDeclaration") {
           await this.evaluateVariableDeclarationAsync(node.declaration);
@@ -8515,6 +8526,11 @@ export class Interpreter {
       }
     } else {
       callee = await this.evaluateNodeAsync(node.callee);
+    }
+
+    // Unwrap ReadOnlyProxy to get the actual callee
+    if (this.isReadOnlyProxyObject(callee)) {
+      callee = callee[PROXY_TARGET];
     }
 
     // Handle optional chaining short-circuit propagation from callee

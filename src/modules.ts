@@ -6,10 +6,7 @@ export type ModuleSource =
   | { type: "namespace"; exports: Record<string, any>; path: string };
 
 export interface ModuleResolver {
-  resolve(
-    specifier: string,
-    importer: string | null
-  ): ModuleSource | Promise<ModuleSource> | null;
+  resolve(specifier: string, importer: string | null): ModuleSource | Promise<ModuleSource> | null;
 }
 
 export interface ModuleOptions {
@@ -35,6 +32,8 @@ export interface ModuleRecord {
   exports: Record<string, any>;
   status: "initializing" | "initialized" | "failed";
   error?: Error;
+  source?: string;
+  ast?: ESTree.Program;
 }
 
 export class ModuleSystem {
@@ -51,10 +50,7 @@ export class ModuleSystem {
     };
   }
 
-  async resolveModule(
-    specifier: string,
-    importer: string | null
-  ): Promise<ModuleRecord | null> {
+  async resolveModule(specifier: string, importer: string | null): Promise<ModuleRecord | null> {
     if (!this.options.enabled) {
       throw new Error("Module system is not enabled");
     }
@@ -67,9 +63,7 @@ export class ModuleSystem {
     }
 
     if (this.options.maxDepth !== undefined && this.depth >= this.options.maxDepth) {
-      throw new Error(
-        `Module resolution depth exceeded maximum (${this.options.maxDepth})`
-      );
+      throw new Error(`Module resolution depth exceeded maximum (${this.options.maxDepth})`);
     }
 
     this.depth++;
@@ -92,14 +86,16 @@ export class ModuleSystem {
       if (source.type === "namespace") {
         record.exports = { ...source.exports };
         record.status = "initialized";
+        this.depth--;
         return record;
       }
 
       if (source.type === "source") {
-        record.path = source.path;
+        record.source = source.code;
+      } else if (source.type === "ast") {
+        record.ast = source.ast;
       }
 
-      this.depth--;
       return record;
     } catch (error) {
       this.depth--;
@@ -120,6 +116,7 @@ export class ModuleSystem {
     if (record) {
       record.exports = exports;
       record.status = "initialized";
+      this.depth--;
     }
   }
 
@@ -142,8 +139,12 @@ export class ModuleSystem {
 }
 
 export function isModuleStatement(
-  node: ESTree.Node
-): node is ESTree.ImportDeclaration | ESTree.ExportNamedDeclaration | ESTree.ExportDefaultDeclaration | ESTree.ExportAllDeclaration {
+  node: ESTree.Node,
+): node is
+  | ESTree.ImportDeclaration
+  | ESTree.ExportNamedDeclaration
+  | ESTree.ExportDefaultDeclaration
+  | ESTree.ExportAllDeclaration {
   return (
     node.type === "ImportDeclaration" ||
     node.type === "ExportNamedDeclaration" ||

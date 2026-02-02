@@ -32,12 +32,7 @@ export {
   type ResourceHistoryEntry,
 } from "./resource-tracker";
 
-export type {
-  ModuleResolver,
-  ModuleOptions,
-  ModuleSource,
-  ModuleRecord,
-} from "./modules";
+export type { ModuleResolver, ModuleOptions, ModuleSource, ModuleRecord } from "./modules";
 export { ModuleSystem } from "./modules";
 
 export * from "./presets";

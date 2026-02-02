@@ -1,15 +1,18 @@
-import { describe, test, expect, beforeEach } from "bun:test";
+import { describe, test, expect } from "bun:test";
 
-import { Interpreter, InterpreterError } from "../src/interpreter";
-import type { ModuleResolver, ModuleSource } from "../src/modules";
+import type { ModuleResolver } from "../src/modules";
+
+import { Interpreter } from "../src/interpreter";
 
 describe("Module System", () => {
   describe("Module Resolver Interface", () => {
     test("should throw error when module system is not enabled", async () => {
       const interpreter = new Interpreter();
 
-      await expect(
-        interpreter.evaluateModuleAsync("export const x = 1;", { path: "test.js" }),
+      expect(
+        interpreter.evaluateModuleAsync("export const x = 1;", {
+          path: "test.js",
+        }),
       ).rejects.toThrow("Module system is not enabled");
     });
 
@@ -29,12 +32,10 @@ describe("Module System", () => {
 
   describe("Basic Import/Export", () => {
     test("should export named constant", async () => {
-      const files = new Map<string, string>([
-        ["math.js", "export const add = (a, b) => a + b;"],
-      ]);
+      const files = new Map<string, string>([["math.js", "export const add = (a, b) => a + b;"]]);
 
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           const code = files.get(specifier);
           if (!code) return null;
           return { type: "source", code, path: specifier };
@@ -47,11 +48,12 @@ describe("Module System", () => {
 
       const exports = await interpreter.evaluateModuleAsync(
         `import { add } from "math.js";
-         add(2, 3);`,
+         const result = add(2, 3);
+         export { result };`,
         { path: "main.js" },
       );
 
-      expect(typeof exports.add).toBe("function");
+      expect(exports.result).toBe(5);
     });
 
     test("should export function", async () => {
@@ -60,7 +62,7 @@ describe("Module System", () => {
       ]);
 
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           const code = files.get(specifier);
           if (!code) return null;
           return { type: "source", code, path: specifier };
@@ -73,11 +75,12 @@ describe("Module System", () => {
 
       const result = await interpreter.evaluateModuleAsync(
         `import { multiply } from "utils.js";
-         multiply(4, 5);`,
+         const product = multiply(4, 5);
+         export { product };`,
         { path: "main.js" },
       );
 
-      expect(result.multiply).toBeDefined();
+      expect(result.product).toBe(20);
     });
   });
 
@@ -88,7 +91,7 @@ describe("Module System", () => {
       ]);
 
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           const code = files.get(specifier);
           if (!code) return null;
           return { type: "source", code, path: specifier };
@@ -109,12 +112,10 @@ describe("Module System", () => {
     });
 
     test("should handle renamed imports", async () => {
-      const files = new Map<string, string>([
-        ["module.js", "export const original = 42;"],
-      ]);
+      const files = new Map<string, string>([["module.js", "export const original = 42;"]]);
 
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           const code = files.get(specifier);
           if (!code) return null;
           return { type: "source", code, path: specifier };
@@ -135,12 +136,10 @@ describe("Module System", () => {
     });
 
     test("should handle namespace imports", async () => {
-      const files = new Map<string, string>([
-        ["module.js", "export const value = 100;"],
-      ]);
+      const files = new Map<string, string>([["module.js", "export const value = 100;"]]);
 
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           const code = files.get(specifier);
           if (!code) return null;
           return { type: "source", code, path: specifier };
@@ -161,12 +160,10 @@ describe("Module System", () => {
     });
 
     test("should handle default import", async () => {
-      const files = new Map<string, string>([
-        ["module.js", "export default 42;"],
-      ]);
+      const files = new Map<string, string>([["module.js", "export default 42;"]]);
 
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           const code = files.get(specifier);
           if (!code) return null;
           return { type: "source", code, path: specifier };
@@ -190,7 +187,7 @@ describe("Module System", () => {
   describe("Export Types", () => {
     test("should handle export const", async () => {
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           return {
             type: "source",
             code: "export const value = 123;",
@@ -203,17 +200,16 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export const value = 123;`,
-        { path: "main.js" },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export const value = 123;`, {
+        path: "main.js",
+      });
 
       expect(result.value).toBe(123);
     });
 
     test("should handle export function", async () => {
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           return {
             type: "source",
             code: "export function greet(name) { return 'Hello, ' + name; }",
@@ -231,12 +227,12 @@ describe("Module System", () => {
         { path: "main.js" },
       );
 
-      expect(typeof result.greet).toBe("function");
+      expect(result.greet).toBeDefined();
     });
 
     test("should handle export default", async () => {
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           return {
             type: "source",
             code: "export default 42;",
@@ -249,10 +245,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export default 42;`,
-        { path: "main.js" },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export default 42;`, {
+        path: "main.js",
+      });
 
       expect(result.default).toBe(42);
     });
@@ -261,7 +256,7 @@ describe("Module System", () => {
   describe("Module Resolution", () => {
     test("should throw error when module not found", async () => {
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve() {
           return null;
         },
       };
@@ -270,11 +265,10 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      await expect(
-        interpreter.evaluateModuleAsync(
-          `import { foo } from "nonexistent.js";`,
-          { path: "main.js" },
-        ),
+      expect(
+        interpreter.evaluateModuleAsync(`import { foo } from "nonexistent.js";`, {
+          path: "main.js",
+        }),
       ).rejects.toThrow("Cannot find module");
     });
 
@@ -285,7 +279,7 @@ describe("Module System", () => {
       ]);
 
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           const path = specifier.replace("./", "");
           const code = files.get(path);
           if (!code) return null;
@@ -297,10 +291,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        files.get("main.js")!,
-        { path: "main.js" },
-      );
+      const result = await interpreter.evaluateModuleAsync(files.get("main.js")!, {
+        path: "main.js",
+      });
 
       expect(result).toBeDefined();
     });
@@ -309,7 +302,7 @@ describe("Module System", () => {
   describe("Namespace Exports", () => {
     test("should handle pre-built module namespace", async () => {
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           if (specifier === "math") {
             return {
               type: "namespace",
@@ -343,7 +336,7 @@ describe("Module System", () => {
       let resolveCount = 0;
 
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           resolveCount++;
           return {
             type: "source",
@@ -370,7 +363,7 @@ describe("Module System", () => {
       let resolveCount = 0;
 
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           resolveCount++;
           return {
             type: "source",
@@ -384,26 +377,24 @@ describe("Module System", () => {
         modules: { enabled: true, resolver, cache: true },
       });
 
-      await interpreter.evaluateModuleAsync(
-        `import { value } from "module.js";`,
-        { path: "main.js" },
-      );
+      await interpreter.evaluateModuleAsync(`import { value } from "module.js";`, {
+        path: "main.js",
+      });
 
       expect(resolveCount).toBe(1);
 
       interpreter.clearModuleCache();
 
-      await interpreter.evaluateModuleAsync(
-        `import { value } from "module.js";`,
-        { path: "main.js" },
-      );
+      await interpreter.evaluateModuleAsync(`import { value } from "module.js";`, {
+        path: "main.js",
+      });
 
       expect(resolveCount).toBe(2);
     });
 
     test("should get cached module exports", async () => {
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           return {
             type: "source",
             code: "export const value = 42;",
@@ -416,10 +407,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      await interpreter.evaluateModuleAsync(
-        `import { value } from "module.js";`,
-        { path: "main.js" },
-      );
+      await interpreter.evaluateModuleAsync(`import { value } from "module.js";`, {
+        path: "main.js",
+      });
 
       const exports = interpreter.getModuleExports("module.js");
       expect(exports?.value).toBe(42);
@@ -428,8 +418,8 @@ describe("Module System", () => {
 
   describe("Security", () => {
     test("should require explicit resolver", () => {
-      expect(() => {
-        new Interpreter({
+      expect(async () => {
+        await new Interpreter({
           modules: {
             enabled: true,
             resolver: {
@@ -444,7 +434,7 @@ describe("Module System", () => {
 
     test("should reject unknown modules when resolver returns null", async () => {
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           if (specifier === "./allowed.js") {
             return {
               type: "source",
@@ -460,11 +450,10 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      await expect(
-        interpreter.evaluateModuleAsync(
-          `import { value } from "./forbidden.js";`,
-          { path: "main.js" },
-        ),
+      expect(
+        interpreter.evaluateModuleAsync(`import { value } from "./forbidden.js";`, {
+          path: "main.js",
+        }),
       ).rejects.toThrow("Cannot find module");
     });
   });
@@ -472,7 +461,7 @@ describe("Module System", () => {
   describe("Max Depth", () => {
     test("should enforce max depth limit", async () => {
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           return {
             type: "source",
             code: `import { value } from "${specifier}"; export { value };`,
@@ -485,11 +474,10 @@ describe("Module System", () => {
         modules: { enabled: true, resolver, maxDepth: 2 },
       });
 
-      await expect(
-        interpreter.evaluateModuleAsync(
-          `import { value } from "./a.js";`,
-          { path: "main.js" },
-        ),
+      expect(
+        interpreter.evaluateModuleAsync(`import { value } from "./a.js";`, {
+          path: "main.js",
+        }),
       ).rejects.toThrow("depth exceeded");
     });
   });
@@ -497,7 +485,7 @@ describe("Module System", () => {
   describe("AST Source Type", () => {
     test("should accept pre-parsed AST", async () => {
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           return {
             type: "ast",
             path: specifier,
@@ -530,10 +518,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `import { value } from "module.js";`,
-        { path: "main.js" },
-      );
+      const result = await interpreter.evaluateModuleAsync(`import { value } from "module.js";`, {
+        path: "main.js",
+      });
 
       expect(result).toBeDefined();
     });

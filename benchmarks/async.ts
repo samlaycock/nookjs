@@ -189,7 +189,7 @@ const benchmarkCases: { name: string; code: string; iterations: number }[] = [
       async function fetchData(id) { return { id, value: id * 10 }; }
       async function processData(data) { return data.value * 2; }
       async function saveData(value) { return { saved: true, value }; }
-      
+
       const data = await fetchData(1);
       const processed = await processData(data);
       await saveData(processed);
@@ -275,4 +275,4 @@ async function main() {
   console.log("Done!");
 }
 
-main();
+await main();
