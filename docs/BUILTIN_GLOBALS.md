@@ -2,16 +2,19 @@
 
 The interpreter automatically provides certain builtin global variables that are always available in sandboxed code.
 
-## Always Available (No Feature Flag Required)
+## Always Available (No Preset Required)
 
-| Variable     | Description                             |
-| ------------ | --------------------------------------- |
-| `undefined`  | The undefined primitive value           |
-| `NaN`        | The Not-a-Number value                  |
-| `Infinity`   | The Infinity value                      |
-| `Symbol`     | The Symbol constructor                  |
-| `globalThis` | Reference to the sandbox's global scope |
-| `global`     | Alias for `globalThis`                  |
+These globals are available in every interpreter instance, regardless of which preset is used:
+
+| Variable     | Description                              |
+| ------------ | ---------------------------------------- |
+| `undefined`  | The undefined primitive value            |
+| `NaN`        | The Not-a-Number value                   |
+| `Infinity`   | The Infinity value                       |
+| `Symbol`     | The Symbol constructor                   |
+| `Promise`    | Promise constructor for async operations |
+| `globalThis` | Reference to the sandbox's global scope  |
+| `global`     | Alias for `globalThis`                   |
 
 ## ES5 Standard Globals
 
@@ -43,21 +46,18 @@ The interpreter automatically provides certain builtin global variables that are
 
 ## ES2015+ Standard Globals
 
-| Global                 | Description                              |
-| ---------------------- | ---------------------------------------- |
-| `Promise`              | Promise constructor for async operations |
-| `Symbol(description?)` | Creates unique symbols                   |
-| `Map`                  | Key-value map collection                 |
-| `Set`                  | Unique values collection                 |
-| `WeakMap`              | Weak reference key-value map             |
-| `WeakSet`              | Weak reference set                       |
+| Global    | Description                  |
+| --------- | ---------------------------- |
+| `Map`     | Key-value map collection     |
+| `Set`     | Unique values collection     |
+| `WeakMap` | Weak reference key-value map |
+| `WeakSet` | Weak reference set           |
 
 ## ES2020+ Standard Globals
 
 | Global           | Description                          |
 | ---------------- | ------------------------------------ |
 | `BigInt(value?)` | Creates arbitrary-precision integers |
-| `globalThis`     | Reference to sandbox global scope    |
 
 ## ES2021+ Standard Globals
 
@@ -95,15 +95,16 @@ The `globalThis` and `global` variables provide access to the sandbox's global s
 
 ## Preset-Specific Globals
 
-Different ECMAScript version presets include different globals:
+Different ECMAScript version presets include different globals (in addition to always-available globals):
 
 | Preset  | Additional Globals                                                                                                                   |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | ES5     | Array, Object, String, Number, Boolean, Date, Math, JSON, Error types, parseInt, parseFloat, isNaN, isFinite, encodeURI*, decodeURI* |
-| ES2015+ | Promise, Symbol, Map, Set, WeakMap, WeakSet                                                                                          |
-| ES2017+ | Object.values, Object.entries (on prototype)                                                                                         |
-| ES2020+ | BigInt, globalThis                                                                                                                   |
+| ES2015+ | Map, Set, WeakMap, WeakSet                                                                                                           |
+| ES2020+ | BigInt                                                                                                                               |
 | ES2021+ | WeakRef, FinalizationRegistry                                                                                                        |
+
+**Note:** `Symbol`, `Promise`, `globalThis`, and `global` are always available regardless of preset.
 
 ## Behavior Notes
 

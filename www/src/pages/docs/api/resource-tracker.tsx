@@ -5,25 +5,39 @@ import { CodeBlock } from "../../../components/code-block";
 export function ResourceTrackerAPI() {
   return (
     <article className="prose prose-invert max-w-none">
-      <h1 className="text-3xl font-bold text-neutral-50 mb-4">Resource Tracker</h1>
+      <h1 className="text-3xl font-bold text-neutral-50 mb-4">
+        Resource Tracking
+      </h1>
       <p className="text-xl text-neutral-300 mb-8">
         Monitor and limit cumulative resource usage across multiple evaluations.
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Overview</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Overview
+        </h2>
         <p className="text-neutral-300 mb-4">
-          The <code className="text-amber-400 bg-neutral-800 px-1 rounded">ResourceTracker</code>{" "}
-          class enables monitoring of resource consumption across multiple{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">evaluate()</code> calls. This
-          is essential for multi-tenant environments where you need to track and limit cumulative
-          usage.
+          NookJS provides integrated resource tracking for monitoring resource
+          consumption across multiple{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            evaluate()
+          </code>{" "}
+          calls. This is essential for multi-tenant environments where you need
+          to track and limit cumulative usage.
         </p>
-        <p className="text-neutral-300 mb-4">Unlike per-call limits, the ResourceTracker:</p>
+        <p className="text-neutral-300 mb-4">
+          Enable tracking with{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            resourceTracking: true
+          </code>{" "}
+          when creating the Interpreter:
+        </p>
         <ul className="space-y-2 text-neutral-300">
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
-            <span>Tracks aggregate resource usage across the interpreter's lifetime</span>
+            <span>
+              Tracks aggregate resource usage across the interpreter's lifetime
+            </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
@@ -31,41 +45,46 @@ export function ResourceTrackerAPI() {
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
-            <span>Supports billing, rate-limiting, and fairness enforcement</span>
+            <span>
+              Supports billing, rate-limiting, and fairness enforcement
+            </span>
           </li>
         </ul>
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Quick Start</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Quick Start
+        </h2>
         <CodeBlock
-          code={`import { Interpreter, ResourceTracker, ES2024, preset } from "nookjs";
+          code={`import { Interpreter, ES2024, preset, ResourceExhaustedError } from "nookjs";
 
-// Create a tracker with limits
-const tracker = new ResourceTracker({
-  limits: {
-    maxTotalMemory: 100 * 1024 * 1024,  // 100 MB cumulative
-    maxTotalIterations: 1000000,         // 1M total loop iterations
-    maxFunctionCalls: 10000,             // 10K function calls
-    maxCpuTime: 30000,                   // 30 seconds cumulative
-    maxEvaluations: 100,                 // 100 evaluations
-  },
-});
-
-// Create interpreter with tracker
+// Create interpreter with resource tracking enabled
 const interpreter = new Interpreter(
   preset(ES2024, {
     globals: { console },
-    resourceTracker: tracker,
+    resourceTracking: true,
   })
 );
 
-// Run code - resources are tracked
-interpreter.evaluate("const arr = Array(1000).fill(0)");
-interpreter.evaluate("for (let i = 0; i < 10000; i++) {}");
+// Set cumulative limits
+interpreter.setResourceLimit("maxTotalMemory", 100 * 1024 * 1024); // 100 MB
+interpreter.setResourceLimit("maxTotalIterations", 1000000); // 1M iterations
+interpreter.setResourceLimit("maxFunctionCalls", 10000); // 10K calls
+interpreter.setResourceLimit("maxEvaluations", 100); // 100 evaluations
 
-// Check stats
-const stats = tracker.getStats();
+// Run code - resources are tracked
+try {
+  interpreter.evaluate("const arr = Array(1000).fill(0)");
+  interpreter.evaluate("for (let i = 0; i < 10000; i++) {}");
+} catch (error) {
+  if (error instanceof ResourceExhaustedError) {
+    console.log(\`Limit exceeded: \${error.resourceType}\`);
+  }
+}
+
+// Check cumulative stats
+const stats = interpreter.getResourceStats();
 console.log(\`Memory: \${stats.memoryBytes} bytes\`);
 console.log(\`Iterations: \${stats.iterations}\`);
 console.log(\`Evaluations: \${stats.evaluations}\`);`}
@@ -73,38 +92,27 @@ console.log(\`Evaluations: \${stats.evaluations}\`);`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Constructor</h2>
-        <CodeBlock code={`new ResourceTracker(options?: ResourceTrackerOptions)`} />
-
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">Options</h3>
-        <CodeBlock
-          code={`interface ResourceTrackerOptions {
-  // Resource limits (all optional)
-  limits?: ResourceLimits;
-
-  // Number of past evaluations to track (default: 100, 0 to disable)
-  historySize?: number;
-}
-
-interface ResourceLimits {
-  maxTotalMemory?: number;      // bytes
-  maxTotalIterations?: number;  // loop iterations
-  maxFunctionCalls?: number;    // total function invocations
-  maxCpuTime?: number;          // milliseconds (best-effort)
-  maxEvaluations?: number;      // number of evaluate() calls
-}`}
-        />
-      </section>
-
-      <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Methods</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Interpreter Methods
+        </h2>
+        <p className="text-neutral-300 mb-4">
+          When{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            resourceTracking: true
+          </code>{" "}
+          is set, the Interpreter exposes these methods:
+        </p>
 
         <div className="space-y-8">
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">getStats()</h3>
-            <p className="text-neutral-400 text-sm mb-3">Returns current resource statistics.</p>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              getResourceStats()
+            </h3>
+            <p className="text-neutral-400 text-sm mb-3">
+              Returns current cumulative resource statistics.
+            </p>
             <CodeBlock
-              code={`const stats = tracker.getStats();
+              code={`const stats = interpreter.getResourceStats();
 
 console.log(stats);
 /*
@@ -131,50 +139,29 @@ console.log(stats);
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">isExhausted()</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              resetResourceStats()
+            </h3>
             <p className="text-neutral-400 text-sm mb-3">
-              Returns true if any resource limit has been exceeded.
+              Clears all statistics and history.
             </p>
-            <CodeBlock
-              code={`if (tracker.isExhausted()) {
-  console.log("Resource limit exceeded");
-  // Reject further evaluations
-}`}
-            />
-          </div>
-
-          <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">getExhaustedLimit()</h3>
-            <p className="text-neutral-400 text-sm mb-3">
-              Returns the key of the exhausted limit, or null if none exceeded.
-            </p>
-            <CodeBlock
-              code={`const exhausted = tracker.getExhaustedLimit();
-if (exhausted) {
-  console.log(\`Limit exceeded: \${exhausted}\`);
-  // e.g., "maxTotalMemory", "maxEvaluations"
-}`}
-            />
-          </div>
-
-          <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">reset()</h3>
-            <p className="text-neutral-400 text-sm mb-3">Clears all statistics and history.</p>
             <CodeBlock
               code={`// Reset at the start of each billing cycle
 setInterval(() => {
-  tracker.reset();
+  interpreter.resetResourceStats();
 }, 24 * 60 * 60 * 1000); // Daily reset`}
             />
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">getHistory()</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              getResourceHistory()
+            </h3>
             <p className="text-neutral-400 text-sm mb-3">
               Returns array of past evaluation statistics.
             </p>
             <CodeBlock
-              code={`const history = tracker.getHistory();
+              code={`const history = interpreter.getResourceHistory();
 /*
 [
   {
@@ -192,19 +179,22 @@ setInterval(() => {
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
             <h3 className="text-lg font-medium text-neutral-100 mb-2">
-              getLimit(key) / setLimit(key, value)
+              setResourceLimit(key, value) / getResourceLimit(key)
             </h3>
             <p className="text-neutral-400 text-sm mb-3">
-              Get or update specific limits dynamically.
+              Get or set specific limits dynamically.
             </p>
             <CodeBlock
-              code={`// Check current limit
-const memLimit = tracker.getLimit("maxTotalMemory");
+              code={`// Set limits
+interpreter.setResourceLimit("maxTotalMemory", 100 * 1024 * 1024);
+interpreter.setResourceLimit("maxEvaluations", 1000);
+
+// Check current limit
+const memLimit = interpreter.getResourceLimit("maxTotalMemory");
 
 // Increase limit for premium users
 if (user.isPremium) {
-  tracker.setLimit("maxTotalMemory", 500 * 1024 * 1024);
-  tracker.setLimit("maxEvaluations", 1000);
+  interpreter.setResourceLimit("maxTotalMemory", 500 * 1024 * 1024);
 }`}
             />
           </div>
@@ -212,114 +202,143 @@ if (user.isPremium) {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Error Handling</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          ResourceLimits
+        </h2>
+        <p className="text-neutral-300 mb-4">Available limits you can set:</p>
+        <CodeBlock
+          code={`type ResourceLimits = {
+  maxTotalMemory?: number;      // bytes (cumulative)
+  maxTotalIterations?: number;  // loop iterations (cumulative)
+  maxFunctionCalls?: number;    // total function invocations
+  maxCpuTime?: number;          // milliseconds (best-effort)
+  maxEvaluations?: number;      // number of evaluate() calls
+};`}
+        />
+      </section>
+
+      <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Error Handling
+        </h2>
         <p className="text-neutral-300 mb-4">
           When a limit is exceeded, a{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">ResourceExhaustedError</code>{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            ResourceExhaustedError
+          </code>{" "}
           is thrown:
         </p>
         <CodeBlock
-          code={`import { ResourceExhaustedError } from "nookjs";
+          code={`import { Interpreter, ResourceExhaustedError } from "nookjs";
+
+const interpreter = new Interpreter({ resourceTracking: true });
+interpreter.setResourceLimit("maxEvaluations", 5);
 
 try {
-  interpreter.evaluate(code);
+  for (let i = 0; i < 10; i++) {
+    interpreter.evaluate("1 + 1");
+  }
 } catch (error) {
   if (error instanceof ResourceExhaustedError) {
     console.log(\`Resource limit exceeded: \${error.resourceType}\`);
     console.log(\`Used: \${error.used}, Limit: \${error.limit}\`);
-
-    // Log for billing/monitoring
-    await logResourceExhaustion(userId, {
-      type: error.resourceType,
-      used: error.used,
-      limit: error.limit,
-    });
   }
 }`}
         />
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Use Cases</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Use Cases
+        </h2>
 
         <div className="space-y-6">
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">Plugin Systems</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              Plugin Systems
+            </h3>
             <p className="text-neutral-400 text-sm mb-3">
               Track resource usage per plugin to enforce fair allocation:
             </p>
             <CodeBlock
-              code={`// Each plugin gets its own tracker
-const plugins = new Map();
-
-function createPluginInterpreter(pluginId: string) {
-  const tracker = new ResourceTracker({
-    limits: {
-      maxTotalMemory: 50 * 1024 * 1024, // 50 MB per plugin
-      maxEvaluations: 1000,
-    },
-  });
-
-  plugins.set(pluginId, tracker);
-
-  return new Interpreter(
-    preset(ES2024, { resourceTracker: tracker })
+              code={`function createPluginInterpreter(pluginId: string, memoryLimit: number) {
+  const interpreter = new Interpreter(
+    preset(ES2024, {
+      resourceTracking: true,
+      globals: getPluginGlobals(pluginId),
+    })
   );
+
+  interpreter.setResourceLimit("maxTotalMemory", memoryLimit);
+  interpreter.setResourceLimit("maxEvaluations", 1000);
+
+  return interpreter;
 }
 
-// Check plugin resource usage
-function getPluginUsage(pluginId: string) {
-  return plugins.get(pluginId)?.getStats();
-}`}
+const plugin1 = createPluginInterpreter("plugin1", 50 * 1024 * 1024);
+const plugin2 = createPluginInterpreter("plugin2", 50 * 1024 * 1024);
+
+plugin1.evaluate(pluginCode);
+const stats = plugin1.getResourceStats();
+console.log(\`Plugin memory: \${stats.memoryBytes} bytes\`);`}
             />
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">Rate Limiting</h3>
-            <p className="text-neutral-400 text-sm mb-3">Implement token-bucket style limits:</p>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              Rate Limiting
+            </h3>
+            <p className="text-neutral-400 text-sm mb-3">
+              Implement evaluation-count-based rate limiting:
+            </p>
             <CodeBlock
-              code={`class UserSandbox {
-  private tracker: ResourceTracker;
+              code={`class RateLimitedSandbox {
   private interpreter: Interpreter;
 
-  constructor(userId: string, tier: "free" | "pro") {
-    const limits = tier === "pro"
-      ? { maxEvaluations: 10000, maxTotalMemory: 500 * 1024 * 1024 }
-      : { maxEvaluations: 100, maxTotalMemory: 50 * 1024 * 1024 };
+  constructor(tier: "free" | "pro") {
+    const evalLimit = tier === "pro" ? 10000 : 100;
+    const memLimit = tier === "pro" ? 500 * 1024 * 1024 : 50 * 1024 * 1024;
 
-    this.tracker = new ResourceTracker({ limits });
     this.interpreter = new Interpreter(
-      preset(ES2024, { resourceTracker: this.tracker })
+      preset(ES2024, { resourceTracking: true })
     );
+
+    this.interpreter.setResourceLimit("maxEvaluations", evalLimit);
+    this.interpreter.setResourceLimit("maxTotalMemory", memLimit);
   }
 
   evaluate(code: string) {
-    if (this.tracker.isExhausted()) {
-      throw new Error("Rate limit exceeded. Please try again later.");
-    }
     return this.interpreter.evaluate(code);
   }
 
   // Reset limits at the start of each day
   resetDailyLimits() {
-    this.tracker.reset();
+    this.interpreter.resetResourceStats();
+  }
+
+  getUsage() {
+    return this.interpreter.getResourceStats();
   }
 }`}
             />
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">Monitoring Dashboard</h3>
-            <p className="text-neutral-400 text-sm mb-3">Expose stats for monitoring:</p>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              Monitoring Dashboard
+            </h3>
+            <p className="text-neutral-400 text-sm mb-3">
+              Expose stats for monitoring:
+            </p>
             <CodeBlock
               code={`// API endpoint for monitoring
 app.get("/api/sandbox/:userId/stats", (req, res) => {
-  const tracker = getUserTracker(req.params.userId);
-  if (!tracker) {
+  const interpreter = getUserInterpreter(req.params.userId);
+  if (!interpreter) {
     return res.status(404).json({ error: "User not found" });
   }
 
-  const stats = tracker.getStats();
+  const stats = interpreter.getResourceStats();
   res.json({
     usage: {
       memory: stats.memoryBytes,
@@ -331,7 +350,7 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
     },
     limits: stats.limitStatus,
     isExhausted: stats.isExhausted,
-    history: tracker.getHistory().slice(-10), // Last 10 evaluations
+    history: interpreter.getResourceHistory().slice(-10),
   });
 });`}
             />
@@ -347,9 +366,15 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-700">
-                <th className="text-left py-2 pr-4 text-neutral-300">Feature</th>
-                <th className="text-left py-2 pr-4 text-neutral-300">Per-Evaluation</th>
-                <th className="text-left py-2 text-neutral-300">ResourceTracker</th>
+                <th className="text-left py-2 pr-4 text-neutral-300">
+                  Feature
+                </th>
+                <th className="text-left py-2 pr-4 text-neutral-300">
+                  Per-Evaluation
+                </th>
+                <th className="text-left py-2 text-neutral-300">
+                  resourceTracking
+                </th>
               </tr>
             </thead>
             <tbody className="text-neutral-400">
@@ -389,7 +414,8 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
                 <td className="py-2 pr-4">Statistics</td>
                 <td className="py-2 pr-4">None</td>
                 <td className="py-2">
-                  Detailed stats via <code className="text-amber-400">getStats()</code>
+                  Detailed stats via{" "}
+                  <code className="text-amber-400">getResourceStats()</code>
                 </td>
               </tr>
               <tr>
@@ -400,6 +426,48 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Standalone ResourceTracker
+        </h2>
+        <p className="text-neutral-300 mb-4">
+          For advanced scenarios, NookJS also exports a standalone{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            ResourceTracker
+          </code>{" "}
+          class that can be used independently for custom resource accounting:
+        </p>
+        <CodeBlock
+          code={`import { ResourceTracker } from "nookjs";
+
+const tracker = new ResourceTracker({
+  limits: {
+    maxTotalMemory: 100 * 1024 * 1024,
+    maxEvaluations: 100,
+  },
+  historySize: 50, // Keep last 50 evaluation records
+});
+
+// Check stats
+const stats = tracker.getStats();
+
+// Check if exhausted
+if (tracker.isExhausted()) {
+  const limit = tracker.getExhaustedLimit();
+  console.log(\`Exhausted: \${limit}\`);
+}
+
+// Reset
+tracker.reset();`}
+        />
+        <p className="text-neutral-400 text-sm mt-4">
+          Note: The standalone ResourceTracker is not automatically integrated
+          with the Interpreter. Use{" "}
+          <code className="text-amber-400">resourceTracking: true</code> for
+          automatic tracking during evaluation.
+        </p>
       </section>
 
       <div className="flex justify-between pt-8 border-t border-neutral-800">
