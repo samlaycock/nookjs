@@ -1,252 +1,51 @@
 import "./index.css";
 
-import CodeEditor from "@uiw/react-textarea-code-editor";
-import { StrictMode, useCallback, useEffect, useMemo, useState } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { DiGithubBadge } from "react-icons/di";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 
-import { Interpreter, InterpreterError, ES2024, preset, ParseError } from "../../src/index";
-
-const CODE_LOCAL_STORAGE_KEY = "nookjs-code";
-const DEFAULT_CODE = `// Welcome to NookJS!
-
-const main = (length: number) => {
-  const arr = Array.from({ length });
-  let i = 0;
-
-  for (const item of arr) {
-    i += 1;
-    console.log(\`Simon says: \${i}\`);
-  }
-}
-
-main(10);
-alert("Check your console!");
-`;
-const CODE_EDITOR_STYLES = {
-  backgroundColor: "transparent",
-  fontSize: 16,
-  height: "100%",
-  width: "100%",
-};
-
-function App() {
-  const [code, setCode] = useState(
-    window.localStorage.getItem(CODE_LOCAL_STORAGE_KEY) ?? DEFAULT_CODE,
-  );
-  const usageCode = useMemo(
-    () => `import { Interpreter, preset, ES2024 } from "nookjs";
-
-const interpreter = new Interpreter(
-  preset(
-    ES2024,
-    { globals: { console, alert: alert.bind(globalThis) } },
-    { security: { hideHostErrorMessages: false } },
-  ),
-);
-
-const code = \`${code.replace(/`/g, "\\`").replace(/\$/g, "\\$")}\`;
-
-const result = await interpreter.evaluateAsync(code);`,
-    [code],
-  );
-  const [mode, setMode] = useState<"code" | "usage">("code");
-  const [output, setOutput] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const onRun = useCallback(async () => {
-    setError(null);
-
-    const interpreter = new Interpreter(
-      preset(
-        ES2024,
-        { globals: { console, alert: alert.bind(globalThis) } },
-        { security: { hideHostErrorMessages: false } },
-      ),
-    );
-
-    try {
-      const result = await interpreter.evaluateAsync(code);
-
-      if (result) {
-        setOutput(String(result));
-      } else {
-        setOutput(null);
-      }
-    } catch (error) {
-      if (error instanceof InterpreterError || error instanceof ParseError) {
-        setError(error.message);
-      } else {
-        console.error(error);
-        setError("An unknown error occurred during execution.");
-      }
-    }
-  }, [code]);
-  const onClear = useCallback(() => {
-    setCode("");
-    setOutput(null);
-    setError(null);
-    window.localStorage.removeItem(CODE_LOCAL_STORAGE_KEY);
-  }, []);
-  const onSetMode = useCallback((newMode: "code" | "usage") => {
-    setMode(newMode);
-  }, []);
-  const [copyButtonText, setCopyButtonText] = useState("Copy");
-  const onCopyToClipboard = useCallback(async () => {
-    await navigator.clipboard.writeText(usageCode);
-
-    setCopyButtonText("Copied!");
-
-    setTimeout(() => {
-      setCopyButtonText("Copy");
-    }, 2000);
-  }, [usageCode]);
-
-  useEffect(() => {
-    if (window.location.pathname !== "/") {
-      window.location.replace("/");
-    }
-  }, []);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (code) {
-        window.localStorage.setItem(CODE_LOCAL_STORAGE_KEY, code);
-      }
-    }, 500);
-
-    return () => clearTimeout(timeout);
-  }, [code]);
-
-  return (
-    <div className="flex flex-col h-screen w-screen font-mono bg-neutral-950">
-      <header className="flex flex-row justify-between gap-4 p-4 sm:gap-6 sm:p-6">
-        <div className="flex flex-col">
-          <h1 className="text-amber-50 text-xl font-semibold">
-            Nook<span className="text-amber-500">JS</span>
-          </h1>
-          <p className="text-neutral-50">JavaScript/TypeScript(ish) Interpreter</p>
-        </div>
-        <div>
-          <a href="https://github.com/samlaycock/nookjs" target="_blank" rel="noreferrer">
-            <DiGithubBadge size={32} className="fill-amber-500 hover:fill-amber-400" />
-          </a>
-        </div>
-      </header>
-      <main className="flex-1 flex flex-col w-full">
-        <section className="flex-1 flex flex-col w-full bg-neutral-900 border-t border-neutral-700">
-          <div className="relative flex-1 p-4 z-10 focus-within:ring-2 focus-within:ring-amber-500 sm:p-6">
-            {mode === "code" && (
-              <form
-                className="h-full w-full"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                }}
-              >
-                <CodeEditor
-                  id="input"
-                  value={code}
-                  language="ts"
-                  placeholder="Please enter JavaScript/TypeScript code."
-                  onChange={(evn) => setCode(evn.target.value)}
-                  padding={0}
-                  style={CODE_EDITOR_STYLES}
-                />
-              </form>
-            )}
-            {mode === "usage" && (
-              <form
-                className="h-full w-full"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                }}
-              >
-                <CodeEditor
-                  id="input"
-                  value={usageCode}
-                  language="ts"
-                  padding={0}
-                  style={CODE_EDITOR_STYLES}
-                  disabled
-                />
-              </form>
-            )}
-            <div className="flex flex-row absolute top-4 right-4 sm:top-6 sm:right-6">
-              <button
-                className={`px-3 py-1 text-neutral-50 text-sm ${mode === "code" ? "bg-neutral-500" : "bg-neutral-600 cursor-pointer hover:bg-neutral-500"}`}
-                onClick={() => onSetMode("code")}
-              >
-                Code
-              </button>
-              <button
-                className={`px-3 py-1 text-neutral-50 text-sm ${mode === "usage" ? "bg-neutral-500" : "bg-neutral-600 cursor-pointer hover:bg-neutral-500"}`}
-                onClick={() => onSetMode("usage")}
-              >
-                Usage
-              </button>
-            </div>
-            {mode === "usage" && (
-              <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6">
-                <button
-                  className="px-3 py-1 bg-neutral-600 text-neutral-50 text-sm cursor-pointer hover:bg-neutral-500"
-                  onClick={onCopyToClipboard}
-                >
-                  {copyButtonText}
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="flex flex-row gap-4 justify-between items-center p-4 border-t border-neutral-700 sm:gap-6 sm:p-6">
-            <div className="flex-1 overflow-hidden">
-              {output !== null && (
-                <div className="flex flex-row gap-4 overflow-hidden">
-                  <span className="text-neutral-600">Output:</span>
-                  <pre className="text-neutral-50 whitespace-pre-wrap">{output}</pre>
-                </div>
-              )}
-              {error !== null && (
-                <div className="flex flex-row gap-4 overflow-hidden">
-                  <span className="text-red-600">Error:</span>
-                  <pre className="text-red-500 whitespace-pre-wrap">{error}</pre>
-                </div>
-              )}
-            </div>
-            <div className="shrink-0 flex flex-row gap-4">
-              <button
-                className="px-4 py-2 bg-neutral-600 text-neutral-50 cursor-pointer hover:bg-neutral-500"
-                onClick={onClear}
-              >
-                Clear
-              </button>
-              <button
-                className="px-4 py-2 bg-amber-500 text-amber-950 cursor-pointer hover:bg-amber-400"
-                onClick={onRun}
-              >
-                Run
-              </button>
-            </div>
-          </div>
-        </section>
-      </main>
-      <footer className="flex flex-row justify-center py-2 px-4 border-t border-neutral-700">
-        <span className="text-neutral-600 text-sm">
-          🧱 &copy;{" "}
-          <a
-            href="https://github.com/samlaycock"
-            target="_blank"
-            rel="noreferrer"
-            className="hover:underline hover:underline-offset-4"
-          >
-            Samuel Laycock
-          </a>{" "}
-          {new Date().getFullYear()}
-        </span>
-      </footer>
-    </div>
-  );
-}
+import { DocsLayout } from "./components/docs-layout";
+import { Layout } from "./components/layout";
+import { ErrorsAPI } from "./pages/docs/api/errors";
+import { InterpreterAPI } from "./pages/docs/api/interpreter";
+import { ResourceTrackerAPI } from "./pages/docs/api/resource-tracker";
+import { AsyncExamples } from "./pages/docs/examples/async";
+import { BasicExamples } from "./pages/docs/examples/basic";
+import { PluginsExamples } from "./pages/docs/examples/plugins";
+import { Features } from "./pages/docs/features";
+import { Globals } from "./pages/docs/globals";
+import { Installation } from "./pages/docs/installation";
+import { Introduction } from "./pages/docs/introduction";
+import { Presets } from "./pages/docs/presets";
+import { QuickStart } from "./pages/docs/quick-start";
+import { Security } from "./pages/docs/security";
+import { Playground } from "./pages/playground";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Playground />} />
+          <Route path="/docs" element={<DocsLayout />}>
+            <Route index element={<Introduction />} />
+            <Route path="installation" element={<Installation />} />
+            <Route path="quick-start" element={<QuickStart />} />
+            <Route path="security" element={<Security />} />
+            <Route path="presets" element={<Presets />} />
+            <Route path="globals" element={<Globals />} />
+            <Route path="features" element={<Features />} />
+            <Route path="api/interpreter" element={<InterpreterAPI />} />
+            <Route path="api/errors" element={<ErrorsAPI />} />
+            <Route path="api/resource-tracker" element={<ResourceTrackerAPI />} />
+            <Route path="examples/basic" element={<BasicExamples />} />
+            <Route path="examples/async" element={<AsyncExamples />} />
+            <Route path="examples/plugins" element={<PluginsExamples />} />
+            <Route path="*" element={<Navigate to="/docs" replace />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   </StrictMode>,
 );
