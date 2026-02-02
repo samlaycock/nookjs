@@ -5,13 +5,18 @@ import { CodeBlock } from "../../../components/code-block";
 export function PluginsExamples() {
   return (
     <article className="prose prose-invert max-w-none">
-      <h1 className="text-3xl font-bold text-neutral-50 mb-4">Plugin Systems</h1>
+      <h1 className="text-3xl font-bold text-neutral-50 mb-4">
+        Plugin Systems
+      </h1>
       <p className="text-xl text-neutral-300 mb-8">
-        Build safe, extensible plugin systems that allow users to write custom logic.
+        Build safe, extensible plugin systems that allow users to write custom
+        logic.
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Basic Plugin Architecture</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Basic Plugin Architecture
+        </h2>
         <p className="text-neutral-300 mb-4">
           A simple plugin system where users can extend functionality:
         </p>
@@ -20,7 +25,6 @@ export function PluginsExamples() {
   Interpreter,
   ES2024,
   preset,
-  ResourceTracker,
   InterpreterError
 } from "nookjs";
 
@@ -39,22 +43,12 @@ interface PluginContext {
 class PluginManager {
   private plugins: Map<string, Plugin> = new Map();
   private interpreters: Map<string, Interpreter> = new Map();
-  private trackers: Map<string, ResourceTracker> = new Map();
 
   registerPlugin(plugin: Plugin) {
-    // Create resource tracker for this plugin
-    const tracker = new ResourceTracker({
-      limits: {
-        maxTotalMemory: 50 * 1024 * 1024, // 50 MB per plugin
-        maxEvaluations: 10000,
-        maxTotalIterations: 100000,
-      },
-    });
-
-    // Create isolated interpreter for this plugin
+    // Create isolated interpreter for this plugin with resource tracking
     const interpreter = new Interpreter(
       preset(ES2024, {
-        resourceTracker: tracker,
+        resourceTracking: true,
         globals: {
           // Plugin API
           log: (...args: unknown[]) =>
@@ -63,9 +57,13 @@ class PluginManager {
       })
     );
 
+    // Set resource limits for this plugin
+    interpreter.setResourceLimit("maxTotalMemory", 50 * 1024 * 1024); // 50 MB
+    interpreter.setResourceLimit("maxEvaluations", 10000);
+    interpreter.setResourceLimit("maxTotalIterations", 100000);
+
     this.plugins.set(plugin.id, plugin);
     this.interpreters.set(plugin.id, interpreter);
-    this.trackers.set(plugin.id, tracker);
   }
 
   async executePlugin(pluginId: string, context: PluginContext) {
@@ -90,7 +88,7 @@ class PluginManager {
   }
 
   getPluginStats(pluginId: string) {
-    return this.trackers.get(pluginId)?.getStats();
+    return this.interpreters.get(pluginId)?.getResourceStats();
   }
 }
 
@@ -135,8 +133,12 @@ console.log(result); // { discount: 0.25, finalPrice: 150 }`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Event-Based Plugin System</h2>
-        <p className="text-neutral-300 mb-4">Let plugins hook into application events:</p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Event-Based Plugin System
+        </h2>
+        <p className="text-neutral-300 mb-4">
+          Let plugins hook into application events:
+        </p>
         <CodeBlock
           code={`import { Interpreter, ES2024, preset, ResourceTracker } from "nookjs";
 
@@ -251,7 +253,9 @@ await events.emit("order.created", {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Middleware Pipeline</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Middleware Pipeline
+        </h2>
         <p className="text-neutral-300 mb-4">
           Create a middleware system where plugins can transform data:
         </p>
@@ -368,17 +372,18 @@ console.log(result.metadata);
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Plugin Marketplace Pattern</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Plugin Marketplace Pattern
+        </h2>
         <p className="text-neutral-300 mb-4">
-          A complete plugin system with installation, versioning, and sandboxing:
+          A complete plugin system with installation, versioning, and
+          sandboxing:
         </p>
         <CodeBlock
           code={`import {
   Interpreter,
   ES2024,
   preset,
-  ResourceTracker,
-  ResourceExhaustedError,
   InterpreterError
 } from "nookjs";
 
@@ -405,29 +410,20 @@ interface PluginAPI {
 
 class PluginRuntime {
   private plugins: Map<string, InstalledPlugin> = new Map();
-  private runtimes: Map<string, { interpreter: Interpreter; tracker: ResourceTracker }> = new Map();
+  private interpreters: Map<string, Interpreter> = new Map();
   private storage: Map<string, Map<string, unknown>> = new Map();
 
   install(plugin: InstalledPlugin) {
     // Create isolated storage for plugin
     this.storage.set(plugin.id, new Map());
 
-    // Create resource tracker
-    const tracker = new ResourceTracker({
-      limits: {
-        maxTotalMemory: 100 * 1024 * 1024,
-        maxEvaluations: 50000,
-        maxCpuTime: 60000, // 1 minute cumulative
-      },
-    });
-
     // Build API based on permissions
     const api = this.buildAPI(plugin);
 
-    // Create interpreter
+    // Create interpreter with resource tracking
     const interpreter = new Interpreter(
       preset(ES2024, {
-        resourceTracker: tracker,
+        resourceTracking: true,
         globals: {
           ...api,
           config: plugin.config,
@@ -437,8 +433,13 @@ class PluginRuntime {
       })
     );
 
+    // Set resource limits
+    interpreter.setResourceLimit("maxTotalMemory", 100 * 1024 * 1024);
+    interpreter.setResourceLimit("maxEvaluations", 50000);
+    interpreter.setResourceLimit("maxCpuTime", 60000); // 1 minute cumulative
+
     this.plugins.set(plugin.id, plugin);
-    this.runtimes.set(plugin.id, { interpreter, tracker });
+    this.interpreters.set(plugin.id, interpreter);
   }
 
   private buildAPI(plugin: InstalledPlugin): Partial<PluginAPI> {
@@ -481,15 +482,8 @@ class PluginRuntime {
   }
 
   async run(pluginId: string, method: string, args: unknown[] = []) {
-    const runtime = this.runtimes.get(pluginId);
-    if (!runtime) throw new Error(\`Plugin \${pluginId} not installed\`);
-
-    const { interpreter, tracker } = runtime;
-
-    // Check if resources exhausted
-    if (tracker.isExhausted()) {
-      throw new Error(\`Plugin \${pluginId} has exceeded resource limits\`);
-    }
+    const interpreter = this.interpreters.get(pluginId);
+    if (!interpreter) throw new Error(\`Plugin \${pluginId} not installed\`);
 
     try {
       return await interpreter.evaluateAsync(
@@ -497,20 +491,20 @@ class PluginRuntime {
         { globals: { args } }
       );
     } catch (error) {
-      if (error instanceof ResourceExhaustedError) {
-        console.error(\`Plugin \${pluginId} exceeded \${error.resourceType} limit\`);
+      if (error instanceof InterpreterError) {
+        console.error(\`Plugin \${pluginId} error:\`, error.message);
       }
       throw error;
     }
   }
 
   getStats(pluginId: string) {
-    return this.runtimes.get(pluginId)?.tracker.getStats();
+    return this.interpreters.get(pluginId)?.getResourceStats();
   }
 
   uninstall(pluginId: string) {
     this.plugins.delete(pluginId);
-    this.runtimes.delete(pluginId);
+    this.interpreters.delete(pluginId);
     this.storage.delete(pluginId);
   }
 }
@@ -560,15 +554,17 @@ console.log(runtime.getStats("analytics-tracker"));`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Best Practices</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Best Practices
+        </h2>
         <div className="space-y-4">
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
             <h3 className="text-lg font-medium text-neutral-100 mb-2">
-              1. Always use ResourceTracker
+              1. Always enable resource tracking
             </h3>
             <p className="text-neutral-400 text-sm">
-              Each plugin should have its own ResourceTracker to prevent any single plugin from
-              consuming all resources.
+              Each plugin should have its own interpreter with resource tracking
+              enabled to prevent any single plugin from consuming all resources.
             </p>
           </div>
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
@@ -576,22 +572,26 @@ console.log(runtime.getStats("analytics-tracker"));`}
               2. Implement permission systems
             </h3>
             <p className="text-neutral-400 text-sm">
-              Only expose APIs that the plugin explicitly needs. Use a permission-based system to
-              control access.
+              Only expose APIs that the plugin explicitly needs. Use a
+              permission-based system to control access.
             </p>
           </div>
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">3. Validate all inputs</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              3. Validate all inputs
+            </h3>
             <p className="text-neutral-400 text-sm">
-              APIs exposed to plugins should validate all arguments and sanitize outputs before
-              they're used by the host application.
+              APIs exposed to plugins should validate all arguments and sanitize
+              outputs before they're used by the host application.
             </p>
           </div>
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">4. Isolate plugin storage</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              4. Isolate plugin storage
+            </h3>
             <p className="text-neutral-400 text-sm">
-              Each plugin should have its own isolated storage space that cannot be accessed by
-              other plugins.
+              Each plugin should have its own isolated storage space that cannot
+              be accessed by other plugins.
             </p>
           </div>
         </div>
@@ -604,7 +604,10 @@ console.log(runtime.getStats("analytics-tracker"));`}
         >
           &larr; Async Operations
         </Link>
-        <Link to="/" className="text-amber-500 hover:text-amber-400 transition-colors">
+        <Link
+          to="/"
+          className="text-amber-500 hover:text-amber-400 transition-colors"
+        >
           Try the Playground &rarr;
         </Link>
       </div>

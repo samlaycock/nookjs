@@ -104,7 +104,7 @@ export function DocsLayout() {
 
       {/* Mobile menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden absolute top-[120px] left-0 right-0 bg-neutral-950 border-b border-neutral-800 p-4 z-50 max-h-[calc(100vh-120px)] overflow-y-auto">
+        <div className="md:hidden absolute top-30 left-0 right-0 bg-neutral-950 border-b border-neutral-800 p-4 z-50 max-h-[calc(100vh-120px)] overflow-y-auto">
           {navContent}
         </div>
       )}

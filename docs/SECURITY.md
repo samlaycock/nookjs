@@ -274,13 +274,13 @@ interpreter.evaluate(code, {
 
 ## Resource Attribution for Multi-Tenant Environments
 
-The interpreter provides a `ResourceTracker` class for monitoring cumulative resource usage across multiple evaluations. This is essential for multi-tenant environments where multiple untrusted code snippets execute concurrently.
+The interpreter provides integrated resource tracking for monitoring cumulative resource usage across multiple evaluations. This is essential for multi-tenant environments where multiple untrusted code snippets execute concurrently.
 
 ### Overview
 
-The `ResourceTracker` enables:
+Integrated resource tracking enables:
 
-1. **Aggregate resource usage** across multiple evaluations in the same sandbox instance
+1. **Aggregate resource usage** across multiple evaluations in the same interpreter instance
 2. **Track cumulative costs** for billing, rate-limiting, or fairness in multi-tenant scenarios
 3. **Detect resource exhaustion patterns** that might indicate malicious or runaway code
 4. **Expose runtime statistics** to host applications for monitoring dashboards
@@ -288,31 +288,32 @@ The `ResourceTracker` enables:
 ### Quick Start
 
 ```typescript
-import { Interpreter, ResourceTracker } from "nookjs";
+import { Interpreter, ResourceExhaustedError } from "nookjs";
 
-// Create a tracker with limits
-const tracker = new ResourceTracker({
-  limits: {
-    maxTotalMemory: 100 * 1024 * 1024, // 100 MB cumulative
-    maxTotalIterations: 1000000, // 1M total loop iterations
-    maxFunctionCalls: 10000, // 10K function calls
-    maxCpuTime: 30000, // 30 seconds cumulative CPU
-    maxEvaluations: 100, // 100 evaluations
-  },
-});
-
-// Create interpreter with tracker
+// Create interpreter with resource tracking enabled
 const interpreter = new Interpreter({
   globals: { console },
-  resourceTracker: tracker,
+  resourceTracking: true,
 });
 
+// Set cumulative limits
+interpreter.setResourceLimit("maxTotalMemory", 100 * 1024 * 1024); // 100 MB
+interpreter.setResourceLimit("maxTotalIterations", 1000000); // 1M iterations
+interpreter.setResourceLimit("maxFunctionCalls", 10000); // 10K calls
+interpreter.setResourceLimit("maxEvaluations", 100); // 100 evaluations
+
 // Run code
-interpreter.evaluate("const arr = Array(1000).fill(0).map((_, i) => i)");
-interpreter.evaluate("for (let i = 0; i < 10000; i++) { }");
+try {
+  interpreter.evaluate("const arr = Array(1000).fill(0).map((_, i) => i)");
+  interpreter.evaluate("for (let i = 0; i < 10000; i++) { }");
+} catch (error) {
+  if (error instanceof ResourceExhaustedError) {
+    console.log(`Resource limit exceeded: ${error.resourceType}`);
+  }
+}
 
 // Get current stats
-const stats = tracker.getStats();
+const stats = interpreter.getResourceStats();
 console.log(stats);
 /*
 {
@@ -333,23 +334,19 @@ console.log(stats);
 */
 ```
 
-### API Reference
+### Interpreter Resource Methods
 
-#### ResourceTracker
+When `resourceTracking: true` is set, the Interpreter exposes these methods:
 
-```typescript
-new ResourceTracker(options?: {
-  limits?: ResourceLimits;
-  historySize?: number;  // Default: 100
-})
-```
+| Method                       | Description                         |
+| ---------------------------- | ----------------------------------- |
+| `getResourceStats()`         | Returns current resource statistics |
+| `resetResourceStats()`       | Clears all statistics and history   |
+| `getResourceHistory()`       | Returns array of past eval stats    |
+| `setResourceLimit(key, val)` | Sets a cumulative limit             |
+| `getResourceLimit(key)`      | Gets a specific limit value         |
 
-**Options:**
-
-- `limits` - Object defining cumulative resource limits
-- `historySize` - Number of past evaluations to track (0 to disable)
-
-#### ResourceLimits
+### ResourceLimits
 
 ```typescript
 type ResourceLimits = {
@@ -361,7 +358,7 @@ type ResourceLimits = {
 };
 ```
 
-#### ResourceStats
+### ResourceStats
 
 ```typescript
 type ResourceStats = {
@@ -372,7 +369,6 @@ type ResourceStats = {
   evaluations: number; // number of evaluations
   peakMemoryBytes: number; // highest memory seen
   largestEvaluation: {
-    // stats for single heaviest evaluation
     memory: number;
     iterations: number;
   };
@@ -387,27 +383,20 @@ type ResourceStats = {
 };
 ```
 
-### Methods
-
-| Method                 | Description                                     |
-| ---------------------- | ----------------------------------------------- |
-| `getStats()`           | Returns current resource statistics             |
-| `isExhausted()`        | Returns true if any limit is exceeded           |
-| `getExhaustedLimit()`  | Returns the key of the exhausted limit, or null |
-| `reset()`              | Clears all statistics and history               |
-| `getHistory()`         | Returns array of past evaluation stats          |
-| `getLimit(key)`        | Gets a specific limit value                     |
-| `setLimit(key, value)` | Sets or updates a limit                         |
-
 ### Error Handling
 
 When a limit is exceeded, a `ResourceExhaustedError` is thrown:
 
 ```typescript
-import { ResourceExhaustedError } from "nookjs";
+import { Interpreter, ResourceExhaustedError } from "nookjs";
+
+const interpreter = new Interpreter({ resourceTracking: true });
+interpreter.setResourceLimit("maxEvaluations", 5);
 
 try {
-  interpreter.evaluate(code);
+  for (let i = 0; i < 10; i++) {
+    interpreter.evaluate("1 + 1");
+  }
 } catch (error) {
   if (error instanceof ResourceExhaustedError) {
     console.log(`Resource limit exceeded: ${error.resourceType}`);
@@ -423,20 +412,20 @@ try {
 Track resource usage per plugin to enforce fair allocation:
 
 ```typescript
-const plugin1Tracker = new ResourceTracker({ limits: { maxTotalMemory: 50 * 1024 * 1024 } });
-const plugin2Tracker = new ResourceTracker({ limits: { maxTotalMemory: 50 * 1024 * 1024 } });
+function createPluginInterpreter(pluginId: string, memoryLimit: number) {
+  const interpreter = new Interpreter({
+    resourceTracking: true,
+    globals: getPluginGlobals(pluginId),
+  });
+  interpreter.setResourceLimit("maxTotalMemory", memoryLimit);
+  return interpreter;
+}
 
-const plugin1Interpreter = new Interpreter({
-  resourceTracker: plugin1Tracker,
-  globals: plugin1Globals,
-});
-const plugin2Interpreter = new Interpreter({
-  resourceTracker: plugin2Tracker,
-  globals: plugin2Globals,
-});
+const plugin1 = createPluginInterpreter("plugin1", 50 * 1024 * 1024);
+const plugin2 = createPluginInterpreter("plugin2", 50 * 1024 * 1024);
 
-// Run plugin code...
-const stats = plugin1Tracker.getStats();
+plugin1.evaluate(plugin1Code);
+const stats = plugin1.getResourceStats();
 if (stats.memoryBytes > 40 * 1024 * 1024) {
   console.log("Plugin1 approaching memory limit");
 }
@@ -447,15 +436,10 @@ if (stats.memoryBytes > 40 * 1024 * 1024) {
 Monitor student code for excessive resource consumption:
 
 ```typescript
-const studentTracker = new ResourceTracker({
-  limits: {
-    maxEvaluations: 50, // Limit submissions
-    maxTotalIterations: 100000, // Prevent infinite loops
-    maxCpuTime: 5000, // 5 seconds CPU time
-  },
-});
-
-const studentInterpreter = new Interpreter({ resourceTracker: studentTracker });
+const studentInterpreter = new Interpreter({ resourceTracking: true });
+studentInterpreter.setResourceLimit("maxEvaluations", 50);
+studentInterpreter.setResourceLimit("maxTotalIterations", 100000);
+studentInterpreter.setResourceLimit("maxCpuTime", 5000);
 
 // Allow multiple submissions
 for (const code of studentSubmissions) {
@@ -465,19 +449,16 @@ for (const code of studentSubmissions) {
 
 #### Rate Limiting
 
-Implement token-bucket style limits across multiple evaluations:
+Implement evaluation-count-based rate limiting:
 
 ```typescript
-const tracker = new ResourceTracker({
-  limits: {
-    maxEvaluations: 1000, // 1000 evaluations per window
-  },
-});
+const interpreter = new Interpreter({ resourceTracking: true });
+interpreter.setResourceLimit("maxEvaluations", 1000);
 
 // Reset at the start of each billing cycle
 setInterval(
   () => {
-    tracker.reset();
+    interpreter.resetResourceStats();
   },
   24 * 60 * 60 * 1000,
 ); // Daily reset
@@ -485,28 +466,28 @@ setInterval(
 
 ### History Tracking
 
-The tracker maintains a history of past evaluations for analytics:
+The interpreter maintains a history of past evaluations for analytics:
 
 ```typescript
-const tracker = new ResourceTracker({ historySize: 50 });
+const interpreter = new Interpreter({ resourceTracking: true });
 
 interpreter.evaluate(code1);
 interpreter.evaluate(code2);
 
-const history = tracker.getHistory();
+const history = interpreter.getResourceHistory();
 // [{ timestamp: Date, memoryBytes: 1234, iterations: 500, functionCalls: 5, evaluationNumber: 1 }, ...]
 ```
 
 ### Performance Considerations
 
 - **Minimal overhead:** Resource tracking adds negligible performance cost
-- **Bounded history:** The history buffer is capped at the specified size (default: 100)
-- **Optional:** Disable by not passing a `ResourceTracker` to the Interpreter constructor
-- **CPU time is best-effort:** JavaScript doesn't expose precise CPU time; wall-clock time is used as an approximation
+- **Bounded history:** The history buffer is capped (default: 100 entries)
+- **Optional:** Only enabled when `resourceTracking: true` is set
+- **CPU time is best-effort:** JavaScript doesn't expose precise CPU time; wall-clock time is used
 
 ### Comparison: Per-Evaluation vs Cumulative Limits
 
-| Feature         | Per-Evaluation                | Cumulative (ResourceTracker)     |
+| Feature         | Per-Evaluation                | Cumulative (resourceTracking)    |
 | --------------- | ----------------------------- | -------------------------------- |
 | Scope           | Single `evaluate()` call      | Across multiple calls            |
 | Memory          | `maxMemory`                   | `maxTotalMemory`                 |

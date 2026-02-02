@@ -9,7 +9,7 @@ A fast, secure JavaScript/TypeScript interpreter written in TypeScript. Execute 
 
 NookJS is a JavaScript interpreter designed for safely executing untrusted code in a sandboxed environment. It parses and evaluates a subset of JavaScript (with TypeScript-style type annotations stripped) while providing strong security guarantees through:
 
-- **Sandbox Isolation**: Complete isolation from the host environment with no access to `eval`, `Function`, `globalThis`, or native prototypes
+- **Sandbox Isolation**: Complete isolation from the host environment with no access to `eval`, `Function`, or native prototypes
 - **Feature Control**: Fine-grained whitelisting of language features (ES5 through ES2024 presets)
 - **Global Injection**: Safe injection of host functions and data with property access protection
 - **Zero Dependencies**: Custom AST parser with no runtime dependencies
@@ -73,7 +73,6 @@ obj.__lookupSetter__;
 
 eval("dangerous()"); // No eval access
 Function("return x"); // No Function constructor
-globalThis.someVar; // No host globals
 require("fs"); // No Node.js modules
 ```
 
@@ -83,7 +82,8 @@ Sandboxed code has access only to:
 
 - Variables it declares itself
 - Injected globals you explicitly provide
-- Math operations, string/array methods you enable
+- Built-in values: `undefined`, `NaN`, `Infinity`, `Symbol`, `Promise`
+- `globalThis`/`global` (references the sandbox's scope, not the host)
 - Control flow (if, for, while, etc.)
 
 ```typescript
@@ -315,6 +315,13 @@ interface InterpreterOptions {
   globals?: Record<string, unknown>;
   featureControl?: FeatureControl;
   validator?: (ast: Program) => boolean;
+  security?: SecurityOptions;
+  resourceTracking?: boolean; // Enable integrated resource tracking
+}
+
+interface SecurityOptions {
+  sanitizeErrors?: boolean; // Remove host paths from stack traces (default: true)
+  hideHostErrorMessages?: boolean; // Hide host function error details (default: true)
 }
 ```
 
@@ -328,6 +335,10 @@ evaluate(code: string, options?: EvaluateOptions): unknown
 interface EvaluateOptions {
   globals?: Record<string, unknown>;
   validator?: (ast: Program) => boolean;
+  featureControl?: FeatureControl;
+  maxCallStackDepth?: number; // Max recursion depth
+  maxLoopIterations?: number; // Max iterations per loop
+  maxMemory?: number; // Max memory in bytes (best-effort)
 }
 ```
 
@@ -337,6 +348,22 @@ Asynchronously evaluates JavaScript code.
 
 ```typescript
 evaluateAsync(code: string, options?: EvaluateOptions): Promise<unknown>
+
+// EvaluateOptions for async also includes:
+interface AsyncEvaluateOptions extends EvaluateOptions {
+  signal?: AbortSignal; // For cancellation
+}
+```
+
+### Resource Tracking Methods
+
+When `resourceTracking: true` is set in constructor options:
+
+```typescript
+interpreter.getResourceStats(); // Get current resource usage
+interpreter.resetResourceStats(); // Reset counters
+interpreter.getResourceHistory(); // Get history of all evaluations
+interpreter.setResourceLimit(type, value); // Set a resource limit
 ```
 
 ## Contributing
