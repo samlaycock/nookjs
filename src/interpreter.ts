@@ -27,6 +27,12 @@ import {
   unwrapForNative,
 } from "./readonly-proxy";
 import { ResourceExhaustedError } from "./resource-tracker";
+import type { ModuleOptions, ModuleResolver, ModuleSource, ModuleRecord } from "./modules";
+import {
+  ModuleSystem,
+  DEFAULT_MODULE_OPTIONS,
+  isModuleStatement,
+} from "./modules";
 
 type ASTNode = ESTree.Node;
 
@@ -2210,6 +2216,11 @@ export type InterpreterOptions = {
    * Default: false
    */
   resourceTracking?: boolean;
+  /**
+   * Module system options for ES module support
+   * When enabled, allows import/export statements with a custom resolver
+   */
+  modules?: ModuleOptions;
 };
 
 export type EvaluateOptions = {
@@ -2453,6 +2464,8 @@ export class Interpreter {
   private integratedLargestEvaluationIterations = 0;
   private integratedExhaustedLimit: keyof ResourceLimits | null = null;
 
+  private moduleSystem: ModuleSystem | null = null;
+
   constructor(options?: InterpreterOptions) {
     this.environment = new Environment();
     this.constructorGlobals = options?.globals || {};
@@ -2470,6 +2483,11 @@ export class Interpreter {
 
     // Configure ReadOnlyProxy with security options
     setSecurityOptions(this.securityOptions);
+
+    // Initialize module system if provided
+    if (options?.modules) {
+      this.moduleSystem = new ModuleSystem(options.modules);
+    }
 
     // Inject built-in globals that should always be available
     this.injectBuiltinGlobals();
@@ -3339,6 +3357,227 @@ export class Interpreter {
       }
     }
     return error;
+  }
+
+  /**
+   * Evaluate code as an ES module with custom resolver support.
+   * Requires modules option to be enabled with a resolver.
+   *
+   * @param code - The JavaScript module code to evaluate
+   * @param options - Evaluation options including path for module resolution
+   * @returns The module's exported values
+   * @throws Error if module system is not enabled
+   */
+  async evaluateModuleAsync(
+    code: string,
+    options: { path: string },
+  ): Promise<Record<string, any>> {
+    if (!this.moduleSystem) {
+      throw new InterpreterError(
+        "Module system is not enabled. Create Interpreter with { modules: { enabled: true, resolver: ... } }.",
+      );
+    }
+
+    const ast = parseModule(code, { next: true });
+    return this.evaluateModuleAstAsync(ast, options.path);
+  }
+
+  /**
+   * Evaluate a parsed AST as an ES module.
+   *
+   * @param ast - The parsed module AST
+   * @param path - The module path (for resolver)
+   * @returns The module's exported values
+   */
+  async evaluateModuleAstAsync(
+    ast: ESTree.Program,
+    path: string,
+  ): Promise<Record<string, any>> {
+    if (!this.moduleSystem) {
+      throw new InterpreterError("Module system is not enabled");
+    }
+
+    const exports: Record<string, any> = {};
+    const moduleEnv = new Environment(this.environment);
+
+    for (const statement of ast.body) {
+      if (statement.type === "ImportDeclaration") {
+        await this.evaluateImportDeclaration(statement, moduleEnv, path);
+      } else if (statement.type === "ExportNamedDeclaration") {
+        await this.evaluateExportNamedDeclaration(statement, moduleEnv, exports, path);
+      } else if (statement.type === "ExportDefaultDeclaration") {
+        await this.evaluateExportDefaultDeclaration(statement, moduleEnv, exports);
+      } else if (statement.type === "ExportAllDeclaration") {
+        await this.evaluateExportAllDeclaration(statement, moduleEnv, path);
+      } else {
+        const prevEnv = this.environment;
+        this.environment = moduleEnv;
+        try {
+          await this.evaluateNodeAsync(statement);
+        } finally {
+          this.environment = prevEnv;
+        }
+      }
+    }
+
+    return ReadOnlyProxy.wrap(exports, "module.exports");
+  }
+
+  private async evaluateImportDeclaration(
+    node: ESTree.ImportDeclaration,
+    moduleEnv: Environment,
+    importerPath: string,
+  ): Promise<void> {
+    if (!this.moduleSystem) {
+      throw new InterpreterError("Module system is not enabled");
+    }
+
+    const specifier = (node.source as ESTree.Literal).value as string;
+    const moduleRecord = await this.moduleSystem.resolveModule(specifier, importerPath);
+
+    if (!moduleRecord) {
+      throw new InterpreterError(`Cannot find module '${specifier}'`);
+    }
+
+    const importedExports = moduleRecord.exports;
+
+    for (const spec of node.specifiers) {
+      if (spec.type === "ImportNamespaceSpecifier") {
+        moduleEnv.declare(spec.local.name, ReadOnlyProxy.wrap(importedExports, spec.local.name), "const");
+      } else if (spec.type === "ImportDefaultSpecifier") {
+        moduleEnv.declare(
+          spec.local.name,
+          ReadOnlyProxy.wrap(importedExports.default ?? undefined, spec.local.name),
+          "const",
+        );
+      } else {
+        moduleEnv.declare(
+          spec.local.name,
+          ReadOnlyProxy.wrap(importedExports[spec.imported.name] ?? undefined, spec.local.name),
+          "const",
+        );
+      }
+    }
+  }
+
+  private async evaluateExportNamedDeclaration(
+    node: ESTree.ExportNamedDeclaration,
+    moduleEnv: Environment,
+    exports: Record<string, any>,
+    currentPath: string,
+  ): Promise<void> {
+    if (node.declaration) {
+      const prevEnv = this.environment;
+      this.environment = moduleEnv;
+      try {
+        if (node.declaration.type === "VariableDeclaration") {
+          await this.evaluateVariableDeclarationAsync(node.declaration);
+          for (const declarator of node.declaration.declarations) {
+            if (declarator.id.type === "Identifier") {
+              const value = moduleEnv.get(declarator.id.name);
+              exports[declarator.id.name] = value;
+            }
+          }
+        } else if (node.declaration.type === "FunctionDeclaration") {
+          this.evaluateFunctionDeclaration(node.declaration);
+          if (node.declaration.id && node.declaration.id.type === "Identifier") {
+            exports[node.declaration.id.name] = moduleEnv.get(node.declaration.id.name);
+          }
+        } else if (node.declaration.type === "ClassDeclaration") {
+          await this.evaluateClassDeclarationAsync(node.declaration);
+          if (node.declaration.id && node.declaration.id.type === "Identifier") {
+            exports[node.declaration.id.name] = moduleEnv.get(node.declaration.id.name);
+          }
+        }
+      } finally {
+        this.environment = prevEnv;
+      }
+    }
+
+    if (node.specifiers) {
+      for (const spec of node.specifiers) {
+        if (spec.type === "ExportSpecifier") {
+          const value = moduleEnv.get(spec.local.name);
+          exports[spec.exported.name] = value;
+        } else if (spec.type === "ExportDefaultSpecifier") {
+          exports[spec.exported.name] = moduleEnv.get(spec.exported.name);
+        }
+      }
+    }
+  }
+
+  private async evaluateExportDefaultDeclaration(
+    node: ESTree.ExportDefaultDeclaration,
+    moduleEnv: Environment,
+    exports: Record<string, any>,
+  ): Promise<void> {
+    const prevEnv = this.environment;
+    this.environment = moduleEnv;
+    try {
+      if (node.declaration) {
+        if (node.declaration.type === "FunctionDeclaration") {
+          const func = this.evaluateFunctionDeclaration(node.declaration as ESTree.FunctionDeclaration);
+          exports.default = func;
+        } else if (node.declaration.type === "ClassDeclaration") {
+          const cls = await this.evaluateClassDeclarationAsync(node.declaration as ESTree.ClassDeclaration);
+          exports.default = cls;
+        } else if (node.declaration.type === "VariableDeclaration") {
+          await this.evaluateVariableDeclarationAsync(node.declaration);
+          for (const declarator of node.declaration.declarations) {
+            if (declarator.id.type === "Identifier" && declarator.init) {
+              exports.default = moduleEnv.get(declarator.id.name);
+            }
+          }
+        }
+      }
+    } finally {
+      this.environment = prevEnv;
+    }
+  }
+
+  private async evaluateExportAllDeclaration(
+    node: ESTree.ExportAllDeclaration,
+    moduleEnv: Environment,
+    currentPath: string,
+  ): Promise<void> {
+    if (!this.moduleSystem) {
+      throw new InterpreterError("Module system is not enabled");
+    }
+
+    const specifier = (node.source as ESTree.Literal).value as string;
+    const moduleRecord = await this.moduleSystem.resolveModule(specifier, currentPath);
+
+    if (!moduleRecord) {
+      throw new InterpreterError(`Cannot find module '${specifier}'`);
+    }
+
+    for (const [key, value] of Object.entries(moduleRecord.exports)) {
+      moduleEnv.declare(key, value, "const");
+    }
+  }
+
+  /**
+   * Get the exports of a previously loaded module.
+   *
+   * @param path - The module path
+   * @returns The module's exports, or undefined if not found
+   */
+  getModuleExports(path: string): Record<string, any> | undefined {
+    return this.moduleSystem?.getModuleExports(path);
+  }
+
+  /**
+   * Clear the module cache.
+   */
+  clearModuleCache(): void {
+    this.moduleSystem?.clearCache();
+  }
+
+  /**
+   * Check if the module system is enabled.
+   */
+  isModuleSystemEnabled(): boolean {
+    return this.moduleSystem?.isEnabled() ?? false;
   }
 
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.

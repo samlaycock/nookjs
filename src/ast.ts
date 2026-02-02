@@ -46,7 +46,11 @@ export namespace ESTree {
     | ThrowStatement
     | TryStatement
     | ClassDeclaration
-    | LabeledStatement;
+    | LabeledStatement
+    | ImportDeclaration
+    | ExportAllDeclaration
+    | ExportNamedDeclaration
+    | ExportDefaultDeclaration;
 
   export type Expression =
     | Identifier
@@ -442,6 +446,64 @@ export namespace ESTree {
     readonly type: "SpreadElement";
     readonly argument: Expression;
   }
+
+  export interface ImportDeclaration extends Node {
+    readonly type: "ImportDeclaration";
+    readonly source: Literal;
+    readonly specifiers: ImportSpecifier[];
+  }
+
+  export type ImportSpecifier =
+    | NamedImportSpecifier
+    | DefaultImportSpecifier
+    | NamespaceImportSpecifier;
+
+  export interface NamedImportSpecifier extends Node {
+    readonly type: "ImportSpecifier";
+    readonly local: Identifier;
+    readonly imported: Identifier;
+  }
+
+  export interface DefaultImportSpecifier extends Node {
+    readonly type: "ImportDefaultSpecifier";
+    readonly local: Identifier;
+  }
+
+  export interface NamespaceImportSpecifier extends Node {
+    readonly type: "ImportNamespaceSpecifier";
+    readonly local: Identifier;
+  }
+
+  export interface ExportNamedDeclaration extends Node {
+    readonly type: "ExportNamedDeclaration";
+    readonly source?: Literal;
+    readonly specifiers?: ExportSpecifier[];
+    readonly declaration?: FunctionDeclaration | ClassDeclaration | VariableDeclaration;
+  }
+
+  export interface ExportDefaultDeclaration extends Node {
+    readonly type: "ExportDefaultDeclaration";
+    readonly source?: Literal;
+    readonly declaration?: FunctionDeclaration | ClassDeclaration | VariableDeclaration | Expression;
+  }
+
+  export interface ExportAllDeclaration extends Node {
+    readonly type: "ExportAllDeclaration";
+    readonly source: Literal;
+  }
+
+  export type ExportSpecifier = NamedExportSpecifier | DefaultExportSpecifier;
+
+  export interface NamedExportSpecifier extends Node {
+    readonly type: "ExportSpecifier";
+    readonly local: Identifier;
+    readonly exported: Identifier;
+  }
+
+  export interface DefaultExportSpecifier extends Node {
+    readonly type: "ExportDefaultSpecifier";
+    readonly exported: Identifier;
+  }
 }
 
 // Numeric token kinds to avoid per-token object allocations.
@@ -498,6 +560,8 @@ const isKeyword = (value: string): boolean => {
     case "null":
     case "typeof":
     case "void":
+    case "import":
+    case "export":
       return true;
     default:
       return false;
@@ -1542,6 +1606,12 @@ class Parser {
             result = this.parseFunctionDeclaration();
           }
           break;
+        case "import":
+          result = this.parseImportDeclaration();
+          break;
+        case "export":
+          result = this.parseExportDeclaration();
+          break;
       }
     }
     if (result === null) {
@@ -2215,6 +2285,364 @@ class Parser {
       async: asyncFlag,
       generator,
     };
+  }
+
+  private parseImportDeclaration(): ESTree.ImportDeclaration {
+    this.expectKeyword("import");
+
+    if (this.currentType === TOKEN.String || this.currentType === TOKEN.Number) {
+      throw new ParseError("Module source must be a string literal");
+    }
+
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "{") {
+      return this.parseNamedImportDeclaration();
+    }
+
+    if (this.currentType === TOKEN.Identifier) {
+      const specifier = this.parseImportSpecifier();
+      if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
+        return this.parseNamedImportDeclarationWithDefault(specifier);
+      }
+      this.expectPunctuator(";");
+      const source = this.parseImportSource();
+      return {
+        type: "ImportDeclaration",
+        source,
+        specifiers: [specifier],
+      };
+    }
+
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "*") {
+      return this.parseNamespaceImportDeclaration();
+    }
+
+    throw new ParseError("Invalid import declaration");
+  }
+
+  private parseImportSpecifier(): ESTree.ImportSpecifier | ESTree.ImportDefaultSpecifier {
+    const local = this.parseIdentifier();
+
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
+      return { type: "ImportDefaultSpecifier", local };
+    }
+
+    return { type: "ImportSpecifier", local, imported: local };
+  }
+
+  private parseNamedImportDeclarationWithDefault(
+    defaultSpec: ESTree.ImportSpecifier | ESTree.ImportDefaultSpecifier,
+  ): ESTree.ImportDeclaration {
+    this.expectPunctuator(",");
+    return this.parseNamedImportDeclaration([defaultSpec]);
+  }
+
+  private parseNamedImportDeclaration(
+    specifiers: (ESTree.ImportSpecifier | ESTree.ImportDefaultSpecifier)[] = [],
+  ): ESTree.ImportDeclaration {
+    this.expectPunctuator("{");
+    while (this.currentType !== TOKEN.Punctuator || this.currentValue !== "}") {
+      specifiers.push(this.parseImportSpecifier());
+      if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
+        this.next();
+        continue;
+      }
+      break;
+    }
+    this.expectPunctuator("}");
+    this.expectPunctuator(";");
+    const source = this.parseImportSource();
+    return {
+      type: "ImportDeclaration",
+      source,
+      specifiers,
+    };
+  }
+
+  private parseNamespaceImportDeclaration(): ESTree.ImportDeclaration {
+    this.expectPunctuator("*");
+    this.expectKeyword("as");
+    const local = this.parseIdentifier();
+    this.expectPunctuator(";");
+    const source = this.parseImportSource();
+    return {
+      type: "ImportDeclaration",
+      source,
+      specifiers: [{ type: "ImportNamespaceSpecifier", local }],
+    };
+  }
+
+  private parseImportSource(): ESTree.Literal {
+    if (this.currentType !== TOKEN.Keyword || this.currentValue !== "from") {
+      throw new ParseError("Expected 'from' after import specifiers");
+    }
+    this.next();
+    if (this.currentType !== TOKEN.String) {
+      throw new ParseError("Module specifier must be a string literal");
+    }
+    const source = this.parseLiteral();
+    this.consumeSemicolon();
+    return source;
+  }
+
+  private parseLiteral(): ESTree.Literal {
+    const value = this.currentValue;
+    this.next();
+    return { type: "Literal", value };
+  }
+
+  private parseExportDeclaration(): ESTree.ExportNamedDeclaration | ESTree.ExportDefaultDeclaration | ESTree.ExportAllDeclaration {
+    this.expectKeyword("export");
+
+    if (this.currentType === TOKEN.Keyword) {
+      if (this.currentValue === "default") {
+        return this.parseExportDefaultDeclaration();
+      }
+    }
+
+    if (this.currentType === TOKEN.Punctuator) {
+      if (this.currentValue === "*") {
+        return this.parseExportAllDeclaration();
+      }
+      if (this.currentValue === "{") {
+        return this.parseExportNamedDeclaration();
+      }
+    }
+
+    if (this.currentType === TOKEN.Keyword) {
+      switch (this.currentValue) {
+        case "async":
+          if (this.tokenizer.peekType() === TOKEN.Keyword && this.tokenizer.peekValue() === "function") {
+            return this.parseExportFunctionDeclaration();
+          }
+          break;
+        case "function":
+          return this.parseExportFunctionDeclaration();
+        case "class":
+          return this.parseExportClassDeclaration();
+        case "const":
+        case "let":
+        case "var":
+          return this.parseExportVariableDeclaration();
+      }
+    }
+
+    if (this.currentType === TOKEN.Identifier) {
+      return this.parseExportVariableOrFunction();
+    }
+
+    throw new ParseError("Invalid export declaration");
+  }
+
+  private parseExportNamedDeclaration(): ESTree.ExportNamedDeclaration {
+    this.expectPunctuator("{");
+    const specifiers: ESTree.NamedExportSpecifier[] = [];
+    while (this.currentType !== TOKEN.Punctuator || this.currentValue !== "}") {
+      const local = this.parseIdentifier();
+      let exported: ESTree.Identifier = local;
+      if (this.currentType === TOKEN.Keyword && this.currentValue === "as") {
+        this.next();
+        exported = this.parseIdentifier();
+      }
+      specifiers.push({ type: "ExportSpecifier", local, exported });
+      if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
+        this.next();
+        continue;
+      }
+      break;
+    }
+    this.expectPunctuator("}");
+
+    let source: ESTree.Literal | undefined;
+    if (this.currentType === TOKEN.Keyword && this.currentValue === "from") {
+      this.next();
+      if (this.currentType !== TOKEN.String) {
+        throw new ParseError("Module specifier must be a string literal");
+      }
+      source = this.parseLiteral();
+    }
+    this.consumeSemicolon();
+
+    return {
+      type: "ExportNamedDeclaration",
+      source,
+      specifiers,
+    };
+  }
+
+  private parseExportAllDeclaration(): ESTree.ExportAllDeclaration {
+    this.expectPunctuator("*");
+    if (this.currentType === TOKEN.Keyword && this.currentValue === "as") {
+      this.next();
+      const exported = this.parseIdentifier();
+      if (this.currentType !== TOKEN.Keyword || this.currentValue !== "from") {
+        throw new ParseError("Expected 'from' after export 'as'");
+      }
+      this.next();
+      if (this.currentType !== TOKEN.String) {
+        throw new ParseError("Module specifier must be a string literal");
+      }
+      const source = this.parseLiteral();
+      this.consumeSemicolon();
+      return {
+        type: "ExportAllDeclaration",
+        source,
+      };
+    }
+    if (this.currentType !== TOKEN.Keyword || this.currentValue !== "from") {
+      throw new ParseError("Expected 'from' after export '*'");
+    }
+    this.next();
+    if (this.currentType !== TOKEN.String) {
+      throw new ParseError("Module specifier must be a string literal");
+    }
+    const source = this.parseLiteral();
+    this.consumeSemicolon();
+    return {
+      type: "ExportAllDeclaration",
+      source,
+    };
+  }
+
+  private parseExportDefaultDeclaration(): ESTree.ExportDefaultDeclaration {
+    this.expectKeyword("default");
+
+    if (this.currentType === TOKEN.Keyword) {
+      switch (this.currentValue) {
+        case "async":
+          if (this.tokenizer.peekType() === TOKEN.Keyword && this.tokenizer.peekValue() === "function") {
+            this.next();
+            const func = this.parseFunctionDeclaration();
+            return {
+              type: "ExportDefaultDeclaration",
+              declaration: func,
+            };
+          }
+          break;
+        case "function": {
+          const func = this.parseFunctionDeclaration();
+          return {
+            type: "ExportDefaultDeclaration",
+            declaration: func,
+          };
+        }
+        case "class": {
+          const cls = this.parseClassDeclaration();
+          return {
+            type: "ExportDefaultDeclaration",
+            declaration: cls,
+          };
+        }
+      }
+    }
+
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "{") {
+      throw new ParseError("Cannot export destructuring pattern as default");
+    }
+
+    const expression = this.parseAssignmentExpression();
+    this.consumeSemicolon();
+
+    return {
+      type: "ExportDefaultDeclaration",
+      declaration: {
+        type: "VariableDeclaration",
+        declarations: [
+          {
+            type: "VariableDeclarator",
+            id: { type: "Identifier", name: "default" },
+            init: expression,
+          },
+        ],
+        kind: "var",
+      },
+    };
+  }
+
+private parseExportFunctionDeclaration(): ESTree.ExportNamedDeclaration {
+    const func = this.parseFunctionDeclaration();
+    return {
+      type: "ExportNamedDeclaration",
+      declaration: func,
+      specifiers: [],
+    };
+  }
+
+  private parseExportClassDeclaration(): ESTree.ExportNamedDeclaration {
+    const cls = this.parseClassDeclaration();
+    return {
+      type: "ExportNamedDeclaration",
+      declaration: cls,
+      specifiers: [],
+    };
+  }
+
+  private parseExportVariableDeclaration(): ESTree.ExportNamedDeclaration {
+    const declaration = this.parseVariableDeclaration(false);
+    return {
+      type: "ExportNamedDeclaration",
+      declaration,
+      specifiers: [],
+    };
+  }
+
+  private parseExportVariableOrFunction(): ESTree.ExportNamedDeclaration {
+    const snapshot = this.snapshot();
+
+    try {
+      const id = this.parseBindingPattern();
+
+      if (this.currentType === TOKEN.Punctuator && this.currentValue === "=") {
+        this.next();
+        const init = this.parseAssignmentExpression();
+        this.consumeSemicolon();
+
+        const declaration: ESTree.VariableDeclaration = {
+          type: "VariableDeclaration",
+          declarations: [
+            {
+              type: "VariableDeclarator",
+              id,
+              init,
+            },
+          ],
+          kind: "var",
+        };
+
+        return {
+          type: "ExportNamedDeclaration",
+          declaration,
+          specifiers: [],
+        };
+      }
+
+      this.consumeSemicolon();
+      const declaration: ESTree.VariableDeclaration = {
+        type: "VariableDeclaration",
+        declarations: [
+          {
+            type: "VariableDeclarator",
+            id,
+            init: null,
+          },
+        ],
+        kind: "var",
+      };
+
+      return {
+        type: "ExportNamedDeclaration",
+        declaration,
+        specifiers: [],
+      };
+    } catch {
+      this.restore(snapshot);
+      const func = this.parseFunctionExpression();
+      this.consumeSemicolon();
+      return {
+        type: "ExportNamedDeclaration",
+        declaration: func as any,
+        specifiers: [],
+      };
+    }
   }
 
   private parseVariableDeclaration(isForInit: boolean): ESTree.VariableDeclaration {
