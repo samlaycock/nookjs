@@ -383,6 +383,19 @@ describe("Functions", () => {
           `;
           expect(interpreter.evaluate(code)).toBe(42);
         });
+
+        test("returns a function that closes over variables", () => {
+          const code = `
+            function makeAdder(x) {
+              return function(y) {
+                return x + y;
+              };
+            }
+            const addFive = makeAdder(5);
+            addFive(3)
+          `;
+          expect(interpreter.evaluate(code)).toBe(8);
+        });
       });
 
       describe("Functions with local variables", () => {

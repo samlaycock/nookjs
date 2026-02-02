@@ -191,6 +191,12 @@ describe("RegExp", () => {
         expect(result).toBe("hello there");
       });
 
+      test("String.replace with global regex", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate(`"a1b2c3".replace(/\\d/g, "#")`);
+        expect(result).toBe("a#b#c#");
+      });
+
       test("String.split with regex", () => {
         const interpreter = new Interpreter(ES5);
         const result = interpreter.evaluate(`"a1b2c3".split(/\\d/)`);
@@ -210,6 +216,12 @@ describe("RegExp", () => {
         const interpreter = new Interpreter(ES5);
         const result = interpreter.evaluate(`"a1b2c3".match(/\\d/g)`);
         expect(result).toEqual(["1", "2", "3"]);
+      });
+
+      test("String.match returns null when no match", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate(`"hello".match(/xyz/)`);
+        expect(result).toBe(null);
       });
 
       test("String.replace with capture groups", () => {

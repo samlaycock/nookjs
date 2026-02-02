@@ -33,6 +33,11 @@ describe("JSON", () => {
         expect(interpreter.evaluate("JSON.stringify([1, 2, 3])")).toBe("[1,2,3]");
       });
 
+      it("should stringify sparse arrays with nulls", () => {
+        const result = interpreter.evaluate("JSON.stringify([, 1])");
+        expect(result).toBe("[null,1]");
+      });
+
       it("should convert undefined in arrays to null", () => {
         expect(interpreter.evaluate("JSON.stringify([1, undefined, 2])")).toBe("[1,null,2]");
       });
@@ -62,6 +67,11 @@ describe("JSON", () => {
       it("should support replacer array to select keys", () => {
         const result = interpreter.evaluate("JSON.stringify({ a: 1, b: 2, c: 3 }, ['a', 'c'])");
         expect(result).toBe('{"a":1,"c":3}');
+      });
+
+      it("should preserve replacer array order", () => {
+        const result = interpreter.evaluate("JSON.stringify({ b: 2, a: 1 }, ['a', 'b'])");
+        expect(result).toBe('{"a":1,"b":2}');
       });
 
       it("should support replacer function to filter keys", () => {
@@ -113,6 +123,13 @@ describe("JSON", () => {
           "JSON.parse('{\"a\":1,\"b\":2}', function(key, value) { if (typeof value === 'number') { return value * 2; } return value; })",
         );
         expect(result).toEqual({ a: 2, b: 4 });
+      });
+
+      it("should allow reviver to transform values", () => {
+        const result = interpreter.evaluate(
+          "JSON.parse('{\"d\":\"2020-01-01T00:00:00.000Z\"}', function(key, value) { if (key === 'd') { return new Date(value).getUTCFullYear(); } return value; })",
+        );
+        expect(result).toEqual({ d: 2020 });
       });
 
       it("should delete properties when reviver returns undefined", () => {

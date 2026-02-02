@@ -970,6 +970,24 @@ describe("Classes", () => {
           `);
         expect(result).toBe(5 + 20);
       });
+
+      it("should use static factory methods to create instances", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Point {
+              constructor(x, y) {
+                this.x = x;
+                this.y = y;
+              }
+              static origin() {
+                return new Point(0, 0);
+              }
+            }
+            const p = Point.origin();
+            [p.x, p.y];
+          `);
+        expect(result).toEqual([0, 0]);
+      });
     });
 
     describe("Getters and Setters", () => {

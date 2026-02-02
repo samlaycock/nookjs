@@ -92,6 +92,24 @@ describe("Date", () => {
         `);
         expect(result).toBe("2020-01-01T00:00:00.000Z");
       });
+
+      it("setUTCMonth should update the UTC month", () => {
+        const result = interpreter.evaluate(`
+          var d = new Date(Date.UTC(2020, 0, 15));
+          d.setUTCMonth(5);
+          d.getUTCMonth();
+        `);
+        expect(result).toBe(5);
+      });
+
+      it("setUTCDate should update the UTC day of month", () => {
+        const result = interpreter.evaluate(`
+          var d = new Date(Date.UTC(2020, 0, 1));
+          d.setUTCDate(20);
+          d.getUTCDate();
+        `);
+        expect(result).toBe(20);
+      });
     });
 
     describe("toISOString", () => {

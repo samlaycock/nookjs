@@ -180,6 +180,12 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("(1.2).toFixed(2)")).toBe("1.20");
         expect(interpreter.evaluate("(10).toFixed(0)")).toBe("10");
       });
+
+      it("should format with toPrecision", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("(1.2345).toPrecision(3)")).toBe("1.23");
+        expect(interpreter.evaluate("(123.45).toPrecision(4)")).toBe("123.5");
+      });
     });
 
     describe("isNaN", () => {
@@ -258,6 +264,12 @@ describe("Numbers", () => {
       it("should return true for zero", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("isFinite(0)")).toBe(true);
+      });
+
+      it("should return true for booleans", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isFinite(true)")).toBe(true);
+        expect(interpreter.evaluate("isFinite(false)")).toBe(true);
       });
     });
   });

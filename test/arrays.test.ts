@@ -1004,6 +1004,24 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual([0, 1, 2]);
         });
+
+        it("should filter truthy values", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [0, 1, false, 2, "", 3, null, undefined];
+                    arr.filter(x => x)
+                  `);
+          expect(result).toEqual([1, 2, 3]);
+        });
+
+        it("should support filtering by object property", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [{ active: true }, { active: false }, { active: true }];
+                    arr.filter(item => item.active)
+                  `);
+          expect(result).toEqual([{ active: true }, { active: true }]);
+        });
       });
 
       describe("reduce", () => {

@@ -82,6 +82,11 @@ describe("Global Utilities", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate('encodeURIComponent("~")')).toBe("~");
       });
+
+      it("should encode query delimiters", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('encodeURIComponent("a=b&c")')).toBe("a%3Db%26c");
+      });
     });
 
     describe("decodeURIComponent", () => {
@@ -105,6 +110,11 @@ describe("Global Utilities", () => {
         expect(interpreter.evaluate('decodeURIComponent(encodeURIComponent("a+b=c"))')).toBe(
           "a+b=c",
         );
+      });
+
+      it("should decode encoded query delimiters", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate('decodeURIComponent("a%3Db%26c")')).toBe("a=b&c");
       });
     });
   });

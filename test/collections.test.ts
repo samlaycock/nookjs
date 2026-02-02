@@ -153,6 +153,17 @@ describe("Collections", () => {
         expect(result).toBe(42);
       });
 
+      it("should overwrite values for existing keys", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const map = new Map();
+          map.set("a", 1);
+          map.set("a", 2);
+          [map.size, map.get("a")];
+        `);
+        expect(result).toEqual([1, 2]);
+      });
+
       it("should iterate with forEach in insertion order", () => {
         const interpreter = new Interpreter(ES2015);
         const result = interpreter.evaluate(`

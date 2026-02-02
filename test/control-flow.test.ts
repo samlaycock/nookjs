@@ -1833,6 +1833,46 @@ describe("Control Flow", () => {
       });
     });
 
+    describe("Do-While Loops", () => {
+      it("should execute body at least once", () => {
+        const interpreter = new Interpreter();
+        const code = `
+          let count = 0;
+          do {
+            count = count + 1;
+          } while (false);
+          count
+        `;
+        expect(interpreter.evaluate(code)).toBe(1);
+      });
+
+      it("should repeat until condition is false", () => {
+        const interpreter = new Interpreter();
+        const code = `
+          let n = 0;
+          do {
+            n = n + 1;
+          } while (n < 3);
+          n
+        `;
+        expect(interpreter.evaluate(code)).toBe(3);
+      });
+
+      it("should support input-like validation loop pattern", () => {
+        const interpreter = new Interpreter();
+        const code = `
+          let attempts = 0;
+          let value = 0;
+          do {
+            attempts = attempts + 1;
+            value = attempts * 2;
+          } while (value < 4);
+          [attempts, value]
+        `;
+        expect(interpreter.evaluate(code)).toEqual([2, 4]);
+      });
+    });
+
     describe("For Loops", () => {
       describe("Basic for loops", () => {
         it("should execute a simple for loop with postfix increment", () => {
@@ -2112,6 +2152,21 @@ describe("Control Flow", () => {
             evens * 10 + odds
           `;
           expect(interpreter.evaluate(code)).toBe(55); // 5 evens, 5 odds -> 55
+        });
+
+        it("should use continue to skip iterations", () => {
+          const interpreter = new Interpreter();
+          const code = `
+            let sum = 0;
+            for (let i = 0; i < 10; i++) {
+              if (i % 2 !== 0) {
+                continue;
+              }
+              sum = sum + i;
+            }
+            sum
+          `;
+          expect(interpreter.evaluate(code)).toBe(20);
         });
 
         it("should handle complex condition in for loop body", () => {

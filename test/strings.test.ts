@@ -887,6 +887,12 @@ describe("Strings", () => {
                 `);
           expect(result).toEqual(["a", "b"]);
         });
+
+        it("should ignore large split limit when fewer parts exist", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`"a,b".split(",", 10)`);
+          expect(result).toEqual(["a", "b"]);
+        });
       });
 
       describe("replace", () => {
@@ -945,6 +951,26 @@ describe("Strings", () => {
                   "abc".replace("b", "$&$&")
                 `);
           expect(result).toBe("abbc");
+        });
+
+        it("should support replacer function", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "a1b2".replace(/\\d/g, function(match) {
+                    return "[" + match + "]";
+                  })
+                `);
+          expect(result).toBe("a[1]b[2]");
+        });
+
+        it("should pass match index to replacer function", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "foo1bar2".replace(/\\d/g, function(match, offset) {
+                    return match + "@" + offset;
+                  })
+                `);
+          expect(result).toBe("foo1@3bar2@7");
         });
       });
 
