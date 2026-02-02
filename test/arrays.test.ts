@@ -791,6 +791,15 @@ describe("Arrays", () => {
           expect(result).toBe(2);
         });
 
+        it("should return -1 for empty array", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [];
+                    arr.indexOf(1)
+                  `);
+          expect(result).toBe(-1);
+        });
+
         it("should not find NaN", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -848,6 +857,12 @@ describe("Arrays", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`["a", "b"].join(undefined)`);
           expect(result).toBe("a,b");
+        });
+
+        it("should treat null separator as string", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`["a", "b"].join(null)`);
+          expect(result).toBe("anullb");
         });
 
         it("should join with custom separator", () => {
@@ -1336,6 +1351,16 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual([3, 4]);
         });
+
+        it("should insert elements when deleteCount is 0", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2, 3];
+                    arr.splice(1, 0, 9);
+                    arr;
+                  `);
+          expect(result).toEqual([1, 9, 2, 3]);
+        });
       });
 
       describe("lastIndexOf", () => {
@@ -1506,6 +1531,16 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual([1, 9, 9, 4]);
         });
+
+        it("should support negative start index", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2, 3, 4];
+                    arr.fill(0, -2);
+                    arr;
+                  `);
+          expect(result).toEqual([1, 2, 0, 0]);
+        });
       });
     });
 
@@ -1544,6 +1579,24 @@ describe("Arrays", () => {
                     arr.includes(5)
                   `);
           expect(result).toBe(false);
+        });
+
+        it("should respect fromIndex", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3];
+                    arr.includes(2, 2)
+                  `);
+          expect(result).toBe(false);
+        });
+
+        it("should handle negative fromIndex", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let arr = [1, 2, 3];
+                    arr.includes(2, -2)
+                  `);
+          expect(result).toBe(true);
         });
       });
     });

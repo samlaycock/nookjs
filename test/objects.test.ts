@@ -1569,6 +1569,13 @@ describe("Objects", () => {
           expect(interpreter.evaluate("Object.entries({})")).toEqual([]);
         });
 
+        it("should work with arrays", () => {
+          expect(interpreter.evaluate("Object.entries([1, 2])")).toEqual([
+            ["0", 1],
+            ["1", 2],
+          ]);
+        });
+
         it("should include undefined values", () => {
           const result = interpreter.evaluate("Object.entries({ a: undefined, b: 1 })");
           expect(result).toEqual([

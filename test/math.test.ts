@@ -105,6 +105,12 @@ describe("Math", () => {
         const result = interpreter.evaluate("Math.max()");
         expect(result).toBe(-Infinity);
       });
+
+      it("should return NaN if any argument is NaN", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate("Math.max(1, NaN)");
+        expect(Number.isNaN(result)).toBe(true);
+      });
     });
 
     describe("Math.min", () => {
@@ -127,6 +133,12 @@ describe("Math", () => {
         const interpreter = new Interpreter(ES5);
         const result = interpreter.evaluate("Math.min()");
         expect(result).toBe(Infinity);
+      });
+
+      it("should return NaN if any argument is NaN", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate("Math.min(1, NaN)");
+        expect(Number.isNaN(result)).toBe(true);
       });
     });
 

@@ -152,6 +152,37 @@ describe("Collections", () => {
         `);
         expect(result).toBe(42);
       });
+
+      it("should iterate with forEach in insertion order", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const map = new Map();
+          map.set("a", 1);
+          map.set("b", 2);
+          const values = [];
+          map.forEach((value, key) => {
+            values.push(key + value);
+          });
+          values;
+        `);
+        expect(result).toEqual(["a1", "b2"]);
+      });
+
+      it("should expose keys, values, and entries iterators", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const map = new Map([["a", 1], ["b", 2]]);
+          [Array.from(map.keys()), Array.from(map.values()), Array.from(map.entries())];
+        `);
+        expect(result).toEqual([
+          ["a", "b"],
+          [1, 2],
+          [
+            ["a", 1],
+            ["b", 2],
+          ],
+        ]);
+      });
     });
 
     describe("Set", () => {
@@ -231,6 +262,34 @@ describe("Collections", () => {
           mySet["has"](3);
         `);
         expect(result).toBe(true);
+      });
+
+      it("should iterate with forEach", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const set = new Set([1, 2, 3]);
+          const values = [];
+          set.forEach(value => {
+            values.push(value * 2);
+          });
+          values;
+        `);
+        expect(result).toEqual([2, 4, 6]);
+      });
+
+      it("should expose values and entries iterators", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const set = new Set([1, 2]);
+          [Array.from(set.values()), Array.from(set.entries())];
+        `);
+        expect(result).toEqual([
+          [1, 2],
+          [
+            [1, 1],
+            [2, 2],
+          ],
+        ]);
       });
     });
 

@@ -598,6 +598,14 @@ describe("Strings", () => {
           expect(Number.isNaN(result)).toBe(true);
         });
 
+        it("should return NaN for negative index", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "ABC".charCodeAt(-1)
+                `);
+          expect(Number.isNaN(result)).toBe(true);
+        });
+
         it("should return NaN for empty string", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -929,6 +937,14 @@ describe("Strings", () => {
                   "John Doe".replace(/(\\w+)\\s(\\w+)/, "$2, $1")
                 `);
           expect(result).toBe("Doe, John");
+        });
+
+        it("should support $& replacement token", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                  "abc".replace("b", "$&$&")
+                `);
+          expect(result).toBe("abbc");
         });
       });
 

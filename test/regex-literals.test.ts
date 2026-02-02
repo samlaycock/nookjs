@@ -196,6 +196,29 @@ describe("RegExp", () => {
         const result = interpreter.evaluate(`"a1b2c3".split(/\\d/)`);
         expect(result).toEqual(["a", "b", "c", ""]);
       });
+
+      test("String.match with capturing group", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate(`
+          var match = "foo1bar2".match(/(\\d)/);
+          [match[0], match[1], match.index];
+        `);
+        expect(result).toEqual(["1", "1", 3]);
+      });
+
+      test("String.match with global regex", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate(`"a1b2c3".match(/\\d/g)`);
+        expect(result).toEqual(["1", "2", "3"]);
+      });
+
+      test("String.replace with capture groups", () => {
+        const interpreter = new Interpreter(ES5);
+        const result = interpreter.evaluate(
+          `"2020-12-31".replace(/(\\d{4})-(\\d{2})-(\\d{2})/, "$2/$3/$1")`,
+        );
+        expect(result).toBe("12/31/2020");
+      });
     });
 
     describe("edge cases", () => {

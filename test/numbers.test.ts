@@ -32,6 +32,11 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("parseInt('10px')")).toBe(10);
       });
 
+      it("should stop parsing at exponent marker", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseInt('1e2')")).toBe(1);
+      });
+
       it("should ignore leading whitespace", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseInt('   42')")).toBe(42);
@@ -56,6 +61,11 @@ describe("Numbers", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseInt('08')")).toBe(8);
         expect(interpreter.evaluate("parseInt('010')")).toBe(10);
+      });
+
+      it("should return NaN for empty string", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(Number.isNaN(interpreter.evaluate("parseInt('')"))).toBe(true);
       });
     });
 
@@ -100,6 +110,11 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("parseFloat('3.14px')")).toBeCloseTo(3.14, 2);
       });
 
+      it("should stop parsing at second decimal point", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("parseFloat('1.2.3')")).toBeCloseTo(1.2, 2);
+      });
+
       it("should ignore leading whitespace", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("parseFloat('   2.5')")).toBeCloseTo(2.5, 2);
@@ -108,6 +123,11 @@ describe("Numbers", () => {
       it("should return NaN for invalid input", () => {
         const interpreter = new Interpreter(ES5);
         expect(Number.isNaN(interpreter.evaluate("parseFloat('abc')"))).toBe(true);
+      });
+
+      it("should return NaN for empty string", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(Number.isNaN(interpreter.evaluate("parseFloat('')"))).toBe(true);
       });
     });
 
@@ -128,6 +148,16 @@ describe("Numbers", () => {
         expect(interpreter.evaluate("Number(false)")).toBe(0);
       });
 
+      it("should parse hex string with 0x prefix", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Number('0x10')")).toBe(16);
+      });
+
+      it("should parse scientific notation string", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("Number('1e2')")).toBe(100);
+      });
+
       it("should convert empty string to 0", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("Number('')")).toBe(0);
@@ -136,6 +166,19 @@ describe("Numbers", () => {
       it("should convert null to 0", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("Number(null)")).toBe(0);
+      });
+
+      it("should convert undefined to NaN", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(Number.isNaN(interpreter.evaluate("Number(undefined)"))).toBe(true);
+      });
+    });
+
+    describe("Number formatting", () => {
+      it("should format with toFixed", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("(1.2).toFixed(2)")).toBe("1.20");
+        expect(interpreter.evaluate("(10).toFixed(0)")).toBe("10");
       });
     });
 
@@ -158,6 +201,11 @@ describe("Numbers", () => {
       it("should return false for number", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("isNaN(42)")).toBe(false);
+      });
+
+      it("should return false for boolean true", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isNaN(true)")).toBe(false);
       });
 
       it("should return false for null", () => {
@@ -185,6 +233,11 @@ describe("Numbers", () => {
       it("should return false for undefined", () => {
         const interpreter = new Interpreter(ES5);
         expect(interpreter.evaluate("isFinite(undefined)")).toBe(false);
+      });
+
+      it("should return false for non-numeric string", () => {
+        const interpreter = new Interpreter(ES5);
+        expect(interpreter.evaluate("isFinite('foo')")).toBe(false);
       });
 
       it("should return true for regular number", () => {

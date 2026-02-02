@@ -368,6 +368,24 @@ describe("Variables", () => {
           interpreter.evaluate("const set = 5");
           expect(interpreter.evaluate("set")).toBe(5);
         });
+
+        test("allows mutation of const object properties", () => {
+          const result = interpreter.evaluate(`
+            const obj = { count: 1 };
+            obj.count = 2;
+            obj.count;
+          `);
+          expect(result).toBe(2);
+        });
+
+        test("allows mutation of const arrays", () => {
+          const result = interpreter.evaluate(`
+            const list = [1];
+            list.push(2);
+            list.length;
+          `);
+          expect(result).toBe(2);
+        });
       });
 
       describe("Variable Access", () => {

@@ -75,6 +75,25 @@ describe("Date", () => {
       });
     });
 
+    describe("UTC date methods", () => {
+      it("getUTCFullYear should return the UTC year", () => {
+        expect(interpreter.evaluate("new Date(Date.UTC(2020, 0, 1)).getUTCFullYear()")).toBe(2020);
+      });
+
+      it("getUTCDay should return the UTC day of week", () => {
+        expect(interpreter.evaluate("new Date(0).getUTCDay()")).toBe(4);
+      });
+
+      it("setUTCFullYear should update the UTC year", () => {
+        const result = interpreter.evaluate(`
+          var d = new Date(Date.UTC(2000, 0, 1));
+          d.setUTCFullYear(2020);
+          d.toISOString();
+        `);
+        expect(result).toBe("2020-01-01T00:00:00.000Z");
+      });
+    });
+
     describe("toISOString", () => {
       it("should return ISO format string", () => {
         expect(interpreter.evaluate("new Date(0).toISOString()")).toBe("1970-01-01T00:00:00.000Z");
