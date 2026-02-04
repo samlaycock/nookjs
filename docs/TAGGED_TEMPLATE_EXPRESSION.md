@@ -14,7 +14,7 @@ Tagged template literals like `tag`hello ${world}``.
 
 - The tag function receives the template strings as an array and the evaluated expressions as rest arguments.
 - Raw strings are available via the `raw` property of template elements.
-- Tag functions can be any callable expression (function, method, class constructor).
+- The tag must be a callable (sandbox function, host function, or native function); class constructors are not callable without `new`.
 
 ## Example
 

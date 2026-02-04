@@ -8,10 +8,9 @@ Arrow functions like `x => x * 2`.
 
 - Implemented in `evaluateArrowFunctionExpression`.
 - Expression bodies are wrapped into an implicit `return`.
-- Supports rest and default parameters.
+- Supports rest, default parameters, and destructuring.
 
 ## Gotchas
 
 - No lexical `this` or `arguments` (behaves like normal functions).
-- No parameter destructuring.
 - Arrow functions cannot be generators.

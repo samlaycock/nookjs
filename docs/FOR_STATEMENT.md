@@ -10,4 +10,4 @@ Classic `for (init; test; update)` loops.
 
 ## Gotchas
 
-- Only unlabeled `break`/`continue` are supported.
+- Labeled `break`/`continue` are supported (see [LABELED_STATEMENT](LABELED_STATEMENT.md)).

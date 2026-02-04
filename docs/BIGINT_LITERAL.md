@@ -7,7 +7,7 @@ BigInt literals for arbitrary-precision integers, written with an `n` suffix: `1
 ## Interpreter implementation
 
 - Parsed as a numeric literal with `bigint` property.
-- Handled via `parseNumericLiteral` in the tokenizer with `BigInt` suffix support.
+- Handled via `parseBigIntLiteral` in the tokenizer with `BigInt` suffix support.
 - BigInt operations use JavaScript's native `BigInt` type.
 
 ## Gotchas

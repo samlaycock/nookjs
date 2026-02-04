@@ -12,6 +12,6 @@ Array and object destructuring assignments and declarations.
 
 ## Gotchas
 
-- Function parameter destructuring is not supported.
+- Function parameter destructuring is supported (uses the same destructuring logic).
 - Object rest only includes own enumerable properties.
 - Dangerous property names are blocked.

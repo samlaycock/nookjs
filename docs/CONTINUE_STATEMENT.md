@@ -7,7 +7,7 @@ Skips to the next loop iteration.
 ## Interpreter implementation
 
 - Implemented in `evaluateContinueStatement`.
-- Uses `ContinueValue` marker for control flow.
+- Uses a `ControlFlowSignal` marker for control flow.
 
 ## Gotchas
 

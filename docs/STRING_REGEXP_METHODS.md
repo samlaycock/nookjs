@@ -1,6 +1,7 @@
 # String.prototype RegExp Methods
 
-The interpreter provides full support for all `String.prototype` methods that work with regular expressions. These methods are exposed through the `String` global and are made available via the `ReadOnlyProxy` mechanism.
+The interpreter supports regex-related `String.prototype` methods via native delegation.
+Availability depends on the host runtime, and methods are exposed on string instances.
 
 ## Supported Methods
 
@@ -98,12 +99,8 @@ try {
 
 ### Security
 
-All String.prototype methods are wrapped via `ReadOnlyProxy`, which:
-
-- Makes properties read-only
-- Wraps functions as `HostFunctionValue`
-- Blocks dangerous properties like `__proto__`, `constructor`
-- Sanitizes error stack traces
+String methods are exposed as `HostFunctionValue` wrappers or via native delegation, and
+property-name validation blocks dangerous properties like `__proto__` and `constructor`.
 
 ### Well-Known Symbols
 
@@ -115,7 +112,7 @@ The following well-known symbols are intentionally blocked to prevent sandbox co
 - `Symbol.search`
 - `Symbol.split`
 
-Direct method calls on `String.prototype` work fine.
+Call methods on string instances (e.g., `"hi".match(...)`). Accessing `String.prototype` is blocked.
 
 ### Host Function Arguments
 

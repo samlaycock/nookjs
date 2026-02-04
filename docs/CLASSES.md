@@ -47,7 +47,7 @@ See [CLASS_EXPRESSION](CLASS_EXPRESSION.md) for more details on class expression
 
 ## Gotchas
 
-- No prototype or `instanceof` semantics.
+- No native JS prototype chain; `instanceof` is implemented via interpreter metadata.
 - Class constructors cannot be called without `new`.
 - Some standard class reflection is unavailable.
 - Class expression names are only visible inside the class body.

@@ -7,7 +7,7 @@
 ## Interpreter implementation
 
 - Implemented in `evaluateYieldExpression` / `evaluateYieldExpressionAsync`.
-- Produces a `YieldValue` that the generator executor interprets as a pause.
+- Produces a `ControlFlowSignal` that the generator executor interprets as a pause.
 - `yield*` delegates to arrays, generators, or objects with `Symbol.iterator`.
 
 ## Gotchas

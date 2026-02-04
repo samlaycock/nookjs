@@ -7,7 +7,7 @@ Exits loops or switch cases.
 ## Interpreter implementation
 
 - Implemented in `evaluateBreakStatement`.
-- Uses `BreakValue` marker for control flow.
+- Uses a `ControlFlowSignal` marker for control flow.
 
 ## Gotchas
 

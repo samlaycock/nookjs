@@ -13,5 +13,5 @@ Constructor calls like `new Foo()`.
 
 ## Gotchas
 
-- No prototype or `instanceof` semantics.
+- No native prototype chain; `instanceof` uses interpreter metadata.
 - If a constructor returns an object, it replaces the created instance.

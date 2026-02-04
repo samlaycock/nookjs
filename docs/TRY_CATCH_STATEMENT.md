@@ -7,7 +7,7 @@ Error handling with `try { } catch { } finally { }`.
 ## Interpreter implementation
 
 - Implemented in `evaluateTryStatement` / `evaluateTryStatementAsync`.
-- Catch param must be an identifier.
+- Catch param can be omitted or be an identifier/array/object pattern.
 - Finally can override control flow results.
 
 ## Gotchas

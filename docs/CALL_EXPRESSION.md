@@ -13,6 +13,6 @@ Function calls like `fn()` or `obj.method()`.
 
 ## Gotchas
 
-- Spread arguments accept arrays, generators, or objects with `Symbol.iterator`.
+- Spread arguments in calls must be arrays (iterables are not expanded in call position).
 - Async host functions require `evaluateAsync`.
 - `call`/`apply`/`bind` are blocked on host functions.

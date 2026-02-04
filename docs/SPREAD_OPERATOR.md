@@ -8,7 +8,7 @@ Spread syntax in arrays, objects, and call expressions.
 
 - Array spread uses `validateArraySpread` and `iterableToArray`.
 - Object spread requires a non-null, non-array object via `validateObjectSpread`.
-- Call spread expands arrays, generators, or objects with `Symbol.iterator`.
+- Call spread expands arrays only.
 
 ## Gotchas
 

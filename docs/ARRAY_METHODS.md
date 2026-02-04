@@ -1,6 +1,8 @@
 # Array Methods
 
-The interpreter provides support for various `Array.prototype` methods through the `ReadOnlyProxy` mechanism. These methods are automatically available on arrays in all presets.
+The interpreter exposes `Array.prototype` methods via explicit wrappers for callback-aware
+methods and native delegation for the rest. These methods are automatically available on arrays
+in all presets.
 
 ## Supported Methods by ECMAScript Version
 
@@ -64,16 +66,14 @@ The interpreter provides support for various `Array.prototype` methods through t
 
 ### Security
 
-All array methods are wrapped via `ReadOnlyProxy`, which:
-
-- Makes properties read-only
-- Wraps functions as `HostFunctionValue`
-- Blocks dangerous properties like `__proto__`, `constructor`
-- Sanitizes error stack traces
+Array methods are exposed as `HostFunctionValue` wrappers (or via native delegation) and still
+pass through property-name validation, so dangerous properties like `__proto__`, `constructor`,
+and `prototype` are blocked.
 
 ### Iterator Methods
 
-Methods that return iterators (`entries()`, `keys()`, `values()`, `matchAll()`) return generator objects that implement the iterator protocol:
+Methods that return iterators (`entries()`, `keys()`, `values()`) return native iterator objects
+that implement the iterator protocol:
 
 ```javascript
 const arr = [1, 2];
