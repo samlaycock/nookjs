@@ -5116,24 +5116,34 @@ export class Interpreter {
   }
 
   /**
+   * Check if a computed property should be treated as an array index.
+   * Mirrors accessArrayElement's permissive Number() handling to avoid
+   * changing existing behavior for numeric-like strings.
+   */
+  private isArrayIndexProperty(property: any): boolean {
+    if (typeof property === "number") {
+      return !isNaN(property);
+    }
+    if (typeof property === "string") {
+      return !isNaN(Number(property));
+    }
+    return false;
+  }
+
+  /**
    * Accesses an object property with validation.
    * Validates the property name for security.
    */
   private accessObjectProperty(obj: object, property: any): any {
     // Symbols are validated separately to avoid string coercion surprises.
     if (typeof property === "symbol") {
-      this.validateSymbolProperty(property);
-      this.ensureNoInternalObjectAccess(obj);
-      this.ensureNoPrototypeAccessForSymbol(obj, property);
-      return (obj as any)[property];
+      return this.resolveSymbolPropertyAccess(obj, property);
     }
     const propName = typeof property === "string" ? property : String(property);
     if (!this.shouldSkipPropertyValidation(obj) || this.shouldForcePropertyValidation(propName)) {
       validatePropertyName(propName); // Security: prevent prototype pollution
     }
-    this.ensureNoInternalObjectAccess(obj);
-    this.ensureNoPrototypeAccess(obj, propName);
-    return (obj as any)[propName];
+    return this.resolveStringPropertyAccess(obj, propName);
   }
 
   /**
@@ -7615,64 +7625,29 @@ export class Interpreter {
       // obj[expr] - computed property access (array indexing or object bracket notation)
       const property = this.evaluateNode(node.property);
       if (typeof property === "symbol") {
-        this.validateSymbolProperty(property);
-        if (this.isReadOnlyProxyObject(object)) {
-          return (object as any)[property];
+        return this.resolveSymbolPropertyAccess(object, property);
+      }
+      if (Array.isArray(object)) {
+        if (this.isArrayIndexProperty(property)) {
+          return this.accessArrayElement(object, property);
         }
-        if (typeof object === "object" && object !== null) {
-          return this.accessObjectProperty(object, property);
-        }
+        throw new InterpreterError("Array index must be a number");
+      }
+
+      if (object === null || object === undefined) {
         throw new InterpreterError("Computed property access requires an array or object");
       }
+
       const propName = String(property);
-      if (this.isReadOnlyProxyObject(object) && !Array.isArray(object)) {
-        validatePropertyName(propName);
-        return (object as any)[propName];
-      }
-      if (this.isPrimitiveValue(object)) {
-        validatePropertyName(propName);
-        const nativeMember = this.getNativeMethod(object, propName);
-        if (nativeMember !== undefined) {
-          return nativeMember;
-        }
-        throw new InterpreterError(`Property '${propName}' not supported`);
-      }
-
-      // Handle Symbol constructor - allow access to static properties
-      if (object === Symbol) {
-        return (Symbol as any)[property];
-      }
-
-      // Handle HostFunctionValue computed access - block internal/meta properties
-      if (object instanceof HostFunctionValue) {
-        const propName = String(property);
-        if (isDangerousProperty(propName)) {
-          throw new InterpreterError(`Cannot access ${propName} on host function '${object.name}'`);
-        }
+      if (!(object instanceof HostFunctionValue)) {
         if (
-          propName === "hostFunc" ||
-          propName === "isAsync" ||
-          propName === "rethrowErrors" ||
-          propName === "name" ||
-          propName === "length"
+          !this.shouldSkipPropertyValidation(object) ||
+          this.shouldForcePropertyValidation(propName)
         ) {
-          throw new InterpreterError("Cannot access properties on host functions");
+          validatePropertyName(propName);
         }
-        // Let the HostFunctionValue proxy handle the access
-        return (object as any)[propName];
       }
-
-      // Handle array indexing
-      if (Array.isArray(object)) {
-        return this.accessArrayElement(object, property);
-      }
-
-      // Handle object computed property access: obj["key"]
-      if (typeof object === "object" && object !== null) {
-        return this.accessObjectProperty(object, property);
-      }
-
-      throw new InterpreterError("Computed property access requires an array or object");
+      return this.resolveStringPropertyAccess(object, propName);
     } else {
       // obj.prop - direct property access
       // Note: PrivateIdentifier is handled earlier in the function
@@ -7686,112 +7661,7 @@ export class Interpreter {
       ) {
         validatePropertyName(property); // Security: prevent prototype pollution
       }
-
-      if (object instanceof FunctionValue) {
-        throw new InterpreterError("Cannot access properties on functions");
-      }
-
-      // Handle Symbol constructor - allow access to static properties (Symbol.iterator, etc.)
-      if (object === Symbol) {
-        return (Symbol as any)[property];
-      }
-
-      // Handle globalThis/global sentinel - return the sentinel's internal object
-      if (object instanceof GlobalThisSentinel) {
-        return (object as any)[property];
-      }
-
-      // Handle HostFunctionValue - allow static method access but block internal/meta properties
-      if (object instanceof HostFunctionValue) {
-        // Block access to internal properties and function metadata
-        if (
-          property === "hostFunc" ||
-          property === "isAsync" ||
-          property === "rethrowErrors" ||
-          property === "name" ||
-          property === "length"
-        ) {
-          throw new InterpreterError("Cannot access properties on host functions");
-        }
-        // Let the HostFunctionValue proxy handle the access (for static methods)
-        return (object as any)[property];
-      }
-
-      // Handle .length for strings and arrays
-      const length = this.getLengthProperty(object, property);
-      if (length !== null) {
-        return length;
-      }
-
-      // Handle generator methods (next, return, throw)
-      if (object instanceof GeneratorValue) {
-        const method = this.getGeneratorMethod(object, property);
-        if (method) {
-          return method;
-        }
-        throw new InterpreterError(`Generator method '${property}' not supported`);
-      }
-
-      // Handle async generator methods
-      if (object instanceof AsyncGeneratorValue) {
-        const method = this.getAsyncGeneratorMethod(object, property);
-        if (method) {
-          return method;
-        }
-        throw new InterpreterError(`Async generator method '${property}' not supported`);
-      }
-
-      // Handle array methods
-      if (Array.isArray(object)) {
-        const arrayMethod = this.getArrayMethod(object, property);
-        if (arrayMethod) {
-          return arrayMethod;
-        }
-        // Allow access to own properties on arrays (e.g., tagged template strings.raw)
-        if (Object.prototype.hasOwnProperty.call(object, property)) {
-          return (object as any)[property];
-        }
-        // Delegate to native array method if safe
-        const nativeMethod = this.getNativeMethod(object, property);
-        if (nativeMethod !== undefined) {
-          return nativeMethod;
-        }
-        throw new InterpreterError(`Array property '${property}' not supported`);
-      }
-
-      // Handle string methods
-      if (typeof object === "string") {
-        const stringMethod = this.getStringMethod(object, property);
-        if (stringMethod) {
-          return stringMethod;
-        }
-        // Delegate to native string method if safe
-        const nativeMethod = this.getNativeMethod(object, property);
-        if (nativeMethod !== undefined) {
-          return nativeMethod;
-        }
-        throw new InterpreterError(`String property '${property}' not supported`);
-      }
-
-      if (this.isReadOnlyProxyObject(object)) {
-        return (object as any)[property];
-      }
-
-      if (this.isPrimitiveValue(object)) {
-        const nativeMethod = this.getNativeMethod(object, property);
-        if (nativeMethod !== undefined) {
-          return nativeMethod;
-        }
-        throw new InterpreterError(`Property '${property}' not supported`);
-      }
-
-      // Handle object property access
-      if (typeof object === "object" && object !== null && !Array.isArray(object)) {
-        this.ensureNoPrototypeAccess(object, property);
-        return object[property];
-      }
-
-      throw new InterpreterError(`Property '${property}' not supported`);
+      return this.resolveStringPropertyAccess(object, property);
     }
   }
 
@@ -8426,22 +8296,119 @@ export class Interpreter {
   }
 
   /**
-   * Delegate to a native method on an object (array or string) if the property
-   * is safe. Returns undefined if the property is dangerous or doesn't exist.
-   * For function properties, wraps them as HostFunctionValue.
+   * Get a property value from a native object/primitive.
+   * Wraps functions as HostFunctionValue so they can be called safely from the sandbox.
    */
-  private getNativeMethod(object: any, property: string): any {
-    if (isDangerousProperty(property)) {
-      return undefined;
-    }
+  private getNativePropertyValue(object: any, property: string): any {
     const value = (object as any)[property];
-    if (value === undefined) {
-      return undefined;
-    }
     if (typeof value === "function") {
       return new HostFunctionValue((...args: any[]) => value.apply(object, args), property, false);
     }
     return value;
+  }
+
+  private resolveSymbolPropertyAccess(object: any, property: symbol): any {
+    this.validateSymbolProperty(property);
+    if (this.isReadOnlyProxyObject(object)) {
+      return (object as any)[property];
+    }
+    if (typeof object === "object" && object !== null) {
+      this.ensureNoInternalObjectAccess(object);
+      this.ensureNoPrototypeAccessForSymbol(object, property);
+      return (object as any)[property];
+    }
+    throw new InterpreterError("Computed property access requires an array or object");
+  }
+
+  private resolveStringPropertyAccess(object: any, property: string): any {
+    if (object instanceof FunctionValue) {
+      throw new InterpreterError("Cannot access properties on functions");
+    }
+
+    // Handle Symbol constructor - allow access to static properties (Symbol.iterator, etc.)
+    if (object === Symbol) {
+      return (Symbol as any)[property];
+    }
+
+    // Handle globalThis/global sentinel - return the sentinel's internal object
+    if (object instanceof GlobalThisSentinel) {
+      return (object as any)[property];
+    }
+
+    // Handle HostFunctionValue - allow static method access but block internal/meta properties
+    if (object instanceof HostFunctionValue) {
+      if (isDangerousProperty(property)) {
+        throw new InterpreterError(
+          `Cannot access ${String(property)} on host function '${object.name}'`,
+        );
+      }
+      if (
+        property === "hostFunc" ||
+        property === "isAsync" ||
+        property === "rethrowErrors" ||
+        property === "name" ||
+        property === "length"
+      ) {
+        throw new InterpreterError("Cannot access properties on host functions");
+      }
+      return (object as any)[property];
+    }
+
+    // Handle .length for strings and arrays
+    const length = this.getLengthProperty(object, property);
+    if (length !== null) {
+      return length;
+    }
+
+    // Handle generator methods (next, return, throw)
+    if (object instanceof GeneratorValue) {
+      const method = this.getGeneratorMethod(object, property);
+      if (method) {
+        return method;
+      }
+      throw new InterpreterError(`Generator method '${property}' not supported`);
+    }
+
+    // Handle async generator methods
+    if (object instanceof AsyncGeneratorValue) {
+      const method = this.getAsyncGeneratorMethod(object, property);
+      if (method) {
+        return method;
+      }
+      throw new InterpreterError(`Async generator method '${property}' not supported`);
+    }
+
+    // Handle array method overrides
+    if (Array.isArray(object)) {
+      const arrayMethod = this.getArrayMethod(object, property);
+      if (arrayMethod) {
+        return arrayMethod;
+      }
+    }
+
+    // Handle string method overrides
+    if (typeof object === "string") {
+      const stringMethod = this.getStringMethod(object, property);
+      if (stringMethod) {
+        return stringMethod;
+      }
+    }
+
+    // Allow read-only proxy objects to handle their own property access
+    if (this.isReadOnlyProxyObject(object)) {
+      return (object as any)[property];
+    }
+
+    if (this.isPrimitiveValue(object)) {
+      return this.getNativePropertyValue(object, property);
+    }
+
+    if (typeof object === "object" && object !== null) {
+      this.ensureNoInternalObjectAccess(object);
+      return this.getNativePropertyValue(object, property);
+    }
+
+    throw new InterpreterError(`Property '${property}' not supported`);
   }
 
   private callCallback(callback: FunctionValue | Function, thisValue: any, args: any[]): any {
@@ -10479,69 +10446,41 @@ export class Interpreter {
         throw new InterpreterError("Invalid property access");
       }
       const property = (node.property as ESTree.Identifier).name;
-      validatePropertyName(property);
+      if (
+        !this.shouldSkipPropertyValidation(object) ||
+        this.shouldForcePropertyValidation(property)
+      ) {
+        validatePropertyName(property);
+      }
       return this.getInstanceProperty(object as Record<string, any>, instanceClass, property);
     }
 
     if (node.computed) {
       const property = await this.evaluateNodeAsync(node.property);
       if (typeof property === "symbol") {
-        this.validateSymbolProperty(property);
-        if (this.isReadOnlyProxyObject(object)) {
-          return (object as any)[property];
+        return this.resolveSymbolPropertyAccess(object, property);
+      }
+      if (Array.isArray(object)) {
+        if (this.isArrayIndexProperty(property)) {
+          return this.accessArrayElement(object, property);
         }
-        if (typeof object === "object" && object !== null) {
-          return this.accessObjectProperty(object, property);
-        }
+        throw new InterpreterError("Array index must be a number");
+      }
+
+      if (object === null || object === undefined) {
         throw new InterpreterError("Computed property access requires an array or object");
       }
+
       const propName = String(property);
-      if (this.isReadOnlyProxyObject(object) && !Array.isArray(object)) {
-        validatePropertyName(propName);
-        return (object as any)[propName];
-      }
-      if (this.isPrimitiveValue(object)) {
-        validatePropertyName(propName);
-        const nativeMember = this.getNativeMethod(object, propName);
-        if (nativeMember !== undefined) {
-          return nativeMember;
-        }
-        throw new InterpreterError(`Property '${propName}' not supported`);
-      }
-
-      // Handle Symbol constructor - allow access to static properties
-      if (object === Symbol) {
-        return (Symbol as any)[property];
-      }
-
-      // Handle HostFunctionValue computed access - block internal/meta properties
-      if (object instanceof HostFunctionValue) {
-        const propName = String(property);
-        if (isDangerousProperty(propName)) {
-          throw new InterpreterError(`Cannot access ${propName} on host function '${object.name}'`);
-        }
+      if (!(object instanceof HostFunctionValue)) {
         if (
-          propName === "hostFunc" ||
-          propName === "isAsync" ||
-          propName === "rethrowErrors" ||
-          propName === "name" ||
-          propName === "length"
+          !this.shouldSkipPropertyValidation(object) ||
+          this.shouldForcePropertyValidation(propName)
         ) {
-          throw new InterpreterError("Cannot access properties on host functions");
+          validatePropertyName(propName);
         }
-        // Let the HostFunctionValue proxy handle the access
-        return (object as any)[propName];
       }
-
-      if (Array.isArray(object)) {
-        return this.accessArrayElement(object, property);
-      }
-
-      if (typeof object === "object" && object !== null) {
-        return this.accessObjectProperty(object, property);
-      }
-
-      throw new InterpreterError("Computed property access requires an array or object");
+      return this.resolveStringPropertyAccess(object, propName);
     } else {
       // obj.prop - direct property access
       // Note: PrivateIdentifier is handled earlier in the function
@@ -10549,110 +10488,14 @@ export class Interpreter {
         throw new InterpreterError("Invalid property access");
       }
       const property = (node.property as ESTree.Identifier).name;
-      validatePropertyName(property);
-
-      if (object instanceof FunctionValue) {
-        throw new InterpreterError("Cannot access properties on functions");
+      if (
+        !this.shouldSkipPropertyValidation(object) ||
+        this.shouldForcePropertyValidation(property)
+      ) {
+        validatePropertyName(property);
       }
 
-      // Handle Symbol constructor - allow access to static properties (Symbol.iterator, etc.)
-      if (object === Symbol) {
-        return (Symbol as any)[property];
-      }
-
-      // Handle globalThis/global sentinel - return the sentinel's internal object
-      if (object instanceof GlobalThisSentinel) {
-        return (object as any)[property];
-      }
-
-      // Handle HostFunctionValue - allow static method access but block internal/meta properties
-      if (object instanceof HostFunctionValue) {
-        if (
-          property === "hostFunc" ||
-          property === "isAsync" ||
-          property === "rethrowErrors" ||
-          property === "name" ||
-          property === "length"
-        ) {
-          throw new InterpreterError("Cannot access properties on host functions");
-        }
-        // Let the HostFunctionValue proxy handle the access (for static methods)
-        return (object as any)[property];
-      }
-
-      const length = this.getLengthProperty(object, property);
-      if (length !== null) {
-        return length;
-      }
-
-      // Handle generator methods (next, return, throw)
-      if (object instanceof GeneratorValue) {
-        const method = this.getGeneratorMethod(object, property);
-        if (method) {
-          return method;
-        }
-        throw new InterpreterError(`Generator method '${property}' not supported`);
-      }
-
-      // Handle async generator methods
-      if (object instanceof AsyncGeneratorValue) {
-        const method = this.getAsyncGeneratorMethod(object, property);
-        if (method) {
-          return method;
-        }
-        throw new InterpreterError(`Async generator method '${property}' not supported`);
-      }
-
-      // Handle array methods (reuse sync version since array methods work the same)
-      if (Array.isArray(object)) {
-        const arrayMethod = this.getArrayMethod(object, property);
-        if (arrayMethod) {
-          return arrayMethod;
-        }
-        // Allow access to own properties on arrays (e.g., tagged template strings.raw)
-        if (Object.prototype.hasOwnProperty.call(object, property)) {
-          return (object as any)[property];
-        }
-        // Delegate to native array method if safe
-        const nativeMethod = this.getNativeMethod(object, property);
-        if (nativeMethod !== undefined) {
-          return nativeMethod;
-        }
-        throw new InterpreterError(`Array property '${property}' not supported`);
-      }
-
-      // Handle string methods (reuse sync version since string methods work the same)
-      if (typeof object === "string") {
-        const stringMethod = this.getStringMethod(object, property);
-        if (stringMethod) {
-          return stringMethod;
-        }
-        // Delegate to native string method if safe
-        const nativeMethod = this.getNativeMethod(object, property);
-        if (nativeMethod !== undefined) {
-          return nativeMethod;
-        }
-        throw new InterpreterError(`String property '${property}' not supported`);
-      }
-
-      if (this.isReadOnlyProxyObject(object)) {
-        return (object as any)[property];
-      }
-
-      if (this.isPrimitiveValue(object)) {
-        const nativeMethod = this.getNativeMethod(object, property);
-        if (nativeMethod !== undefined) {
-          return nativeMethod;
-        }
-        throw new InterpreterError(`Property '${property}' not supported`);
-      }
-
-      if (typeof object === "object" && object !== null && !Array.isArray(object)) {
-        this.ensureNoPrototypeAccess(object, property);
-        return object[property];
-      }
-
-      throw new InterpreterError(`Property '${property}' not supported`);
+      return this.resolveStringPropertyAccess(object, property);
     }
   }
 
