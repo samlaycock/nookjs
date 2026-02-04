@@ -38,21 +38,40 @@ bun add nookjs
 ## Quick Start
 
 ```typescript
+import { createSandbox, parse, run } from "nookjs";
+
+// One-off evaluation
+const result = await run("2 + 3 * 4");
+console.log(result); // 14
+
+// Reusable sandbox
+const sandbox = createSandbox({
+  env: "es2022",
+  apis: ["console"],
+  globals: { PI: 3.14159 },
+});
+
+const value = await sandbox.run(`
+  let numbers = [1, 2, 3, 4, 5];
+  let sum = 0;
+  for (let i = 0; i < numbers.length; i++) {
+    sum = sum + numbers[i];
+  }
+  sum + PI
+`);
+
+console.log(value); // 18.14159
+```
+
+### Advanced API (Interpreter)
+
+```typescript
 import { Interpreter } from "nookjs";
 
 const interpreter = new Interpreter();
 
 const result = interpreter.evaluate("2 + 3 * 4");
 console.log(result); // 14
-
-interpreter.evaluate(`
-  let numbers = [1, 2, 3, 4, 5];
-  let sum = 0;
-  for (let i = 0; i < numbers.length; i++) {
-    sum = sum + numbers[i];
-  }
-  sum
-`); // 15
 ```
 
 ## Security Sandbox
@@ -410,6 +429,41 @@ Supported (stripped):
 - [Builtin Globals](docs/BUILTIN_GLOBALS.md) - Available built-in globals
 
 ## API Reference
+
+### Simplified API
+
+```typescript
+import { createSandbox, run } from "nookjs";
+
+// One-off
+await run("1 + 2");
+
+// Reusable sandbox
+const sandbox = createSandbox({
+  env: "es2022",
+  apis: ["fetch", "console"],
+  globals: { VERSION: "1.0.0" },
+  limits: {
+    perRun: { loops: 1_000_000, callDepth: 200 },
+    total: { memoryBytes: 50 * 1024 * 1024 },
+  },
+  policy: { errors: "safe" },
+});
+
+const value = await sandbox.run("VERSION");
+
+const ast = parse("1 + 2");
+```
+
+**Options overview**
+
+- `env`: Language preset (`"minimal"`, `"es2022"`, `"esnext"`, `"browser"`, `"node"`, `"wintercg"`)
+- `apis`: Add-on globals (`"fetch"`, `"console"`, `"timers"`, `"crypto"`, `"text"`, `"streams"`, etc.)
+- `globals`: Host-provided values
+- `limits.perRun`: Per-evaluation guards (`loops`, `callDepth`, `memoryBytes`)
+- `limits.total`: Cumulative resource limits (requires integrated tracking)
+- `policy.errors`: `"safe"` | `"sanitize"` | `"full"`
+- `modules`: `{ files, ast, externals }` for easy module resolution
 
 ### `new Interpreter(options?)`
 
