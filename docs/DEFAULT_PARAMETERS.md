@@ -11,4 +11,4 @@ Default parameter values: `function f(x = 1) {}`.
 
 ## Gotchas
 
-- Only identifier parameters are supported (no destructuring).
+- Defaults apply to identifiers and destructuring patterns (requires `Destructuring`).

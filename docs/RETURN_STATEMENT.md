@@ -7,7 +7,7 @@ Returns a value from a function.
 ## Interpreter implementation
 
 - Implemented in `evaluateReturnStatement` / `evaluateReturnStatementAsync`.
-- Uses a `ReturnValue` wrapper to bubble up through nested statements.
+- Uses a `ControlFlowSignal` to bubble up through nested statements.
 
 ## Gotchas
 

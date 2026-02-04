@@ -9,8 +9,9 @@ Iterates over values of an iterable: `for (const x of iterable)`.
 - Implemented in `evaluateForOfStatement` / `evaluateForOfStatementAsync`.
 - Sync: arrays, generators, and objects with `Symbol.iterator`.
 - Async: also supports `Symbol.asyncIterator` in `evaluateAsync`.
+- Left side supports identifiers, declarations, and destructuring patterns.
 
 ## Gotchas
 
-- No `for await...of` syntax.
+- `for await...of` is only supported in `evaluateAsync`.
 - Non-iterables throw.

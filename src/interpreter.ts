@@ -85,6 +85,7 @@ type ControlFlowKind = "return" | "break" | "continue" | "yield" | "optional-cha
 
 /**
  * Unified control-flow signal used for return/break/continue/yield/optional-chain.
+ * These are returned from evaluation helpers and bubbled up by callers.
  */
 class ControlFlowSignal {
   constructor(
@@ -182,10 +183,13 @@ interface ConstructorExecutionResult {
 }
 
 /**
- * Shared state type for generators
+ * Shared state type for generators.
  */
 type GeneratorState = "suspended-start" | "suspended-yield" | "executing" | "completed";
 
+/**
+ * Base class for generator instances (sync + async) that share yield bookkeeping.
+ */
 abstract class BaseGeneratorValue {
   protected state: GeneratorState = "suspended-start";
 
@@ -198,19 +202,23 @@ abstract class BaseGeneratorValue {
   ) {}
 
   protected setPendingYield(received: any): void {
+    // Store the value passed to next() for the next yield expression to read.
     this.interpreter.pendingYieldReceivedValue = {
       value: received,
       hasValue: true,
     };
+    // Mark resume state so the generator can fast-forward to the next yield point.
     this.interpreter.isResumingFromYield = true;
     this.interpreter.yieldCurrentIndex = 0;
   }
 
   protected clearResumingFromYield(): void {
+    // Clear resume flag once the pending yield value has been consumed.
     this.interpreter.isResumingFromYield = false;
   }
 
   protected resetYieldState(): void {
+    // Reset all yield tracking when the generator completes or terminates.
     this.interpreter.yieldResumeIndex = 0;
     this.interpreter.yieldCurrentIndex = 0;
     this.interpreter.yieldReceivedValues = [];
@@ -218,8 +226,8 @@ abstract class BaseGeneratorValue {
 }
 
 /**
- * Process a generator statement result and determine control flow.
- * Returns: { yielded: boolean, yieldValue?: any, delegate?: boolean, returned?: ControlFlowSignal, shouldBreak?: boolean, shouldContinue?: boolean }
+ * Translate a statement result into generator control flags for the main loop.
+ * Returns: { yielded, yieldValue?, delegate?, returned?, shouldBreak?, shouldContinue? }
  */
 function processGeneratorResult(result: any): {
   yielded: boolean;
@@ -248,6 +256,14 @@ function processGeneratorResult(result: any): {
   return { yielded: false };
 }
 
+// ============================================================================
+// ITERATOR HELPERS
+// ============================================================================
+
+/**
+ * Normalize a sync iterable/iterator to an Iterator instance.
+ * Accepts arrays, objects with Symbol.iterator, or iterator-like objects with next().
+ */
 function getSyncIterator(iterable: any, errorMessage: string): Iterator<any> {
   if (Array.isArray(iterable)) {
     return iterable[Symbol.iterator]();
@@ -261,6 +277,10 @@ function getSyncIterator(iterable: any, errorMessage: string): Iterator<any> {
   throw new InterpreterError(errorMessage);
 }
 
+/**
+ * Normalize an async iterable/iterator to a { iterator, isAsync } pair.
+ * Prefers Symbol.asyncIterator when present; falls back to sync iteration.
+ */
 function getAsyncIterator(
   iterable: any,
   errorMessage: string,
@@ -280,6 +300,9 @@ function getAsyncIterator(
   throw new InterpreterError(errorMessage);
 }
 
+/**
+ * Normalize the left side of a for...of into a name/pattern + declaration metadata.
+ */
 function extractForOfVariable(left: ESTree.ForOfStatement["left"]): {
   variableName?: string;
   pattern?: ESTree.ArrayPattern | ESTree.ObjectPattern;
@@ -319,6 +342,9 @@ function extractForOfVariable(left: ESTree.ForOfStatement["left"]): {
   throw new InterpreterError("Unsupported for...of left-hand side");
 }
 
+/**
+ * Normalize the left side of a for...in into a name + declaration metadata.
+ */
 function extractForInVariable(left: ESTree.ForInStatement["left"]): {
   variableName: string;
   isDeclaration: boolean;
@@ -3398,6 +3424,9 @@ export class Interpreter {
     }
   }
 
+  /**
+   * Resolve a module specifier and return its exports, evaluating if needed.
+   */
   private async resolveModuleExports(
     specifier: string,
     importerPath: string,
@@ -3415,6 +3444,7 @@ export class Interpreter {
       return moduleRecord.exports;
     }
 
+    // Module is initializing; evaluate its AST now to populate exports.
     let ast: ESTree.Program;
     if (moduleRecord.source !== undefined) {
       ast = parseModule(moduleRecord.source, { next: true });
@@ -3810,10 +3840,15 @@ export class Interpreter {
     }
   }
 
+  /**
+   * Build a dispatch table for AST node evaluation.
+   * This keeps sync/async logic co-located and avoids a giant switch.
+   */
   private createNodeHandlers(): Record<
     string,
     { sync: (node: ASTNode) => any; async: (node: ASTNode) => any }
   > {
+    // Helper for nodes whose sync/async behavior is identical.
     const same = (fn: (node: ASTNode) => any) => ({ sync: fn, async: fn });
     return {
       Program: {
@@ -4221,13 +4256,25 @@ export class Interpreter {
     return [newValue, returnValue];
   }
 
+  /**
+   * Evaluate nodes sequentially and return the last result.
+   * Used by Program, SequenceExpression, and other list-like nodes.
+   */
   private evaluateNodeList<T extends ESTree.Node>(nodes: T[], evalFn: (node: T) => any): any {
     if (nodes.length === 0) {
       return undefined;
     }
-    return nodes.reduce((_, node) => evalFn(node), undefined as any);
+    let result: any = undefined;
+    for (const node of nodes) {
+      result = evalFn(node);
+    }
+    return result;
   }
 
+  /**
+   * Async version of evaluateNodeList with strict left-to-right ordering.
+   * Important because earlier statements can define bindings for later ones.
+   */
   private async evaluateNodeListAsync<T extends ESTree.Node>(
     nodes: T[],
     evalFn: (node: T) => Promise<any>,
@@ -4268,6 +4315,8 @@ export class Interpreter {
   }
 
   private finalizeOptionalChain(result: any): any {
+    // Optional chaining uses a control-flow sentinel to short-circuit.
+    // Once the chain ends, convert it into the required undefined result.
     if (isControlFlowKind(result, "optional-chain")) {
       return undefined;
     }
@@ -4275,6 +4324,7 @@ export class Interpreter {
   }
 
   private buildTaggedTemplateStrings(quasi: ESTree.TemplateLiteral): string[] {
+    // Tag functions receive a frozen strings array with a non-enumerable "raw" property.
     const strings: string[] = quasi.quasis.map((q) => q.value.cooked);
     const raw: string[] = quasi.quasis.map((q) => q.value.raw);
     Object.freeze(raw);
@@ -4289,6 +4339,7 @@ export class Interpreter {
   }
 
   private callTagFunction(tag: any, args: any[], isAsync: boolean): any {
+    // Tag can be a sandbox function, host function, or native function.
     if (tag instanceof FunctionValue) {
       return isAsync
         ? this.executeSandboxFunctionAsync(tag, args, undefined)
@@ -4974,8 +5025,7 @@ export class Interpreter {
   }
 
   /**
-   * Evaluates function/constructor arguments, handling spread elements.
-   * Shared logic between evaluateCallExpression and evaluateNewExpression.
+   * Append spread arguments without using push(...spread) to avoid call-arg limits.
    */
   private appendSpreadArgs(target: any[], spreadValue: any[]): void {
     for (const value of spreadValue) {

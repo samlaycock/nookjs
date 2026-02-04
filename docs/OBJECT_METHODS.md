@@ -6,20 +6,20 @@ The interpreter provides support for various `Object` static methods through the
 
 ### ES5+ (Always Available)
 
-| Method                                        | Description                                  | Example                                       |
-| --------------------------------------------- | -------------------------------------------- | --------------------------------------------- |
-| `Object.keys(obj)`                            | Returns array of own enumerable string keys  | `Object.keys({a:1,b:2})` → `['a','b']`        |
-| `Object.getOwnPropertyNames(obj)`             | Returns array of own string keys             | `Object.getOwnPropertyNames({a:1})` → `['a']` |
-| `Object.getPrototypeOf(obj)`                  | Returns prototype (always `null` in sandbox) | `Object.getPrototypeOf({})` → `null`          |
-| `Object.getOwnPropertyDescriptor(obj, key)`   | Returns property descriptor                  | `Object.getOwnPropertyDescriptor({x:1}, 'x')` |
-| `Object.defineProperty(obj, key, descriptor)` | Defines property (restricted)                | Throws in sandbox                             |
-| `Object.defineProperties(obj, descriptors)`   | Defines multiple properties                  | Throws in sandbox                             |
-| `Object.seal(obj)`                            | Seals object (restricted)                    | Returns original object                       |
-| `Object.freeze(obj)`                          | Freezes object (restricted)                  | Returns original object                       |
-| `Object.isSealed(obj)`                        | Checks if sealed                             | `false`                                       |
-| `Object.isFrozen(obj)`                        | Checks if frozen                             | `false`                                       |
-| `Object.preventExtensions(obj)`               | Prevents extensions (restricted)             | Returns original object                       |
-| `Object.isExtensible(obj)`                    | Checks if extensible                         | `false`                                       |
+| Method                                        | Description                                                    | Example                                          |
+| --------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------ |
+| `Object.keys(obj)`                            | Returns array of own enumerable string keys                    | `Object.keys({a:1,b:2})` → `['a','b']`           |
+| `Object.getOwnPropertyNames(obj)`             | Returns array of own string keys                               | `Object.getOwnPropertyNames({a:1})` → `['a']`    |
+| `Object.getPrototypeOf(obj)`                  | Returns prototype (ReadOnlyProxy globals report `null`)        | `Object.getPrototypeOf({})` → `Object.prototype` |
+| `Object.getOwnPropertyDescriptor(obj, key)`   | Returns property descriptor                                    | `Object.getOwnPropertyDescriptor({x:1}, 'x')`    |
+| `Object.defineProperty(obj, key, descriptor)` | Defines property (blocked on ReadOnlyProxy globals)            | `Object.defineProperty({}, 'x', {value:1})`      |
+| `Object.defineProperties(obj, descriptors)`   | Defines multiple properties (blocked on ReadOnlyProxy globals) | `Object.defineProperties({}, {x:{value:1}})`     |
+| `Object.seal(obj)`                            | Seals object                                                   | `Object.seal({})` → object                       |
+| `Object.freeze(obj)`                          | Freezes object                                                 | `Object.freeze({})` → object                     |
+| `Object.isSealed(obj)`                        | Checks if sealed                                               | `Object.isSealed({})` → `false`                  |
+| `Object.isFrozen(obj)`                        | Checks if frozen                                               | `Object.isFrozen({})` → `false`                  |
+| `Object.preventExtensions(obj)`               | Prevents extensions                                            | `Object.preventExtensions({})` → object          |
+| `Object.isExtensible(obj)`                    | Checks if extensible                                           | `Object.isExtensible({})` → `true`               |
 
 ### ES2017+ Additions
 
@@ -38,25 +38,17 @@ The interpreter provides support for various `Object` static methods through the
 
 ### Security Restrictions
 
-The following methods are restricted in the sandbox:
+ReadOnlyProxy-wrapped globals are read-only. As a result:
 
-- `Object.setPrototypeOf()` - Throws `PROTOTYPE_ACCESS` error
-- `Object.defineProperty()` / `Object.defineProperties()` - Throws for non-wrapped properties
-- `Object.create()` with prototype - Restricted
-
-These restrictions prevent prototype chain manipulation attacks.
+- `Object.defineProperty()` / `Object.defineProperties()` throw when targeting wrapped globals.
+- `Object.setPrototypeOf()` throws when targeting wrapped globals.
+- Prototype access on wrapped globals is hidden (`Object.getPrototypeOf` returns `null`).
 
 ### Prototype Behavior
 
-In the sandbox:
-
-```javascript
-const obj = {};
-Object.getPrototypeOf(obj); // null
-obj.__proto__; // undefined (blocked)
-obj.constructor; // undefined (blocked)
-Object.prototype.isPrototypeOf(obj); // false
-```
+Prototype access is limited for safety. Dangerous property names like `__proto__` and
+`constructor` are blocked, and wrapped globals hide their prototype chain. Plain sandbox
+objects still use the normal JavaScript prototype chain.
 
 ### hasOwn vs hasOwnProperty
 

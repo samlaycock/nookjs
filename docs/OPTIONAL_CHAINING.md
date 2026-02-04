@@ -6,7 +6,7 @@ Optional chaining (`?.`) for safe member access and calls.
 
 ## Interpreter implementation
 
-- Implemented via `ChainExpression` with `OptionalChainShortCircuit`.
+- Implemented via `ChainExpression` with an internal control-flow signal to short-circuit.
 - If any optional access hits `null`/`undefined`, the chain returns `undefined`.
 
 ## Gotchas

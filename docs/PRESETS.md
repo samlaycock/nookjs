@@ -93,13 +93,17 @@ All ES presets include these globals (from ES5):
 - `parseInt`, `parseFloat`, `isNaN`, `isFinite`
 - `encodeURI`, `encodeURIComponent`, `decodeURI`, `decodeURIComponent`
 
+Always available regardless of preset:
+
+- `Promise`, `Symbol`, `globalThis`, `global`
+
 ES2015+ presets add:
 
-- `Promise`, `Symbol`, `Map`, `Set`, `WeakMap`, `WeakSet`
+- `Map`, `Set`, `WeakMap`, `WeakSet`
 
 ES2020+ presets add:
 
-- `BigInt`, `globalThis`
+- `BigInt`
 
 ES2021+ presets add:
 

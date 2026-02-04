@@ -22,7 +22,9 @@
 
 ## Language Features
 
-Each file below documents one `LanguageFeature` flag supported by the interpreter. Every doc covers:
+Most files below map directly to a `LanguageFeature` flag. A few cover related syntax or
+interpreter behavior that is enabled by another flag (for example tagged templates under
+`TemplateLiterals`). Every doc covers:
 
 - What the language feature is
 - How it is implemented in this interpreter
