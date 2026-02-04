@@ -6,65 +6,68 @@ Resource attribution enables host applications to monitor and limit cumulative r
 
 NookJS provides two approaches to resource tracking:
 
-1. **Integrated Resource Tracking** - Enable via `{ resourceTracking: true }` on the Interpreter. The Interpreter tracks resources internally and exposes methods to get stats, set limits, and reset.
+1. **Integrated Resource Tracking** - Enable via `limits.total` or `trackResources` on `createSandbox()`. The sandbox tracks resources internally and exposes stats via `sandbox.resources()`.
 
 2. **Standalone ResourceTracker** - Use the `ResourceTracker` class independently for custom resource accounting scenarios.
 
-## Integrated Resource Tracking
+## Simplified API (createSandbox)
 
-The recommended approach for most use cases. Enable tracking when creating the Interpreter:
+The simplified API enables integrated tracking automatically when you set total limits:
 
 ```typescript
-import { Interpreter, ResourceExhaustedError } from "nookjs";
+import { createSandbox } from "nookjs";
 
-const interpreter = new Interpreter({
-  globals: { console },
-  resourceTracking: true,
+const sandbox = createSandbox({
+  env: "es2022",
+  limits: {
+    total: {
+      evaluations: 100,
+      memoryBytes: 50 * 1024 * 1024,
+    },
+  },
 });
 
-// Set limits
-interpreter.setResourceLimit("maxTotalMemory", 100 * 1024 * 1024); // 100 MB
-interpreter.setResourceLimit("maxTotalIterations", 1000000); // 1M iterations
-interpreter.setResourceLimit("maxFunctionCalls", 10000); // 10K calls
-interpreter.setResourceLimit("maxEvaluations", 100); // 100 evaluations
+const out = await sandbox.run("1 + 2", { result: "full" });
+console.log(out.resources?.evaluations);
+```
 
-// Run code
+You can also enable tracking explicitly with `trackResources: true` and access stats via
+`sandbox.resources()` or `sandbox.interpreter.getResourceStats()`.
+
+## Integrated Resource Tracking
+
+The recommended approach for most use cases. Enable tracking when creating a sandbox and set
+total limits:
+
+```typescript
+import { createSandbox, ResourceExhaustedError } from "nookjs";
+
+const sandbox = createSandbox({
+  env: "es2022",
+  limits: {
+    total: {
+      memoryBytes: 100 * 1024 * 1024,
+      iterations: 1_000_000,
+      functionCalls: 10_000,
+      evaluations: 100,
+    },
+  },
+});
+
 try {
-  interpreter.evaluate("const arr = Array(1000).fill(0)");
-  interpreter.evaluate("for (let i = 0; i < 10000; i++) {}");
+  await sandbox.run("const arr = Array(1000).fill(0)");
+  await sandbox.run("for (let i = 0; i < 10000; i++) {}");
 } catch (error) {
   if (error instanceof ResourceExhaustedError) {
     console.log(`Resource limit exceeded: ${error.resourceType}`);
   }
 }
 
-// Get cumulative stats
-const stats = interpreter.getResourceStats();
-console.log(`Memory used: ${stats.memoryBytes} bytes`);
-console.log(`Iterations: ${stats.iterations}`);
-console.log(`Evaluations: ${stats.evaluations}`);
+const stats = sandbox.resources();
+console.log(`Memory used: ${stats?.memoryBytes} bytes`);
 ```
 
-### Interpreter Resource Methods
-
-When `resourceTracking: true` is set, the Interpreter exposes these methods:
-
-```typescript
-// Get cumulative resource statistics
-interpreter.getResourceStats(): ResourceStats;
-
-// Reset all tracking statistics
-interpreter.resetResourceStats(): void;
-
-// Get history of past evaluations
-interpreter.getResourceHistory(): ResourceHistoryEntry[];
-
-// Set a resource limit
-interpreter.setResourceLimit(key: keyof ResourceLimits, value: number): void;
-
-// Get a resource limit
-interpreter.getResourceLimit(key: keyof ResourceLimits): number | undefined;
-```
+For low-level resource APIs, see [Internal Classes](INTERNAL_CLASSES.md).
 
 ## Standalone ResourceTracker
 
@@ -104,7 +107,7 @@ const memLimit = tracker.getLimit("maxTotalMemory");
 const history = tracker.getHistory();
 ```
 
-**Note**: The standalone ResourceTracker is not automatically integrated with the Interpreter. Use integrated tracking (`resourceTracking: true`) for automatic enforcement during evaluation.
+**Note**: The standalone ResourceTracker is not automatically integrated with the sandbox. Use integrated tracking via `createSandbox()` for automatic enforcement during evaluation.
 
 ## Type Reference
 
@@ -171,29 +174,30 @@ class ResourceExhaustedError extends InterpreterError {
 
 ### Multi-Tenant Plugin Systems
 
-Track resource usage per plugin using integrated tracking:
+Track resource usage per plugin using total limits:
 
 ```typescript
-function createPluginInterpreter(pluginId: string, memoryLimit: number) {
-  const interpreter = new Interpreter({
-    resourceTracking: true,
+function createPluginSandbox(pluginId: string, memoryLimit: number) {
+  return createSandbox({
+    env: "es2022",
     globals: getPluginGlobals(pluginId),
+    limits: {
+      total: {
+        memoryBytes: memoryLimit,
+        evaluations: 1000,
+      },
+    },
   });
-
-  interpreter.setResourceLimit("maxTotalMemory", memoryLimit);
-  interpreter.setResourceLimit("maxEvaluations", 1000);
-
-  return interpreter;
 }
 
 const plugins = {
-  payment: createPluginInterpreter("payment", 50 * 1024 * 1024),
-  analytics: createPluginInterpreter("analytics", 50 * 1024 * 1024),
+  payment: createPluginSandbox("payment", 50 * 1024 * 1024),
+  analytics: createPluginSandbox("analytics", 50 * 1024 * 1024),
 };
 
-plugins.payment.evaluate(paymentCode);
-const stats = plugins.payment.getResourceStats();
-console.log(`Payment plugin memory: ${stats.memoryBytes} bytes`);
+await plugins.payment.run(paymentCode);
+const stats = plugins.payment.resources();
+console.log(`Payment plugin memory: ${stats?.memoryBytes} bytes`);
 ```
 
 ### Educational Platforms
@@ -202,24 +206,22 @@ Monitor student code submissions:
 
 ```typescript
 class StudentSession {
-  private interpreter: Interpreter;
+  private sandbox = createSandbox({
+    env: "es2022",
+    globals: { console: educationalConsole },
+    limits: {
+      total: {
+        evaluations: 50,
+        iterations: 100_000,
+        cpuTimeMs: 5000,
+      },
+    },
+  });
 
-  constructor(studentId: string) {
-    this.interpreter = new Interpreter({
-      resourceTracking: true,
-      globals: { console: educationalConsole },
-    });
-
-    // Set limits for student submissions
-    this.interpreter.setResourceLimit("maxEvaluations", 50);
-    this.interpreter.setResourceLimit("maxTotalIterations", 100000);
-    this.interpreter.setResourceLimit("maxCpuTime", 5000);
-  }
-
-  submitCode(code: string): SubmissionResult {
+  async submitCode(code: string): Promise<SubmissionResult> {
     try {
-      this.interpreter.evaluate(code);
-      return { success: true, stats: this.interpreter.getResourceStats() };
+      await this.sandbox.run(code);
+      return { success: true, stats: this.sandbox.resources() };
     } catch (error) {
       if (error instanceof ResourceExhaustedError) {
         return {
@@ -231,14 +233,6 @@ class StudentSession {
       throw error;
     }
   }
-
-  getStats() {
-    return this.interpreter.getResourceStats();
-  }
-
-  reset() {
-    this.interpreter.resetResourceStats();
-  }
 }
 ```
 
@@ -247,24 +241,21 @@ class StudentSession {
 Implement evaluation-count-based rate limiting:
 
 ```typescript
-class RateLimitedInterpreter {
-  private interpreter: Interpreter;
-
-  constructor() {
-    this.interpreter = new Interpreter({
-      resourceTracking: true,
-    });
-
-    // Allow 1000 evaluations per period
-    this.interpreter.setResourceLimit("maxEvaluations", 1000);
-  }
+class RateLimitedSandbox {
+  private sandbox = createSandbox({
+    env: "es2022",
+    limits: { total: { evaluations: 1000 } },
+  });
 
   evaluate(code: string): unknown {
-    return this.interpreter.evaluate(code);
+    return this.sandbox.runSync(code);
   }
 
   refill(): void {
-    this.interpreter.resetResourceStats();
+    this.sandbox = createSandbox({
+      env: "es2022",
+      limits: { total: { evaluations: 1000 } },
+    });
   }
 }
 ```
@@ -275,34 +266,32 @@ Track resources for usage-based billing:
 
 ```typescript
 class BillingTracker {
-  private interpreter: Interpreter;
-
-  constructor() {
-    this.interpreter = new Interpreter({
-      resourceTracking: true,
-    });
-  }
+  private sandbox = createSandbox({
+    env: "es2022",
+    trackResources: true,
+  });
 
   evaluate(code: string): unknown {
-    return this.interpreter.evaluate(code);
+    return this.sandbox.runSync(code);
   }
 
   generateInvoice(userId: string): Invoice {
-    const stats = this.interpreter.getResourceStats();
+    const stats = this.sandbox.resources();
 
     return {
       userId,
-      evaluations: stats.evaluations,
+      evaluations: stats?.evaluations ?? 0,
       resourceUsage: {
-        memoryMB: stats.memoryBytes / (1024 * 1024),
-        iterations: stats.iterations,
-        cpuTimeMs: stats.cpuTimeMs,
+        memoryMB: (stats?.memoryBytes ?? 0) / (1024 * 1024),
+        iterations: stats?.iterations ?? 0,
+        cpuTimeMs: stats?.cpuTimeMs ?? 0,
       },
       cost: this.calculateCost(stats),
     };
   }
 
-  private calculateCost(stats: ResourceStats): number {
+  private calculateCost(stats?: ResourceStats): number {
+    if (!stats) return 0;
     const baseCost = 0.01;
     const memoryCost = (stats.memoryBytes / (1024 * 1024)) * 0.001;
     const iterationCost = stats.iterations * 0.00001;
@@ -316,25 +305,17 @@ class BillingTracker {
 Expose stats for monitoring:
 
 ```typescript
-function createMonitoredInterpreter() {
-  const interpreter = new Interpreter({
-    resourceTracking: true,
+function createMonitoredSandbox() {
+  const sandbox = createSandbox({
+    env: "es2022",
+    limits: { total: { memoryBytes: 500 * 1024 * 1024, iterations: 10_000_000 } },
   });
 
-  interpreter.setResourceLimit("maxTotalMemory", 500 * 1024 * 1024);
-  interpreter.setResourceLimit("maxTotalIterations", 10000000);
-
   return {
-    evaluate: (code: string) => interpreter.evaluate(code),
+    evaluate: (code: string) => sandbox.runSync(code),
     getMetrics: () => ({
-      current: interpreter.getResourceStats(),
-      history: interpreter.getResourceHistory(),
-      limits: {
-        memory: interpreter.getResourceLimit("maxTotalMemory"),
-        iterations: interpreter.getResourceLimit("maxTotalIterations"),
-      },
+      current: sandbox.resources(),
     }),
-    reset: () => interpreter.resetResourceStats(),
   };
 }
 ```

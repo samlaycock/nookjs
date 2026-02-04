@@ -18,17 +18,17 @@ export function BasicExamples() {
           The simplest use case - evaluate mathematical expressions:
         </p>
         <CodeBlock
-          code={`import { Interpreter } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
-const interpreter = new Interpreter();
+const sandbox = createSandbox();
 
 // Basic math
-interpreter.evaluate("2 + 2");          // 4
-interpreter.evaluate("10 * 5 / 2");     // 25
-interpreter.evaluate("2 ** 10");        // 1024
+sandbox.runSync("2 + 2");          // 4
+sandbox.runSync("10 * 5 / 2");     // 25
+sandbox.runSync("2 ** 10");        // 1024
 
 // With variables
-interpreter.evaluate(\`
+sandbox.runSync(\`
   let x = 10;
   let y = 20;
   x * y + 5
@@ -42,31 +42,30 @@ interpreter.evaluate(\`
           Build a spreadsheet-style formula evaluator with cell references:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
 function createFormulaEvaluator() {
-  const interpreter = new Interpreter(
-    preset(ES2024, {
-      globals: {
-        // Spreadsheet functions
-        SUM: (...nums: number[]) => nums.reduce((a, b) => a + b, 0),
-        AVG: (...nums: number[]) => nums.reduce((a, b) => a + b, 0) / nums.length,
-        MIN: Math.min,
-        MAX: Math.max,
-        ABS: Math.abs,
-        ROUND: Math.round,
-        FLOOR: Math.floor,
-        CEIL: Math.ceil,
-        IF: (condition: boolean, then: unknown, else_: unknown) =>
-          condition ? then : else_,
-        AND: (...vals: boolean[]) => vals.every(Boolean),
-        OR: (...vals: boolean[]) => vals.some(Boolean),
-      },
-    })
-  );
+  const sandbox = createSandbox({
+    env: "es2024",
+    globals: {
+      // Spreadsheet functions
+      SUM: (...nums: number[]) => nums.reduce((a, b) => a + b, 0),
+      AVG: (...nums: number[]) => nums.reduce((a, b) => a + b, 0) / nums.length,
+      MIN: Math.min,
+      MAX: Math.max,
+      ABS: Math.abs,
+      ROUND: Math.round,
+      FLOOR: Math.floor,
+      CEIL: Math.ceil,
+      IF: (condition: boolean, then: unknown, else_: unknown) =>
+        condition ? then : else_,
+      AND: (...vals: boolean[]) => vals.every(Boolean),
+      OR: (...vals: boolean[]) => vals.some(Boolean),
+    },
+  });
 
   return function evaluate(formula: string, cells: Record<string, number>) {
-    return interpreter.evaluate(formula, { globals: cells });
+    return sandbox.runSync(formula, { globals: cells });
   };
 }
 
@@ -87,7 +86,7 @@ evaluate("SUM(A1, A2) * IF(B1 > 50, 2, 1)", cells); // 60`}
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Configuration/Rules Engine</h2>
         <p className="text-neutral-300 mb-4">Let users define business rules in JavaScript:</p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
 interface Order {
   total: number;
@@ -97,10 +96,10 @@ interface Order {
 }
 
 function createRulesEngine() {
-  const interpreter = new Interpreter(ES2024);
+  const sandbox = createSandbox({ env: "es2024" });
 
   return function evaluateRule(rule: string, order: Order): boolean {
-    return interpreter.evaluate(rule, {
+    return sandbox.runSync(rule, {
       globals: { order },
     }) as boolean;
   };
@@ -147,40 +146,39 @@ const applicableDiscounts = rules.filter((rule) =>
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Template Rendering</h2>
         <p className="text-neutral-300 mb-4">Execute template expressions safely:</p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
 function createTemplateEngine() {
-  const interpreter = new Interpreter(
-    preset(ES2024, {
-      globals: {
-        // Template helpers
-        uppercase: (s: string) => s.toUpperCase(),
-        lowercase: (s: string) => s.toLowerCase(),
-        capitalize: (s: string) => s.charAt(0).toUpperCase() + s.slice(1),
-        formatDate: (d: string | Date) => new Date(d).toLocaleDateString(),
-        formatCurrency: (n: number) => "$" + n.toFixed(2),
-        pluralize: (count: number, singular: string, plural: string) =>
-          count === 1 ? singular : plural,
-      },
-      // Disable loops for safety
-      featureControl: {
-        mode: "blacklist",
-        features: [
-          "ForStatement",
-          "WhileStatement",
-          "DoWhileStatement",
-          "ForInStatement",
-          "ForOfStatement",
-        ],
-      },
-    })
-  );
+  const sandbox = createSandbox({
+    env: "es2024",
+    globals: {
+      // Template helpers
+      uppercase: (s: string) => s.toUpperCase(),
+      lowercase: (s: string) => s.toLowerCase(),
+      capitalize: (s: string) => s.charAt(0).toUpperCase() + s.slice(1),
+      formatDate: (d: string | Date) => new Date(d).toLocaleDateString(),
+      formatCurrency: (n: number) => "$" + n.toFixed(2),
+      pluralize: (count: number, singular: string, plural: string) =>
+        count === 1 ? singular : plural,
+    },
+    // Disable loops for safety
+    features: {
+      mode: "blacklist",
+      disable: [
+        "ForStatement",
+        "WhileStatement",
+        "DoWhileStatement",
+        "ForInStatement",
+        "ForOfStatement",
+      ],
+    },
+  });
 
   // Render template with {{ expression }} syntax
   return function render(template: string, data: Record<string, unknown>): string {
     return template.replace(/\\{\\{\\s*(.+?)\\s*\\}\\}/g, (_, expression) => {
       try {
-        const result = interpreter.evaluate(expression, { globals: data });
+        const result = sandbox.runSync(expression, { globals: data });
         return String(result);
       } catch (error) {
         return \`[Error: \${expression}]\`;
@@ -214,13 +212,13 @@ const html = render(template, {
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Data Transformation</h2>
         <p className="text-neutral-300 mb-4">Let users define data transformations:</p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
 function createTransformer<T, R>(transformCode: string) {
-  const interpreter = new Interpreter(ES2024);
+  const sandbox = createSandbox({ env: "es2024" });
 
   return function transform(data: T): R {
-    return interpreter.evaluate(transformCode, {
+    return sandbox.runSync(transformCode, {
       globals: { data },
     }) as R;
   };
@@ -251,7 +249,7 @@ const result = transform({
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Validation Rules</h2>
         <p className="text-neutral-300 mb-4">Let users define validation logic:</p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset, RuntimeError } from "nookjs";
+          code={`import { createSandbox, RuntimeError } from "nookjs";
 
 interface ValidationResult {
   valid: boolean;
@@ -259,14 +257,14 @@ interface ValidationResult {
 }
 
 function createValidator(rules: Array<{ rule: string; message: string }>) {
-  const interpreter = new Interpreter(ES2024);
+  const sandbox = createSandbox({ env: "es2024" });
 
   return function validate(data: Record<string, unknown>): ValidationResult {
     const errors: string[] = [];
 
     for (const { rule, message } of rules) {
       try {
-        const result = interpreter.evaluate(rule, { globals: data });
+        const result = sandbox.runSync(rule, { globals: data });
         if (!result) {
           errors.push(message);
         }
@@ -307,7 +305,7 @@ const result = validateUser({
           Add computed properties to objects based on user-defined formulas:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
 interface FieldDefinition {
   name: string;
@@ -317,13 +315,13 @@ interface FieldDefinition {
 function createCalculatedFields<T extends Record<string, unknown>>(
   fields: FieldDefinition[]
 ) {
-  const interpreter = new Interpreter(ES2024);
+  const sandbox = createSandbox({ env: "es2024" });
 
   return function compute(data: T): T & Record<string, unknown> {
     const result = { ...data };
 
     for (const field of fields) {
-      result[field.name] = interpreter.evaluate(field.formula, {
+      result[field.name] = sandbox.runSync(field.formula, {
         globals: result,
       });
     }

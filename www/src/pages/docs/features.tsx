@@ -42,34 +42,57 @@ export function Features() {
       </section>
 
       <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Simplified Toggles</h2>
+        <p className="text-neutral-300 mb-4">
+          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">features</code> with
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">createSandbox()</code> to
+          enable or disable specific features.
+        </p>
+        <CodeBlock
+          code={`import { createSandbox } from "nookjs";
+
+const sandbox = createSandbox({
+  env: "es2022",
+  features: {
+    disable: ["ArrowFunctions", "ForStatement"],
+  },
+});
+
+// Throws: ArrowFunctions is not enabled
+sandbox.runSync("(() => 1)()");`}
+        />
+      </section>
+
+      <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Whitelist Mode</h2>
         <p className="text-neutral-300 mb-4">
           Only allow explicitly listed features (most restrictive):
         </p>
         <CodeBlock
-          code={`import { Interpreter } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
-const interpreter = new Interpreter({
-  featureControl: {
+const sandbox = createSandbox({
+  env: "es2022",
+  features: {
     mode: "whitelist",
-    features: [
+    enable: [
       "VariableDeclarations",
       "BinaryOperators",
       "UnaryOperators",
-      "FunctionCalls",
-      "MemberExpressions",
+      "CallExpression",
+      "MemberExpression",
     ],
   },
 });
 
 // These work
-interpreter.evaluate("let x = 5");
-interpreter.evaluate("x + 10");
-interpreter.evaluate("Math.abs(-5)");
+sandbox.runSync("let x = 5");
+sandbox.runSync("x + 10");
+sandbox.runSync("Math.abs(-5)");
 
 // These throw FeatureError
-interpreter.evaluate("for (let i = 0; i < 10; i++) {}"); // ForStatement not enabled
-interpreter.evaluate("() => {}");                         // ArrowFunctions not enabled`}
+sandbox.runSync("for (let i = 0; i < 10; i++) {}"); // ForStatement not enabled
+sandbox.runSync("() => {}");                         // ArrowFunctions not enabled`}
         />
       </section>
 
@@ -77,10 +100,11 @@ interpreter.evaluate("() => {}");                         // ArrowFunctions not 
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Blacklist Mode</h2>
         <p className="text-neutral-300 mb-4">Allow everything except explicitly listed features:</p>
         <CodeBlock
-          code={`const interpreter = new Interpreter({
-  featureControl: {
+          code={`const sandbox = createSandbox({
+  env: "es2022",
+  features: {
     mode: "blacklist",
-    features: [
+    disable: [
       "ForStatement",
       "WhileStatement",
       "DoWhileStatement",
@@ -91,12 +115,12 @@ interpreter.evaluate("() => {}");                         // ArrowFunctions not 
 });
 
 // Most features work
-interpreter.evaluate("const fn = () => x * 2");
-interpreter.evaluate("if (x > 0) { return x; }");
+sandbox.runSync("const fn = () => x * 2");
+sandbox.runSync("if (x > 0) { return x; }");
 
 // Loops throw FeatureError
-interpreter.evaluate("for (let i = 0; i < 10; i++) {}"); // ForStatement is blacklisted
-interpreter.evaluate("while (true) {}");                  // WhileStatement is blacklisted`}
+sandbox.runSync("for (let i = 0; i < 10; i++) {}"); // ForStatement is blacklisted
+sandbox.runSync("while (true) {}");                  // WhileStatement is blacklisted`}
         />
       </section>
 
@@ -245,21 +269,20 @@ interpreter.evaluate("while (true) {}");                  // WhileStatement is b
           restrict them:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
 // ES2024 preset with loops disabled
-const interpreter = new Interpreter(
-  preset(ES2024, {
-    featureControl: {
-      mode: "blacklist",
-      features: [
-        "ForStatement",
-        "WhileStatement",
-        "DoWhileStatement",
-      ],
-    },
-  })
-);`}
+const sandbox = createSandbox({
+  env: "es2024",
+  features: {
+    mode: "blacklist",
+    disable: [
+      "ForStatement",
+      "WhileStatement",
+      "DoWhileStatement",
+    ],
+  },
+});`}
         />
       </section>
 
@@ -272,13 +295,13 @@ const interpreter = new Interpreter(
               Formula Evaluator (Math Only)
             </h3>
             <p className="text-neutral-400 text-sm mb-3">
-              A minimal interpreter for spreadsheet-style formulas:
+              A minimal sandbox for spreadsheet-style formulas:
             </p>
             <CodeBlock
-              code={`const formulaInterpreter = new Interpreter({
-  featureControl: {
+              code={`const sandbox = createSandbox({
+  features: {
     mode: "whitelist",
-    features: [
+    enable: [
       "BinaryOperators",
       "UnaryOperators",
       "ConditionalExpression",
@@ -294,9 +317,9 @@ const interpreter = new Interpreter(
   },
 });
 
-formulaInterpreter.evaluate("SUM(1, 2, 3) * 2"); // 12
-formulaInterpreter.evaluate("IF(A1 > 10, A1 * 0.9, A1)", {
-  globals: { A1: 15 }
+sandbox.runSync("SUM(1, 2, 3) * 2"); // 12
+sandbox.runSync("IF(A1 > 10, A1 * 0.9, A1)", {
+  globals: { A1: 15 },
 }); // 13.5`}
             />
           </div>
@@ -309,10 +332,10 @@ formulaInterpreter.evaluate("IF(A1 > 10, A1 * 0.9, A1)", {
               Allow expressions but prevent potentially infinite loops:
             </p>
             <CodeBlock
-              code={`const templateInterpreter = new Interpreter({
-  featureControl: {
+              code={`const sandbox = createSandbox({
+  features: {
     mode: "blacklist",
-    features: [
+    disable: [
       "ForStatement",
       "ForInStatement",
       "ForOfStatement",
@@ -337,19 +360,19 @@ formulaInterpreter.evaluate("IF(A1 > 10, A1 * 0.9, A1)", {
               Teach JavaScript basics without modern syntax:
             </p>
             <CodeBlock
-              code={`import { Interpreter, ES5 } from "nookjs";
+              code={`import { createSandbox } from "nookjs";
 
 // ES5 preset only enables pre-2015 features
-const learningInterpreter = new Interpreter(ES5);
+const sandbox = createSandbox({ env: "es5" });
 
 // These work
-learningInterpreter.evaluate("var x = 5;");
-learningInterpreter.evaluate("function add(a, b) { return a + b; }");
+sandbox.runSync("var x = 5;");
+sandbox.runSync("function add(a, b) { return a + b; }");
 
 // These throw FeatureError
-learningInterpreter.evaluate("let x = 5;");    // let not in ES5
-learningInterpreter.evaluate("() => {}");       // arrows not in ES5
-learningInterpreter.evaluate("class Foo {}");   // classes not in ES5`}
+sandbox.runSync("let x = 5;");    // let not in ES5
+sandbox.runSync("() => {}");       // arrows not in ES5
+sandbox.runSync("class Foo {}");   // classes not in ES5`}
             />
           </div>
         </div>
@@ -363,17 +386,17 @@ learningInterpreter.evaluate("class Foo {}");   // classes not in ES5`}
           thrown:
         </p>
         <CodeBlock
-          code={`import { Interpreter, FeatureError } from "nookjs";
+          code={`import { createSandbox, FeatureError } from "nookjs";
 
-const interpreter = new Interpreter({
-  featureControl: {
+const sandbox = createSandbox({
+  features: {
     mode: "whitelist",
-    features: ["BinaryOperators"],
+    enable: ["BinaryOperators"],
   },
 });
 
 try {
-  interpreter.evaluate("for (let i = 0; i < 10; i++) {}");
+  sandbox.runSync("for (let i = 0; i < 10; i++) {}");
 } catch (error) {
   if (error instanceof FeatureError) {
     console.log(error.feature);  // "ForStatement"

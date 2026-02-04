@@ -13,12 +13,40 @@ The module system provides:
 - Lifecycle hooks for monitoring and debugging
 - Introspection API for cache management
 
+## Simplified Modules (createSandbox)
+
+For simple cases, you can provide module sources directly without implementing a resolver:
+
+```typescript
+import { createSandbox } from "nookjs";
+
+const sandbox = createSandbox({
+  env: "es2022",
+  modules: {
+    files: {
+      "math.js": "export const add = (a, b) => a + b;",
+    },
+    externals: {
+      lodash: { map, filter },
+    },
+  },
+});
+
+const exports = await sandbox.runModule(
+  `import { add } from "math.js";
+   export const result = add(1, 2);`,
+  { path: "main.js" },
+);
+```
+
+Use a custom `resolver` when you need advanced resolution logic, access control, or lazy loading.
+
 ## Enabling the Module System
 
 The module system is disabled by default. Enable it by providing a `modules` configuration:
 
 ```typescript
-import { Interpreter, ModuleResolver } from "nookjs";
+import { createSandbox, type ModuleResolver } from "nookjs";
 
 const resolver: ModuleResolver = {
   resolve(specifier, importer, context) {
@@ -27,9 +55,9 @@ const resolver: ModuleResolver = {
   },
 };
 
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
+  env: "es2022",
   modules: {
-    enabled: true,
     resolver,
     maxDepth: 100, // Optional: max import depth (default: 100)
     cache: true, // Optional: enable caching (default: true)
@@ -279,10 +307,10 @@ const resolver: ModuleResolver = {
 
 ## Evaluating Module Code
 
-Use `evaluateModuleAsync` to evaluate ES module code:
+Use `runModule` to evaluate ES module code:
 
 ```typescript
-const exports = await interpreter.evaluateModuleAsync(
+const exports = await sandbox.runModule(
   `
   import { add } from "math.js";
   export const result = add(1, 2);
@@ -309,50 +337,29 @@ By default, modules are cached after first evaluation:
 
 ```typescript
 // First import evaluates the module
-await interpreter.evaluateModuleAsync('import { x } from "mod.js";', { path: "a.js" });
+await sandbox.runModule('import { x } from "mod.js";', { path: "a.js" });
 
 // Second import uses cached exports (no re-evaluation)
-await interpreter.evaluateModuleAsync('import { x } from "mod.js";', { path: "b.js" });
+await sandbox.runModule('import { x } from "mod.js";', { path: "b.js" });
 ```
 
 ### Cache Control
 
 ```typescript
 // Disable caching (re-evaluate on every import)
-const interpreter = new Interpreter({
-  modules: { enabled: true, resolver, cache: false },
+const sandbox = createSandbox({
+  env: "es2022",
+  modules: { resolver, cache: false },
 });
 
-// Clear cache programmatically
-interpreter.clearModuleCache();
+// For programmatic cache management, use the internal Interpreter API
+// (see docs/INTERNAL_CLASSES.md).
 ```
 
 ## Introspection API
 
-Query the module system state:
-
-```typescript
-// Check if a module is cached
-interpreter.isModuleCached("math.js"); // by specifier
-interpreter.isModuleCachedByPath("/full/path/math.js"); // by path
-
-// List loaded modules
-interpreter.getLoadedModuleSpecifiers(); // ["math.js", "utils.js"]
-interpreter.getLoadedModulePaths(); // ["/full/path/math.js", ...]
-
-// Get module metadata
-const metadata = interpreter.getModuleMetadata("math.js");
-// { path: string, specifier: string, status: string, loadedAt: number }
-
-// Get cached exports
-const exports = interpreter.getModuleExports("math.js");
-
-// Cache size
-interpreter.getModuleCacheSize(); // number of cached modules
-
-// Check if module system is enabled
-interpreter.isModuleSystemEnabled(); // true
-```
+Module cache introspection and management are available on the internal `Interpreter` class.
+See [Internal Classes](INTERNAL_CLASSES.md) for details.
 
 ## Lifecycle Hooks
 
@@ -429,9 +436,9 @@ export const b = "b"; // Works - doesn't depend on 'a'
 Prevent stack overflow from deeply nested imports:
 
 ```typescript
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
+  env: "es2022",
   modules: {
-    enabled: true,
     resolver,
     maxDepth: 50, // Throw after 50 levels of imports
   },
@@ -456,7 +463,7 @@ const interpreter = new Interpreter({
 ## Complete Example
 
 ```typescript
-import { Interpreter, ModuleResolver } from "nookjs";
+import { createSandbox, type ModuleResolver } from "nookjs";
 
 // Define a virtual file system
 const modules = new Map([
@@ -506,12 +513,13 @@ const resolver: ModuleResolver = {
 };
 
 // Create interpreter
-const interpreter = new Interpreter({
-  modules: { enabled: true, resolver },
+const sandbox = createSandbox({
+  env: "es2022",
+  modules: { resolver },
 });
 
 // Run module code
-const result = await interpreter.evaluateModuleAsync(
+const result = await sandbox.runModule(
   `
   import { add, multiply, capitalize, GREETING } from "utils/index.js";
 

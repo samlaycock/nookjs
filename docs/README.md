@@ -5,6 +5,11 @@
 - [SECURITY](SECURITY.md) - Security sandboxing model, options, and recommendations
 - [RESOURCE_ATTRIBUTION](RESOURCE_ATTRIBUTION.md) - Resource tracking and attribution for multi-tenant environments
 
+## Simplified API
+
+- [SIMPLIFIED_API](SIMPLIFIED_API.md) - `run()`, `createSandbox()`, and `parse()` helpers
+- [INTERNAL_CLASSES](INTERNAL_CLASSES.md) - Advanced usage with internal classes like `Interpreter`
+
 ## Presets
 
 - [PRESETS](PRESETS.md) - ECMAScript version presets, API addons, and the `preset()` function

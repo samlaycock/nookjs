@@ -13,25 +13,24 @@ export function AsyncExamples() {
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Basic Async/Await</h2>
         <p className="text-neutral-300 mb-4">
-          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">evaluateAsync</code> to
-          run code with async operations:
+          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">run()</code> to execute
+          async operations:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
-const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      // Async function that sandbox code can await
-      fetchUser: async (id: number) => {
-        const response = await fetch(\`/api/users/\${id}\`);
-        return response.json();
-      },
+const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    // Async function that sandbox code can await
+    fetchUser: async (id: number) => {
+      const response = await fetch(\`/api/users/\${id}\`);
+      return response.json();
     },
-  })
-);
+  },
+});
 
-const result = await interpreter.evaluateAsync(\`
+const result = await sandbox.run(\`
   const user = await fetchUser(123);
   user.name
 \`);
@@ -44,24 +43,23 @@ console.log(result); // "John Doe"`}
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Promise Handling</h2>
         <p className="text-neutral-300 mb-4">Sandbox code can work with Promises directly:</p>
         <CodeBlock
-          code={`const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      fetchData: (url: string) =>
-        fetch(url).then((r) => r.json()),
-    },
-  })
-);
+          code={`const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    fetchData: (url: string) =>
+      fetch(url).then((r) => r.json()),
+  },
+});
 
 // Using .then()
-const result1 = await interpreter.evaluateAsync(\`
+const result1 = await sandbox.run(\`
   fetchData('/api/data')
     .then(data => data.items)
     .then(items => items.length)
 \`);
 
 // Using async/await
-const result2 = await interpreter.evaluateAsync(\`
+const result2 = await sandbox.run(\`
   const data = await fetchData('/api/data');
   const items = data.items;
   items.length
@@ -73,21 +71,19 @@ const result2 = await interpreter.evaluateAsync(\`
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Parallel Execution</h2>
         <p className="text-neutral-300 mb-4">Execute multiple async operations in parallel:</p>
         <CodeBlock
-          code={`const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      fetchUser: async (id: number) => ({ id, name: \`User \${id}\` }),
-      fetchOrders: async (userId: number) => [
-        { id: 1, total: 100 },
-        { id: 2, total: 200 },
-      ],
-      fetchPreferences: async (userId: number) => ({ theme: "dark" }),
-      Promise, // Expose Promise for Promise.all
-    },
-  })
-);
+          code={`const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    fetchUser: async (id: number) => ({ id, name: \`User \${id}\` }),
+    fetchOrders: async (userId: number) => [
+      { id: 1, total: 100 },
+      { id: 2, total: 200 },
+    ],
+    fetchPreferences: async (userId: number) => ({ theme: "dark" }),
+  },
+});
 
-const result = await interpreter.evaluateAsync(\`
+const result = await sandbox.run(\`
   const userId = 123;
 
   // Parallel fetch
@@ -116,22 +112,21 @@ console.log(result);
         </h2>
         <p className="text-neutral-300 mb-4">Handle errors from async operations:</p>
         <CodeBlock
-          code={`const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      fetchData: async (url: string) => {
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(\`HTTP \${response.status}\`);
-        }
-        return response.json();
-      },
+          code={`const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    fetchData: async (url: string) => {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(\`HTTP \${response.status}\`);
+      }
+      return response.json();
     },
-  })
-);
+  },
+});
 
 // Try-catch in sandbox code
-const result = await interpreter.evaluateAsync(\`
+const result = await sandbox.run(\`
   let data;
   let error = null;
 
@@ -148,7 +143,7 @@ const result = await interpreter.evaluateAsync(\`
 import { RuntimeError } from "nookjs";
 
 try {
-  await interpreter.evaluateAsync(\`
+  await sandbox.run(\`
     const data = await fetchData('/api/nonexistent');
     data
   \`);
@@ -166,23 +161,22 @@ try {
           Use AbortSignal to cancel long-running async operations:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
-const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      slowOperation: () =>
-        new Promise((resolve) => setTimeout(() => resolve("done"), 10000)),
-    },
-  })
-);
+const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    slowOperation: () =>
+      new Promise((resolve) => setTimeout(() => resolve("done"), 10000)),
+  },
+});
 
 // Create abort controller with timeout
 const controller = new AbortController();
 const timeout = setTimeout(() => controller.abort(), 5000);
 
 try {
-  const result = await interpreter.evaluateAsync(
+  const result = await sandbox.run(
     \`
     const result = await slowOperation();
     result
@@ -206,29 +200,26 @@ try {
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Async Data Pipeline</h2>
         <p className="text-neutral-300 mb-4">Build async data processing pipelines:</p>
         <CodeBlock
-          code={`const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      // Data sources
-      fetchUsers: async () => [
-        { id: 1, name: "Alice", departmentId: 1 },
-        { id: 2, name: "Bob", departmentId: 2 },
-        { id: 3, name: "Charlie", departmentId: 1 },
-      ],
-      fetchDepartments: async () => [
-        { id: 1, name: "Engineering" },
-        { id: 2, name: "Sales" },
-      ],
+          code={`const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    // Data sources
+    fetchUsers: async () => [
+      { id: 1, name: "Alice", departmentId: 1 },
+      { id: 2, name: "Bob", departmentId: 2 },
+      { id: 3, name: "Charlie", departmentId: 1 },
+    ],
+    fetchDepartments: async () => [
+      { id: 1, name: "Engineering" },
+      { id: 2, name: "Sales" },
+    ],
 
-      // Async helpers
-      delay: (ms: number) => new Promise((r) => setTimeout(r, ms)),
+    // Async helpers
+    delay: (ms: number) => new Promise((r) => setTimeout(r, ms)),
+  },
+});
 
-      Promise,
-    },
-  })
-);
-
-const result = await interpreter.evaluateAsync(\`
+const result = await sandbox.run(\`
   // Fetch data in parallel
   const [users, departments] = await Promise.all([
     fetchUsers(),
@@ -269,7 +260,7 @@ console.log(result);
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Webhook Handler</h2>
         <p className="text-neutral-300 mb-4">Let users define async webhook processing logic:</p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
 interface WebhookPayload {
   event: string;
@@ -277,30 +268,29 @@ interface WebhookPayload {
 }
 
 function createWebhookHandler(userScript: string) {
-  const interpreter = new Interpreter(
-    preset(ES2024, {
-      globals: {
-        // Async actions the user can trigger
-        sendEmail: async (to: string, subject: string, body: string) => {
-          console.log(\`Sending email to \${to}: \${subject}\`);
-          // Actual email sending logic
-          return { success: true, messageId: "msg_123" };
-        },
-        sendSlack: async (channel: string, message: string) => {
-          console.log(\`Sending Slack to \${channel}: \${message}\`);
-          return { success: true };
-        },
-        updateDatabase: async (table: string, id: string, data: unknown) => {
-          console.log(\`Updating \${table}[\${id}]\`, data);
-          return { updated: true };
-        },
-        log: console.log,
+  const sandbox = createSandbox({
+    env: "es2024",
+    globals: {
+      // Async actions the user can trigger
+      sendEmail: async (to: string, subject: string, body: string) => {
+        console.log(\`Sending email to \${to}: \${subject}\`);
+        // Actual email sending logic
+        return { success: true, messageId: "msg_123" };
       },
-    })
-  );
+      sendSlack: async (channel: string, message: string) => {
+        console.log(\`Sending Slack to \${channel}: \${message}\`);
+        return { success: true };
+      },
+      updateDatabase: async (table: string, id: string, data: unknown) => {
+        console.log(\`Updating \${table}[\${id}]\`, data);
+        return { updated: true };
+      },
+      log: console.log,
+    },
+  });
 
   return async function handleWebhook(payload: WebhookPayload) {
-    return interpreter.evaluateAsync(userScript, {
+    return sandbox.run(userScript, {
       globals: { payload },
     });
   };

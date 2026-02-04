@@ -30,10 +30,12 @@ export function ErrorsAPI() {
           Base class for all interpreter errors. All specific error types extend this class.
         </p>
         <CodeBlock
-          code={`import { InterpreterError } from "nookjs";
+          code={`import { createSandbox, InterpreterError } from "nookjs";
+
+const sandbox = createSandbox();
 
 try {
-  interpreter.evaluate(code);
+  sandbox.runSync(code);
 } catch (error) {
   if (error instanceof InterpreterError) {
     console.log(error.message);
@@ -49,10 +51,12 @@ try {
           Thrown when the code contains syntax errors that prevent parsing.
         </p>
         <CodeBlock
-          code={`import { ParseError } from "nookjs";
+          code={`import { createSandbox, ParseError } from "nookjs";
+
+const sandbox = createSandbox();
 
 try {
-  interpreter.evaluate("const x = ;"); // Syntax error
+  sandbox.runSync("const x = ;"); // Syntax error
 } catch (error) {
   if (error instanceof ParseError) {
     console.log(error.message);
@@ -114,10 +118,12 @@ try {
           Thrown when sandbox code throws an error during execution.
         </p>
         <CodeBlock
-          code={`import { RuntimeError } from "nookjs";
+          code={`import { createSandbox, RuntimeError } from "nookjs";
+
+const sandbox = createSandbox();
 
 try {
-  interpreter.evaluate(\`
+  sandbox.runSync(\`
     throw new Error("Something went wrong");
   \`);
 } catch (error) {
@@ -166,8 +172,12 @@ try {
           JavaScript allows throwing any value, not just Error objects:
         </p>
         <CodeBlock
-          code={`try {
-  interpreter.evaluate('throw "string error"');
+          code={`import { createSandbox, RuntimeError } from "nookjs";
+
+const sandbox = createSandbox();
+
+try {
+  sandbox.runSync('throw "string error"');
 } catch (error) {
   if (error instanceof RuntimeError) {
     console.log(error.thrownValue); // "string error"
@@ -175,7 +185,7 @@ try {
 }
 
 try {
-  interpreter.evaluate('throw { code: 404, reason: "Not found" }');
+  sandbox.runSync('throw { code: 404, reason: "Not found" }');
 } catch (error) {
   if (error instanceof RuntimeError) {
     console.log(error.thrownValue); // { code: 404, reason: "Not found" }
@@ -191,16 +201,15 @@ try {
           operations.
         </p>
         <CodeBlock
-          code={`import { SecurityError } from "nookjs";
+          code={`import { createSandbox, SecurityError } from "nookjs";
 
-const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: { obj: { foo: "bar" } },
-  })
-);
+const sandbox = createSandbox({
+  env: "es2024",
+  globals: { obj: { foo: "bar" } },
+});
 
 try {
-  interpreter.evaluate("obj.__proto__");
+  sandbox.runSync("obj.__proto__");
 } catch (error) {
   if (error instanceof SecurityError) {
     console.log(error.message);
@@ -242,17 +251,17 @@ try {
           Thrown when sandbox code uses a language feature that is not enabled.
         </p>
         <CodeBlock
-          code={`import { FeatureError } from "nookjs";
+          code={`import { createSandbox, FeatureError } from "nookjs";
 
-const interpreter = new Interpreter({
-  featureControl: {
+const sandbox = createSandbox({
+  features: {
     mode: "whitelist",
-    features: ["BinaryOperators"],
+    enable: ["BinaryOperators"],
   },
 });
 
 try {
-  interpreter.evaluate("for (let i = 0; i < 10; i++) {}");
+  sandbox.runSync("for (let i = 0; i < 10; i++) {}");
 } catch (error) {
   if (error instanceof FeatureError) {
     console.log(error.message);
@@ -292,13 +301,15 @@ try {
           Thrown when execution exceeds configured resource limits.
         </p>
         <CodeBlock
-          code={`import { ResourceExhaustedError } from "nookjs";
+          code={`import { createSandbox, ResourceExhaustedError } from "nookjs";
+
+const sandbox = createSandbox();
 
 try {
-  interpreter.evaluate(\`
+  sandbox.runSync(\`
     while (true) {}
   \`, {
-    maxLoopIterations: 1000,
+    limits: { loops: 1000 },
   });
 } catch (error) {
   if (error instanceof ResourceExhaustedError) {
@@ -356,8 +367,7 @@ try {
         <p className="text-neutral-300 mb-4">Handle all error types in your application:</p>
         <CodeBlock
           code={`import {
-  Interpreter,
-  ES2024,
+  createSandbox,
   ParseError,
   RuntimeError,
   SecurityError,
@@ -366,14 +376,16 @@ try {
 } from "nookjs";
 
 function executeUserCode(code: string) {
-  const interpreter = new Interpreter(ES2024);
+  const sandbox = createSandbox({ env: "es2024" });
 
   try {
     return {
       success: true,
-      result: interpreter.evaluate(code, {
-        maxLoopIterations: 10000,
-        maxCallStackDepth: 100,
+      result: sandbox.runSync(code, {
+        limits: {
+          loops: 10000,
+          callDepth: 100,
+        },
       }),
     };
   } catch (error) {

@@ -118,19 +118,18 @@ export function Introduction() {
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Quick Example</h2>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
-const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      console: { log: (...args) => console.log(...args) },
-      calculateDiscount: (price, percent) => price * (1 - percent / 100),
-    },
-  })
-);
+const sandbox = createSandbox({
+  env: "es2022",
+  apis: ["console"],
+  globals: {
+    calculateDiscount: (price, percent) => price * (1 - percent / 100),
+  },
+});
 
 // Execute user-provided code safely
-const result = interpreter.evaluate(\`
+const result = await sandbox.run(\`
   const price = 100;
   const discount = calculateDiscount(price, 20);
   console.log("Discounted price:", discount);

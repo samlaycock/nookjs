@@ -9,6 +9,7 @@ import { Layout } from "./components/layout";
 import { ErrorsAPI } from "./pages/docs/api/errors";
 import { InterpreterAPI } from "./pages/docs/api/interpreter";
 import { ResourceTrackerAPI } from "./pages/docs/api/resource-tracker";
+import { SandboxAPI } from "./pages/docs/api/sandbox";
 import { AsyncExamples } from "./pages/docs/examples/async";
 import { BasicExamples } from "./pages/docs/examples/basic";
 import { PluginsExamples } from "./pages/docs/examples/plugins";
@@ -37,6 +38,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="globals" element={<Globals />} />
             <Route path="modules" element={<Modules />} />
             <Route path="features" element={<Features />} />
+            <Route path="api/sandbox" element={<SandboxAPI />} />
             <Route path="api/interpreter" element={<InterpreterAPI />} />
             <Route path="api/errors" element={<ErrorsAPI />} />
             <Route path="api/resource-tracker" element={<ResourceTrackerAPI />} />

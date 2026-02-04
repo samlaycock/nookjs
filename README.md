@@ -63,16 +63,10 @@ const value = await sandbox.run(`
 console.log(value); // 18.14159
 ```
 
-### Advanced API (Interpreter)
+### Advanced API (Internal Classes)
 
-```typescript
-import { Interpreter } from "nookjs";
-
-const interpreter = new Interpreter();
-
-const result = interpreter.evaluate("2 + 3 * 4");
-console.log(result); // 14
-```
+For low-level control (custom resolvers, direct evaluation, internal stats), see
+[Internal Classes](docs/INTERNAL_CLASSES.md).
 
 ## Security Sandbox
 
@@ -106,15 +100,16 @@ Sandboxed code has access only to:
 - Control flow (if, for, while, etc.)
 
 ```typescript
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
+  env: "minimal",
   globals: {
     PI: 3.14159,
     calculateArea: (r: number) => PI * r * r,
   },
 });
 
-interpreter.evaluate("calculateArea(5)"); // 78.53975
-interpreter.evaluate("Math.PI"); // Error: Math is not defined
+await sandbox.run("calculateArea(5)"); // 78.53975
+await sandbox.run("Math.PI"); // Error: Math is not defined
 ```
 
 ### Security Best Practices
@@ -122,14 +117,15 @@ interpreter.evaluate("Math.PI"); // Error: Math is not defined
 1. **Always use timeouts** to prevent infinite loops:
 
 ```typescript
+const sandbox = createSandbox({ env: "es2022" });
 const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
-const result = await Promise.race([interpreter.evaluateAsync(untrustedCode), timeout]);
+const result = await Promise.race([sandbox.run(untrustedCode), timeout]);
 ```
 
 2. **Clone sensitive data** before passing as globals:
 
 ```typescript
-interpreter.evaluateAsync(code, {
+await sandbox.run(code, {
   globals: { state: structuredClone(sharedState) },
 });
 ```
@@ -147,12 +143,12 @@ Control exactly which JavaScript features are available using the feature contro
 ### ECMAScript Presets
 
 ```typescript
-import { Interpreter, ES5, ES2015, ES2017, ES2020 } from "nookjs";
+import { createSandbox } from "nookjs";
 
-const es5 = new Interpreter(ES5); // var, functions, loops
-const es2015 = new Interpreter(ES2015); // + let/const, arrow functions
-const es2017 = new Interpreter(ES2017); // + async/await
-const es2020 = new Interpreter(ES2020); // + nullish coalescing
+const es5 = createSandbox({ env: "es5" }); // var, functions, loops
+const es2015 = createSandbox({ env: "es2015" }); // + let/const, arrow functions
+const es2017 = createSandbox({ env: "es2017" }); // + async/await
+const es2020 = createSandbox({ env: "es2020" }); // + nullish coalescing
 ```
 
 | Preset      | Description                                                                     |
@@ -167,10 +163,11 @@ const es2020 = new Interpreter(ES2020); // + nullish coalescing
 ### Custom Feature Control
 
 ```typescript
-const interpreter = new Interpreter({
-  featureControl: {
+const sandbox = createSandbox({
+  env: "es2022",
+  features: {
     mode: "whitelist",
-    features: [
+    enable: [
       "VariableDeclarations",
       "FunctionDeclarations",
       "BinaryOperators",
@@ -180,16 +177,17 @@ const interpreter = new Interpreter({
   },
 });
 
-interpreter.evaluate("() => {}"); // Error: ArrowFunctions is not enabled
+sandbox.runSync("() => {}"); // Error: ArrowFunctions is not enabled
 ```
 
 Use blacklist mode to disable specific features:
 
 ```typescript
-const interpreter = new Interpreter({
-  featureControl: {
+const sandbox = createSandbox({
+  env: "es2022",
+  features: {
     mode: "blacklist",
-    features: ["ForStatement", "WhileStatement"], // Allow loops except these
+    disable: ["ForStatement", "WhileStatement"], // Allow loops except these
   },
 });
 ```
@@ -202,10 +200,11 @@ Inject variables and functions from the host environment into sandbox code.
 
 ### Constructor Globals (Persistent)
 
-Globals passed when creating the interpreter persist across all `evaluate()` calls:
+Globals passed when creating the sandbox persist across all runs:
 
 ```typescript
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
+  env: "es2022",
   globals: {
     PI: 3.14159,
     VERSION: "1.0.0",
@@ -213,20 +212,20 @@ const interpreter = new Interpreter({
   },
 });
 
-interpreter.evaluate("PI * 2"); // 6.28318
-interpreter.evaluate("config.debug"); // true
+await sandbox.run("PI * 2"); // 6.28318
+await sandbox.run("config.debug"); // true
 ```
 
 ### Per-Call Globals (Temporary)
 
-Globals passed to individual `evaluate()` calls are available only for that execution:
+Globals passed to individual runs are available only for that execution:
 
 ```typescript
-interpreter.evaluate("x + y", {
+await sandbox.run("x + y", {
   globals: { x: 10, y: 20 },
 }); // 30
 
-interpreter.evaluate("x + y"); // Error: x/y are not defined
+await sandbox.run("x + y"); // Error: x/y are not defined
 ```
 
 ### Host Functions
@@ -234,7 +233,8 @@ interpreter.evaluate("x + y"); // Error: x/y are not defined
 Pass functions from your host code that sandbox code can call:
 
 ```typescript
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
+  env: "es2022",
   globals: {
     double: (x: number) => x * 2,
     log: (msg: string) => console.log(msg),
@@ -242,8 +242,8 @@ const interpreter = new Interpreter({
   },
 });
 
-interpreter.evaluate("double(5)"); // 10
-interpreter.evaluate('log("Hello sandbox!")'); // Logs to console
+await sandbox.run("double(5)"); // 10
+await sandbox.run('log("Hello sandbox!")'); // Logs to console
 ```
 
 ### Merged Globals
@@ -251,12 +251,13 @@ interpreter.evaluate('log("Hello sandbox!")'); // Logs to console
 Per-call globals override constructor globals (but not user-declared variables):
 
 ```typescript
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
+  env: "es2022",
   globals: { multiplier: 10 },
 });
 
-interpreter.evaluate("multiplier * 5"); // 50
-interpreter.evaluate("multiplier * 5", {
+await sandbox.run("multiplier * 5"); // 50
+await sandbox.run("multiplier * 5", {
   globals: { multiplier: 2 },
 }); // 10
 ```
@@ -266,20 +267,22 @@ interpreter.evaluate("multiplier * 5", {
 All injected globals are protected from sandbox manipulation:
 
 ```typescript
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
+  env: "es2022",
   globals: { myFunc: () => "secret" },
 });
 
-myFunc.name; // Error: Cannot access properties on host functions
-myFunc(); // "secret" (calling works)
+await sandbox.run("myFunc.name"); // Error: Cannot access properties on host functions
+await sandbox.run("myFunc()"); // "secret" (calling works)
 ```
 
 ## Async Support
 
-The interpreter supports both synchronous and asynchronous execution:
+The sandbox supports both synchronous and asynchronous execution:
 
 ```typescript
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
+  env: "es2022",
   globals: {
     fetchData: async (id: number) => {
       const response = await fetch(`/api/${id}`);
@@ -288,7 +291,7 @@ const interpreter = new Interpreter({
   },
 });
 
-const result = await interpreter.evaluateAsync(`
+const result = await sandbox.run(`
   let data = await fetchData(123);
   data.name
 `);
@@ -301,29 +304,21 @@ NookJS supports ES module syntax (`import`/`export`) through a custom module res
 ### Basic Usage
 
 ```typescript
-import { Interpreter, ModuleResolver } from "nookjs";
+import { createSandbox } from "nookjs";
 
 // Define your modules
-const files = new Map([
-  ["math.js", "export const add = (a, b) => a + b; export const PI = 3.14159;"],
-  ["utils.js", "export function double(x) { return x * 2; }"],
-]);
-
-// Create a resolver that provides module source code
-const resolver: ModuleResolver = {
-  resolve(specifier) {
-    const code = files.get(specifier);
-    if (!code) return null;
-    return { type: "source", code, path: specifier };
+const sandbox = createSandbox({
+  env: "es2022",
+  modules: {
+    files: {
+      "math.js": "export const add = (a, b) => a + b; export const PI = 3.14159;",
+      "utils.js": "export function double(x) { return x * 2; }",
+    },
   },
-};
-
-const interpreter = new Interpreter({
-  modules: { enabled: true, resolver },
 });
 
 // Evaluate module code
-const exports = await interpreter.evaluateModuleAsync(
+const exports = await sandbox.runModule(
   `import { add, PI } from "math.js";
    import { double } from "utils.js";
    export const result = double(add(1, 2));
@@ -371,30 +366,22 @@ export * as namespace from "other.js";
 Inject host modules directly without source code parsing:
 
 ```typescript
-const resolver: ModuleResolver = {
-  resolve(specifier) {
-    if (specifier === "lodash") {
-      return {
-        type: "namespace",
-        exports: { map, filter, reduce }, // Host functions
-        path: "lodash",
-      };
-    }
-    return null;
+const sandbox = createSandbox({
+  env: "es2022",
+  modules: {
+    externals: {
+      lodash: { map, filter, reduce },
+    },
   },
-};
+});
 ```
 
 ### Module Introspection
 
 Query the module cache and metadata:
 
-```typescript
-interpreter.isModuleCached("math.js"); // true
-interpreter.getLoadedModuleSpecifiers(); // ["math.js", "utils.js"]
-interpreter.getModuleMetadata("math.js"); // { path, status, loadedAt }
-interpreter.clearModuleCache(); // Clear all cached modules
-```
+Module cache introspection and low-level module APIs are available on the internal
+`Interpreter` class. See [Internal Classes](docs/INTERNAL_CLASSES.md) for details.
 
 See [Module Documentation](docs/MODULES.md) for complete details including security considerations, lifecycle hooks, and advanced resolver patterns.
 
@@ -403,9 +390,9 @@ See [Module Documentation](docs/MODULES.md) for complete details including secur
 TypeScript-style type annotations are automatically stripped at parse time:
 
 ```typescript
-const interpreter = new Interpreter();
+const sandbox = createSandbox({ env: "es2022" });
 
-interpreter.evaluate(`
+await sandbox.run(`
   function greet(name: string): string {
     return "Hello, " + name;
   }
@@ -465,65 +452,10 @@ const ast = parse("1 + 2");
 - `policy.errors`: `"safe"` | `"sanitize"` | `"full"`
 - `modules`: `{ files, ast, externals }` for easy module resolution
 
-### `new Interpreter(options?)`
+### Internal Classes
 
-Creates a new interpreter instance.
-
-```typescript
-interface InterpreterOptions {
-  globals?: Record<string, unknown>;
-  featureControl?: FeatureControl;
-  validator?: (ast: Program) => boolean;
-  security?: SecurityOptions;
-  resourceTracking?: boolean; // Enable integrated resource tracking
-}
-
-interface SecurityOptions {
-  sanitizeErrors?: boolean; // Remove host paths from stack traces (default: true)
-  hideHostErrorMessages?: boolean; // Hide host function error details (default: true)
-}
-```
-
-### `interpreter.evaluate(code, options?)`
-
-Synchronously evaluates JavaScript code.
-
-```typescript
-evaluate(code: string, options?: EvaluateOptions): unknown
-
-interface EvaluateOptions {
-  globals?: Record<string, unknown>;
-  validator?: (ast: Program) => boolean;
-  featureControl?: FeatureControl;
-  maxCallStackDepth?: number; // Max recursion depth
-  maxLoopIterations?: number; // Max iterations per loop
-  maxMemory?: number; // Max memory in bytes (best-effort)
-}
-```
-
-### `interpreter.evaluateAsync(code, options?)`
-
-Asynchronously evaluates JavaScript code.
-
-```typescript
-evaluateAsync(code: string, options?: EvaluateOptions): Promise<unknown>
-
-// EvaluateOptions for async also includes:
-interface AsyncEvaluateOptions extends EvaluateOptions {
-  signal?: AbortSignal; // For cancellation
-}
-```
-
-### Resource Tracking Methods
-
-When `resourceTracking: true` is set in constructor options:
-
-```typescript
-interpreter.getResourceStats(); // Get current resource usage
-interpreter.resetResourceStats(); // Reset counters
-interpreter.getResourceHistory(); // Get history of all evaluations
-interpreter.setResourceLimit(type, value); // Set a resource limit
-```
+Need low-level access (Interpreter, ModuleSystem, ResourceTracker)? See
+[Internal Classes](docs/INTERNAL_CLASSES.md).
 
 ## Contributing
 

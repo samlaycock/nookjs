@@ -5,19 +5,44 @@ Presets provide pre-configured `InterpreterOptions` for common use cases. They i
 ## Quick Start
 
 ```typescript
-import { Interpreter } from "./interpreter";
-import { preset, ES2022, FetchAPI, ConsoleAPI } from "./presets";
+import { createSandbox } from "nookjs";
 
-// Create an interpreter with ES2022 features, Fetch API, and console
-const interpreter = new Interpreter(preset(ES2022, FetchAPI, ConsoleAPI));
+// Create a sandbox with ES2022 features, Fetch API, and console
+const sandbox = createSandbox({
+  env: "es2022",
+  apis: ["fetch", "console"],
+});
 
-await interpreter.evaluateAsync(`
+await sandbox.run(`
   console.log('Fetching data...');
   const response = await fetch('https://api.example.com/data');
   const data = await response.json();
   console.log('Got:', data);
 `);
 ```
+
+## Simplified Usage (Recommended)
+
+If you do not need full control over `InterpreterOptions`, use the simplified API:
+
+```typescript
+import { createSandbox } from "nookjs";
+
+const sandbox = createSandbox({
+  env: "es2022",
+  apis: ["fetch", "console"],
+});
+
+await sandbox.run(`
+  console.log("Fetching data...");
+  const response = await fetch("https://api.example.com/data");
+  const data = await response.json();
+  console.log("Got:", data);
+`);
+```
+
+Under the hood, `env` maps to the ECMAScript presets and `apis` maps to the addon presets. Use
+`preset()` directly when you need advanced merging behavior or low-level configuration.
 
 ## The `preset()` Function
 
@@ -133,9 +158,11 @@ Addon presets provide access to specific Web/Runtime APIs. They only add globals
 Provides the Fetch API for making HTTP requests. Requires async/await (ES2017+).
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, FetchAPI));
+import { createSandbox } from "nookjs";
 
-await interpreter.evaluateAsync(`
+const sandbox = createSandbox({ env: "es2022", apis: ["fetch"] });
+
+await sandbox.run(`
   const response = await fetch('https://api.example.com/data');
   const data = await response.json();
 `);
@@ -148,9 +175,9 @@ await interpreter.evaluateAsync(`
 Provides console methods for logging.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, ConsoleAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["console"] });
 
-interpreter.evaluate(`
+await sandbox.run(`
   console.log('Hello, world!');
   console.error('Something went wrong');
 `);
@@ -163,9 +190,9 @@ interpreter.evaluate(`
 Provides timer functions. Note: These are async operations.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, TimersAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["timers"] });
 
-await interpreter.evaluateAsync(`
+await sandbox.run(`
   await new Promise(resolve => setTimeout(resolve, 1000));
   console.log('1 second later');
 `);
@@ -178,9 +205,9 @@ await interpreter.evaluateAsync(`
 Provides text encoding/decoding utilities.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, TextCodecAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["text"] });
 
-interpreter.evaluate(`
+await sandbox.run(`
   const encoder = new TextEncoder();
   const bytes = encoder.encode('Hello');
   // bytes is Uint8Array [72, 101, 108, 108, 111]
@@ -194,9 +221,9 @@ interpreter.evaluate(`
 Provides cryptographic functions.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, CryptoAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["crypto"] });
 
-interpreter.evaluate(`
+await sandbox.run(`
   const uuid = crypto.randomUUID();
   // uuid is something like "550e8400-e29b-41d4-a716-446655440000"
 `);
@@ -209,9 +236,9 @@ interpreter.evaluate(`
 Provides regular expression functionality.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, RegExpAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["regexp"] });
 
-interpreter.evaluate(`
+await sandbox.run(`
   const pattern = new RegExp('hello', 'i');
   pattern.test('Hello World'); // true
 `);
@@ -224,9 +251,9 @@ interpreter.evaluate(`
 Provides internationalization functionality for formatting dates, numbers, and strings.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, IntlAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["intl"] });
 
-interpreter.evaluate(`
+await sandbox.run(`
   const formatter = new Intl.NumberFormat('en-US', { 
     style: 'currency', 
     currency: 'USD' 
@@ -242,9 +269,9 @@ interpreter.evaluate(`
 Provides binary data handling with ArrayBuffer, DataView, and typed arrays.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, BufferAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["buffer"] });
 
-interpreter.evaluate(`
+await sandbox.run(`
   const buffer = new ArrayBuffer(16);
   const view = new DataView(buffer);
   view.setInt32(0, 42);
@@ -259,9 +286,9 @@ interpreter.evaluate(`
 Provides the Streams API for handling streaming data. Useful with Fetch API responses.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, StreamsAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["streams"] });
 
-await interpreter.evaluateAsync(`
+await sandbox.run(`
   const stream = new ReadableStream({
     start(controller) {
       controller.enqueue('hello');
@@ -278,9 +305,9 @@ await interpreter.evaluateAsync(`
 Provides Blob and File handling for binary data.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, BlobAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["blob"] });
 
-interpreter.evaluate(`
+await sandbox.run(`
   const blob = new Blob(['hello'], { type: 'text/plain' });
   blob.size; // 5
 `);
@@ -293,9 +320,9 @@ interpreter.evaluate(`
 Provides performance measurement utilities.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, PerformanceAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["performance"] });
 
-interpreter.evaluate(`
+await sandbox.run(`
   const start = performance.now();
   // ... do work ...
   const elapsed = performance.now() - start;
@@ -309,9 +336,9 @@ interpreter.evaluate(`
 Provides event-related classes for custom event handling.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2022, EventAPI));
+const sandbox = createSandbox({ env: "es2022", apis: ["events"] });
 
-interpreter.evaluate(`
+await sandbox.run(`
   const target = new EventTarget();
   target.addEventListener('custom', (e) => console.log(e.type));
   target.dispatchEvent(new Event('custom'));
@@ -333,8 +360,14 @@ const MyAPI: InterpreterOptions = {
   },
 };
 
-// Use it
-const interpreter = new Interpreter(preset(ES2022, MyAPI));
+// Use it with createSandbox
+const sandbox = createSandbox({
+  env: "es2022",
+  globals: {
+    myFunction: (x: number) => x * 2,
+    myConstant: 42,
+  },
+});
 ```
 
 For more restrictive presets, you can include feature control:
