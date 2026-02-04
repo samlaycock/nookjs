@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 
 import { Interpreter } from "../src/interpreter";
-import { ES2024, ConsoleAPI } from "../src/presets";
+import { ES2024, ConsoleAPI, preset } from "../src/presets";
 
 describe("Console", () => {
   describe("API", () => {
     let interpreter: Interpreter;
 
     beforeEach(() => {
-      interpreter = new Interpreter({ ...ES2024, ...ConsoleAPI });
+      interpreter = new Interpreter(preset(ES2024, ConsoleAPI));
     });
 
     describe("console.log", () => {

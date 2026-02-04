@@ -4077,8 +4077,14 @@ export class Interpreter {
       case "Literal":
         return this.evaluateLiteral(node as ESTree.Literal);
 
-      case "Identifier":
-        return this.evaluateIdentifier(node as ESTree.Identifier);
+      case "Identifier": {
+        const val = this.evaluateIdentifier(node as ESTree.Identifier);
+        // Wrap Promise values in RawValue to prevent auto-awaiting when returned from async function
+        if (val instanceof Promise) {
+          return new RawValue(val);
+        }
+        return val;
+      }
 
       case "ThisExpression":
         return this.evaluateThisExpression(node as ESTree.ThisExpression);
@@ -4164,8 +4170,12 @@ export class Interpreter {
       case "TryStatement":
         return await this.evaluateTryStatementAsync(node as ESTree.TryStatement);
 
-      case "CallExpression":
-        return await this.evaluateCallExpressionAsync(node as ESTree.CallExpression);
+      case "CallExpression": {
+        const result = await this.evaluateCallExpressionAsync(node as ESTree.CallExpression);
+        // Return RawValue directly - it will be unwrapped by callers that need the value
+        // This prevents Promise auto-awaiting in async contexts
+        return result;
+      }
 
       case "NewExpression": {
         const result = await this.evaluateNewExpressionAsync(node as ESTree.NewExpression);
@@ -5007,7 +5017,7 @@ export class Interpreter {
     if (object instanceof RegExp) {
       return;
     }
-    if (propName === "then") {
+    if (propName === "then" || propName === "catch" || propName === "finally") {
       return;
     }
     if (propName in object && !Object.prototype.hasOwnProperty.call(object, propName)) {
@@ -5254,7 +5264,12 @@ export class Interpreter {
     if (!hasSpread) {
       const evaluatedArgs = Array.from({ length: count });
       for (let i = 0; i < count; i++) {
-        evaluatedArgs[i] = await this.evaluateNodeAsync(args[i] as ESTree.Expression);
+        let val = await this.evaluateNodeAsync(args[i] as ESTree.Expression);
+        // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)
+        if (val instanceof RawValue) {
+          val = val.value;
+        }
+        evaluatedArgs[i] = val;
       }
       return evaluatedArgs;
     }
@@ -5277,7 +5292,12 @@ export class Interpreter {
           evaluatedArgs.push(spreadValue[j]);
         }
       } else {
-        evaluatedArgs.push(await this.evaluateNodeAsync(arg as ESTree.Expression));
+        let val = await this.evaluateNodeAsync(arg as ESTree.Expression);
+        // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)
+        if (val instanceof RawValue) {
+          val = val.value;
+        }
+        evaluatedArgs.push(val);
       }
     }
     return evaluatedArgs;
@@ -8824,6 +8844,11 @@ export class Interpreter {
         thisValue = this.currentSuperBinding?.thisValue;
       } else {
         thisValue = await this.evaluateNodeAsync(memberExpr.object);
+        // Unwrap RawValue to preserve Promise objects for method chaining
+        // (e.g., Promise.resolve(1).then(...) - the Promise must not be auto-awaited)
+        if (thisValue instanceof RawValue) {
+          thisValue = thisValue.value;
+        }
       }
 
       // Resolve the member value using the already-evaluated object to avoid double evaluation.
@@ -8832,6 +8857,11 @@ export class Interpreter {
       }
     } else {
       callee = await this.evaluateNodeAsync(node.callee);
+    }
+
+    // Unwrap RawValue from callee (e.g., when callee is from a call/new expression)
+    if (callee instanceof RawValue) {
+      callee = callee.value;
     }
 
     // Unwrap ReadOnlyProxy to get the actual callee
@@ -8861,7 +8891,13 @@ export class Interpreter {
           const resolved = await result;
           return ReadOnlyProxy.wrap(resolved, callee.name);
         }
-        return ReadOnlyProxy.wrap(result, callee.name);
+        const wrapped = ReadOnlyProxy.wrap(result, callee.name);
+        // Wrap Promise results in RawValue to prevent auto-awaiting by async/await
+        // This preserves Promise identity for chaining (e.g., Promise.resolve(1).then(...))
+        if (wrapped instanceof Promise) {
+          return new RawValue(wrapped);
+        }
+        return wrapped;
       } catch (error: any) {
         // If rethrowErrors is true, propagate the error directly (used by generator.throw())
         if (callee.rethrowErrors) {
@@ -8873,12 +8909,17 @@ export class Interpreter {
       }
     }
 
-    // Handle native JavaScript functions (e.g., bound class methods)
+    // Handle native JavaScript functions (e.g., bound class methods like .then, .catch)
     if (typeof callee === "function") {
       const args = await this.evaluateArgumentsAsync(node.arguments);
-      return thisValue !== undefined
-        ? await callee.call(thisValue, ...args)
-        : await callee(...args);
+      const wrappedArgs = this.wrapArgsForHost(args, true);
+      const result =
+        thisValue !== undefined ? callee.call(thisValue, ...wrappedArgs) : callee(...wrappedArgs);
+      // Wrap Promise results in RawValue to prevent auto-awaiting
+      if (result instanceof Promise) {
+        return new RawValue(result);
+      }
+      return result;
     }
 
     if (callee instanceof ClassValue) {
@@ -8983,7 +9024,11 @@ export class Interpreter {
       return this.evaluateCompoundAssignmentAsync(node);
     }
 
-    const value = await this.evaluateNodeAsync(node.right);
+    let value = await this.evaluateNodeAsync(node.right);
+    // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)
+    if (value instanceof RawValue) {
+      value = value.value;
+    }
 
     // Handle destructuring assignments
     if (node.left.type === "ArrayPattern" || node.left.type === "ObjectPattern") {
@@ -9981,7 +10026,11 @@ export class Interpreter {
   }
 
   private async evaluateReturnStatementAsync(node: ESTree.ReturnStatement): Promise<any> {
-    const value = node.argument ? await this.evaluateNodeAsync(node.argument) : undefined;
+    let value = node.argument ? await this.evaluateNodeAsync(node.argument) : undefined;
+    // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)
+    if (value instanceof RawValue) {
+      value = value.value;
+    }
     return new ReturnValue(value);
   }
 
@@ -9991,7 +10040,12 @@ export class Interpreter {
     }
 
     // Evaluate the argument (which should be a promise)
-    const value = await this.evaluateNodeAsync(node.argument);
+    let value = await this.evaluateNodeAsync(node.argument);
+
+    // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)
+    if (value instanceof RawValue) {
+      value = value.value;
+    }
 
     // Security: Block awaiting host functions directly
     // This prevents exposing the raw host function to the host via the HostFunctionValue wrapper
@@ -10373,7 +10427,11 @@ export class Interpreter {
       return this.evaluateSuperMemberAccess(node);
     }
 
-    const object = await this.evaluateNodeAsync(node.object);
+    let object = await this.evaluateNodeAsync(node.object);
+    // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)
+    if (object instanceof RawValue) {
+      object = object.value;
+    }
     return this.resolveMemberExpressionValueAsync(node, object);
   }
 
@@ -10616,7 +10674,12 @@ export class Interpreter {
         const spreadArray = this.validateArraySpread(spreadValue);
         elements.push(...spreadArray);
       } else {
-        elements.push(await this.evaluateNodeAsync(element));
+        let val = await this.evaluateNodeAsync(element);
+        // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)
+        if (val instanceof RawValue) {
+          val = val.value;
+        }
+        elements.push(val);
       }
     }
 

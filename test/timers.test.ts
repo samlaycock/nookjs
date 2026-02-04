@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 
 import { Interpreter } from "../src/interpreter";
-import { ES2024, TimersAPI } from "../src/presets";
+import { ES2024, TimersAPI, preset } from "../src/presets";
 
 describe("Timers", () => {
   describe("API", () => {
     let interpreter: Interpreter;
 
     beforeEach(() => {
-      interpreter = new Interpreter({ ...ES2024, ...TimersAPI });
+      interpreter = new Interpreter(preset(ES2024, TimersAPI));
     });
 
     describe("setTimeout", () => {
