@@ -1,7 +1,7 @@
 import CodeEditor from "@uiw/react-textarea-code-editor";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Interpreter, InterpreterError, ES2024, preset, ParseError } from "../../../src/index";
+import { createSandbox, InterpreterError, ParseError } from "../../../src/index";
 import { Button } from "../components/button";
 
 const CODE_LOCAL_STORAGE_KEY = "nookjs-code";
@@ -32,19 +32,17 @@ export function Playground() {
     window.localStorage.getItem(CODE_LOCAL_STORAGE_KEY) ?? DEFAULT_CODE,
   );
   const usageCode = useMemo(
-    () => `import { Interpreter, preset, ES2024 } from "nookjs";
+    () => `import { createSandbox } from "nookjs";
 
-const interpreter = new Interpreter(
-  preset(
-    ES2024,
-    { globals: { console, alert: alert.bind(globalThis) } },
-    { security: { hideHostErrorMessages: false } },
-  ),
-);
+const sandbox = createSandbox({
+  env: "es2024",
+  globals: { console, alert: alert.bind(globalThis) },
+  security: { hideHostErrorMessages: false },
+});
 
 const code = \`${code.replace(/`/g, "\\`").replace(/\$/g, "\\$")}\`;
 
-const result = await interpreter.evaluateAsync(code);`,
+const result = await sandbox.run(code);`,
     [code],
   );
   const [mode, setMode] = useState<"code" | "usage">("code");
@@ -53,16 +51,14 @@ const result = await interpreter.evaluateAsync(code);`,
   const onRun = useCallback(async () => {
     setError(null);
 
-    const interpreter = new Interpreter(
-      preset(
-        ES2024,
-        { globals: { console, alert: alert.bind(globalThis) } },
-        { security: { hideHostErrorMessages: false } },
-      ),
-    );
+    const sandbox = createSandbox({
+      env: "es2024",
+      globals: { console, alert: alert.bind(globalThis) },
+      security: { hideHostErrorMessages: false },
+    });
 
     try {
-      const result = await interpreter.evaluateAsync(code);
+      const result = await sandbox.run(code);
 
       if (result) {
         setOutput(String(result));
