@@ -36,9 +36,7 @@ console.log(result); // 10`}
 
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Presets and APIs</h2>
-        <p className="text-neutral-300 mb-4">
-          Choose an environment preset and add optional APIs:
-        </p>
+        <p className="text-neutral-300 mb-4">Choose an environment preset and add optional APIs:</p>
         <CodeBlock
           code={`const sandbox = createSandbox({
   env: "es2022",

@@ -17,7 +17,7 @@ const interpreter = new Interpreter(
       log: console.log,
       double: (x) => x * 2,
     },
-  })
+  }),
 );
 
 const result = interpreter.evaluate("double(21)");
@@ -36,9 +36,7 @@ console.log(value); // 123
 ```typescript
 import { Interpreter, ModuleResolver } from "nookjs";
 
-const files = new Map([
-  ["math.js", "export const add = (a, b) => a + b;"],
-]);
+const files = new Map([["math.js", "export const add = (a, b) => a + b;"]]);
 
 const resolver: ModuleResolver = {
   resolve(specifier) {
@@ -53,7 +51,7 @@ const interpreter = new Interpreter({
 });
 
 const exports = await interpreter.evaluateModuleAsync(
-  "import { add } from \"math.js\"; export const result = add(1, 2);",
+  'import { add } from "math.js"; export const result = add(1, 2);',
   { path: "main.js" },
 );
 

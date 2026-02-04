@@ -42,7 +42,8 @@ export function ResourceTrackerAPI() {
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Simplified API</h2>
         <p className="text-neutral-300 mb-4">
-          When using <code className="text-amber-400 bg-neutral-800 px-1 rounded">createSandbox()</code>,
+          When using{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">createSandbox()</code>,
           setting total limits automatically enables tracking:
         </p>
         <CodeBlock
@@ -376,8 +377,8 @@ if (tracker.isExhausted()) {
 tracker.reset();`}
         />
         <p className="text-neutral-400 text-sm mt-4">
-          Note: The standalone ResourceTracker is not automatically integrated with the sandbox.
-          Use <code className="text-amber-400">trackResources: true</code> (or{" "}
+          Note: The standalone ResourceTracker is not automatically integrated with the sandbox. Use{" "}
+          <code className="text-amber-400">trackResources: true</code> (or{" "}
           <code className="text-amber-400">limits.total</code>) for automatic tracking during{" "}
           <code className="text-amber-400">run()</code>.
         </p>

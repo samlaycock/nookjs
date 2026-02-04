@@ -18,7 +18,10 @@ export function InterpreterAPI() {
       </p>
       <p className="text-neutral-400 mb-8">
         Other internal classes include{" "}
-        <Link to="/docs/api/resource-tracker" className="text-amber-500 hover:text-amber-400 underline">
+        <Link
+          to="/docs/api/resource-tracker"
+          className="text-amber-500 hover:text-amber-400 underline"
+        >
           Resource Tracker
         </Link>{" "}
         and the ModuleSystem (see{" "}

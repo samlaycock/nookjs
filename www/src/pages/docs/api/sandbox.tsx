@@ -135,8 +135,12 @@ console.log(exports.result); // 3`}
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Advanced Usage</h2>
         <p className="text-neutral-300">
           Need fine-grained control? Use the
-          <Link to="/docs/api/interpreter" className="text-amber-500 hover:text-amber-400 underline">
-            {" "}Interpreter API
+          <Link
+            to="/docs/api/interpreter"
+            className="text-amber-500 hover:text-amber-400 underline"
+          >
+            {" "}
+            Interpreter API
           </Link>
           .
         </p>

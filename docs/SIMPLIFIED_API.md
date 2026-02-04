@@ -55,6 +55,7 @@ const ast = parse("const x = 1", {
 ## Options overview
 
 ### `env`
+
 Controls the language preset and built-in globals.
 
 Allowed values:
@@ -64,6 +65,7 @@ Allowed values:
 - `"browser"`, `"node"`, `"wintercg"`
 
 ### `apis`
+
 Adds host-like globals via preset bundles.
 
 Common values:
@@ -71,6 +73,7 @@ Common values:
 - `"console"`, `"fetch"`, `"timers"`, `"text"`, `"crypto"`, `"streams"`, `"blob"`, `"buffer"`
 
 ### `features`
+
 Enable or disable language features without building a full `featureControl` list.
 
 ```typescript
@@ -83,6 +86,7 @@ const sandbox = createSandbox({
 ```
 
 ### `limits`
+
 Guard execution per run and over time.
 
 ```typescript
@@ -96,6 +100,7 @@ const sandbox = createSandbox({
 ```
 
 ### `policy`
+
 Simplifies error sanitization.
 
 - `"safe"` - hide host error details and sanitize stacks (default)
@@ -103,6 +108,7 @@ Simplifies error sanitization.
 - `"full"` - expose full host errors
 
 ### `modules`
+
 Quick module wiring without a custom resolver.
 
 ```typescript
@@ -119,12 +125,13 @@ const sandbox = createSandbox({
 });
 
 const exports = await sandbox.runModule(
-  "import { add } from \"math.js\"; export const result = add(1, 2);",
+  'import { add } from "math.js"; export const result = add(1, 2);',
   { path: "main.js" },
 );
 ```
 
 ### `result: "full"`
+
 Return stats and resource usage alongside the result.
 
 ```typescript
