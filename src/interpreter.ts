@@ -81,53 +81,28 @@ function validatePropertyName(name: string, node?: ESTree.Node): void {
   }
 }
 
-/**
- * Wrapper for return values to propagate them through nested scopes
- * When a function executes `return x`, we wrap x in ReturnValue so it can
- * bubble up through blocks, loops, and conditionals until caught by the function call handler
- */
-class ReturnValue {
-  constructor(public value: any) {}
-}
+type ControlFlowKind = "return" | "break" | "continue" | "yield" | "optional-chain";
 
 /**
- * Marker class to signal a break statement
- * When a loop executes `break`, we return BreakValue to signal the loop to exit
+ * Unified control-flow signal used for return/break/continue/yield/optional-chain.
  */
-class BreakValue {
-  constructor(public label: string | null = null) {}
-}
-
-/**
- * Marker class to signal a continue statement
- * When a loop executes `continue`, we return ContinueValue to signal skipping to next iteration
- */
-class ContinueValue {
-  constructor(public label: string | null = null) {}
-}
-
-/**
- * Marker class to signal optional chaining short-circuit
- * When optional chaining encounters null/undefined with ?., we return this to short-circuit
- * the entire chain expression and return undefined
- */
-class OptionalChainShortCircuit {
-  // Marker class to signal optional chaining short-circuit
-}
-
-// Reuse a single marker instance to avoid per-chain allocations.
-const OPTIONAL_CHAIN_SHORT_CIRCUIT = new OptionalChainShortCircuit();
-
-/**
- * Marker class to signal a yield expression in a generator
- * When a generator executes `yield value`, we return YieldValue to pause execution
- */
-class YieldValue {
+class ControlFlowSignal {
   constructor(
-    public value: any,
+    public kind: ControlFlowKind,
+    public value?: any,
+    public label: string | null = null,
     public delegate: boolean = false, // true for yield*, false for yield
   ) {}
 }
+
+// Reuse a single marker instance to avoid per-chain allocations.
+const OPTIONAL_CHAIN_SHORT_CIRCUIT = new ControlFlowSignal("optional-chain");
+
+const isControlFlowSignal = (value: any): value is ControlFlowSignal =>
+  value instanceof ControlFlowSignal;
+
+const isControlFlowKind = (value: any, kind: ControlFlowKind): value is ControlFlowSignal =>
+  value instanceof ControlFlowSignal && value.kind === kind;
 
 /**
  * Represents a function defined in the sandbox (interpreted JavaScript)
@@ -211,69 +186,180 @@ interface ConstructorExecutionResult {
  */
 type GeneratorState = "suspended-start" | "suspended-yield" | "executing" | "completed";
 
-/**
- * Binds generator function parameters to the environment.
- * Shared between sync and async generators.
- */
-function bindGeneratorParameters(fn: FunctionValue, args: any[], env: Environment): void {
-  const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
+abstract class BaseGeneratorValue {
+  protected state: GeneratorState = "suspended-start";
 
-  for (let i = 0; i < regularParamCount && i < args.length; i++) {
-    env.declare(fn.params[i]!, args[i], "let");
+  constructor(
+    protected fn: FunctionValue,
+    protected args: any[],
+    protected interpreter: Interpreter,
+    protected thisValue: any,
+    protected featureEnabled: (feature: LanguageFeature) => boolean,
+  ) {}
+
+  protected setPendingYield(received: any): void {
+    this.interpreter.pendingYieldReceivedValue = {
+      value: received,
+      hasValue: true,
+    };
+    this.interpreter.isResumingFromYield = true;
+    this.interpreter.yieldCurrentIndex = 0;
   }
 
-  if (fn.restParamIndex !== null) {
-    const restArgs = args.slice(fn.restParamIndex);
-    env.declare(fn.params[fn.restParamIndex]!, restArgs, "let");
+  protected clearResumingFromYield(): void {
+    this.interpreter.isResumingFromYield = false;
+  }
+
+  protected resetYieldState(): void {
+    this.interpreter.yieldResumeIndex = 0;
+    this.interpreter.yieldCurrentIndex = 0;
+    this.interpreter.yieldReceivedValues = [];
   }
 }
 
 /**
  * Process a generator statement result and determine control flow.
- * Returns: { yielded: boolean, yieldValue?: any, delegate?: boolean, returned?: ReturnValue, shouldBreak?: boolean, shouldContinue?: boolean }
+ * Returns: { yielded: boolean, yieldValue?: any, delegate?: boolean, returned?: ControlFlowSignal, shouldBreak?: boolean, shouldContinue?: boolean }
  */
 function processGeneratorResult(result: any): {
   yielded: boolean;
   yieldValue?: any;
   delegate?: boolean;
-  returned?: ReturnValue;
+  returned?: ControlFlowSignal;
   shouldBreak?: boolean;
   shouldContinue?: boolean;
 } {
-  if (result instanceof YieldValue) {
+  if (isControlFlowKind(result, "yield")) {
     return {
       yielded: true,
       yieldValue: result.value,
       delegate: result.delegate,
     };
   }
-  if (result instanceof ReturnValue) {
+  if (isControlFlowKind(result, "return")) {
     return { yielded: false, returned: result };
   }
-  if (result instanceof BreakValue) {
+  if (isControlFlowKind(result, "break")) {
     return { yielded: false, shouldBreak: true };
   }
-  if (result instanceof ContinueValue) {
+  if (isControlFlowKind(result, "continue")) {
     return { yielded: false, shouldContinue: true };
   }
   return { yielded: false };
+}
+
+function getSyncIterator(iterable: any, errorMessage: string): Iterator<any> {
+  if (Array.isArray(iterable)) {
+    return iterable[Symbol.iterator]();
+  }
+  if (iterable && typeof iterable[Symbol.iterator] === "function") {
+    return iterable[Symbol.iterator]();
+  }
+  if (iterable && typeof iterable.next === "function") {
+    return iterable;
+  }
+  throw new InterpreterError(errorMessage);
+}
+
+function getAsyncIterator(
+  iterable: any,
+  errorMessage: string,
+): { iterator: Iterator<any> | AsyncIterator<any>; isAsync: boolean } {
+  if (Array.isArray(iterable)) {
+    return { iterator: iterable[Symbol.iterator](), isAsync: false };
+  }
+  if (iterable && typeof iterable[Symbol.asyncIterator] === "function") {
+    return { iterator: iterable[Symbol.asyncIterator](), isAsync: true };
+  }
+  if (iterable && typeof iterable[Symbol.iterator] === "function") {
+    return { iterator: iterable[Symbol.iterator](), isAsync: false };
+  }
+  if (iterable && typeof iterable.next === "function") {
+    return { iterator: iterable, isAsync: false };
+  }
+  throw new InterpreterError(errorMessage);
+}
+
+function extractForOfVariable(left: ESTree.ForOfStatement["left"]): {
+  variableName?: string;
+  pattern?: ESTree.ArrayPattern | ESTree.ObjectPattern;
+  isDeclaration: boolean;
+  variableKind?: "let" | "const";
+} {
+  if (left.type === "VariableDeclaration") {
+    const decl = left.declarations[0];
+    if (decl?.id.type === "Identifier") {
+      return {
+        variableName: decl.id.name,
+        isDeclaration: true,
+        variableKind: left.kind as "let" | "const",
+      };
+    }
+    if (decl?.id.type === "ArrayPattern" || decl?.id.type === "ObjectPattern") {
+      return {
+        pattern: decl.id,
+        isDeclaration: true,
+        variableKind: left.kind as "let" | "const",
+      };
+    }
+    throw new InterpreterError("Unsupported for...of variable pattern");
+  }
+  if (left.type === "Identifier") {
+    return {
+      variableName: left.name,
+      isDeclaration: false,
+    };
+  }
+  if (left.type === "ArrayPattern" || left.type === "ObjectPattern") {
+    return {
+      pattern: left,
+      isDeclaration: false,
+    };
+  }
+  throw new InterpreterError("Unsupported for...of left-hand side");
+}
+
+function extractForInVariable(left: ESTree.ForInStatement["left"]): {
+  variableName: string;
+  isDeclaration: boolean;
+  variableKind?: "let" | "const";
+} {
+  if (left.type === "VariableDeclaration") {
+    const decl = left.declarations[0];
+    if (decl?.id.type !== "Identifier") {
+      throw new InterpreterError("Unsupported for...in variable pattern");
+    }
+    return {
+      variableName: decl.id.name,
+      isDeclaration: true,
+      variableKind: left.kind as "let" | "const",
+    };
+  }
+  if (left.type === "Identifier") {
+    return {
+      variableName: left.name,
+      isDeclaration: false,
+    };
+  }
+  throw new InterpreterError("Unsupported for...in left-hand side");
 }
 
 /**
  * Represents a synchronous generator instance created by calling a generator function.
  * Implements the iterator protocol with next(), return(), and throw().
  */
-class GeneratorValue {
-  private state: GeneratorState = "suspended-start";
+class GeneratorValue extends BaseGeneratorValue {
   private nativeGenerator: Generator<any, any, any> | null = null;
 
   constructor(
-    private fn: FunctionValue,
-    private args: any[],
-    private interpreter: Interpreter,
-    private thisValue: any,
-    private featureEnabled: (feature: LanguageFeature) => boolean,
-  ) {}
+    fn: FunctionValue,
+    args: any[],
+    interpreter: Interpreter,
+    thisValue: any,
+    featureEnabled: (feature: LanguageFeature) => boolean,
+  ) {
+    super(fn, args, interpreter, thisValue, featureEnabled);
+  }
 
   /**
    * Execute a statement in generator context, yielding any yields recursively.
@@ -330,16 +416,11 @@ class GeneratorValue {
 
       // Store the received value and re-evaluate the statement
       // This allows yield expressions to return the received value
-      this.interpreter.pendingYieldReceivedValue = {
-        value: received,
-        hasValue: true,
-      };
-      this.interpreter.isResumingFromYield = true;
-      this.interpreter.yieldCurrentIndex = 0; // Reset for re-evaluation
+      this.setPendingYield(received);
 
       // Re-evaluate the statement - yield expression will now return the received value
       const resumeResult = this.interpreter.evaluateNode(statement);
-      this.interpreter.isResumingFromYield = false; // Clear after statement completes
+      this.clearResumingFromYield();
       const resumeProcessed = processGeneratorResult(resumeResult);
 
       if (resumeProcessed.yielded) {
@@ -355,9 +436,7 @@ class GeneratorValue {
         return resumeProcessed.returned;
       }
       // Reset yield indices when statement completes
-      this.interpreter.yieldResumeIndex = 0;
-      this.interpreter.yieldCurrentIndex = 0;
-      this.interpreter.yieldReceivedValues = [];
+      this.resetYieldState();
       return resumeResult;
     }
     if (processed.returned) {
@@ -382,15 +461,10 @@ class GeneratorValue {
       received = yield yieldValue;
     }
 
-    this.interpreter.pendingYieldReceivedValue = {
-      value: received,
-      hasValue: true,
-    };
-    this.interpreter.isResumingFromYield = true;
-    this.interpreter.yieldCurrentIndex = 0; // Reset for re-evaluation
+    this.setPendingYield(received);
 
     const resumeResult = this.interpreter.evaluateNode(statement);
-    this.interpreter.isResumingFromYield = false; // Clear after statement completes
+    this.clearResumingFromYield();
     const resumeProcessed = processGeneratorResult(resumeResult);
 
     if (resumeProcessed.yielded) {
@@ -404,9 +478,7 @@ class GeneratorValue {
       return resumeProcessed.returned;
     }
     // Reset yield indices when statement completes
-    this.interpreter.yieldResumeIndex = 0;
-    this.interpreter.yieldCurrentIndex = 0;
-    this.interpreter.yieldReceivedValues = [];
+    this.resetYieldState();
     return resumeResult;
   }
 
@@ -414,30 +486,18 @@ class GeneratorValue {
    * Handle yield* delegation - yield all values from the delegated iterator.
    */
   private *delegateYield(iterable: any): Generator<any, any, any> {
-    // Get an iterator from the value
-    let iterator: Iterator<any>;
-    if (Array.isArray(iterable)) {
-      iterator = iterable[Symbol.iterator]();
-    } else if (iterable && typeof iterable[Symbol.iterator] === "function") {
-      iterator = iterable[Symbol.iterator]();
-    } else if (iterable && typeof iterable.next === "function") {
-      // Already an iterator (e.g., generator)
-      iterator = iterable;
-    } else {
-      throw new InterpreterError(
-        "yield* requires an iterable (array, generator, or object with [Symbol.iterator])",
-      );
-    }
+    const iterator = getSyncIterator(
+      iterable,
+      "yield* requires an iterable (array, generator, or object with [Symbol.iterator])",
+    );
 
-    // Iterate and yield each value
-    let iterResult = iterator.next();
-    while (!iterResult.done) {
+    while (true) {
+      const iterResult = iterator.next();
+      if (iterResult.done) {
+        return iterResult.value;
+      }
       yield iterResult.value;
-      iterResult = iterator.next();
     }
-
-    // Return the final value (if any)
-    return iterResult.value;
   }
 
   /**
@@ -460,15 +520,10 @@ class GeneratorValue {
         }
 
         // Store received value and re-evaluate
-        this.interpreter.pendingYieldReceivedValue = {
-          value: received,
-          hasValue: true,
-        };
-        this.interpreter.isResumingFromYield = true;
-        this.interpreter.yieldCurrentIndex = 0; // Reset for re-evaluation
+        this.setPendingYield(received);
 
         const resumeResult = this.interpreter.evaluateNode(statement);
-        this.interpreter.isResumingFromYield = false; // Clear after statement completes
+        this.clearResumingFromYield();
         const resumeProcessed = processGeneratorResult(resumeResult);
 
         if (resumeProcessed.yielded) {
@@ -478,11 +533,9 @@ class GeneratorValue {
             resumeProcessed.yieldValue,
             resumeProcessed.delegate || false,
           );
-          if (finalResult instanceof ReturnValue) {
+          if (isControlFlowKind(finalResult, "return")) {
             // Reset yield indices
-            this.interpreter.yieldResumeIndex = 0;
-            this.interpreter.yieldCurrentIndex = 0;
-            this.interpreter.yieldReceivedValues = [];
+            this.resetYieldState();
             return {
               shouldBreak: false,
               shouldReturn: finalResult,
@@ -490,14 +543,10 @@ class GeneratorValue {
             };
           }
           // Reset yield indices when statement completes
-          this.interpreter.yieldResumeIndex = 0;
-          this.interpreter.yieldCurrentIndex = 0;
-          this.interpreter.yieldReceivedValues = [];
+          this.resetYieldState();
         } else if (resumeProcessed.returned) {
           // Reset yield indices
-          this.interpreter.yieldResumeIndex = 0;
-          this.interpreter.yieldCurrentIndex = 0;
-          this.interpreter.yieldReceivedValues = [];
+          this.resetYieldState();
           return {
             shouldBreak: false,
             shouldReturn: resumeProcessed.returned,
@@ -517,9 +566,7 @@ class GeneratorValue {
           };
         } else {
           // Statement completed without further yielding - reset yield indices
-          this.interpreter.yieldResumeIndex = 0;
-          this.interpreter.yieldCurrentIndex = 0;
-          this.interpreter.yieldReceivedValues = [];
+          this.resetYieldState();
         }
       } else if (processed.returned) {
         return {
@@ -641,51 +688,32 @@ class GeneratorValue {
       // Evaluate the iterable
       const iterableValue = this.interpreter.evaluateNode(node.right);
 
-      // Get an iterator from the value
-      let iterator: Iterator<any>;
-      if (Array.isArray(iterableValue)) {
-        iterator = iterableValue[Symbol.iterator]();
-      } else if (iterableValue && typeof iterableValue[Symbol.iterator] === "function") {
-        iterator = iterableValue[Symbol.iterator]();
-      } else if (iterableValue && typeof iterableValue.next === "function") {
-        iterator = iterableValue;
-      } else {
-        throw new InterpreterError(
-          "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
-        );
-      }
+      const iterator = getSyncIterator(
+        iterableValue,
+        "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
+      );
 
-      // Extract variable information from node.left
-      const left = node.left;
-      let variableName: string;
-      let isDeclaration = false;
-      let variableKind: "let" | "const" | "var" | undefined;
+      const { variableName, pattern, isDeclaration, variableKind } = extractForOfVariable(
+        node.left,
+      );
 
-      if (left.type === "VariableDeclaration") {
-        const decl = left as ESTree.VariableDeclaration;
-        const declarator = decl.declarations[0];
-        if (declarator?.id.type === "Identifier") {
-          variableName = declarator.id.name;
-          isDeclaration = true;
-          variableKind = decl.kind as "let" | "const" | "var";
-        } else {
-          throw new InterpreterError("for...of only supports simple identifiers");
+      while (true) {
+        const iterResult = iterator.next();
+        if (iterResult.done) {
+          break;
         }
-      } else if (left.type === "Identifier") {
-        variableName = (left as ESTree.Identifier).name;
-      } else {
-        throw new InterpreterError("Unsupported for...of left-hand side");
-      }
 
-      // Iterate using the iterator protocol
-      let iterResult = iterator.next();
-      while (!iterResult.done) {
         const currentValue = iterResult.value;
 
         if (isDeclaration) {
           const iterEnv = this.interpreter.environment;
           this.interpreter.environment = new Environment(iterEnv);
-          this.interpreter.environment.declare(variableName, currentValue, variableKind!);
+
+          if (pattern) {
+            this.interpreter.destructurePattern(pattern, currentValue, true, variableKind);
+          } else {
+            this.interpreter.environment.declare(variableName!, currentValue, variableKind!);
+          }
 
           if (node.body.type === "BlockStatement") {
             const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
@@ -716,7 +744,11 @@ class GeneratorValue {
 
           this.interpreter.environment = iterEnv;
         } else {
-          this.interpreter.environment.set(variableName, currentValue);
+          if (pattern) {
+            this.interpreter.destructurePattern(pattern, currentValue, false);
+          } else {
+            this.interpreter.environment.set(variableName!, currentValue);
+          }
 
           if (node.body.type === "BlockStatement") {
             const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
@@ -734,8 +766,6 @@ class GeneratorValue {
             else if (processed.shouldBreak) break;
           }
         }
-
-        iterResult = iterator.next();
       }
       return undefined;
     } finally {
@@ -761,27 +791,7 @@ class GeneratorValue {
         throw new InterpreterError(`for...in requires an object or array, got ${typeof obj}`);
       }
 
-      // Extract variable information from node.left
-      const left = node.left;
-      let variableName: string;
-      let isDeclaration = false;
-      let variableKind: "let" | "const" | "var" | undefined;
-
-      if (left.type === "VariableDeclaration") {
-        const decl = left as ESTree.VariableDeclaration;
-        const declarator = decl.declarations[0];
-        if (declarator?.id.type === "Identifier") {
-          variableName = declarator.id.name;
-          isDeclaration = true;
-          variableKind = decl.kind as "let" | "const" | "var";
-        } else {
-          throw new InterpreterError("for...in only supports simple identifiers");
-        }
-      } else if (left.type === "Identifier") {
-        variableName = (left as ESTree.Identifier).name;
-      } else {
-        throw new InterpreterError("Unsupported for...in left-hand side");
-      }
+      const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
       // Iterate over object keys
       const keys = Object.keys(obj);
@@ -908,8 +918,8 @@ class GeneratorValue {
       throw caughtError;
     }
 
-    // If tryResult is a ReturnValue, unwrap it for normal return
-    if (tryResult instanceof ReturnValue) {
+    // If tryResult is a return signal, unwrap it for normal return
+    if (isControlFlowKind(tryResult, "return")) {
       return tryResult;
     }
     return tryResult;
@@ -924,15 +934,15 @@ class GeneratorValue {
     this.interpreter.environment = generatorEnv;
 
     try {
-      bindGeneratorParameters(this.fn, this.args, generatorEnv);
+      this.interpreter.bindFunctionParameters(this.fn, this.args);
 
       for (const statement of this.fn.body.body) {
         const result = yield* this.executeStatement(statement);
 
-        if (result instanceof ReturnValue) {
+        if (isControlFlowKind(result, "return")) {
           return result.value;
         }
-        if (result instanceof BreakValue || result instanceof ContinueValue) {
+        if (isControlFlowKind(result, "break") || isControlFlowKind(result, "continue")) {
           throw new InterpreterError("Break/continue outside of loop in generator");
         }
       }
@@ -971,7 +981,7 @@ class GeneratorValue {
       done: true,
       value,
     };
-    if (result.value instanceof ReturnValue) {
+    if (isControlFlowKind(result.value, "return")) {
       return { done: result.done, value: result.value.value };
     }
     return result;
@@ -1004,17 +1014,18 @@ class GeneratorValue {
  * Represents an async generator instance created by calling an async generator function.
  * Implements the async iterator protocol with next(), return(), and throw().
  */
-class AsyncGeneratorValue {
-  private state: GeneratorState = "suspended-start";
+class AsyncGeneratorValue extends BaseGeneratorValue {
   private nativeGenerator: AsyncGenerator<any, any, any> | null = null;
 
   constructor(
-    private fn: FunctionValue,
-    private args: any[],
-    private interpreter: Interpreter,
-    private thisValue: any,
-    private featureEnabled: (feature: LanguageFeature) => boolean,
-  ) {}
+    fn: FunctionValue,
+    args: any[],
+    interpreter: Interpreter,
+    thisValue: any,
+    featureEnabled: (feature: LanguageFeature) => boolean,
+  ) {
+    super(fn, args, interpreter, thisValue, featureEnabled);
+  }
 
   /**
    * Execute a statement in async generator context, yielding any yields recursively.
@@ -1071,16 +1082,11 @@ class AsyncGeneratorValue {
 
       // Store the received value and re-evaluate the statement
       // This allows yield expressions to return the received value
-      this.interpreter.pendingYieldReceivedValue = {
-        value: received,
-        hasValue: true,
-      };
-      this.interpreter.isResumingFromYield = true;
-      this.interpreter.yieldCurrentIndex = 0; // Reset for re-evaluation
+      this.setPendingYield(received);
 
       // Re-evaluate the statement - yield expression will now return the received value
       const resumeResult = await this.interpreter.evaluateNodeAsync(statement);
-      this.interpreter.isResumingFromYield = false; // Clear after statement completes
+      this.clearResumingFromYield();
       const resumeProcessed = processGeneratorResult(resumeResult);
 
       if (resumeProcessed.yielded) {
@@ -1095,9 +1101,7 @@ class AsyncGeneratorValue {
         return resumeProcessed.returned;
       }
       // Reset yield indices when statement completes
-      this.interpreter.yieldResumeIndex = 0;
-      this.interpreter.yieldCurrentIndex = 0;
-      this.interpreter.yieldReceivedValues = [];
+      this.resetYieldState();
       return resumeResult;
     }
     if (processed.returned) {
@@ -1122,15 +1126,10 @@ class AsyncGeneratorValue {
       received = yield yieldValue;
     }
 
-    this.interpreter.pendingYieldReceivedValue = {
-      value: received,
-      hasValue: true,
-    };
-    this.interpreter.isResumingFromYield = true;
-    this.interpreter.yieldCurrentIndex = 0; // Reset for re-evaluation
+    this.setPendingYield(received);
 
     const resumeResult = await this.interpreter.evaluateNodeAsync(statement);
-    this.interpreter.isResumingFromYield = false; // Clear after statement completes
+    this.clearResumingFromYield();
     const resumeProcessed = processGeneratorResult(resumeResult);
 
     if (resumeProcessed.yielded) {
@@ -1144,9 +1143,7 @@ class AsyncGeneratorValue {
       return resumeProcessed.returned;
     }
     // Reset yield indices after statement completes without yielding
-    this.interpreter.yieldResumeIndex = 0;
-    this.interpreter.yieldCurrentIndex = 0;
-    this.interpreter.yieldReceivedValues = [];
+    this.resetYieldState();
     return resumeResult;
   }
 
@@ -1154,40 +1151,20 @@ class AsyncGeneratorValue {
    * Handle yield* delegation for async generators - yield all values from the delegated iterator.
    */
   private async *delegateYield(iterable: any): AsyncGenerator<any, any, any> {
-    // Get an iterator from the value (support both sync and async iterators)
-    let iterator: Iterator<any> | AsyncIterator<any>;
-    let isAsync = false;
+    const { iterator, isAsync } = getAsyncIterator(
+      iterable,
+      "yield* requires an iterable (array, generator, or object with [Symbol.iterator])",
+    );
 
-    if (Array.isArray(iterable)) {
-      iterator = iterable[Symbol.iterator]();
-    } else if (iterable && typeof iterable[Symbol.asyncIterator] === "function") {
-      iterator = iterable[Symbol.asyncIterator]();
-      isAsync = true;
-    } else if (iterable && typeof iterable[Symbol.iterator] === "function") {
-      iterator = iterable[Symbol.iterator]();
-    } else if (iterable && typeof iterable.next === "function") {
-      // Already an iterator (e.g., generator)
-      iterator = iterable;
-    } else {
-      throw new InterpreterError(
-        "yield* requires an iterable (array, generator, or object with [Symbol.iterator])",
-      );
-    }
-
-    // Iterate and yield each value
-    let iterResult = isAsync
-      ? await (iterator as AsyncIterator<any>).next()
-      : (iterator as Iterator<any>).next();
-
-    while (!iterResult.done) {
-      yield iterResult.value;
-      iterResult = isAsync
+    while (true) {
+      const iterResult = isAsync
         ? await (iterator as AsyncIterator<any>).next()
         : (iterator as Iterator<any>).next();
+      if (iterResult.done) {
+        return iterResult.value;
+      }
+      yield iterResult.value;
     }
-
-    // Return the final value (if any)
-    return iterResult.value;
   }
 
   /**
@@ -1214,15 +1191,10 @@ class AsyncGeneratorValue {
         }
 
         // Store received value and re-evaluate
-        this.interpreter.pendingYieldReceivedValue = {
-          value: received,
-          hasValue: true,
-        };
-        this.interpreter.isResumingFromYield = true;
-        this.interpreter.yieldCurrentIndex = 0; // Reset for re-evaluation
+        this.setPendingYield(received);
 
         const resumeResult = await this.interpreter.evaluateNodeAsync(statement);
-        this.interpreter.isResumingFromYield = false; // Clear after statement completes
+        this.clearResumingFromYield();
         const resumeProcessed = processGeneratorResult(resumeResult);
 
         if (resumeProcessed.yielded) {
@@ -1232,7 +1204,7 @@ class AsyncGeneratorValue {
             resumeProcessed.yieldValue,
             resumeProcessed.delegate || false,
           );
-          if (finalResult instanceof ReturnValue) {
+          if (isControlFlowKind(finalResult, "return")) {
             return {
               shouldBreak: false,
               shouldReturn: finalResult,
@@ -1259,9 +1231,7 @@ class AsyncGeneratorValue {
           };
         } else {
           // Statement completed without further yielding - reset yield indices
-          this.interpreter.yieldResumeIndex = 0;
-          this.interpreter.yieldCurrentIndex = 0;
-          this.interpreter.yieldReceivedValues = [];
+          this.resetYieldState();
         }
       } else if (processed.returned) {
         return {
@@ -1385,59 +1355,39 @@ class AsyncGeneratorValue {
       // Evaluate the iterable
       const iterableValue = await this.interpreter.evaluateNodeAsync(node.right);
 
-      // Get an iterator from the value (support async iterators too)
-      let iterator: Iterator<any> | AsyncIterator<any>;
-      let isAsync = false;
+      const { iterator, isAsync } = getAsyncIterator(
+        iterableValue,
+        "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
+      );
 
-      if (Array.isArray(iterableValue)) {
-        iterator = iterableValue[Symbol.iterator]();
-      } else if (iterableValue && typeof iterableValue[Symbol.asyncIterator] === "function") {
-        iterator = iterableValue[Symbol.asyncIterator]();
-        isAsync = true;
-      } else if (iterableValue && typeof iterableValue[Symbol.iterator] === "function") {
-        iterator = iterableValue[Symbol.iterator]();
-      } else if (iterableValue && typeof iterableValue.next === "function") {
-        iterator = iterableValue;
-      } else {
-        throw new InterpreterError(
-          "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
-        );
-      }
+      const { variableName, pattern, isDeclaration, variableKind } = extractForOfVariable(
+        node.left,
+      );
 
-      // Extract variable information from node.left
-      const left = node.left;
-      let variableName: string;
-      let isDeclaration = false;
-      let variableKind: "let" | "const" | "var" | undefined;
-
-      if (left.type === "VariableDeclaration") {
-        const decl = left as ESTree.VariableDeclaration;
-        const declarator = decl.declarations[0];
-        if (declarator?.id.type === "Identifier") {
-          variableName = declarator.id.name;
-          isDeclaration = true;
-          variableKind = decl.kind as "let" | "const" | "var";
-        } else {
-          throw new InterpreterError("for...of only supports simple identifiers");
+      while (true) {
+        const iterResult = isAsync
+          ? await (iterator as AsyncIterator<any>).next()
+          : (iterator as Iterator<any>).next();
+        if (iterResult.done) {
+          break;
         }
-      } else if (left.type === "Identifier") {
-        variableName = (left as ESTree.Identifier).name;
-      } else {
-        throw new InterpreterError("Unsupported for...of left-hand side");
-      }
 
-      // Iterate using the iterator protocol
-      let iterResult = isAsync
-        ? await (iterator as AsyncIterator<any>).next()
-        : (iterator as Iterator<any>).next();
-
-      while (!iterResult.done) {
         const currentValue = iterResult.value;
 
         if (isDeclaration) {
           const iterEnv = this.interpreter.environment;
           this.interpreter.environment = new Environment(iterEnv);
-          this.interpreter.environment.declare(variableName, currentValue, variableKind!);
+
+          if (pattern) {
+            await this.interpreter.destructurePatternAsync(
+              pattern,
+              currentValue,
+              true,
+              variableKind,
+            );
+          } else {
+            this.interpreter.environment.declare(variableName!, currentValue, variableKind!);
+          }
 
           if (node.body.type === "BlockStatement") {
             const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
@@ -1468,7 +1418,11 @@ class AsyncGeneratorValue {
 
           this.interpreter.environment = iterEnv;
         } else {
-          this.interpreter.environment.set(variableName, currentValue);
+          if (pattern) {
+            await this.interpreter.destructurePatternAsync(pattern, currentValue, false);
+          } else {
+            this.interpreter.environment.set(variableName!, currentValue);
+          }
 
           if (node.body.type === "BlockStatement") {
             const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
@@ -1486,10 +1440,6 @@ class AsyncGeneratorValue {
             else if (processed.shouldBreak) break;
           }
         }
-
-        iterResult = isAsync
-          ? await (iterator as AsyncIterator<any>).next()
-          : (iterator as Iterator<any>).next();
       }
       return undefined;
     } finally {
@@ -1515,27 +1465,7 @@ class AsyncGeneratorValue {
         throw new InterpreterError(`for...in requires an object or array, got ${typeof obj}`);
       }
 
-      // Extract variable information from node.left
-      const left = node.left;
-      let variableName: string;
-      let isDeclaration = false;
-      let variableKind: "let" | "const" | "var" | undefined;
-
-      if (left.type === "VariableDeclaration") {
-        const decl = left as ESTree.VariableDeclaration;
-        const declarator = decl.declarations[0];
-        if (declarator?.id.type === "Identifier") {
-          variableName = declarator.id.name;
-          isDeclaration = true;
-          variableKind = decl.kind as "let" | "const" | "var";
-        } else {
-          throw new InterpreterError("for...in only supports simple identifiers");
-        }
-      } else if (left.type === "Identifier") {
-        variableName = (left as ESTree.Identifier).name;
-      } else {
-        throw new InterpreterError("Unsupported for...in left-hand side");
-      }
+      const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
       // Iterate over object keys
       const keys = Object.keys(obj);
@@ -1651,7 +1581,7 @@ class AsyncGeneratorValue {
         if (node.finalizer.type === "BlockStatement") {
           const { shouldReturn } = yield* this.executeBlockBody(node.finalizer.body);
           // If finally block has a return, it overrides try/catch result
-          // Unwrap ReturnValue since we're returning directly from the generator
+          // Unwrap return signal since we're returning directly from the generator
           if (shouldReturn) {
             finallyHasReturn = true;
             finallyReturnValue = shouldReturn;
@@ -1669,8 +1599,8 @@ class AsyncGeneratorValue {
       throw caughtError;
     }
 
-    // If tryResult is a ReturnValue, propagate it
-    if (tryResult instanceof ReturnValue) {
+    // If tryResult is a return signal, propagate it
+    if (isControlFlowKind(tryResult, "return")) {
       return tryResult;
     }
     return tryResult;
@@ -1685,15 +1615,15 @@ class AsyncGeneratorValue {
     this.interpreter.environment = generatorEnv;
 
     try {
-      bindGeneratorParameters(this.fn, this.args, generatorEnv);
+      await this.interpreter.bindFunctionParametersAsync(this.fn, this.args);
 
       for (const statement of this.fn.body.body) {
         const result = yield* this.executeStatement(statement);
 
-        if (result instanceof ReturnValue) {
+        if (isControlFlowKind(result, "return")) {
           return result.value;
         }
-        if (result instanceof BreakValue || result instanceof ContinueValue) {
+        if (isControlFlowKind(result, "break") || isControlFlowKind(result, "continue")) {
           throw new InterpreterError("Break/continue outside of loop in generator");
         }
       }
@@ -1732,7 +1662,7 @@ class AsyncGeneratorValue {
       done: true,
       value,
     };
-    if (result.value instanceof ReturnValue) {
+    if (isControlFlowKind(result.value, "return")) {
       return { done: result.done, value: result.value.value };
     }
     return result;
@@ -2013,7 +1943,7 @@ class Environment {
    * Force-set a variable's value, even if it's const.
    * This is used internally for:
    * 1. Generator yield resumption where we need to update a const variable
-   *    that was initially assigned a YieldValue placeholder.
+   *    that was initially assigned a yield signal placeholder.
    * 2. Updating injected globals (allows per-call globals to override constructor globals)
    *
    * @param name - Variable name
@@ -2413,7 +2343,7 @@ export class Interpreter {
   private currentSourceCode: string = "";
 
   // Generator yield handling - for passing values into yield expressions
-  // When set, the next yield expression will return this value instead of YieldValue
+  // When set, the next yield expression will return this value instead of a yield signal
   public pendingYieldReceivedValue?: { value: any; hasValue: boolean };
   // Set to true to indicate we're resuming from a yield and should use pendingYieldReceivedValue
   public isResumingFromYield: boolean = false;
@@ -2461,6 +2391,10 @@ export class Interpreter {
   private integratedExhaustedLimit: keyof ResourceLimits | null = null;
 
   private moduleSystem: ModuleSystem | null = null;
+  private nodeHandlers: Record<
+    string,
+    { sync: (node: ASTNode) => any; async: (node: ASTNode) => any }
+  >;
 
   constructor(options?: InterpreterOptions) {
     this.environment = new Environment();
@@ -2490,6 +2424,7 @@ export class Interpreter {
     this.injectGlobals(this.constructorGlobals);
 
     this.integratedResourceTracking = options?.resourceTracking ?? false;
+    this.nodeHandlers = this.createNodeHandlers();
   }
 
   /**
@@ -3284,7 +3219,7 @@ export class Interpreter {
       result = this.evaluateNode(statement);
 
       // Handle control flow values
-      if (result instanceof ReturnValue) {
+      if (isControlFlowKind(result, "return")) {
         result = result.value;
         break;
       }
@@ -3463,36 +3398,44 @@ export class Interpreter {
     }
   }
 
+  private async resolveModuleExports(
+    specifier: string,
+    importerPath: string,
+  ): Promise<Record<string, any>> {
+    if (!this.moduleSystem) {
+      throw new InterpreterError("Module system is not enabled");
+    }
+
+    const moduleRecord = await this.moduleSystem.resolveModule(specifier, importerPath);
+    if (!moduleRecord) {
+      throw new InterpreterError(`Cannot find module '${specifier}'`);
+    }
+
+    if (moduleRecord.status !== "initializing") {
+      return moduleRecord.exports;
+    }
+
+    let ast: ESTree.Program;
+    if (moduleRecord.source !== undefined) {
+      ast = parseModule(moduleRecord.source, { next: true });
+    } else if (moduleRecord.ast) {
+      ast = moduleRecord.ast;
+    } else {
+      throw new InterpreterError(`Module '${specifier}' has no source or AST`);
+    }
+
+    const exports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
+    this.moduleSystem.setModuleExports(specifier, exports);
+    return exports;
+  }
+
   private async evaluateImportDeclaration(
     node: ESTree.ImportDeclaration,
     moduleEnv: Environment,
     importerPath: string,
   ): Promise<void> {
-    if (!this.moduleSystem) {
-      throw new InterpreterError("Module system is not enabled");
-    }
-
     const specifier = (node.source as ESTree.Literal).value as string;
-    const moduleRecord = await this.moduleSystem.resolveModule(specifier, importerPath);
-
-    if (!moduleRecord) {
-      throw new InterpreterError(`Cannot find module '${specifier}'`);
-    }
-
-    let importedExports = moduleRecord.exports;
-
-    if (moduleRecord.status === "initializing") {
-      let ast: ESTree.Program;
-      if (moduleRecord.source !== undefined) {
-        ast = parseModule(moduleRecord.source, { next: true });
-      } else if (moduleRecord.ast) {
-        ast = moduleRecord.ast;
-      } else {
-        throw new InterpreterError(`Module '${specifier}' has no source or AST`);
-      }
-      importedExports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
-      this.moduleSystem.setModuleExports(specifier, importedExports);
-    }
+    const importedExports = await this.resolveModuleExports(specifier, importerPath);
 
     for (const spec of node.specifiers) {
       if (spec.type === "ImportNamespaceSpecifier") {
@@ -3563,26 +3506,7 @@ export class Interpreter {
       // Handle re-exports: export { foo } from "module"
       if (node.source) {
         const specifier = (node.source as ESTree.Literal).value as string;
-        const moduleRecord = await this.moduleSystem!.resolveModule(specifier, currentPath);
-
-        if (!moduleRecord) {
-          throw new InterpreterError(`Cannot find module '${specifier}'`);
-        }
-
-        // Evaluate the module if it's still initializing
-        let sourceExports = moduleRecord.exports;
-        if (moduleRecord.status === "initializing") {
-          let ast: ESTree.Program;
-          if (moduleRecord.source !== undefined) {
-            ast = parseModule(moduleRecord.source, { next: true });
-          } else if (moduleRecord.ast) {
-            ast = moduleRecord.ast;
-          } else {
-            throw new InterpreterError(`Module '${specifier}' has no source or AST`);
-          }
-          sourceExports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
-          this.moduleSystem!.setModuleExports(specifier, sourceExports);
-        }
+        const sourceExports = await this.resolveModuleExports(specifier, currentPath);
 
         for (const spec of node.specifiers) {
           if (spec.type === "ExportSpecifier") {
@@ -3701,31 +3625,8 @@ export class Interpreter {
     exports: Record<string, any>,
     currentPath: string,
   ): Promise<void> {
-    if (!this.moduleSystem) {
-      throw new InterpreterError("Module system is not enabled");
-    }
-
     const specifier = (node.source as ESTree.Literal).value as string;
-    const moduleRecord = await this.moduleSystem.resolveModule(specifier, currentPath);
-
-    if (!moduleRecord) {
-      throw new InterpreterError(`Cannot find module '${specifier}'`);
-    }
-
-    // Evaluate the module if it's still initializing
-    let sourceExports = moduleRecord.exports;
-    if (moduleRecord.status === "initializing") {
-      let ast: ESTree.Program;
-      if (moduleRecord.source !== undefined) {
-        ast = parseModule(moduleRecord.source, { next: true });
-      } else if (moduleRecord.ast) {
-        ast = moduleRecord.ast;
-      } else {
-        throw new InterpreterError(`Module '${specifier}' has no source or AST`);
-      }
-      sourceExports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
-      this.moduleSystem.setModuleExports(specifier, sourceExports);
-    }
+    const sourceExports = await this.resolveModuleExports(specifier, currentPath);
 
     // Handle "export * as namespace from 'module'"
     if (node.exported) {
@@ -3897,341 +3798,222 @@ export class Interpreter {
     return this.moduleSystem?.getCacheSize() ?? 0;
   }
 
-  // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
-  public evaluateNode(node: ASTNode): any {
-    this.statsNodeCount++;
-
+  private updateNodeLocation(node: ASTNode): void {
     const nodeLoc = getNodeLocation(node);
     if (nodeLoc) {
       this.currentLine = nodeLoc.start.line;
       this.currentColumn = nodeLoc.start.column;
-    } else if ("line" in node && typeof (node as any).line === "number") {
+      return;
+    }
+    if ("line" in node && typeof (node as any).line === "number") {
       this.currentLine = (node as any).line;
     }
+  }
 
+  private createNodeHandlers(): Record<
+    string,
+    { sync: (node: ASTNode) => any; async: (node: ASTNode) => any }
+  > {
+    const same = (fn: (node: ASTNode) => any) => ({ sync: fn, async: fn });
+    return {
+      Program: {
+        sync: (node) => this.evaluateProgram(node as ESTree.Program),
+        async: (node) => this.evaluateProgramAsync(node as ESTree.Program),
+      },
+      ExpressionStatement: {
+        sync: (node) => this.evaluateNode((node as ESTree.ExpressionStatement).expression),
+        async: (node) => this.evaluateNodeAsync((node as ESTree.ExpressionStatement).expression),
+      },
+      EmptyStatement: same(() => undefined),
+      Literal: same((node) => this.evaluateLiteral(node as ESTree.Literal)),
+      Identifier: {
+        sync: (node) => this.evaluateIdentifier(node as ESTree.Identifier),
+        async: (node) => {
+          const value = this.evaluateIdentifier(node as ESTree.Identifier);
+          return value instanceof Promise ? new RawValue(value) : value;
+        },
+      },
+      ThisExpression: same((node) => this.evaluateThisExpression(node as ESTree.ThisExpression)),
+      BinaryExpression: {
+        sync: (node) => this.evaluateBinaryExpression(node as ESTree.BinaryExpression),
+        async: (node) => this.evaluateBinaryExpressionAsync(node as ESTree.BinaryExpression),
+      },
+      UnaryExpression: {
+        sync: (node) => this.evaluateUnaryExpression(node as ESTree.UnaryExpression),
+        async: (node) => this.evaluateUnaryExpressionAsync(node as ESTree.UnaryExpression),
+      },
+      UpdateExpression: same((node) =>
+        this.evaluateUpdateExpression(node as ESTree.UpdateExpression),
+      ),
+      LogicalExpression: {
+        sync: (node) => this.evaluateLogicalExpression(node as ESTree.LogicalExpression),
+        async: (node) => this.evaluateLogicalExpressionAsync(node as ESTree.LogicalExpression),
+      },
+      ConditionalExpression: {
+        sync: (node) => this.evaluateConditionalExpression(node as ESTree.ConditionalExpression),
+        async: (node) =>
+          this.evaluateConditionalExpressionAsync(node as ESTree.ConditionalExpression),
+      },
+      AssignmentExpression: {
+        sync: (node) => this.evaluateAssignmentExpression(node as ESTree.AssignmentExpression),
+        async: (node) =>
+          this.evaluateAssignmentExpressionAsync(node as ESTree.AssignmentExpression),
+      },
+      VariableDeclaration: {
+        sync: (node) => this.evaluateVariableDeclaration(node as ESTree.VariableDeclaration),
+        async: (node) => this.evaluateVariableDeclarationAsync(node as ESTree.VariableDeclaration),
+      },
+      BlockStatement: {
+        sync: (node) => this.evaluateBlockStatement(node as ESTree.BlockStatement),
+        async: (node) => this.evaluateBlockStatementAsync(node as ESTree.BlockStatement),
+      },
+      IfStatement: {
+        sync: (node) => this.evaluateIfStatement(node as ESTree.IfStatement),
+        async: (node) => this.evaluateIfStatementAsync(node as ESTree.IfStatement),
+      },
+      WhileStatement: {
+        sync: (node) => this.evaluateWhileStatement(node as ESTree.WhileStatement),
+        async: (node) => this.evaluateWhileStatementAsync(node as ESTree.WhileStatement),
+      },
+      DoWhileStatement: {
+        sync: (node) => this.evaluateDoWhileStatement(node as ESTree.DoWhileStatement),
+        async: (node) => this.evaluateDoWhileStatementAsync(node as ESTree.DoWhileStatement),
+      },
+      ForStatement: {
+        sync: (node) => this.evaluateForStatement(node as ESTree.ForStatement),
+        async: (node) => this.evaluateForStatementAsync(node as ESTree.ForStatement),
+      },
+      ForOfStatement: {
+        sync: (node) => this.evaluateForOfStatement(node as ESTree.ForOfStatement),
+        async: (node) => this.evaluateForOfStatementAsync(node as ESTree.ForOfStatement),
+      },
+      ForInStatement: {
+        sync: (node) => this.evaluateForInStatement(node as ESTree.ForInStatement),
+        async: (node) => this.evaluateForInStatementAsync(node as ESTree.ForInStatement),
+      },
+      SwitchStatement: {
+        sync: (node) => this.evaluateSwitchStatement(node as ESTree.SwitchStatement),
+        async: (node) => this.evaluateSwitchStatementAsync(node as ESTree.SwitchStatement),
+      },
+      FunctionDeclaration: same((node) =>
+        this.evaluateFunctionDeclaration(node as ESTree.FunctionDeclaration),
+      ),
+      FunctionExpression: same((node) =>
+        this.evaluateFunctionExpression(node as ESTree.FunctionExpression),
+      ),
+      ArrowFunctionExpression: same((node) =>
+        this.evaluateArrowFunctionExpression(node as ESTree.ArrowFunctionExpression),
+      ),
+      ReturnStatement: {
+        sync: (node) => this.evaluateReturnStatement(node as ESTree.ReturnStatement),
+        async: (node) => this.evaluateReturnStatementAsync(node as ESTree.ReturnStatement),
+      },
+      AwaitExpression: {
+        sync: () => {
+          throw new InterpreterError(
+            "Cannot use await in synchronous evaluate(). Use evaluateAsync() instead.",
+          );
+        },
+        async: (node) => this.evaluateAwaitExpressionAsync(node as ESTree.AwaitExpression),
+      },
+      YieldExpression: {
+        sync: (node) => this.evaluateYieldExpression(node as ESTree.YieldExpression),
+        async: (node) => this.evaluateYieldExpressionAsync(node as ESTree.YieldExpression),
+      },
+      BreakStatement: same((node) => this.evaluateBreakStatement(node as ESTree.BreakStatement)),
+      ContinueStatement: same((node) =>
+        this.evaluateContinueStatement(node as ESTree.ContinueStatement),
+      ),
+      LabeledStatement: {
+        sync: (node) => this.evaluateLabeledStatement(node as ESTree.LabeledStatement),
+        async: (node) => this.evaluateLabeledStatementAsync(node as ESTree.LabeledStatement),
+      },
+      ThrowStatement: {
+        sync: (node) => this.evaluateThrowStatement(node as ESTree.ThrowStatement),
+        async: (node) => this.evaluateThrowStatementAsync(node as ESTree.ThrowStatement),
+      },
+      TryStatement: {
+        sync: (node) => this.evaluateTryStatement(node as ESTree.TryStatement),
+        async: (node) => this.evaluateTryStatementAsync(node as ESTree.TryStatement),
+      },
+      CallExpression: {
+        sync: (node) => this.evaluateCallExpression(node as ESTree.CallExpression),
+        async: (node) => this.evaluateCallExpressionAsync(node as ESTree.CallExpression),
+      },
+      NewExpression: {
+        sync: (node) => this.evaluateNewExpression(node as ESTree.NewExpression),
+        async: (node) => this.evaluateNewExpressionAsync(node as ESTree.NewExpression),
+      },
+      MemberExpression: {
+        sync: (node) => this.evaluateMemberExpression(node as ESTree.MemberExpression),
+        async: (node) => this.evaluateMemberExpressionAsync(node as ESTree.MemberExpression),
+      },
+      ArrayExpression: {
+        sync: (node) => this.evaluateArrayExpression(node as ESTree.ArrayExpression),
+        async: (node) => this.evaluateArrayExpressionAsync(node as ESTree.ArrayExpression),
+      },
+      ObjectExpression: {
+        sync: (node) => this.evaluateObjectExpression(node as ESTree.ObjectExpression),
+        async: (node) => this.evaluateObjectExpressionAsync(node as ESTree.ObjectExpression),
+      },
+      TemplateLiteral: {
+        sync: (node) => this.evaluateTemplateLiteral(node as ESTree.TemplateLiteral),
+        async: (node) => this.evaluateTemplateLiteralAsync(node as ESTree.TemplateLiteral),
+      },
+      TaggedTemplateExpression: {
+        sync: (node) =>
+          this.evaluateTaggedTemplateExpression(node as ESTree.TaggedTemplateExpression),
+        async: (node) =>
+          this.evaluateTaggedTemplateExpressionAsync(node as ESTree.TaggedTemplateExpression),
+      },
+      SequenceExpression: {
+        sync: (node) => this.evaluateSequenceExpression(node as ESTree.SequenceExpression),
+        async: (node) => this.evaluateSequenceExpressionAsync(node as ESTree.SequenceExpression),
+      },
+      ChainExpression: {
+        sync: (node) => this.evaluateChainExpression(node as ESTree.ChainExpression),
+        async: (node) => this.evaluateChainExpressionAsync(node as ESTree.ChainExpression),
+      },
+      ClassDeclaration: {
+        sync: (node) => this.evaluateClassDeclaration(node as ESTree.ClassDeclaration),
+        async: (node) => this.evaluateClassDeclarationAsync(node as ESTree.ClassDeclaration),
+      },
+      ClassExpression: {
+        sync: (node) => this.evaluateClassExpression(node as ESTree.ClassExpression),
+        async: (node) => this.evaluateClassExpressionAsync(node as ESTree.ClassExpression),
+      },
+      Super: same(() => this.evaluateSuper()),
+    };
+  }
+
+  // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
+  public evaluateNode(node: ASTNode): any {
+    this.statsNodeCount++;
+    this.updateNodeLocation(node);
     this.checkExecutionLimits();
 
-    switch (node.type) {
-      case "Program":
-        return this.evaluateProgram(node as ESTree.Program);
-
-      case "ExpressionStatement":
-        return this.evaluateNode((node as ESTree.ExpressionStatement).expression);
-
-      case "EmptyStatement":
-        return undefined;
-
-      case "Literal":
-        return this.evaluateLiteral(node as ESTree.Literal);
-
-      case "Identifier":
-        return this.evaluateIdentifier(node as ESTree.Identifier);
-
-      case "ThisExpression":
-        return this.evaluateThisExpression(node as ESTree.ThisExpression);
-
-      case "BinaryExpression":
-        return this.evaluateBinaryExpression(node as ESTree.BinaryExpression);
-
-      case "UnaryExpression":
-        return this.evaluateUnaryExpression(node as ESTree.UnaryExpression);
-
-      case "UpdateExpression":
-        return this.evaluateUpdateExpression(node as ESTree.UpdateExpression);
-
-      case "LogicalExpression":
-        return this.evaluateLogicalExpression(node as ESTree.LogicalExpression);
-
-      case "ConditionalExpression":
-        return this.evaluateConditionalExpression(node as ESTree.ConditionalExpression);
-
-      case "AssignmentExpression":
-        return this.evaluateAssignmentExpression(node as ESTree.AssignmentExpression);
-
-      case "VariableDeclaration":
-        return this.evaluateVariableDeclaration(node as ESTree.VariableDeclaration);
-
-      case "BlockStatement":
-        return this.evaluateBlockStatement(node as ESTree.BlockStatement);
-
-      case "IfStatement":
-        return this.evaluateIfStatement(node as ESTree.IfStatement);
-
-      case "WhileStatement":
-        return this.evaluateWhileStatement(node as ESTree.WhileStatement);
-
-      case "DoWhileStatement":
-        return this.evaluateDoWhileStatement(node as ESTree.DoWhileStatement);
-
-      case "ForStatement":
-        return this.evaluateForStatement(node as ESTree.ForStatement);
-
-      case "ForOfStatement":
-        return this.evaluateForOfStatement(node as ESTree.ForOfStatement);
-
-      case "ForInStatement":
-        return this.evaluateForInStatement(node as ESTree.ForInStatement);
-
-      case "SwitchStatement":
-        return this.evaluateSwitchStatement(node as ESTree.SwitchStatement);
-
-      case "FunctionDeclaration":
-        return this.evaluateFunctionDeclaration(node as ESTree.FunctionDeclaration);
-
-      case "FunctionExpression":
-        return this.evaluateFunctionExpression(node as ESTree.FunctionExpression);
-
-      case "ArrowFunctionExpression":
-        return this.evaluateArrowFunctionExpression(node as ESTree.ArrowFunctionExpression);
-
-      case "ReturnStatement":
-        return this.evaluateReturnStatement(node as ESTree.ReturnStatement);
-
-      case "AwaitExpression":
-        throw new InterpreterError(
-          "Cannot use await in synchronous evaluate(). Use evaluateAsync() instead.",
-        );
-
-      case "YieldExpression":
-        return this.evaluateYieldExpression(node as ESTree.YieldExpression);
-
-      case "BreakStatement":
-        return this.evaluateBreakStatement(node as ESTree.BreakStatement);
-
-      case "ContinueStatement":
-        return this.evaluateContinueStatement(node as ESTree.ContinueStatement);
-
-      case "LabeledStatement":
-        return this.evaluateLabeledStatement(node as ESTree.LabeledStatement);
-
-      case "ThrowStatement":
-        return this.evaluateThrowStatement(node as ESTree.ThrowStatement);
-
-      case "TryStatement":
-        return this.evaluateTryStatement(node as ESTree.TryStatement);
-
-      case "CallExpression":
-        return this.evaluateCallExpression(node as ESTree.CallExpression);
-
-      case "NewExpression":
-        return this.evaluateNewExpression(node as ESTree.NewExpression);
-
-      case "MemberExpression":
-        return this.evaluateMemberExpression(node as ESTree.MemberExpression);
-
-      case "ArrayExpression":
-        return this.evaluateArrayExpression(node as ESTree.ArrayExpression);
-
-      case "ObjectExpression":
-        return this.evaluateObjectExpression(node as ESTree.ObjectExpression);
-
-      case "TemplateLiteral":
-        return this.evaluateTemplateLiteral(node as ESTree.TemplateLiteral);
-
-      case "TaggedTemplateExpression":
-        return this.evaluateTaggedTemplateExpression(node as ESTree.TaggedTemplateExpression);
-
-      case "SequenceExpression":
-        return this.evaluateSequenceExpression(node as ESTree.SequenceExpression);
-
-      case "ChainExpression":
-        return this.evaluateChainExpression(node as ESTree.ChainExpression);
-
-      case "ClassDeclaration":
-        return this.evaluateClassDeclaration(node as ESTree.ClassDeclaration);
-
-      case "ClassExpression":
-        return this.evaluateClassExpression(node as ESTree.ClassExpression);
-
-      case "Super":
-        return this.evaluateSuper();
-
-      default:
-        throw new InterpreterError(`Unsupported node type: ${node.type}`);
+    const handler = this.nodeHandlers[node.type];
+    if (!handler) {
+      throw new InterpreterError(`Unsupported node type: ${node.type}`);
     }
+    return handler.sync(node);
   }
 
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
   public async evaluateNodeAsync(node: ASTNode): Promise<any> {
-    // Track statistics
     this.statsNodeCount++;
-
-    // Track line number for error reporting
-    if (node.line) {
-      this.currentLine = node.line;
-    }
-
-    // Check execution limits periodically
+    this.updateNodeLocation(node);
     this.checkExecutionLimits();
 
-    switch (node.type) {
-      case "Program":
-        return await this.evaluateProgramAsync(node as ESTree.Program);
-
-      case "ExpressionStatement":
-        return await this.evaluateNodeAsync((node as ESTree.ExpressionStatement).expression);
-
-      case "EmptyStatement":
-        return undefined;
-
-      case "Literal":
-        return this.evaluateLiteral(node as ESTree.Literal);
-
-      case "Identifier": {
-        const val = this.evaluateIdentifier(node as ESTree.Identifier);
-        // Wrap Promise values in RawValue to prevent auto-awaiting when returned from async function
-        if (val instanceof Promise) {
-          return new RawValue(val);
-        }
-        return val;
-      }
-
-      case "ThisExpression":
-        return this.evaluateThisExpression(node as ESTree.ThisExpression);
-
-      case "BinaryExpression":
-        return await this.evaluateBinaryExpressionAsync(node as ESTree.BinaryExpression);
-
-      case "UnaryExpression":
-        return await this.evaluateUnaryExpressionAsync(node as ESTree.UnaryExpression);
-
-      case "UpdateExpression":
-        return this.evaluateUpdateExpression(node as ESTree.UpdateExpression);
-
-      case "LogicalExpression":
-        return await this.evaluateLogicalExpressionAsync(node as ESTree.LogicalExpression);
-
-      case "ConditionalExpression":
-        return await this.evaluateConditionalExpressionAsync(node as ESTree.ConditionalExpression);
-
-      case "AssignmentExpression":
-        return await this.evaluateAssignmentExpressionAsync(node as ESTree.AssignmentExpression);
-
-      case "VariableDeclaration":
-        return await this.evaluateVariableDeclarationAsync(node as ESTree.VariableDeclaration);
-
-      case "BlockStatement":
-        return await this.evaluateBlockStatementAsync(node as ESTree.BlockStatement);
-
-      case "IfStatement":
-        return await this.evaluateIfStatementAsync(node as ESTree.IfStatement);
-
-      case "WhileStatement":
-        return await this.evaluateWhileStatementAsync(node as ESTree.WhileStatement);
-
-      case "DoWhileStatement":
-        return await this.evaluateDoWhileStatementAsync(node as ESTree.DoWhileStatement);
-
-      case "ForStatement":
-        return await this.evaluateForStatementAsync(node as ESTree.ForStatement);
-
-      case "ForOfStatement":
-        return await this.evaluateForOfStatementAsync(node as ESTree.ForOfStatement);
-
-      case "ForInStatement":
-        return await this.evaluateForInStatementAsync(node as ESTree.ForInStatement);
-
-      case "SwitchStatement":
-        return await this.evaluateSwitchStatementAsync(node as ESTree.SwitchStatement);
-
-      case "FunctionDeclaration":
-        // Function declarations are sync - just reuse the sync version
-        return this.evaluateFunctionDeclaration(node as ESTree.FunctionDeclaration);
-
-      case "FunctionExpression":
-        // Function expressions are sync - just reuse the sync version
-        return this.evaluateFunctionExpression(node as ESTree.FunctionExpression);
-
-      case "ArrowFunctionExpression":
-        // Arrow functions are sync - just reuse the sync version
-        return this.evaluateArrowFunctionExpression(node as ESTree.ArrowFunctionExpression);
-
-      case "ReturnStatement":
-        return await this.evaluateReturnStatementAsync(node as ESTree.ReturnStatement);
-
-      case "AwaitExpression":
-        return await this.evaluateAwaitExpressionAsync(node as ESTree.AwaitExpression);
-
-      case "YieldExpression":
-        return await this.evaluateYieldExpressionAsync(node as ESTree.YieldExpression);
-
-      case "BreakStatement":
-        return this.evaluateBreakStatement(node as ESTree.BreakStatement);
-
-      case "ContinueStatement":
-        return this.evaluateContinueStatement(node as ESTree.ContinueStatement);
-
-      case "LabeledStatement":
-        return await this.evaluateLabeledStatementAsync(node as ESTree.LabeledStatement);
-
-      case "ThrowStatement":
-        return await this.evaluateThrowStatementAsync(node as ESTree.ThrowStatement);
-
-      case "TryStatement":
-        return await this.evaluateTryStatementAsync(node as ESTree.TryStatement);
-
-      case "CallExpression": {
-        const result = await this.evaluateCallExpressionAsync(node as ESTree.CallExpression);
-        // Return RawValue directly - it will be unwrapped by callers that need the value
-        // This prevents Promise auto-awaiting in async contexts
-        return result;
-      }
-
-      case "NewExpression": {
-        const result = await this.evaluateNewExpressionAsync(node as ESTree.NewExpression);
-        // Return RawValue directly - it will be unwrapped by callers that need the value
-        // This prevents Promise auto-awaiting in async contexts
-        return result;
-      }
-
-      case "MemberExpression":
-        return await this.evaluateMemberExpressionAsync(node as ESTree.MemberExpression);
-
-      case "ArrayExpression":
-        return await this.evaluateArrayExpressionAsync(node as ESTree.ArrayExpression);
-
-      case "ObjectExpression":
-        return await this.evaluateObjectExpressionAsync(node as ESTree.ObjectExpression);
-
-      case "TemplateLiteral":
-        return await this.evaluateTemplateLiteralAsync(node as ESTree.TemplateLiteral);
-
-      case "TaggedTemplateExpression":
-        return await this.evaluateTaggedTemplateExpressionAsync(
-          node as ESTree.TaggedTemplateExpression,
-        );
-
-      case "SequenceExpression":
-        return await this.evaluateSequenceExpressionAsync(node as ESTree.SequenceExpression);
-
-      case "ChainExpression":
-        return await this.evaluateChainExpressionAsync(node as ESTree.ChainExpression);
-
-      case "ClassDeclaration":
-        return await this.evaluateClassDeclarationAsync(node as ESTree.ClassDeclaration);
-
-      case "ClassExpression":
-        return await this.evaluateClassExpressionAsync(node as ESTree.ClassExpression);
-
-      case "Super":
-        return this.evaluateSuper();
-
-      default:
-        throw new InterpreterError(`Unsupported node type: ${node.type}`);
+    const handler = this.nodeHandlers[node.type];
+    if (!handler) {
+      throw new InterpreterError(`Unsupported node type: ${node.type}`);
     }
+    return await handler.async(node);
   }
 
   private evaluateProgram(node: ESTree.Program): any {
-    if (node.body.length === 0) {
-      return undefined;
-    }
-
-    let result: any;
-    for (const statement of node.body) {
-      result = this.evaluateNode(statement);
-    }
-
-    return result;
+    return this.evaluateNodeList(node.body, (statement) => this.evaluateNode(statement));
   }
 
   private evaluateLiteral(node: ESTree.Literal): any {
@@ -4439,12 +4221,95 @@ export class Interpreter {
     return [newValue, returnValue];
   }
 
+  private evaluateNodeList<T extends ESTree.Node>(nodes: T[], evalFn: (node: T) => any): any {
+    if (nodes.length === 0) {
+      return undefined;
+    }
+    return nodes.reduce((_, node) => evalFn(node), undefined as any);
+  }
+
+  private async evaluateNodeListAsync<T extends ESTree.Node>(
+    nodes: T[],
+    evalFn: (node: T) => Promise<any>,
+  ): Promise<any> {
+    if (nodes.length === 0) {
+      return undefined;
+    }
+    let result: any = undefined;
+    for (const node of nodes) {
+      result = await evalFn(node);
+    }
+    return result;
+  }
+
+  private collectNodeValues<T extends ESTree.Node>(nodes: T[], evalFn: (node: T) => any): any[] {
+    if (nodes.length === 0) {
+      return [];
+    }
+    const values: any[] = [];
+    for (const node of nodes) {
+      values.push(evalFn(node));
+    }
+    return values;
+  }
+
+  private async collectNodeValuesAsync<T extends ESTree.Node>(
+    nodes: T[],
+    evalFn: (node: T) => Promise<any>,
+  ): Promise<any[]> {
+    if (nodes.length === 0) {
+      return [];
+    }
+    const values: any[] = [];
+    for (const node of nodes) {
+      values.push(await evalFn(node));
+    }
+    return values;
+  }
+
+  private finalizeOptionalChain(result: any): any {
+    if (isControlFlowKind(result, "optional-chain")) {
+      return undefined;
+    }
+    return result;
+  }
+
+  private buildTaggedTemplateStrings(quasi: ESTree.TemplateLiteral): string[] {
+    const strings: string[] = quasi.quasis.map((q) => q.value.cooked);
+    const raw: string[] = quasi.quasis.map((q) => q.value.raw);
+    Object.freeze(raw);
+    Object.defineProperty(strings, "raw", {
+      value: raw,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+    Object.freeze(strings);
+    return strings;
+  }
+
+  private callTagFunction(tag: any, args: any[], isAsync: boolean): any {
+    if (tag instanceof FunctionValue) {
+      return isAsync
+        ? this.executeSandboxFunctionAsync(tag, args, undefined)
+        : this.executeSandboxFunction(tag, args, undefined);
+    }
+    if (tag instanceof HostFunctionValue) {
+      return tag.hostFunc(...args);
+    }
+    if (typeof tag === "function") {
+      return tag(...args);
+    }
+    throw new InterpreterError("Tag expression is not a function");
+  }
+
   /**
    * Binds function parameters to argument values in the current environment.
    * Handles regular parameters, rest parameters, and default parameter values.
    * This core logic is shared between sync and async function calls.
    */
-  private bindFunctionParameters(fn: FunctionValue, args: any[]): void {
+  // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
+  public bindFunctionParameters(fn: FunctionValue, args: any[]): void {
     const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
 
     // Bind regular parameters (with default value support)
@@ -4477,7 +4342,8 @@ export class Interpreter {
   /**
    * Async version of bindFunctionParameters that can evaluate async default values.
    */
-  private async bindFunctionParametersAsync(fn: FunctionValue, args: any[]): Promise<void> {
+  // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
+  public async bindFunctionParametersAsync(fn: FunctionValue, args: any[]): Promise<void> {
     const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
 
     // Bind regular parameters (with default value support)
@@ -4632,12 +4498,7 @@ export class Interpreter {
    * This core logic is shared between sync and async evaluation.
    */
   private shouldPropagateControlFlow(result: any): boolean {
-    return (
-      result instanceof ReturnValue ||
-      result instanceof BreakValue ||
-      result instanceof ContinueValue ||
-      result instanceof YieldValue
-    );
+    return isControlFlowSignal(result) && result.kind !== "optional-chain";
   }
 
   /**
@@ -4669,12 +4530,12 @@ export class Interpreter {
     value: any;
   } {
     // If we hit a return statement, propagate it up
-    if (result instanceof ReturnValue) {
+    if (isControlFlowKind(result, "return")) {
       return { shouldReturn: true, value: result };
     }
 
     // If we hit a break statement, exit the loop and return undefined
-    if (result instanceof BreakValue) {
+    if (isControlFlowKind(result, "break")) {
       // Labeled break targeting this loop's label - consume and break
       if (result.label !== null && result.label === label) {
         return Interpreter.CONTROL_FLOW_BREAK;
@@ -4688,7 +4549,7 @@ export class Interpreter {
     }
 
     // Labeled continue targeting this loop's label - treat as unlabeled continue
-    if (result instanceof ContinueValue && result.label !== null) {
+    if (isControlFlowKind(result, "continue") && result.label !== null) {
       if (result.label === label) {
         return Interpreter.CONTROL_FLOW_CONTINUE;
       }
@@ -4701,80 +4562,6 @@ export class Interpreter {
   }
 
   /**
-   * Extracts for-of loop variable information from the left-hand side.
-   * Handles both declarations (for (let x of arr)) and existing variables (for (x of arr)).
-   * Returns the variable name, whether it's a declaration, and the variable kind.
-   */
-  private extractForOfVariable(left: ESTree.ForOfStatement["left"]): {
-    variableName?: string;
-    pattern?: ESTree.ArrayPattern | ESTree.ObjectPattern;
-    isDeclaration: boolean;
-    variableKind?: "let" | "const";
-  } {
-    if (left.type === "VariableDeclaration") {
-      const decl = left.declarations[0];
-      if (decl?.id.type === "Identifier") {
-        return {
-          variableName: decl.id.name,
-          isDeclaration: true,
-          variableKind: left.kind as "let" | "const",
-        };
-      } else if (decl?.id.type === "ArrayPattern" || decl?.id.type === "ObjectPattern") {
-        return {
-          pattern: decl.id,
-          isDeclaration: true,
-          variableKind: left.kind as "let" | "const",
-        };
-      } else {
-        throw new InterpreterError("Unsupported for...of variable pattern");
-      }
-    } else if (left.type === "Identifier") {
-      return {
-        variableName: left.name,
-        isDeclaration: false,
-      };
-    } else if (left.type === "ArrayPattern" || left.type === "ObjectPattern") {
-      // Destructuring assignment: for ([a, b] of pairs)
-      return {
-        pattern: left,
-        isDeclaration: false,
-      };
-    } else {
-      throw new InterpreterError("Unsupported for...of left-hand side");
-    }
-  }
-
-  /**
-   * Extracts for-in loop variable information from the left-hand side.
-   * Handles both declarations (for (let k in obj)) and existing variables (for (k in obj)).
-   * Returns the variable name, whether it's a declaration, and the variable kind.
-   */
-  private extractForInVariable(left: ESTree.ForInStatement["left"]): {
-    variableName: string;
-    isDeclaration: boolean;
-    variableKind?: "let" | "const";
-  } {
-    if (left.type === "VariableDeclaration") {
-      const decl = left.declarations[0];
-      if (decl?.id.type !== "Identifier") {
-        throw new InterpreterError("Unsupported for...in variable pattern");
-      }
-      return {
-        variableName: decl.id.name,
-        isDeclaration: true,
-        variableKind: left.kind as "let" | "const",
-      };
-    } else if (left.type === "Identifier") {
-      return {
-        variableName: left.name,
-        isDeclaration: false,
-      };
-    } else {
-      throw new InterpreterError("Unsupported for...in left-hand side");
-    }
-  }
-
-  /**
    * Converts an iterable to an array.
    * Supports arrays, generators, and objects with [Symbol.iterator].
    */
@@ -4782,22 +4569,19 @@ export class Interpreter {
     if (Array.isArray(value)) {
       return value;
     }
-    if (value && typeof value[Symbol.iterator] === "function") {
-      return [...value];
-    }
-    if (value && typeof value.next === "function") {
-      // Already an iterator (e.g., generator instance without Symbol.iterator called)
-      const result: any[] = [];
-      let iterResult = value.next();
-      while (!iterResult.done) {
-        result.push(iterResult.value);
-        iterResult = value.next();
-      }
-      return result;
-    }
-    throw new InterpreterError(
+    const iterator = getSyncIterator(
+      value,
       "Spread syntax requires an iterable (array, generator, or object with [Symbol.iterator])",
     );
+    const result: any[] = [];
+    while (true) {
+      const iterResult = iterator.next();
+      if (iterResult.done) {
+        break;
+      }
+      result.push(iterResult.value);
+    }
+    return result;
   }
 
   /**
@@ -4972,14 +4756,7 @@ export class Interpreter {
     if (object instanceof GeneratorValue || object instanceof AsyncGeneratorValue) {
       throw new InterpreterError("Cannot access internal generator properties");
     }
-    if (
-      object instanceof ReturnValue ||
-      object instanceof BreakValue ||
-      object instanceof ContinueValue ||
-      object instanceof OptionalChainShortCircuit ||
-      object instanceof YieldValue ||
-      object instanceof Environment
-    ) {
+    if (isControlFlowSignal(object) || object instanceof Environment) {
       throw new InterpreterError("Cannot access internal interpreter state");
     }
   }
@@ -4992,14 +4769,7 @@ export class Interpreter {
     if (object instanceof GeneratorValue || object instanceof AsyncGeneratorValue) {
       throw new InterpreterError("Cannot assign properties on generators");
     }
-    if (
-      object instanceof ReturnValue ||
-      object instanceof BreakValue ||
-      object instanceof ContinueValue ||
-      object instanceof OptionalChainShortCircuit ||
-      object instanceof YieldValue ||
-      object instanceof Environment
-    ) {
+    if (isControlFlowSignal(object) || object instanceof Environment) {
       throw new InterpreterError("Cannot assign properties on internal objects");
     }
   }
@@ -5207,19 +4977,19 @@ export class Interpreter {
    * Evaluates function/constructor arguments, handling spread elements.
    * Shared logic between evaluateCallExpression and evaluateNewExpression.
    */
+  private appendSpreadArgs(target: any[], spreadValue: any[]): void {
+    for (const value of spreadValue) {
+      target.push(value);
+    }
+  }
+
   private evaluateArguments(args: ESTree.CallExpression["arguments"]): any[] {
     const count = args.length;
     if (count === 0) {
       return [];
     }
 
-    let hasSpread = false;
-    for (let i = 0; i < count; i++) {
-      if (args[i]?.type === "SpreadElement") {
-        hasSpread = true;
-        break;
-      }
-    }
+    const hasSpread = args.some((arg) => arg?.type === "SpreadElement");
 
     if (!hasSpread) {
       const evaluatedArgs = Array.from({ length: count });
@@ -5243,9 +5013,7 @@ export class Interpreter {
           throw new InterpreterError("Spread syntax in function calls requires an array");
         }
         // Avoid push(...spreadValue) to sidestep argument count limits on large arrays.
-        for (let j = 0; j < spreadValue.length; j++) {
-          evaluatedArgs.push(spreadValue[j]);
-        }
+        this.appendSpreadArgs(evaluatedArgs, spreadValue);
       } else {
         evaluatedArgs.push(this.evaluateNode(arg as ESTree.Expression));
       }
@@ -5263,13 +5031,7 @@ export class Interpreter {
       return [];
     }
 
-    let hasSpread = false;
-    for (let i = 0; i < count; i++) {
-      if (args[i]?.type === "SpreadElement") {
-        hasSpread = true;
-        break;
-      }
-    }
+    const hasSpread = args.some((arg) => arg?.type === "SpreadElement");
 
     if (!hasSpread) {
       const evaluatedArgs = Array.from({ length: count });
@@ -5298,9 +5060,7 @@ export class Interpreter {
           throw new InterpreterError("Spread syntax in function calls requires an array");
         }
         // Avoid push(...spreadValue) to sidestep argument count limits on large arrays.
-        for (let j = 0; j < spreadValue.length; j++) {
-          evaluatedArgs.push(spreadValue[j]);
-        }
+        this.appendSpreadArgs(evaluatedArgs, spreadValue);
       } else {
         let val = await this.evaluateNodeAsync(arg as ESTree.Expression);
         // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)
@@ -5365,46 +5125,59 @@ export class Interpreter {
     return wrappedArgs;
   }
 
-  /**
-   * Executes a sandbox function (synchronous version).
-   * Sets up environment, binds parameters, executes body, and unwraps return value.
-   */
-  private executeSandboxFunction(fn: FunctionValue, args: any[], thisValue: any): any {
-    // Check and track call stack depth
+  private enterFunctionContext(
+    fn: FunctionValue,
+    thisValue: any,
+  ): { previousEnvironment: Environment; previousSuperBinding: SuperBinding | null } {
     this.enterCallStack();
 
     const previousEnvironment = this.environment;
     const previousSuperBinding = this.currentSuperBinding;
     this.environment = new Environment(fn.closure, thisValue, true);
 
-    try {
-      if (fn.homeClass) {
-        this.currentSuperBinding = {
-          parentClass: fn.homeClass.parentClass,
-          thisValue,
-          currentClass: fn.homeClass,
-          isStatic: fn.homeIsStatic,
-        };
-      }
+    if (fn.homeClass) {
+      this.currentSuperBinding = {
+        parentClass: fn.homeClass.parentClass,
+        thisValue,
+        currentClass: fn.homeClass,
+        isStatic: fn.homeIsStatic,
+      };
+    }
 
+    return { previousEnvironment, previousSuperBinding };
+  }
+
+  private exitFunctionContext(
+    previousEnvironment: Environment,
+    previousSuperBinding: SuperBinding | null,
+  ): void {
+    this.environment = previousEnvironment;
+    this.currentSuperBinding = previousSuperBinding;
+    this.exitCallStack();
+  }
+
+  private unwrapReturnSignal(result: any): any {
+    if (isControlFlowKind(result, "return")) {
+      return result.value;
+    }
+    return undefined;
+  }
+
+  /**
+   * Executes a sandbox function (synchronous version).
+   * Sets up environment, binds parameters, executes body, and unwraps return value.
+   */
+  private executeSandboxFunction(fn: FunctionValue, args: any[], thisValue: any): any {
+    const { previousEnvironment, previousSuperBinding } = this.enterFunctionContext(fn, thisValue);
+    try {
       // Bind parameters to arguments
       this.bindFunctionParameters(fn, args);
 
       // Execute the function body
       const result = this.evaluateNode(fn.body);
-
-      // If we got a return value, unwrap it and return the actual value
-      if (result instanceof ReturnValue) {
-        return result.value;
-      }
-
-      // If no explicit return, JavaScript functions return undefined
-      return undefined;
+      return this.unwrapReturnSignal(result);
     } finally {
-      // Restore the previous environment (exit function scope)
-      this.environment = previousEnvironment;
-      this.currentSuperBinding = previousSuperBinding;
-      this.exitCallStack();
+      this.exitFunctionContext(previousEnvironment, previousSuperBinding);
     }
   }
 
@@ -5418,41 +5191,16 @@ export class Interpreter {
     args: any[],
     thisValue: any,
   ): Promise<any> {
-    // Check and track call stack depth
-    this.enterCallStack();
-
-    const previousEnvironment = this.environment;
-    const previousSuperBinding = this.currentSuperBinding;
-    this.environment = new Environment(fn.closure, thisValue, true);
-
+    const { previousEnvironment, previousSuperBinding } = this.enterFunctionContext(fn, thisValue);
     try {
-      if (fn.homeClass) {
-        this.currentSuperBinding = {
-          parentClass: fn.homeClass.parentClass,
-          thisValue,
-          currentClass: fn.homeClass,
-          isStatic: fn.homeIsStatic,
-        };
-      }
-
       // Bind parameters to arguments (use async version to handle async default values)
       await this.bindFunctionParametersAsync(fn, args);
 
       // Execute the function body
       const result = await this.evaluateNodeAsync(fn.body);
-
-      // If we got a return value, unwrap it and return the actual value
-      if (result instanceof ReturnValue) {
-        return result.value;
-      }
-
-      // If no explicit return, JavaScript functions return undefined
-      return undefined;
+      return this.unwrapReturnSignal(result);
     } finally {
-      // Restore the previous environment (exit function scope)
-      this.environment = previousEnvironment;
-      this.currentSuperBinding = previousSuperBinding;
-      this.exitCallStack();
+      this.exitFunctionContext(previousEnvironment, previousSuperBinding);
     }
   }
 
@@ -5565,9 +5313,9 @@ export class Interpreter {
     }
 
     const left = this.evaluateNode(node.left);
-    if (left instanceof YieldValue) return left;
+    if (isControlFlowKind(left, "yield")) return left;
     const right = this.evaluateNode(node.right);
-    if (right instanceof YieldValue) return right;
+    if (isControlFlowKind(right, "yield")) return right;
     return this.applyBinaryOperator(node.operator, left, right);
   }
 
@@ -5688,7 +5436,7 @@ export class Interpreter {
     }
 
     const left = this.evaluateNode(node.left);
-    if (left instanceof YieldValue) return left;
+    if (isControlFlowKind(left, "yield")) return left;
 
     switch (node.operator) {
       case "&&":
@@ -5720,7 +5468,7 @@ export class Interpreter {
 
     // Evaluate the test condition
     const testValue = this.evaluateNode(node.test);
-    if (testValue instanceof YieldValue) return testValue;
+    if (isControlFlowKind(testValue, "yield")) return testValue;
 
     // Return consequent if truthy, alternate if falsy
     if (testValue) {
@@ -6400,7 +6148,7 @@ export class Interpreter {
         this.currentLoopLabel = myLabel;
         return controlFlow.value;
       }
-      // Continue to next iteration (for ContinueValue or normal result)
+      // Continue to next iteration (for continue signal or normal result)
     }
 
     this.currentLoopLabel = myLabel;
@@ -6430,7 +6178,7 @@ export class Interpreter {
         this.currentLoopLabel = myLabel;
         return controlFlow.value;
       }
-      // Continue to next iteration (for ContinueValue or normal result)
+      // Continue to next iteration (for continue signal or normal result)
     } while (this.evaluateNode(node.test));
 
     this.currentLoopLabel = myLabel;
@@ -6477,10 +6225,10 @@ export class Interpreter {
         result = this.evaluateNode(node.body);
 
         // Check for return or break (before update for proper semantics)
-        if (result instanceof ReturnValue) {
+        if (isControlFlowKind(result, "return")) {
           return result;
         }
-        if (result instanceof BreakValue) {
+        if (isControlFlowKind(result, "break")) {
           // Labeled break targeting this loop's label - consume
           if (result.label !== null && result.label === myLabel) {
             return undefined;
@@ -6493,7 +6241,11 @@ export class Interpreter {
           return undefined;
         }
         // Labeled continue targeting a different label - propagate
-        if (result instanceof ContinueValue && result.label !== null && result.label !== myLabel) {
+        if (
+          isControlFlowKind(result, "continue") &&
+          result.label !== null &&
+          result.label !== myLabel
+        ) {
           return result;
         }
 
@@ -6503,7 +6255,7 @@ export class Interpreter {
           this.evaluateNode(node.update);
         }
 
-        // Continue to next iteration (for ContinueValue or normal result)
+        // Continue to next iteration (for continue signal or normal result)
       }
 
       return result;
@@ -6548,22 +6300,13 @@ export class Interpreter {
 
       // Get an iterator from the value
       // Support: arrays, generators, and any object with [Symbol.iterator]
-      let iterator: Iterator<any>;
-      if (Array.isArray(iterableValue)) {
-        iterator = iterableValue[Symbol.iterator]();
-      } else if (iterableValue && typeof iterableValue[Symbol.iterator] === "function") {
-        iterator = iterableValue[Symbol.iterator]();
-      } else if (iterableValue && typeof iterableValue.next === "function") {
-        // Already an iterator (e.g., generator instance)
-        iterator = iterableValue;
-      } else {
-        throw new InterpreterError(
-          "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
-        );
-      }
+      const iterator = getSyncIterator(
+        iterableValue,
+        "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
+      );
 
       // Extract variable information
-      const { variableName, pattern, isDeclaration, variableKind } = this.extractForOfVariable(
+      const { variableName, pattern, isDeclaration, variableKind } = extractForOfVariable(
         node.left,
       );
 
@@ -6571,8 +6314,11 @@ export class Interpreter {
       let iterations = 0;
 
       // Iterate using the iterator protocol
-      let iterResult = iterator.next();
-      while (!iterResult.done) {
+      while (true) {
+        const iterResult = iterator.next();
+        if (iterResult.done) {
+          break;
+        }
         // Check execution limits at the start of each loop iteration
         this.checkExecutionLimits();
         this.checkLoopIterations(iterations++);
@@ -6615,7 +6361,7 @@ export class Interpreter {
         }
 
         // Handle control flow
-        if (result instanceof BreakValue) {
+        if (isControlFlowKind(result, "break")) {
           // Call iterator.return() to allow cleanup (e.g., finally blocks in generators)
           if (typeof iterator.return === "function") {
             iterator.return();
@@ -6626,7 +6372,7 @@ export class Interpreter {
           }
           return undefined;
         }
-        if (result instanceof ReturnValue) {
+        if (isControlFlowKind(result, "return")) {
           // Call iterator.return() to allow cleanup
           if (typeof iterator.return === "function") {
             iterator.return();
@@ -6634,16 +6380,17 @@ export class Interpreter {
           return result;
         }
         // Labeled continue targeting a different label - propagate
-        if (result instanceof ContinueValue && result.label !== null && result.label !== myLabel) {
+        if (
+          isControlFlowKind(result, "continue") &&
+          result.label !== null &&
+          result.label !== myLabel
+        ) {
           if (typeof iterator.return === "function") {
             iterator.return();
           }
           return result;
         }
-        // ContinueValue (unlabeled or targeting this loop) just continues to the next iteration
-
-        // Get next value
-        iterResult = iterator.next();
+        // continue signal (unlabeled or targeting this loop) just continues to the next iteration
       }
 
       return result;
@@ -6684,7 +6431,7 @@ export class Interpreter {
       }
 
       // Extract variable information
-      const { variableName, isDeclaration, variableKind } = this.extractForInVariable(node.left);
+      const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
       let result: any = undefined;
       let iterations = 0;
@@ -6778,17 +6525,17 @@ export class Interpreter {
           result = this.evaluateNode(statement);
 
           // If we hit a return statement, propagate it up
-          if (result instanceof ReturnValue) {
+          if (isControlFlowKind(result, "return")) {
             return result;
           }
 
           // If we hit a break statement, exit the switch immediately
-          if (result instanceof BreakValue) {
+          if (isControlFlowKind(result, "break")) {
             return undefined;
           }
 
           // Continue is not valid in switch (only in loops)
-          if (result instanceof ContinueValue) {
+          if (isControlFlowKind(result, "continue")) {
             throw new InterpreterError("Illegal continue statement");
           }
         }
@@ -6960,7 +6707,7 @@ export class Interpreter {
     }
 
     const value = node.argument ? this.evaluateNode(node.argument) : undefined;
-    return new ReturnValue(value);
+    return new ControlFlowSignal("return", value);
   }
 
   private evaluateLabeledStatement(node: ESTree.LabeledStatement): any {
@@ -6974,7 +6721,7 @@ export class Interpreter {
 
     const result = this.evaluateNode(body);
     // If break targets this label, consume it
-    if (result instanceof BreakValue && result.label === labelName) {
+    if (isControlFlowKind(result, "break") && result.label === labelName) {
       return undefined;
     }
     return result;
@@ -6991,7 +6738,7 @@ export class Interpreter {
 
     const result = await this.evaluateNodeAsync(body);
     // If break targets this label, consume it
-    if (result instanceof BreakValue && result.label === labelName) {
+    if (isControlFlowKind(result, "break") && result.label === labelName) {
       return undefined;
     }
     return result;
@@ -7012,7 +6759,7 @@ export class Interpreter {
     this.currentLoopLabel = label;
     try {
       const result = this.evaluateNode(body);
-      if (result instanceof BreakValue && result.label === label) {
+      if (isControlFlowKind(result, "break") && result.label === label) {
         return undefined;
       }
       return result;
@@ -7026,7 +6773,7 @@ export class Interpreter {
     this.currentLoopLabel = label;
     try {
       const result = await this.evaluateNodeAsync(body);
-      if (result instanceof BreakValue && result.label === label) {
+      if (isControlFlowKind(result, "break") && result.label === label) {
         return undefined;
       }
       return result;
@@ -7040,7 +6787,7 @@ export class Interpreter {
       throw new InterpreterError("BreakStatement is not enabled");
     }
 
-    return new BreakValue(node.label?.name ?? null);
+    return new ControlFlowSignal("break", undefined, node.label?.name ?? null);
   }
 
   private evaluateContinueStatement(node: ESTree.ContinueStatement): any {
@@ -7048,7 +6795,7 @@ export class Interpreter {
       throw new InterpreterError("ContinueStatement is not enabled");
     }
 
-    return new ContinueValue(node.label?.name ?? null);
+    return new ControlFlowSignal("continue", undefined, node.label?.name ?? null);
   }
 
   /**
@@ -7150,7 +6897,8 @@ export class Interpreter {
    * @param declare - If true, declare new variables; if false, assign to existing
    * @param kind - Variable kind for declarations ("let" or "const")
    */
-  private destructurePattern(
+  // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
+  public destructurePattern(
     pattern: ESTree.ArrayPattern | ESTree.ObjectPattern,
     value: any,
     declare: boolean,
@@ -7358,7 +7106,7 @@ export class Interpreter {
    * 3. Handle host functions (native JS functions from globals)
    * 4. Handle sandbox functions (interpreted functions)
    * 5. Create new environment with closure + parameter bindings
-   * 6. Unwrap ReturnValue if function returns
+   * 6. Unwrap return signal if function returns
    */
   private evaluateCallExpression(node: ESTree.CallExpression): any {
     if (!this.isFeatureEnabled("CallExpression")) {
@@ -7427,7 +7175,7 @@ export class Interpreter {
     }
 
     // Handle optional chaining short-circuit propagation from callee
-    if (callee instanceof OptionalChainShortCircuit) {
+    if (isControlFlowKind(callee, "optional-chain")) {
       return callee;
     }
 
@@ -7572,7 +7320,7 @@ export class Interpreter {
 
   private resolveMemberExpressionValue(node: ESTree.MemberExpression, object: any): any {
     // Preserve optional chaining short-circuit semantics.
-    if (object instanceof OptionalChainShortCircuit) {
+    if (isControlFlowKind(object, "optional-chain")) {
       return object;
     }
     if (node.optional && (object === null || object === undefined)) {
@@ -8444,7 +8192,7 @@ export class Interpreter {
       const result = this.evaluateNode(func.body);
 
       // Unwrap return value
-      if (result instanceof ReturnValue) {
+      if (isControlFlowKind(result, "return")) {
         return result.value;
       }
 
@@ -8570,13 +8318,12 @@ export class Interpreter {
     }
 
     // Evaluate all expressions
-    const expressionValues: any[] = [];
-    for (const expr of node.expressions) {
+    const expressionValues = this.collectNodeValues(node.expressions, (expr) => {
       if (!expr) {
         throw new InterpreterError("Template literal missing expression");
       }
-      expressionValues.push(this.evaluateNode(expr));
-    }
+      return this.evaluateNode(expr);
+    });
 
     // Build the final string using shared logic
     return this.buildTemplateLiteralString(node.quasis, expressionValues);
@@ -8588,46 +8335,16 @@ export class Interpreter {
     }
 
     const tag = this.evaluateNode(node.tag);
-
-    // Build the strings array with cooked values
-    const strings: string[] = node.quasi.quasis.map((q) => q.value.cooked);
-    // Attach the raw property (frozen array of raw strings)
-    const raw: string[] = node.quasi.quasis.map((q) => q.value.raw);
-    Object.freeze(raw);
-    Object.defineProperty(strings, "raw", {
-      value: raw,
-      writable: false,
-      enumerable: false,
-      configurable: false,
-    });
-    Object.freeze(strings);
-
-    // Evaluate expressions
-    const values: any[] = [];
-    for (const expr of node.quasi.expressions) {
-      values.push(this.evaluateNode(expr));
-    }
-
-    // Call the tag function
+    const strings = this.buildTaggedTemplateStrings(node.quasi);
+    const values = this.collectNodeValues(node.quasi.expressions, (expr) =>
+      this.evaluateNode(expr),
+    );
     const args = [strings, ...values];
-    if (tag instanceof FunctionValue) {
-      return this.executeSandboxFunction(tag, args, undefined);
-    }
-    if (tag instanceof HostFunctionValue) {
-      return tag.hostFunc(...args);
-    }
-    if (typeof tag === "function") {
-      return tag(...args);
-    }
-    throw new InterpreterError("Tag expression is not a function");
+    return this.callTagFunction(tag, args, false);
   }
 
   private evaluateSequenceExpression(node: ESTree.SequenceExpression): any {
-    let result: any;
-    for (const expr of node.expressions) {
-      result = this.evaluateNode(expr);
-    }
-    return result;
+    return this.evaluateNodeList(node.expressions, (expr) => this.evaluateNode(expr));
   }
 
   /**
@@ -8641,13 +8358,7 @@ export class Interpreter {
     }
 
     const result = this.evaluateNode(node.expression);
-
-    // If we got a short-circuit marker, the chain should return undefined
-    if (result instanceof OptionalChainShortCircuit) {
-      return undefined;
-    }
-
-    return result;
+    return this.finalizeOptionalChain(result);
   }
 
   // ============================================================================
@@ -8655,16 +8366,9 @@ export class Interpreter {
   // ============================================================================
 
   private async evaluateProgramAsync(node: ESTree.Program): Promise<any> {
-    if (node.body.length === 0) {
-      return undefined;
-    }
-
-    let result: any;
-    for (const statement of node.body) {
-      result = await this.evaluateNodeAsync(statement);
-    }
-
-    return result;
+    return await this.evaluateNodeListAsync(node.body, (statement) =>
+      this.evaluateNodeAsync(statement),
+    );
   }
 
   private async evaluateBinaryExpressionAsync(node: ESTree.BinaryExpression): Promise<any> {
@@ -8673,9 +8377,9 @@ export class Interpreter {
     }
 
     const left = await this.evaluateNodeAsync(node.left);
-    if (left instanceof YieldValue) return left;
+    if (isControlFlowKind(left, "yield")) return left;
     const right = await this.evaluateNodeAsync(node.right);
-    if (right instanceof YieldValue) return right;
+    if (isControlFlowKind(right, "yield")) return right;
     return this.applyBinaryOperator(node.operator, left, right);
   }
 
@@ -8721,7 +8425,7 @@ export class Interpreter {
     }
 
     const left = await this.evaluateNodeAsync(node.left);
-    if (left instanceof YieldValue) return left;
+    if (isControlFlowKind(left, "yield")) return left;
 
     switch (node.operator) {
       case "&&":
@@ -8748,7 +8452,7 @@ export class Interpreter {
 
     // Evaluate the test condition
     const testValue = await this.evaluateNodeAsync(node.test);
-    if (testValue instanceof YieldValue) return testValue;
+    if (isControlFlowKind(testValue, "yield")) return testValue;
 
     // Return consequent if truthy, alternate if falsy
     if (testValue) {
@@ -8837,7 +8541,7 @@ export class Interpreter {
     }
 
     // Handle optional chaining short-circuit propagation from callee
-    if (callee instanceof OptionalChainShortCircuit) {
+    if (isControlFlowKind(callee, "optional-chain")) {
       return callee;
     }
 
@@ -9626,7 +9330,7 @@ export class Interpreter {
         this.currentLoopLabel = myLabel;
         return controlFlow.value;
       }
-      // Continue to next iteration (for ContinueValue or normal result)
+      // Continue to next iteration (for continue signal or normal result)
     }
 
     this.currentLoopLabel = myLabel;
@@ -9656,7 +9360,7 @@ export class Interpreter {
         this.currentLoopLabel = myLabel;
         return controlFlow.value;
       }
-      // Continue to next iteration (for ContinueValue or normal result)
+      // Continue to next iteration (for continue signal or normal result)
     } while (await this.evaluateNodeAsync(node.test));
 
     this.currentLoopLabel = myLabel;
@@ -9697,10 +9401,10 @@ export class Interpreter {
         result = await this.evaluateNodeAsync(node.body);
 
         // Check for return or break (before update for proper semantics)
-        if (result instanceof ReturnValue) {
+        if (isControlFlowKind(result, "return")) {
           return result;
         }
-        if (result instanceof BreakValue) {
+        if (isControlFlowKind(result, "break")) {
           // Labeled break targeting a different label - propagate
           if (result.label !== null && result.label !== myLabel) {
             return result;
@@ -9708,7 +9412,11 @@ export class Interpreter {
           return undefined;
         }
         // Labeled continue targeting a different label - propagate
-        if (result instanceof ContinueValue && result.label !== null && result.label !== myLabel) {
+        if (
+          isControlFlowKind(result, "continue") &&
+          result.label !== null &&
+          result.label !== myLabel
+        ) {
           return result;
         }
 
@@ -9718,7 +9426,7 @@ export class Interpreter {
           await this.evaluateNodeAsync(node.update);
         }
 
-        // Continue to next iteration (for ContinueValue or normal result)
+        // Continue to next iteration (for continue signal or normal result)
       }
 
       return result;
@@ -9745,30 +9453,14 @@ export class Interpreter {
 
       // Get an iterator from the value
       // Support: arrays, generators, and any object with [Symbol.iterator] or [Symbol.asyncIterator]
-      let iterator: Iterator<any> | AsyncIterator<any>;
-      let isAsync = node.await || false;
-
-      // For `for await...of`, prefer Symbol.asyncIterator
-      if (isAsync && iterableValue && typeof iterableValue[Symbol.asyncIterator] === "function") {
-        iterator = iterableValue[Symbol.asyncIterator]();
-      } else if (!isAsync && Array.isArray(iterableValue)) {
-        iterator = iterableValue[Symbol.iterator]();
-      } else if (iterableValue && typeof iterableValue[Symbol.asyncIterator] === "function") {
-        iterator = iterableValue[Symbol.asyncIterator]();
-        isAsync = true;
-      } else if (iterableValue && typeof iterableValue[Symbol.iterator] === "function") {
-        iterator = iterableValue[Symbol.iterator]();
-      } else if (iterableValue && typeof iterableValue.next === "function") {
-        // Already an iterator (e.g., generator instance)
-        iterator = iterableValue;
-      } else {
-        throw new InterpreterError(
-          "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
-        );
-      }
+      const { iterator, isAsync } = getAsyncIterator(
+        iterableValue,
+        "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
+      );
+      const shouldAwait = isAsync || node.await;
 
       // Extract variable information
-      const { variableName, pattern, isDeclaration, variableKind } = this.extractForOfVariable(
+      const { variableName, pattern, isDeclaration, variableKind } = extractForOfVariable(
         node.left,
       );
 
@@ -9776,11 +9468,13 @@ export class Interpreter {
       let iterations = 0;
 
       // Iterate using the iterator protocol
-      let iterResult = isAsync
-        ? await (iterator as AsyncIterator<any>).next()
-        : (iterator as Iterator<any>).next();
-
-      while (!iterResult.done) {
+      while (true) {
+        const iterResult = shouldAwait
+          ? await (iterator as AsyncIterator<any>).next()
+          : (iterator as Iterator<any>).next();
+        if (iterResult.done) {
+          break;
+        }
         // Check execution limits at the start of each loop iteration
         this.checkExecutionLimits();
         this.checkLoopIterations(iterations++);
@@ -9817,10 +9511,10 @@ export class Interpreter {
         }
 
         // Handle control flow
-        if (result instanceof BreakValue) {
+        if (isControlFlowKind(result, "break")) {
           // Call iterator.return() to allow cleanup (e.g., finally blocks in generators)
           if (typeof iterator.return === "function") {
-            if (isAsync) {
+            if (shouldAwait) {
               await (iterator as AsyncIterator<any>).return?.();
             } else {
               (iterator as Iterator<any>).return?.();
@@ -9832,10 +9526,10 @@ export class Interpreter {
           }
           return undefined;
         }
-        if (result instanceof ReturnValue) {
+        if (isControlFlowKind(result, "return")) {
           // Call iterator.return() to allow cleanup
           if (typeof iterator.return === "function") {
-            if (isAsync) {
+            if (shouldAwait) {
               await (iterator as AsyncIterator<any>).return?.();
             } else {
               (iterator as Iterator<any>).return?.();
@@ -9844,9 +9538,13 @@ export class Interpreter {
           return result;
         }
         // Labeled continue targeting a different label - propagate
-        if (result instanceof ContinueValue && result.label !== null && result.label !== myLabel) {
+        if (
+          isControlFlowKind(result, "continue") &&
+          result.label !== null &&
+          result.label !== myLabel
+        ) {
           if (typeof iterator.return === "function") {
-            if (isAsync) {
+            if (shouldAwait) {
               await (iterator as AsyncIterator<any>).return?.();
             } else {
               (iterator as Iterator<any>).return?.();
@@ -9854,12 +9552,7 @@ export class Interpreter {
           }
           return result;
         }
-        // ContinueValue (unlabeled or targeting this loop) just continues to the next iteration
-
-        // Get next value
-        iterResult = isAsync
-          ? await (iterator as AsyncIterator<any>).next()
-          : (iterator as Iterator<any>).next();
+        // continue signal (unlabeled or targeting this loop) just continues to the next iteration
       }
 
       return result;
@@ -9895,7 +9588,7 @@ export class Interpreter {
       }
 
       // Extract variable information
-      const { variableName, isDeclaration, variableKind } = this.extractForInVariable(node.left);
+      const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
       let result: any = undefined;
       let iterations = 0;
@@ -9974,15 +9667,15 @@ export class Interpreter {
         for (const statement of switchCase.consequent) {
           result = await this.evaluateNodeAsync(statement);
 
-          if (result instanceof ReturnValue) {
+          if (isControlFlowKind(result, "return")) {
             return result;
           }
 
-          if (result instanceof BreakValue) {
+          if (isControlFlowKind(result, "break")) {
             return undefined;
           }
 
-          if (result instanceof ContinueValue) {
+          if (isControlFlowKind(result, "continue")) {
             throw new InterpreterError("Illegal continue statement");
           }
         }
@@ -9998,7 +9691,7 @@ export class Interpreter {
     if (value instanceof RawValue) {
       value = value.value;
     }
-    return new ReturnValue(value);
+    return new ControlFlowSignal("return", value);
   }
 
   private async evaluateAwaitExpressionAsync(node: ESTree.AwaitExpression): Promise<any> {
@@ -10031,7 +9724,7 @@ export class Interpreter {
 
   /**
    * Evaluate yield expression (sync): yield value or yield* iterable
-   * Returns a YieldValue signal that will be caught by the generator executor
+   * Returns a yield signal that will be caught by the generator executor
    */
   private evaluateYieldExpression(node: ESTree.YieldExpression): any {
     if (!this.isFeatureEnabled("YieldExpression")) {
@@ -10068,12 +9761,12 @@ export class Interpreter {
     const value = node.argument ? this.evaluateNode(node.argument) : undefined;
     const delegate = node.delegate || false;
 
-    return new YieldValue(value, delegate);
+    return new ControlFlowSignal("yield", value, null, delegate);
   }
 
   /**
    * Evaluate yield expression (async): yield value or yield* iterable
-   * Returns a YieldValue signal that will be caught by the async generator executor
+   * Returns a yield signal that will be caught by the async generator executor
    */
   private async evaluateYieldExpressionAsync(node: ESTree.YieldExpression): Promise<any> {
     if (!this.isFeatureEnabled("YieldExpression")) {
@@ -10110,7 +9803,7 @@ export class Interpreter {
     const value = node.argument ? await this.evaluateNodeAsync(node.argument) : undefined;
     const delegate = node.delegate || false;
 
-    return new YieldValue(value, delegate);
+    return new ControlFlowSignal("yield", value, null, delegate);
   }
 
   /**
@@ -10208,7 +9901,8 @@ export class Interpreter {
   /**
    * Destructure a pattern and assign/declare variables (async)
    */
-  private async destructurePatternAsync(
+  // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
+  public async destructurePatternAsync(
     pattern: ESTree.ArrayPattern | ESTree.ObjectPattern,
     value: any,
     declare: boolean,
@@ -10407,7 +10101,7 @@ export class Interpreter {
     object: any,
   ): Promise<any> {
     // Preserve optional chaining short-circuit semantics.
-    if (object instanceof OptionalChainShortCircuit) {
+    if (isControlFlowKind(object, "optional-chain")) {
       return object;
     }
     if (node.optional && (object === null || object === undefined)) {
@@ -10607,13 +10301,12 @@ export class Interpreter {
     }
 
     // Evaluate all expressions asynchronously
-    const expressionValues: any[] = [];
-    for (const expr of node.expressions) {
+    const expressionValues = await this.collectNodeValuesAsync(node.expressions, async (expr) => {
       if (!expr) {
         throw new InterpreterError("Template literal missing expression");
       }
-      expressionValues.push(await this.evaluateNodeAsync(expr));
-    }
+      return await this.evaluateNodeAsync(expr);
+    });
 
     // Build the final string using shared logic
     return this.buildTemplateLiteralString(node.quasis, expressionValues);
@@ -10627,45 +10320,18 @@ export class Interpreter {
     }
 
     const tag = await this.evaluateNodeAsync(node.tag);
-
-    // Build the strings array with cooked values
-    const strings: string[] = node.quasi.quasis.map((q) => q.value.cooked);
-    const raw: string[] = node.quasi.quasis.map((q) => q.value.raw);
-    Object.freeze(raw);
-    Object.defineProperty(strings, "raw", {
-      value: raw,
-      writable: false,
-      enumerable: false,
-      configurable: false,
-    });
-    Object.freeze(strings);
-
-    // Evaluate expressions asynchronously
-    const values: any[] = [];
-    for (const expr of node.quasi.expressions) {
-      values.push(await this.evaluateNodeAsync(expr));
-    }
-
-    // Call the tag function
+    const strings = this.buildTaggedTemplateStrings(node.quasi);
+    const values = await this.collectNodeValuesAsync(node.quasi.expressions, (expr) =>
+      this.evaluateNodeAsync(expr),
+    );
     const args = [strings, ...values];
-    if (tag instanceof FunctionValue) {
-      return await this.executeSandboxFunctionAsync(tag, args, undefined);
-    }
-    if (tag instanceof HostFunctionValue) {
-      return tag.isAsync ? await tag.hostFunc(...args) : tag.hostFunc(...args);
-    }
-    if (typeof tag === "function") {
-      return tag(...args);
-    }
-    throw new InterpreterError("Tag expression is not a function");
+    return await this.callTagFunction(tag, args, true);
   }
 
   private async evaluateSequenceExpressionAsync(node: ESTree.SequenceExpression): Promise<any> {
-    let result: any;
-    for (const expr of node.expressions) {
-      result = await this.evaluateNodeAsync(expr);
-    }
-    return result;
+    return await this.evaluateNodeListAsync(node.expressions, (expr) =>
+      this.evaluateNodeAsync(expr),
+    );
   }
 
   /**
@@ -10677,13 +10343,7 @@ export class Interpreter {
     }
 
     const result = await this.evaluateNodeAsync(node.expression);
-
-    // If we got a short-circuit marker, the chain should return undefined
-    if (result instanceof OptionalChainShortCircuit) {
-      return undefined;
-    }
-
-    return result;
+    return this.finalizeOptionalChain(result);
   }
 
   // ============================================================================
@@ -11172,7 +10832,7 @@ export class Interpreter {
       for (const statement of block.body) {
         const result = this.evaluateNode(statement);
         // Static blocks don't return values, but we need to handle control flow
-        if (result instanceof ReturnValue) {
+        if (isControlFlowKind(result, "return")) {
           throw new InterpreterError(
             "Return statement is not allowed in static initialization block",
           );
@@ -11228,7 +10888,7 @@ export class Interpreter {
     try {
       for (const statement of block.body) {
         const result = await this.evaluateNodeAsync(statement);
-        if (result instanceof ReturnValue) {
+        if (isControlFlowKind(result, "return")) {
           throw new InterpreterError(
             "Return statement is not allowed in static initialization block",
           );
@@ -11416,7 +11076,7 @@ export class Interpreter {
         args,
       );
       const finalInstance = thisValue ?? instance;
-      if (result instanceof ReturnValue) {
+      if (isControlFlowKind(result, "return")) {
         return this.resolveConstructorReturn(result.value, finalInstance);
       }
       return finalInstance;
@@ -11462,7 +11122,7 @@ export class Interpreter {
         args,
       );
       const finalInstance = thisValue ?? instance;
-      if (result instanceof ReturnValue) {
+      if (isControlFlowKind(result, "return")) {
         return this.resolveConstructorReturn(result.value, finalInstance);
       }
       return finalInstance;
@@ -11715,7 +11375,7 @@ export class Interpreter {
       this.bindFunctionParameters(func, args);
       const result = this.evaluateNode(func.body);
 
-      if (result instanceof ReturnValue) {
+      if (isControlFlowKind(result, "return")) {
         return result.value;
       }
       return undefined;
@@ -11757,7 +11417,7 @@ export class Interpreter {
         args,
       );
       currentInstance = thisValue ?? instance;
-      if (result instanceof ReturnValue) {
+      if (isControlFlowKind(result, "return")) {
         currentInstance = this.resolveConstructorReturn(result.value, currentInstance);
       }
     } else if (parentClass.parentClass) {
@@ -11821,7 +11481,7 @@ export class Interpreter {
         args,
       );
       currentInstance = thisValue ?? instance;
-      if (result instanceof ReturnValue) {
+      if (isControlFlowKind(result, "return")) {
         currentInstance = this.resolveConstructorReturn(result.value, currentInstance);
       }
     } else if (parentClass.parentClass) {

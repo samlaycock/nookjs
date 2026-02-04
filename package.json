@@ -42,10 +42,10 @@
     "@changesets/cli": "2.29.8",
     "@types/bun": "latest",
     "meriyah": "7.0.0",
-    "oxfmt": "0.26.0",
-    "oxlint": "1.41.0",
-    "oxlint-tsgolint": "0.11.1",
-    "tsdown": "0.20.0-beta.4"
+    "oxfmt": "0.28.0",
+    "oxlint": "1.43.0",
+    "oxlint-tsgolint": "0.11.4",
+    "tsdown": "0.20.1"
   },
   "peerDependencies": {
     "typescript": "^5"
