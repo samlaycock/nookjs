@@ -8,6 +8,7 @@
 import type { ComparisonResult } from "./shared/format";
 
 import { Interpreter } from "../src/interpreter";
+import { ES2024, preset } from "../src/presets";
 
 import { formatTable, formatSummary } from "./shared/format";
 
@@ -28,7 +29,8 @@ async function benchmarkAsync(
   iterations: number = 1000,
   globals?: Record<string, any>,
 ): Promise<AsyncBenchmarkResult> {
-  const interpreter = new Interpreter({ globals });
+  const options = globals ? preset(ES2024, { globals }) : ES2024;
+  const interpreter = new Interpreter(options);
 
   await interpreter.evaluateAsync(code);
   // eslint-disable-next-line no-eval
@@ -36,7 +38,7 @@ async function benchmarkAsync(
 
   const interpreterStart = performance.now();
   for (let i = 0; i < iterations; i++) {
-    const interp = new Interpreter({ globals });
+    const interp = new Interpreter(options);
     await interp.evaluateAsync(code);
   }
   const interpreterTime = performance.now() - interpreterStart;
@@ -245,9 +247,15 @@ async function main() {
   console.log("========================================\n");
 
   const results: AsyncBenchmarkResult[] = [];
+  const skipped: string[] = [];
   for (const c of benchmarkCases) {
-    const result = await benchmarkAsync(c.name, c.code, c.iterations);
-    results.push(result);
+    try {
+      const result = await benchmarkAsync(c.name, c.code, c.iterations);
+      results.push(result);
+    } catch (error: any) {
+      skipped.push(c.name);
+      console.log(`  SKIPPED: ${c.name} - ${error.message}\n`);
+    }
   }
 
   const tableData: ComparisonResult[] = results.map((r) => ({
@@ -261,6 +269,10 @@ async function main() {
 
   console.log(formatTable(tableData, true));
   console.log(formatSummary(results));
+
+  if (skipped.length > 0) {
+    console.log(`\nSkipped ${skipped.length} benchmark(s): ${skipped.join(", ")}`);
+  }
 
   const jsonOutput = {
     timestamp: new Date().toISOString(),

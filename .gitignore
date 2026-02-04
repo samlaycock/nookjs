@@ -45,6 +45,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Benchmark results
 benchmark-results.json
+benchmark-async-results.json
 
 # *.local.* files
 *.local.*

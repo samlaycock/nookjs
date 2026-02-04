@@ -74,7 +74,20 @@ export function unwrapForNative(value: unknown): unknown {
     return target;
   }
 
-  // For other proxy types, return the original proxy
+  // Unwrap non-plain-object proxies for native method compatibility.
+  // Host functions like clearTimeout need the original object (e.g., Timeout),
+  // not a proxy. Plain objects and arrays stay wrapped for security.
+  if (
+    typeof target === "object" &&
+    target !== null &&
+    !Array.isArray(target) &&
+    Object.getPrototypeOf(target) !== Object.prototype &&
+    Object.getPrototypeOf(target) !== null
+  ) {
+    return target;
+  }
+
+  // For plain objects, arrays, and other proxy types, return the original proxy
   return value;
 }
 
