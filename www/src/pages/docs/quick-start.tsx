@@ -1,5 +1,3 @@
-import { Link } from "react-router";
-
 import { CodeBlock } from "../../components/code-block";
 
 export function QuickStart() {
@@ -10,48 +8,46 @@ export function QuickStart() {
 
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Basic Evaluation</h2>
-        <p className="text-neutral-300 mb-4">Create an interpreter and evaluate JavaScript code:</p>
+        <p className="text-neutral-300 mb-4">
+          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">run()</code> for quick,
+          one-off evaluations:
+        </p>
         <CodeBlock
-          code={`import { Interpreter } from "nookjs";
+          code={`import { run } from "nookjs";
 
-const interpreter = new Interpreter();
+const value = await run("2 + 3 * 4");
+console.log(value); // 14`}
+        />
+        <p className="text-neutral-300 mt-6 mb-4">
+          For repeated evaluations, create a reusable sandbox:
+        </p>
+        <CodeBlock
+          code={`import { createSandbox } from "nookjs";
 
-// Simple expressions
-const sum = interpreter.evaluate("2 + 3 * 4");
-console.log(sum); // 14
+const sandbox = createSandbox({ env: "es2022" });
 
-// Multi-line code
-const result = interpreter.evaluate(\`
-  let numbers = [1, 2, 3, 4, 5];
-  let sum = 0;
-  for (let i = 0; i < numbers.length; i++) {
-    sum = sum + numbers[i];
-  }
-  sum
-\`);
-console.log(result); // 15`}
+const result = await sandbox.run(
+  "let sum = 0; for (let i = 0; i < 5; i++) { sum += i; } sum"
+);
+
+console.log(result); // 10`}
         />
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Using Presets</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Presets and APIs</h2>
         <p className="text-neutral-300 mb-4">
-          Presets configure the interpreter with specific ECMAScript version features and built-in
-          globals:
+          Choose an environment preset and add optional APIs:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`const sandbox = createSandbox({
+  env: "es2022",
+  apis: ["fetch", "console"],
+});
 
-// Create interpreter with ES2024 features
-const interpreter = new Interpreter(ES2024);
-
-// Now you can use modern JavaScript features
-interpreter.evaluate(\`
-  const data = { a: 1, b: 2, c: 3 };
-  const values = Object.values(data);
-  const sum = values.reduce((acc, val) => acc + val, 0);
-  sum
-\`); // 6`}
+await sandbox.run(
+  "console.log(await (await fetch('https://example.com')).status)"
+);`}
         />
       </section>
 
@@ -59,67 +55,38 @@ interpreter.evaluate(\`
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Injecting Globals</h2>
         <p className="text-neutral-300 mb-4">Pass host functions and data into the sandbox:</p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`const sandbox = createSandbox({
+  env: "es2022",
+  globals: {
+    PI: 3.14159,
+    log: (msg) => console.log("[sandbox]", msg),
+    calculateArea: (radius) => PI * radius * radius,
+    config: { debug: true, maxItems: 100 },
+  },
+});
 
-const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      // Simple values
-      PI: 3.14159,
-      VERSION: "1.0.0",
-
-      // Functions
-      log: (msg) => console.log("[sandbox]", msg),
-      calculateArea: (radius) => Math.PI * radius * radius,
-
-      // Objects (will be read-only in sandbox)
-      config: {
-        maxItems: 100,
-        debug: true,
-      },
-    },
-  })
-);
-
-interpreter.evaluate(\`
-  log("Calculating area...");
-  const area = calculateArea(5);
-  log("Area: " + area);
-
-  // Accessing injected config
-  if (config.debug) {
-    log("Debug mode enabled");
-  }
-\`);`}
+await sandbox.run(
+  "log('Area: ' + calculateArea(5)); config.debug"
+);`}
         />
       </section>
 
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Async Code</h2>
-        <p className="text-neutral-300 mb-4">
-          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">evaluateAsync</code> to
-          execute code with async/await:
-        </p>
+        <p className="text-neutral-300 mb-4">Use async/await with `run()`:</p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`const sandbox = createSandbox({
+  env: "es2022",
+  globals: {
+    fetchUser: async (id) => ({ id, name: "John Doe" }),
+  },
+});
 
-const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      fetchUser: async (id) => {
-        // Simulated async operation
-        return { id, name: "John Doe", email: "john@example.com" };
-      },
-    },
-  })
+const name = await sandbox.run(
+  "const user = await fetchUser(123); user.name"
 );
 
-const result = await interpreter.evaluateAsync(\`
-  const user = await fetchUser(123);
-  user.name
-\`);
-
-console.log(result); // "John Doe"`}
+console.log(name); // "John Doe"`}
         />
       </section>
 
@@ -127,30 +94,18 @@ console.log(result); // "John Doe"`}
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Error Handling</h2>
         <p className="text-neutral-300 mb-4">Catch and handle errors from sandbox code:</p>
         <CodeBlock
-          code={`import {
-  Interpreter,
-  ES2024,
-  ParseError,
-  RuntimeError,
-  SecurityError
-} from "nookjs";
-
-const interpreter = new Interpreter(ES2024);
+          code={`import { run, ParseError, RuntimeError, SecurityError } from "nookjs";
 
 try {
-  interpreter.evaluate(userProvidedCode);
+  await run(userProvidedCode);
 } catch (error) {
   if (error instanceof ParseError) {
-    // Syntax error in the code
     console.error("Syntax error:", error.message);
   } else if (error instanceof SecurityError) {
-    // Attempted to access blocked property
     console.error("Security violation:", error.message);
   } else if (error instanceof RuntimeError) {
-    // Runtime error (thrown value accessible via error.thrownValue)
     console.error("Runtime error:", error.message);
   } else {
-    // Unknown error
     console.error("Error:", error);
   }
 }`}
@@ -163,97 +118,38 @@ try {
           Type annotations are automatically stripped at parse time:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ES2024 } from "nookjs";
+          code={`const sandbox = createSandbox({ env: "es2022" });
 
-const interpreter = new Interpreter(ES2024);
+const result = await sandbox.run(
+  "interface User { name: string; } const user: User = { name: 'Alice' }; user.name"
+);
 
-// TypeScript syntax works out of the box
-const result = interpreter.evaluate(\`
-  interface User {
-    name: string;
-    age: number;
-  }
-
-  function greet(user: User): string {
-    return "Hello, " + user.name;
-  }
-
-  const user: User = { name: "Alice", age: 30 };
-  greet(user)
-\`);
-
-console.log(result); // "Hello, Alice"`}
+console.log(result); // "Alice"`}
         />
       </section>
 
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Complete Example</h2>
-        <p className="text-neutral-300 mb-4">
-          Here's a complete example showing a typical use case:
-        </p>
+        <p className="text-neutral-300 mb-4">A typical usage pattern:</p>
         <CodeBlock
-          code={`import {
-  Interpreter,
-  ES2024,
-  preset,
-  ParseError,
-  InterpreterError
-} from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
-// Create a sandboxed interpreter for evaluating user formulas
-function createFormulaEvaluator(data: Record<string, number>) {
-  const interpreter = new Interpreter(
-    preset(ES2024, {
-      globals: {
-        // Expose data as read-only
-        data,
-
-        // Provide safe math helpers
-        sum: (...nums: number[]) => nums.reduce((a, b) => a + b, 0),
-        avg: (...nums: number[]) => nums.reduce((a, b) => a + b, 0) / nums.length,
-        min: Math.min,
-        max: Math.max,
-        round: Math.round,
-      },
-    })
-  );
-
-  return (formula: string) => {
-    try {
-      return interpreter.evaluate(formula);
-    } catch (error) {
-      if (error instanceof ParseError || error instanceof InterpreterError) {
-        throw new Error(\`Formula error: \${error.message}\`);
-      }
-      throw error;
-    }
-  };
-}
-
-// Usage
-const evaluate = createFormulaEvaluator({
-  revenue: 50000,
-  costs: 30000,
-  employees: 10,
+const sandbox = createSandbox({
+  env: "es2022",
+  apis: ["console"],
+  globals: {
+    calculateDiscount: (price, percent) => price * (1 - percent / 100),
+  },
+  limits: { perRun: { loops: 100_000 } },
 });
 
-console.log(evaluate("data.revenue - data.costs")); // 20000
-console.log(evaluate("avg(data.revenue, data.costs)")); // 40000
-console.log(evaluate("data.revenue / data.employees")); // 5000`}
+const result = await sandbox.run(
+  "const price = 100; calculateDiscount(price, 20)"
+);
+
+console.log(result); // 80`}
         />
       </section>
-
-      <div className="flex justify-between pt-8 border-t border-neutral-800">
-        <Link
-          to="/docs/installation"
-          className="text-neutral-400 hover:text-amber-400 transition-colors"
-        >
-          &larr; Installation
-        </Link>
-        <Link to="/docs/security" className="text-amber-500 hover:text-amber-400 transition-colors">
-          Security Model &rarr;
-        </Link>
-      </div>
     </article>
   );
 }

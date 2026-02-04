@@ -14,19 +14,19 @@ export function ResourceTrackerAPI() {
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Overview</h2>
         <p className="text-neutral-300 mb-4">
           NookJS provides integrated resource tracking for monitoring resource consumption across
-          multiple <code className="text-amber-400 bg-neutral-800 px-1 rounded">evaluate()</code>{" "}
-          calls. This is essential for multi-tenant environments where you need to track and limit
+          multiple <code className="text-amber-400 bg-neutral-800 px-1 rounded">run()</code> calls.
+          This is essential for multi-tenant environments where you need to track and limit
           cumulative usage.
         </p>
         <p className="text-neutral-300 mb-4">
           Enable tracking with{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">resourceTracking: true</code>{" "}
-          when creating the Interpreter:
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">trackResources: true</code>{" "}
+          (or any total limits) when creating the sandbox:
         </p>
         <ul className="space-y-2 text-neutral-300">
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
-            <span>Tracks aggregate resource usage across the interpreter's lifetime</span>
+            <span>Tracks aggregate resource usage across the sandbox's lifetime</span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
@@ -40,28 +40,48 @@ export function ResourceTrackerAPI() {
       </section>
 
       <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Simplified API</h2>
+        <p className="text-neutral-300 mb-4">
+          When using <code className="text-amber-400 bg-neutral-800 px-1 rounded">createSandbox()</code>,
+          setting total limits automatically enables tracking:
+        </p>
+        <CodeBlock
+          code={`import { createSandbox } from "nookjs";
+
+const sandbox = createSandbox({
+  env: "es2022",
+  limits: { total: { evaluations: 100, memoryBytes: 50 * 1024 * 1024 } },
+});
+
+const out = await sandbox.run("1 + 2", { result: "full" });
+console.log(out.resources?.evaluations);`}
+        />
+      </section>
+
+      <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Quick Start</h2>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset, ResourceExhaustedError } from "nookjs";
+          code={`import { createSandbox, ResourceExhaustedError } from "nookjs";
 
-// Create interpreter with resource tracking enabled
-const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: { console },
-    resourceTracking: true,
-  })
-);
-
-// Set cumulative limits
-interpreter.setResourceLimit("maxTotalMemory", 100 * 1024 * 1024); // 100 MB
-interpreter.setResourceLimit("maxTotalIterations", 1000000); // 1M iterations
-interpreter.setResourceLimit("maxFunctionCalls", 10000); // 10K calls
-interpreter.setResourceLimit("maxEvaluations", 100); // 100 evaluations
+// Create sandbox with resource tracking enabled
+const sandbox = createSandbox({
+  env: "es2024",
+  globals: { console },
+  trackResources: true,
+  limits: {
+    total: {
+      memoryBytes: 100 * 1024 * 1024, // 100 MB
+      iterations: 1_000_000, // 1M iterations
+      functionCalls: 10_000, // 10K calls
+      evaluations: 100, // 100 evaluations
+    },
+  },
+});
 
 // Run code - resources are tracked
 try {
-  interpreter.evaluate("const arr = Array(1000).fill(0)");
-  interpreter.evaluate("for (let i = 0; i < 10000; i++) {}");
+  sandbox.runSync("const arr = Array(1000).fill(0)");
+  sandbox.runSync("for (let i = 0; i < 10000; i++) {}");
 } catch (error) {
   if (error instanceof ResourceExhaustedError) {
     console.log(\`Limit exceeded: \${error.resourceType}\`);
@@ -69,119 +89,60 @@ try {
 }
 
 // Check cumulative stats
-const stats = interpreter.getResourceStats();
-console.log(\`Memory: \${stats.memoryBytes} bytes\`);
-console.log(\`Iterations: \${stats.iterations}\`);
-console.log(\`Evaluations: \${stats.evaluations}\`);`}
+const stats = sandbox.resources();
+if (stats) {
+  console.log(\`Memory: \${stats.memoryBytes} bytes\`);
+  console.log(\`Iterations: \${stats.iterations}\`);
+  console.log(\`Evaluations: \${stats.evaluations}\`);
+}`}
         />
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Interpreter Methods</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Accessing Stats</h2>
         <p className="text-neutral-300 mb-4">
-          When{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">resourceTracking: true</code>{" "}
-          is set, the Interpreter exposes these methods:
+          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">resources()</code> for
+          cumulative stats, or request a full result for per-run stats:
         </p>
+        <CodeBlock
+          code={`import { createSandbox } from "nookjs";
 
-        <div className="space-y-8">
-          <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">getResourceStats()</h3>
-            <p className="text-neutral-400 text-sm mb-3">
-              Returns current cumulative resource statistics.
-            </p>
-            <CodeBlock
-              code={`const stats = interpreter.getResourceStats();
+const sandbox = createSandbox({
+  env: "es2024",
+  trackResources: true,
+  limits: { total: { evaluations: 10 } },
+});
 
-console.log(stats);
-/*
-{
-  memoryBytes: 24576,
-  iterations: 10000,
-  functionCalls: 3,
-  cpuTimeMs: 15,
-  evaluations: 2,
-  peakMemoryBytes: 32768,
-  largestEvaluation: {
-    memory: 16384,
-    iterations: 10000
-  },
-  isExhausted: false,
-  limitStatus: {
-    maxTotalMemory: { used: 24576, limit: 104857600, remaining: 104833024 },
-    maxTotalIterations: { used: 10000, limit: 1000000, remaining: 990000 },
-    // ...
-  }
-}
-*/`}
-            />
-          </div>
-
-          <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">resetResourceStats()</h3>
-            <p className="text-neutral-400 text-sm mb-3">Clears all statistics and history.</p>
-            <CodeBlock
-              code={`// Reset at the start of each billing cycle
-setInterval(() => {
-  interpreter.resetResourceStats();
-}, 24 * 60 * 60 * 1000); // Daily reset`}
-            />
-          </div>
-
-          <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">getResourceHistory()</h3>
-            <p className="text-neutral-400 text-sm mb-3">
-              Returns array of past evaluation statistics.
-            </p>
-            <CodeBlock
-              code={`const history = interpreter.getResourceHistory();
-/*
-[
-  {
-    timestamp: Date,
-    memoryBytes: 1234,
-    iterations: 500,
-    functionCalls: 5,
-    evaluationNumber: 1
-  },
-  // ...
-]
-*/`}
-            />
-          </div>
-
-          <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">
-              setResourceLimit(key, value) / getResourceLimit(key)
-            </h3>
-            <p className="text-neutral-400 text-sm mb-3">Get or set specific limits dynamically.</p>
-            <CodeBlock
-              code={`// Set limits
-interpreter.setResourceLimit("maxTotalMemory", 100 * 1024 * 1024);
-interpreter.setResourceLimit("maxEvaluations", 1000);
-
-// Check current limit
-const memLimit = interpreter.getResourceLimit("maxTotalMemory");
-
-// Increase limit for premium users
-if (user.isPremium) {
-  interpreter.setResourceLimit("maxTotalMemory", 500 * 1024 * 1024);
-}`}
-            />
-          </div>
-        </div>
+const result = await sandbox.run("1 + 2", { result: "full" });
+console.log(result.stats);     // per-run execution stats
+console.log(result.resources); // cumulative resource stats`}
+        />
+        <p className="text-neutral-300 mt-4">
+          Need history or dynamic limit updates? See{" "}
+          <Link to="/docs/api/interpreter" className="text-amber-400 hover:text-amber-300">
+            Internal Classes
+          </Link>{" "}
+          for advanced controls.
+        </p>
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">ResourceLimits</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">SandboxLimits</h2>
         <p className="text-neutral-300 mb-4">Available limits you can set:</p>
         <CodeBlock
-          code={`type ResourceLimits = {
-  maxTotalMemory?: number;      // bytes (cumulative)
-  maxTotalIterations?: number;  // loop iterations (cumulative)
-  maxFunctionCalls?: number;    // total function invocations
-  maxCpuTime?: number;          // milliseconds (best-effort)
-  maxEvaluations?: number;      // number of evaluate() calls
+          code={`type SandboxLimits = {
+  perRun?: {
+    callDepth?: number;   // call stack depth
+    loops?: number;       // loop iterations
+    memoryBytes?: number; // bytes
+  };
+  total?: {
+    memoryBytes?: number;   // bytes (cumulative)
+    iterations?: number;    // loop iterations (cumulative)
+    functionCalls?: number; // total function invocations
+    cpuTimeMs?: number;     // milliseconds (best-effort)
+    evaluations?: number;   // number of run() calls
+  };
 };`}
         />
       </section>
@@ -194,14 +155,16 @@ if (user.isPremium) {
           is thrown:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ResourceExhaustedError } from "nookjs";
+          code={`import { createSandbox, ResourceExhaustedError } from "nookjs";
 
-const interpreter = new Interpreter({ resourceTracking: true });
-interpreter.setResourceLimit("maxEvaluations", 5);
+const sandbox = createSandbox({
+  trackResources: true,
+  limits: { total: { evaluations: 5 } },
+});
 
 try {
   for (let i = 0; i < 10; i++) {
-    interpreter.evaluate("1 + 1");
+    sandbox.runSync("1 + 1");
   }
 } catch (error) {
   if (error instanceof ResourceExhaustedError) {
@@ -222,26 +185,23 @@ try {
               Track resource usage per plugin to enforce fair allocation:
             </p>
             <CodeBlock
-              code={`function createPluginInterpreter(pluginId: string, memoryLimit: number) {
-  const interpreter = new Interpreter(
-    preset(ES2024, {
-      resourceTracking: true,
-      globals: getPluginGlobals(pluginId),
-    })
-  );
+              code={`import { createSandbox } from "nookjs";
 
-  interpreter.setResourceLimit("maxTotalMemory", memoryLimit);
-  interpreter.setResourceLimit("maxEvaluations", 1000);
-
-  return interpreter;
+function createPluginSandbox(pluginId: string, memoryLimit: number) {
+  return createSandbox({
+    env: "es2024",
+    trackResources: true,
+    limits: { total: { memoryBytes: memoryLimit, evaluations: 1000 } },
+    globals: getPluginGlobals(pluginId),
+  });
 }
 
-const plugin1 = createPluginInterpreter("plugin1", 50 * 1024 * 1024);
-const plugin2 = createPluginInterpreter("plugin2", 50 * 1024 * 1024);
+const plugin1 = createPluginSandbox("plugin1", 50 * 1024 * 1024);
+const plugin2 = createPluginSandbox("plugin2", 50 * 1024 * 1024);
 
-plugin1.evaluate(pluginCode);
-const stats = plugin1.getResourceStats();
-console.log(\`Plugin memory: \${stats.memoryBytes} bytes\`);`}
+plugin1.runSync(pluginCode);
+const stats = plugin1.resources();
+console.log(\`Plugin memory: \${stats?.memoryBytes} bytes\`);`}
             />
           </div>
 
@@ -251,32 +211,36 @@ console.log(\`Plugin memory: \${stats.memoryBytes} bytes\`);`}
               Implement evaluation-count-based rate limiting:
             </p>
             <CodeBlock
-              code={`class RateLimitedSandbox {
-  private interpreter: Interpreter;
+              code={`import { createSandbox } from "nookjs";
+
+class RateLimitedSandbox {
+  private sandbox;
+  private options;
 
   constructor(tier: "free" | "pro") {
     const evalLimit = tier === "pro" ? 10000 : 100;
     const memLimit = tier === "pro" ? 500 * 1024 * 1024 : 50 * 1024 * 1024;
 
-    this.interpreter = new Interpreter(
-      preset(ES2024, { resourceTracking: true })
-    );
+    this.options = {
+      env: "es2024",
+      trackResources: true,
+      limits: { total: { evaluations: evalLimit, memoryBytes: memLimit } },
+    };
 
-    this.interpreter.setResourceLimit("maxEvaluations", evalLimit);
-    this.interpreter.setResourceLimit("maxTotalMemory", memLimit);
+    this.sandbox = createSandbox(this.options);
   }
 
-  evaluate(code: string) {
-    return this.interpreter.evaluate(code);
+  run(code: string) {
+    return this.sandbox.runSync(code);
   }
 
   // Reset limits at the start of each day
   resetDailyLimits() {
-    this.interpreter.resetResourceStats();
+    this.sandbox = createSandbox(this.options);
   }
 
   getUsage() {
-    return this.interpreter.getResourceStats();
+    return this.sandbox.resources();
   }
 }`}
             />
@@ -288,12 +252,16 @@ console.log(\`Plugin memory: \${stats.memoryBytes} bytes\`);`}
             <CodeBlock
               code={`// API endpoint for monitoring
 app.get("/api/sandbox/:userId/stats", (req, res) => {
-  const interpreter = getUserInterpreter(req.params.userId);
-  if (!interpreter) {
+  const sandbox = getUserSandbox(req.params.userId);
+  if (!sandbox) {
     return res.status(404).json({ error: "User not found" });
   }
 
-  const stats = interpreter.getResourceStats();
+  const stats = sandbox.resources();
+  if (!stats) {
+    return res.status(409).json({ error: "Tracking not enabled" });
+  }
+
   res.json({
     usage: {
       memory: stats.memoryBytes,
@@ -305,7 +273,6 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
     },
     limits: stats.limitStatus,
     isExhausted: stats.isExhausted,
-    history: interpreter.getResourceHistory().slice(-10),
   });
 });`}
             />
@@ -322,48 +289,50 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
             <thead>
               <tr className="border-b border-neutral-700">
                 <th className="text-left py-2 pr-4 text-neutral-300">Feature</th>
-                <th className="text-left py-2 pr-4 text-neutral-300">Per-Evaluation</th>
-                <th className="text-left py-2 text-neutral-300">resourceTracking</th>
+                <th className="text-left py-2 pr-4 text-neutral-300">Per-Run</th>
+                <th className="text-left py-2 text-neutral-300">Cumulative</th>
               </tr>
             </thead>
             <tbody className="text-neutral-400">
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">Scope</td>
                 <td className="py-2 pr-4">
-                  Single <code className="text-amber-400">evaluate()</code> call
+                  Single <code className="text-amber-400">run()</code> call
                 </td>
                 <td className="py-2">Across multiple calls</td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">Memory</td>
                 <td className="py-2 pr-4">
-                  <code className="text-amber-400">maxMemory</code>
+                  <code className="text-amber-400">limits.perRun.memoryBytes</code>
                 </td>
                 <td className="py-2">
-                  <code className="text-amber-400">maxTotalMemory</code>
+                  <code className="text-amber-400">limits.total.memoryBytes</code>
                 </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">Loop iterations</td>
                 <td className="py-2 pr-4">
-                  <code className="text-amber-400">maxLoopIterations</code>
+                  <code className="text-amber-400">limits.perRun.loops</code>
                 </td>
                 <td className="py-2">
-                  <code className="text-amber-400">maxTotalIterations</code>
+                  <code className="text-amber-400">limits.total.iterations</code>
                 </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">Function calls</td>
                 <td className="py-2 pr-4">Not available</td>
                 <td className="py-2">
-                  <code className="text-amber-400">maxFunctionCalls</code>
+                  <code className="text-amber-400">limits.total.functionCalls</code>
                 </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">Statistics</td>
-                <td className="py-2 pr-4">None</td>
+                <td className="py-2 pr-4">
+                  <code className="text-amber-400">result: "full"</code> stats
+                </td>
                 <td className="py-2">
-                  Detailed stats via <code className="text-amber-400">getResourceStats()</code>
+                  <code className="text-amber-400">resources()</code> totals
                 </td>
               </tr>
               <tr>
@@ -407,9 +376,10 @@ if (tracker.isExhausted()) {
 tracker.reset();`}
         />
         <p className="text-neutral-400 text-sm mt-4">
-          Note: The standalone ResourceTracker is not automatically integrated with the Interpreter.
-          Use <code className="text-amber-400">resourceTracking: true</code> for automatic tracking
-          during evaluation.
+          Note: The standalone ResourceTracker is not automatically integrated with the sandbox.
+          Use <code className="text-amber-400">trackResources: true</code> (or{" "}
+          <code className="text-amber-400">limits.total</code>) for automatic tracking during{" "}
+          <code className="text-amber-400">run()</code>.
         </p>
       </section>
 

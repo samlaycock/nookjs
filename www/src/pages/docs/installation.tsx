@@ -87,10 +87,10 @@ export function Installation() {
         <p className="text-neutral-300 mb-4">Import the core classes and presets you need:</p>
         <CodeBlock
           code={`// ESM (recommended)
-import { Interpreter, ES2024, preset } from "nookjs";
+import { createSandbox, run, parse } from "nookjs";
 
 // CommonJS
-const { Interpreter, ES2024, preset } = require("nookjs");`}
+const { createSandbox, run, parse } = require("nookjs");`}
         />
       </section>
 
@@ -108,9 +108,27 @@ const { Interpreter, ES2024, preset } = require("nookjs");`}
             <tbody className="text-neutral-400">
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">
+                  <code className="text-amber-400">createSandbox</code>
+                </td>
+                <td className="py-2">Simplified sandbox builder</td>
+              </tr>
+              <tr className="border-b border-neutral-800">
+                <td className="py-2 pr-4">
+                  <code className="text-amber-400">run</code>
+                </td>
+                <td className="py-2">One-off evaluation helper</td>
+              </tr>
+              <tr className="border-b border-neutral-800">
+                <td className="py-2 pr-4">
+                  <code className="text-amber-400">parse</code>
+                </td>
+                <td className="py-2">Parse code without executing</td>
+              </tr>
+              <tr className="border-b border-neutral-800">
+                <td className="py-2 pr-4">
                   <code className="text-amber-400">Interpreter</code>
                 </td>
-                <td className="py-2">Main interpreter class</td>
+                <td className="py-2">Internal interpreter class (advanced)</td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">

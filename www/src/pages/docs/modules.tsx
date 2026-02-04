@@ -1,3 +1,5 @@
+import { Link } from "react-router";
+
 import { CodeBlock } from "../../components/code-block";
 
 export function Modules() {
@@ -54,6 +56,35 @@ export function Modules() {
       </section>
 
       <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Simplified Modules</h2>
+        <p className="text-neutral-300 mb-4">
+          For common cases, provide module sources directly without writing a resolver:
+        </p>
+        <CodeBlock
+          code={`import { createSandbox } from "nookjs";
+
+const sandbox = createSandbox({
+  env: "es2022",
+  modules: {
+    files: {
+      "math.js": "export const add = (a, b) => a + b;",
+    },
+    externals: {
+      lodash: { map, filter },
+    },
+  },
+});
+
+const exports = await sandbox.runModule(
+  "import { add } from \\"math.js\\"; export const result = add(1, 2);",
+  { path: "main.js" },
+);
+
+console.log(exports.result); // 3`}
+        />
+      </section>
+
+      <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Enabling the Module System</h2>
         <p className="text-neutral-300 mb-4">
           The module system is disabled by default. Enable it by providing a{" "}
@@ -61,7 +92,7 @@ export function Modules() {
           with a resolver:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ModuleResolver } from "nookjs";
+          code={`import { createSandbox, type ModuleResolver } from "nookjs";
 
 // Define your modules (could be files, database, API, etc.)
 const files = new Map([
@@ -78,9 +109,8 @@ const resolver: ModuleResolver = {
   },
 };
 
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
   modules: {
-    enabled: true,
     resolver,
     maxDepth: 100,  // Optional: max import depth (default: 100)
     cache: true,    // Optional: enable caching (default: true)
@@ -92,12 +122,11 @@ const interpreter = new Interpreter({
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Basic Usage</h2>
         <p className="text-neutral-300 mb-4">
-          Use{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">evaluateModuleAsync</code> to
+          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">runModule</code> to
           evaluate ES module code:
         </p>
         <CodeBlock
-          code={`const exports = await interpreter.evaluateModuleAsync(
+          code={`const exports = await sandbox.runModule(
   \`import { add, PI } from "math.js";
    import { double } from "utils.js";
 
@@ -277,6 +306,7 @@ const resolver: ModuleResolver = {
         <p className="text-neutral-300 mb-4">Inject host libraries directly without parsing:</p>
         <CodeBlock
           code={`import _ from "lodash";
+import { createSandbox, type ModuleResolver } from "nookjs";
 
 const resolver: ModuleResolver = {
   resolve(specifier) {
@@ -296,8 +326,12 @@ const resolver: ModuleResolver = {
   },
 };
 
+const sandbox = createSandbox({
+  modules: { resolver },
+});
+
 // Now sandbox code can use lodash
-const result = await interpreter.evaluateModuleAsync(
+const result = await sandbox.runModule(
   \`import { map } from "lodash";
    export const doubled = map([1, 2, 3], x => x * 2);\`,
   { path: "main.js" }
@@ -311,53 +345,41 @@ const result = await interpreter.evaluateModuleAsync(
           By default, modules are cached after first evaluation:
         </p>
         <CodeBlock
-          code={`// First import evaluates the module
-await interpreter.evaluateModuleAsync(
+          code={`const sandbox = createSandbox({
+  modules: { resolver, cache: true },
+});
+
+// First import evaluates the module
+await sandbox.runModule(
   'import { x } from "mod.js";',
   { path: "a.js" }
 );
 
 // Second import uses cached exports (no re-evaluation)
-await interpreter.evaluateModuleAsync(
+await sandbox.runModule(
   'import { x } from "mod.js";',
   { path: "b.js" }
 );
 
 // Disable caching
-const interpreter = new Interpreter({
-  modules: { enabled: true, resolver, cache: false },
-});
-
-// Or clear cache programmatically
-interpreter.clearModuleCache();`}
+const noCacheSandbox = createSandbox({
+  modules: { resolver, cache: false },
+});`}
         />
       </section>
 
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Introspection API</h2>
-        <p className="text-neutral-300 mb-4">Query the module system state:</p>
-        <CodeBlock
-          code={`// Check if a module is cached
-interpreter.isModuleCached("math.js");
-
-// List loaded modules
-interpreter.getLoadedModuleSpecifiers(); // ["math.js", "utils.js"]
-interpreter.getLoadedModulePaths();
-
-// Get module metadata
-const metadata = interpreter.getModuleMetadata("math.js");
-// { path, specifier, status, loadedAt }
-
-// Get cached exports
-const exports = interpreter.getModuleExports("math.js");
-
-// Cache management
-interpreter.getModuleCacheSize();
-interpreter.clearModuleCache();
-
-// Check if module system is enabled
-interpreter.isModuleSystemEnabled();`}
-        />
+        <p className="text-neutral-300 mb-4">
+          Need cache introspection or module metadata? Those live on the internal{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">Interpreter</code> and{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">ModuleSystem</code> classes.
+          See{" "}
+          <Link to="/docs/api/interpreter" className="text-amber-400 hover:text-amber-300">
+            Internal Classes
+          </Link>{" "}
+          for advanced control.
+        </p>
       </section>
 
       <section className="mb-12">
@@ -382,7 +404,8 @@ interpreter.isModuleSystemEnabled();`}
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Security</h2>
         <p className="text-neutral-300 mb-4">
-          The module system maintains the same security guarantees as the rest of the interpreter:
+          The module system maintains the same security guarantees as the rest of the sandbox
+          runtime:
         </p>
 
         <h3 className="text-xl font-semibold text-neutral-200 mb-3 mt-6">Export Immutability</h3>
@@ -410,9 +433,8 @@ obj.constructor;  // Throws: SecurityError`}
         <h3 className="text-xl font-semibold text-neutral-200 mb-3 mt-6">Import Depth Limiting</h3>
         <p className="text-neutral-300 mb-4">Prevent stack overflow from deeply nested imports:</p>
         <CodeBlock
-          code={`const interpreter = new Interpreter({
+          code={`const sandbox = createSandbox({
   modules: {
-    enabled: true,
     resolver,
     maxDepth: 50,  // Throw after 50 levels of imports
   },
@@ -462,7 +484,7 @@ obj.constructor;  // Throws: SecurityError`}
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Complete Example</h2>
         <CodeBlock
-          code={`import { Interpreter, ModuleResolver } from "nookjs";
+          code={`import { createSandbox, type ModuleResolver } from "nookjs";
 
 // Define a virtual file system
 const modules = new Map([
@@ -502,13 +524,13 @@ const resolver: ModuleResolver = {
   },
 };
 
-// Create interpreter
-const interpreter = new Interpreter({
-  modules: { enabled: true, resolver },
+// Create sandbox
+const sandbox = createSandbox({
+  modules: { resolver },
 });
 
 // Run module code
-const result = await interpreter.evaluateModuleAsync(\`
+const result = await sandbox.runModule(\`
   import { add, multiply, capitalize, GREETING } from "utils/index.js";
 
   const sum = add(5, 3);

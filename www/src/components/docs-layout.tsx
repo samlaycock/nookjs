@@ -23,6 +23,7 @@ const DOCS_NAV = [
   {
     title: "API Reference",
     items: [
+      { title: "Sandbox", path: "/docs/api/sandbox" },
       { title: "Interpreter", path: "/docs/api/interpreter" },
       { title: "Error Types", path: "/docs/api/errors" },
       { title: "Resource Tracker", path: "/docs/api/resource-tracker" },
@@ -105,13 +106,13 @@ export function DocsLayout() {
 
       {/* Mobile menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden absolute top-30 left-0 right-0 bg-neutral-950 border-b border-neutral-800 p-4 z-50 max-h-[calc(100vh-120px)] overflow-y-auto">
+        <div className="md:hidden absolute top-30 left-0 right-0 bg-neutral-950 border-b border-neutral-800 p-4 z-40 max-h-[calc(100vh-120px)] overflow-y-auto">
           {navContent}
         </div>
       )}
 
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-64 shrink-0 border-r border-neutral-800 p-4 overflow-y-auto">
+      <aside className="hidden md:flex md:sticky md:top-[var(--site-header-height)] md:h-[calc(100vh-var(--site-header-height))] flex-col w-64 shrink-0 border-r border-neutral-800 p-4 overflow-y-auto">
         {navContent}
       </aside>
 

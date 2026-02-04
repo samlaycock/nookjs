@@ -7,39 +7,63 @@ export function Presets() {
     <article className="prose prose-invert max-w-none">
       <h1 className="text-3xl font-bold text-neutral-50 mb-4">Presets</h1>
       <p className="text-xl text-neutral-300 mb-8">
-        Configure the interpreter with pre-built ECMAScript versions and API addons.
+        Configure the sandbox with pre-built ECMAScript versions and API addons.
       </p>
 
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Overview</h2>
         <p className="text-neutral-300 mb-4">
-          Presets provide pre-configured{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">InterpreterOptions</code> for
-          common use cases. Use the{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">preset()</code> function to
-          combine multiple presets and add your own customizations.
+          Presets power the simplified API. Choose an{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">env</code> for the language
+          version and add <code className="text-amber-400 bg-neutral-800 px-1 rounded">apis</code>{" "}
+          for extra globals. For advanced preset composition, see{" "}
+          <Link to="/docs/api/interpreter" className="text-amber-400 hover:text-amber-300">
+            Internal Classes
+          </Link>
+          .
         </p>
         <CodeBlock
-          code={`import { Interpreter, preset, ES2024, ConsoleAPI, FetchAPI } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
 // Combine presets and custom options
-const interpreter = new Interpreter(
-  preset(
-    ES2024,           // ECMAScript version
-    ConsoleAPI,       // Add console.log
-    FetchAPI,         // Add fetch API
-    {                 // Custom options
-      globals: { myHelper: (x) => x * 2 },
-    }
-  )
-);`}
+const sandbox = createSandbox({
+  env: "es2024",
+  apis: ["console", "fetch"],
+  globals: { myHelper: (x) => x * 2 },
+});
+
+await sandbox.run("console.log(myHelper(3))");`}
         />
+      </section>
+
+      <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Simplified Usage</h2>
+        <p className="text-neutral-300 mb-4">
+          For most projects, the simplified API is easier to use. It maps
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">env</code> to ECMAScript
+          presets and <code className="text-amber-400 bg-neutral-800 px-1 rounded">apis</code> to
+          addon presets.
+        </p>
+        <CodeBlock
+          code={`import { createSandbox } from "nookjs";
+
+const sandbox = createSandbox({
+  env: "es2022",
+  apis: ["fetch", "console"],
+});
+
+await sandbox.run("console.log(await (await fetch('https://example.com')).status)");`}
+        />
+        <p className="text-neutral-300 mt-4">
+          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">preset()</code> directly
+          when you need advanced merging behavior.
+        </p>
       </section>
 
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">ECMAScript Version Presets</h2>
         <p className="text-neutral-300 mb-4">
-          These presets configure the interpreter for specific ECMAScript versions by whitelisting
+          These presets configure the sandbox for specific ECMAScript versions by whitelisting
           appropriate language features and providing era-appropriate globals.
         </p>
         <div className="overflow-x-auto">
@@ -238,9 +262,12 @@ const interpreter = new Interpreter(
               URLSearchParams
             </p>
             <CodeBlock
-              code={`const interpreter = new Interpreter(preset(ES2024, FetchAPI));
+              code={`const sandbox = createSandbox({
+  env: "es2024",
+  apis: ["fetch"],
+});
 
-await interpreter.evaluateAsync(\`
+await sandbox.run(\`
   const response = await fetch('https://api.example.com/data');
   const data = await response.json();
 \`);`}
@@ -252,9 +279,12 @@ await interpreter.evaluateAsync(\`
             <p className="text-neutral-400 text-sm mb-3">Provides console methods for logging.</p>
             <p className="text-neutral-500 text-xs mb-3">Includes: console</p>
             <CodeBlock
-              code={`const interpreter = new Interpreter(preset(ES2024, ConsoleAPI));
+              code={`const sandbox = createSandbox({
+  env: "es2024",
+  apis: ["console"],
+});
 
-interpreter.evaluate(\`
+sandbox.runSync(\`
   console.log('Hello, world!');
   console.error('Something went wrong');
 \`);`}
@@ -270,9 +300,12 @@ interpreter.evaluate(\`
               Includes: setTimeout, clearTimeout, setInterval, clearInterval
             </p>
             <CodeBlock
-              code={`const interpreter = new Interpreter(preset(ES2024, TimersAPI));
+              code={`const sandbox = createSandbox({
+  env: "es2024",
+  apis: ["timers", "console"],
+});
 
-await interpreter.evaluateAsync(\`
+await sandbox.run(\`
   await new Promise(resolve => setTimeout(resolve, 1000));
   console.log('1 second later');
 \`);`}
@@ -286,9 +319,12 @@ await interpreter.evaluateAsync(\`
             </p>
             <p className="text-neutral-500 text-xs mb-3">Includes: TextEncoder, TextDecoder</p>
             <CodeBlock
-              code={`const interpreter = new Interpreter(preset(ES2024, TextCodecAPI));
+              code={`const sandbox = createSandbox({
+  env: "es2024",
+  apis: ["textcodec"],
+});
 
-interpreter.evaluate(\`
+sandbox.runSync(\`
   const encoder = new TextEncoder();
   const bytes = encoder.encode('Hello');
   // bytes is Uint8Array [72, 101, 108, 108, 111]
@@ -305,9 +341,12 @@ interpreter.evaluate(\`
               Includes: ArrayBuffer, DataView, Int8Array, Uint8Array, Float32Array, etc.
             </p>
             <CodeBlock
-              code={`const interpreter = new Interpreter(preset(ES2024, BufferAPI));
+              code={`const sandbox = createSandbox({
+  env: "es2024",
+  apis: ["buffer"],
+});
 
-interpreter.evaluate(\`
+sandbox.runSync(\`
   const buffer = new ArrayBuffer(16);
   const view = new DataView(buffer);
   view.setInt32(0, 42);
@@ -323,9 +362,12 @@ interpreter.evaluate(\`
             </p>
             <p className="text-neutral-500 text-xs mb-3">Includes: RegExp</p>
             <CodeBlock
-              code={`const interpreter = new Interpreter(preset(ES2024, RegExpAPI));
+              code={`const sandbox = createSandbox({
+  env: "es2024",
+  apis: ["regexp"],
+});
 
-interpreter.evaluate(\`
+sandbox.runSync(\`
   const pattern = new RegExp('hello', 'i');
   pattern.test('Hello World'); // true
 \`);`}
@@ -335,108 +377,54 @@ interpreter.evaluate(\`
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">The preset() Function</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Composing Presets</h2>
         <p className="text-neutral-300 mb-4">
-          The <code className="text-amber-400 bg-neutral-800 px-1 rounded">preset()</code> function
-          combines multiple presets and option overrides into a single configuration.
+          Combine an <code className="text-amber-400 bg-neutral-800 px-1 rounded">env</code> preset
+          with one or more <code className="text-amber-400 bg-neutral-800 px-1 rounded">apis</code>,
+          then layer your own policy and globals. For internal preset merging, see{" "}
+          <Link to="/docs/api/interpreter" className="text-amber-400 hover:text-amber-300">
+            Internal Classes
+          </Link>
+          .
         </p>
-
-        <h3 className="text-xl font-medium text-neutral-100 mb-3">Merging Behavior</h3>
-        <div className="overflow-x-auto mb-6">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-neutral-700">
-                <th className="text-left py-2 pr-4 text-neutral-300">Property</th>
-                <th className="text-left py-2 text-neutral-300">Merge Strategy</th>
-              </tr>
-            </thead>
-            <tbody className="text-neutral-400">
-              <tr className="border-b border-neutral-800">
-                <td className="py-2 pr-4">
-                  <code className="text-amber-400">globals</code>
-                </td>
-                <td className="py-2">Shallow merge, later presets override earlier</td>
-              </tr>
-              <tr className="border-b border-neutral-800">
-                <td className="py-2 pr-4">
-                  <code className="text-amber-400">featureControl</code>
-                </td>
-                <td className="py-2">Features are unioned</td>
-              </tr>
-              <tr className="border-b border-neutral-800">
-                <td className="py-2 pr-4">
-                  <code className="text-amber-400">security</code>
-                </td>
-                <td className="py-2">Shallow merge, later presets override earlier</td>
-              </tr>
-              <tr>
-                <td className="py-2 pr-4">
-                  <code className="text-amber-400">validator</code>
-                </td>
-                <td className="py-2">Last one wins</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
         <CodeBlock
-          code={`import { preset, ES2024, FetchAPI, ConsoleAPI } from "nookjs";
-
-// Combine multiple presets
-const opts = preset(ES2024, FetchAPI, ConsoleAPI);
-
-// Add custom security settings
-const opts = preset(ES2024, FetchAPI, {
-  security: { hideHostErrorMessages: false },
+          code={`const sandbox = createSandbox({
+  env: "es2024",
+  apis: ["fetch", "console"],
+  policy: { errors: "sanitize" },
+  globals: { myHelper: (x) => x * 2 },
 });
 
-// Add custom globals
-const opts = preset(ES2024, {
-  globals: { myHelper: (x) => x * 2 },
-});`}
+await sandbox.run("console.log(myHelper(2))");`}
         />
       </section>
 
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Creating Custom Presets</h2>
         <p className="text-neutral-300 mb-4">
-          Create your own presets by defining an{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">InterpreterOptions</code>{" "}
-          object:
+          Create your own presets by composing globals and feature toggles:
         </p>
         <CodeBlock
-          code={`import { Interpreter, preset, ES2024, InterpreterOptions } from "nookjs";
-
-// Custom addon preset with helpers
-const MathHelpers: InterpreterOptions = {
+          code={`const sandbox = createSandbox({
+  env: "es2024",
   globals: {
     sum: (...nums: number[]) => nums.reduce((a, b) => a + b, 0),
     avg: (...nums: number[]) => nums.reduce((a, b) => a + b, 0) / nums.length,
     clamp: (val: number, min: number, max: number) =>
       Math.min(Math.max(val, min), max),
   },
-};
-
-// Restrictive preset for math-only operations
-const MathOnly: InterpreterOptions = {
-  featureControl: {
+  features: {
     mode: "whitelist",
-    features: [
+    enable: [
       "VariableDeclarations",
       "BinaryOperators",
       "UnaryOperators",
       "FunctionCalls",
     ],
   },
-  globals: {
-    Math,
-  },
-};
+});
 
-// Use custom presets
-const interpreter = new Interpreter(
-  preset(ES2024, MathHelpers)
-);`}
+sandbox.runSync("sum(1, 2, 3)"); // 6`}
         />
       </section>
 

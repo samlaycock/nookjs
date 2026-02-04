@@ -7,7 +7,25 @@ export function InterpreterAPI() {
     <article className="prose prose-invert max-w-none">
       <h1 className="text-3xl font-bold text-neutral-50 mb-4">Interpreter</h1>
       <p className="text-xl text-neutral-300 mb-8">
-        The main class for executing JavaScript code in a sandboxed environment.
+        The internal, advanced class for executing JavaScript code in a sandboxed environment.
+      </p>
+      <p className="text-neutral-400 mb-8">
+        Looking for the simpler API? See the{" "}
+        <Link to="/docs/api/sandbox" className="text-amber-500 hover:text-amber-400 underline">
+          Sandbox API
+        </Link>
+        .
+      </p>
+      <p className="text-neutral-400 mb-8">
+        Other internal classes include{" "}
+        <Link to="/docs/api/resource-tracker" className="text-amber-500 hover:text-amber-400 underline">
+          Resource Tracker
+        </Link>{" "}
+        and the ModuleSystem (see{" "}
+        <Link to="/docs/modules" className="text-amber-500 hover:text-amber-400 underline">
+          ES Modules
+        </Link>
+        ).
       </p>
 
       <section className="mb-12">

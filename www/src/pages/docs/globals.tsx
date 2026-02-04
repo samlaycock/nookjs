@@ -23,7 +23,7 @@ export function Globals() {
             <span className="text-amber-500">1.</span>
             <span>
               <strong className="text-neutral-100">Constructor globals</strong> - Persist across all{" "}
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">evaluate()</code> calls
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">run()</code> calls
             </span>
           </li>
           <li className="flex gap-3">
@@ -37,38 +37,58 @@ export function Globals() {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Constructor Globals</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Simplified API</h2>
         <p className="text-neutral-300 mb-4">
-          Globals passed when creating the interpreter persist across all{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">evaluate()</code> calls:
+          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">createSandbox()</code> to
+          set persistent globals:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
-const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      // Simple values
-      PI: 3.14159,
-      VERSION: "1.0.0",
-      DEBUG: true,
+const sandbox = createSandbox({
+  env: "es2022",
+  globals: {
+    PI: 3.14159,
+    log: (msg) => console.log("[sandbox]", msg),
+  },
+});
 
-      // Objects (will be read-only in sandbox)
-      config: {
-        maxItems: 100,
-        timeout: 5000,
-      },
+await sandbox.run("log(PI)");`}
+        />
+      </section>
 
-      // Functions
-      log: (msg) => console.log("[sandbox]", msg),
+      <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Constructor Globals</h2>
+        <p className="text-neutral-300 mb-4">
+          Globals passed when creating the sandbox persist across all{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">run()</code> calls:
+        </p>
+        <CodeBlock
+          code={`import { createSandbox } from "nookjs";
+
+const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    // Simple values
+    PI: 3.14159,
+    VERSION: "1.0.0",
+    DEBUG: true,
+
+    // Objects (will be read-only in sandbox)
+    config: {
+      maxItems: 100,
+      timeout: 5000,
     },
-  })
-);
 
-// All globals available in every evaluation
-interpreter.evaluate("log(PI)");      // Logs: [sandbox] 3.14159
-interpreter.evaluate("log(VERSION)"); // Logs: [sandbox] 1.0.0
-interpreter.evaluate("config.maxItems"); // 100`}
+    // Functions
+    log: (msg) => console.log("[sandbox]", msg),
+  },
+});
+
+// All globals available in every run
+sandbox.runSync("log(PI)");      // Logs: [sandbox] 3.14159
+sandbox.runSync("log(VERSION)"); // Logs: [sandbox] 1.0.0
+sandbox.runSync("config.maxItems"); // 100`}
         />
       </section>
 
@@ -76,29 +96,31 @@ interpreter.evaluate("config.maxItems"); // 100`}
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Per-Call Globals</h2>
         <p className="text-neutral-300 mb-4">
           Globals passed to individual{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">evaluate()</code> calls are
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">run()</code> calls are
           available only for that execution:
         </p>
         <CodeBlock
-          code={`const interpreter = new Interpreter(ES2024);
+          code={`const sandbox = createSandbox({ env: "es2024" });
 
 // x and y only exist for this call
-const sum = interpreter.evaluate("x + y", {
+const sum = sandbox.runSync("x + y", {
   globals: { x: 10, y: 20 },
 });
 console.log(sum); // 30
 
 // This would throw: x is not defined
-interpreter.evaluate("x + y");`}
+sandbox.runSync("x + y");`}
         />
         <p className="text-neutral-300 mt-4">
           This is useful for providing context-specific data to each evaluation:
         </p>
         <CodeBlock
-          code={`function evaluateUserFormula(userId: string, formula: string) {
+          code={`const sandbox = createSandbox({ env: "es2024" });
+
+function evaluateUserFormula(userId: string, formula: string) {
   const userData = getUserData(userId);
 
-  return interpreter.evaluate(formula, {
+  return sandbox.runSync(formula, {
     globals: {
       user: userData,
       balance: userData.balance,
@@ -119,22 +141,21 @@ evaluateUserFormula("user2", "balance * 0.15");`}
           user-declared variables):
         </p>
         <CodeBlock
-          code={`const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: { multiplier: 10 },
-  })
-);
+          code={`const sandbox = createSandbox({
+  env: "es2024",
+  globals: { multiplier: 10 },
+});
 
 // Uses constructor global
-interpreter.evaluate("multiplier * 5"); // 50
+sandbox.runSync("multiplier * 5"); // 50
 
 // Per-call global overrides constructor global
-interpreter.evaluate("multiplier * 5", {
+sandbox.runSync("multiplier * 5", {
   globals: { multiplier: 2 },
 }); // 10
 
 // Original constructor global still intact
-interpreter.evaluate("multiplier * 5"); // 50`}
+sandbox.runSync("multiplier * 5"); // 50`}
         />
       </section>
 
@@ -144,34 +165,33 @@ interpreter.evaluate("multiplier * 5"); // 50`}
           Pass functions from your host code that sandbox code can call:
         </p>
         <CodeBlock
-          code={`const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      // Simple function
-      double: (x) => x * 2,
+          code={`const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    // Simple function
+    double: (x) => x * 2,
 
-      // Function with side effects
-      log: (msg) => console.log(msg),
+    // Function with side effects
+    log: (msg) => console.log(msg),
 
-      // Async function
-      fetchData: async (id) => {
-        const response = await fetch(\`/api/data/\${id}\`);
-        return response.json();
-      },
-
-      // Function returning complex data
-      getConfig: () => ({
-        maxItems: 100,
-        features: ["a", "b", "c"],
-      }),
+    // Async function
+    fetchData: async (id) => {
+      const response = await fetch(\`/api/data/\${id}\`);
+      return response.json();
     },
-  })
-);
 
-interpreter.evaluate("double(21)"); // 42
-interpreter.evaluate("getConfig().maxItems"); // 100
+    // Function returning complex data
+    getConfig: () => ({
+      maxItems: 100,
+      features: ["a", "b", "c"],
+    }),
+  },
+});
 
-await interpreter.evaluateAsync(\`
+sandbox.runSync("double(21)"); // 42
+sandbox.runSync("getConfig().maxItems"); // 100
+
+await sandbox.run(\`
   const data = await fetchData(123);
   data.name
 \`);`}
@@ -253,11 +273,12 @@ await interpreter.evaluateAsync(\`
   }
 }
 
-const interpreter = new Interpreter(
-  preset(ES2024, { globals: { Point } })
-);
+const sandbox = createSandbox({
+  env: "es2024",
+  globals: { Point },
+});
 
-interpreter.evaluate(\`
+sandbox.runSync(\`
   const p = new Point(3, 4);
   p.distance()
 \`); // 5`}
@@ -272,17 +293,16 @@ interpreter.evaluate(\`
           All injected globals are protected from sandbox manipulation:
         </p>
         <CodeBlock
-          code={`const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      config: { secret: "password123" },
-      myFunc: () => "result",
-    },
-  })
-);
+          code={`const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    config: { secret: "password123" },
+    myFunc: () => "result",
+  },
+});
 
 // Modifications silently fail (no error, but no effect)
-interpreter.evaluate(\`
+sandbox.runSync(\`
   config.secret = "hacked";     // No effect
   delete config.secret;         // No effect
   config.newProp = "test";      // No effect
@@ -291,7 +311,7 @@ interpreter.evaluate(\`
 \`);
 
 // Function properties are blocked
-interpreter.evaluate(\`
+sandbox.runSync(\`
   myFunc.name      // SecurityError
   myFunc.length    // SecurityError
   myFunc.toString  // SecurityError
@@ -332,7 +352,9 @@ interpreter.evaluate(\`
               While host objects are read-only, clone data for extra safety:
             </p>
             <CodeBlock
-              code={`interpreter.evaluate(code, {
+              code={`const sandbox = createSandbox({ env: "es2024" });
+
+sandbox.runSync(code, {
   globals: {
     state: structuredClone(sharedState),
     config: { ...originalConfig },
@@ -365,11 +387,13 @@ globals: {
               Use per-call globals for user context
             </h3>
             <CodeBlock
-              code={`// Each evaluation gets isolated user context
+              code={`const sandbox = createSandbox({ env: "es2024" });
+
+// Each evaluation gets isolated user context
 function runUserScript(userId: string, script: string) {
   const user = getUser(userId);
 
-  return interpreter.evaluate(script, {
+  return sandbox.runSync(script, {
     globals: {
       currentUser: {
         id: user.id,

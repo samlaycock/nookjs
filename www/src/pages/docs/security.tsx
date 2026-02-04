@@ -172,22 +172,31 @@ func.bind(null);`}
           <code className="text-amber-400 bg-neutral-800 px-1 rounded">security</code> option:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox } from "nookjs";
 
-const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: { /* ... */ },
-    security: {
-      // Sanitize error stack traces to remove host file paths
-      // Default: true
-      sanitizeErrors: true,
+const sandbox = createSandbox({
+  env: "es2024",
+  globals: { /* ... */ },
+  security: {
+    // Sanitize error stack traces to remove host file paths
+    // Default: true
+    sanitizeErrors: true,
 
-      // Hide original error messages from host functions
-      // Default: true
-      hideHostErrorMessages: true,
-    },
-  })
-);`}
+    // Hide original error messages from host functions
+    // Default: true
+    hideHostErrorMessages: true,
+  },
+});`}
+        />
+        <p className="text-neutral-300 mt-4 mb-4">
+          The simplified API provides a shorthand via{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">policy.errors</code>:
+        </p>
+        <CodeBlock
+          code={`const sandbox = createSandbox({
+  env: "es2022",
+  policy: { errors: "safe" }, // "safe" | "sanitize" | "full"
+});`}
         />
 
         <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">
@@ -247,19 +256,23 @@ ENOENT: no such file, open '/etc/passwd'`}
           Protect against denial-of-service attacks with execution limits:
         </p>
         <CodeBlock
-          code={`const result = interpreter.evaluate(untrustedCode, {
-  // Maximum call stack depth (protects against infinite recursion)
-  maxCallStackDepth: 100,
+          code={`const sandbox = createSandbox();
 
-  // Maximum iterations per loop (protects against infinite loops)
-  maxLoopIterations: 10000,
+const result = sandbox.runSync(untrustedCode, {
+  limits: {
+    // Maximum call stack depth (protects against infinite recursion)
+    callDepth: 100,
 
-  // Maximum memory usage in bytes (best-effort estimate)
-  maxMemory: 10 * 1024 * 1024, // 10 MB
+    // Maximum iterations per loop (protects against infinite loops)
+    loops: 10000,
+
+    // Maximum memory usage in bytes (best-effort estimate)
+    memoryBytes: 10 * 1024 * 1024, // 10 MB
+  },
 });`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">maxCallStackDepth</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">callDepth</h3>
         <p className="text-neutral-300 mb-4">
           Limits the depth of function call nesting. When exceeded, throws{" "}
           <code className="text-amber-400 bg-neutral-800 px-1 rounded">
@@ -268,44 +281,46 @@ ENOENT: no such file, open '/etc/passwd'`}
           .
         </p>
         <CodeBlock
-          code={`// This will throw when maxCallStackDepth is exceeded
-interpreter.evaluate(\`
+          code={`// This will throw when callDepth is exceeded
+sandbox.runSync(\`
   function infinite() { return infinite(); }
   infinite();
-\`, { maxCallStackDepth: 50 });`}
+\`, { limits: { callDepth: 50 } });`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">maxLoopIterations</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">loops</h3>
         <p className="text-neutral-300 mb-4">
           Limits the number of iterations <strong>per loop</strong>. Each loop has its own counter
           that resets when the loop completes.
         </p>
         <CodeBlock
           code={`// This will throw
-interpreter.evaluate(\`while (true) { }\`, { maxLoopIterations: 1000 });
+sandbox.runSync(\`while (true) { }\`, { limits: { loops: 1000 } });
 
 // This works - each loop is under the limit
-interpreter.evaluate(\`
+sandbox.runSync(\`
   for (let i = 0; i < 500; i++) { }  // 500 iterations
   for (let j = 0; j < 500; j++) { }  // 500 iterations
-\`, { maxLoopIterations: 1000 });`}
+\`, { limits: { loops: 1000 } });`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">maxMemory</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">memoryBytes</h3>
         <p className="text-neutral-300 mb-4">
           Limits estimated memory usage in bytes. This is a <strong>best-effort heuristic</strong>{" "}
           that tracks array, object, and string allocations.
         </p>
         <CodeBlock
           code={`// This will throw when estimated memory exceeds the limit
-interpreter.evaluate(\`
+sandbox.runSync(\`
   const huge = [];
   for (let i = 0; i < 100000; i++) {
     huge.push([1, 2, 3, 4, 5]);
   }
 \`, {
-  maxMemory: 1024 * 1024,  // 1 MB
-  maxLoopIterations: 1000000
+  limits: {
+    memoryBytes: 1024 * 1024,  // 1 MB
+    loops: 1000000,
+  },
 });`}
         />
 
@@ -316,17 +331,20 @@ interpreter.evaluate(\`
           For comprehensive protection, combine execution limits with AbortSignal for timeouts:
         </p>
         <CodeBlock
-          code={`const controller = new AbortController();
+          code={`const sandbox = createSandbox();
+const controller = new AbortController();
 
 // Cancel after 5 seconds
 setTimeout(() => controller.abort(), 5000);
 
 try {
-  await interpreter.evaluateAsync(code, {
+  await sandbox.run(code, {
     signal: controller.signal,
-    maxCallStackDepth: 100,
-    maxLoopIterations: 100000,
-    maxMemory: 10 * 1024 * 1024,
+    limits: {
+      callDepth: 100,
+      loops: 100000,
+      memoryBytes: 10 * 1024 * 1024,
+    },
   });
 } catch (error) {
   if (error.name === 'AbortError') {
@@ -375,16 +393,15 @@ try {
         </ul>
 
         <CodeBlock
-          code={`const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      config: { secret: "password123" },
-    },
-  })
-);
+          code={`const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    config: { secret: "password123" },
+  },
+});
 
 // Sandbox code cannot modify host objects
-interpreter.evaluate(\`
+sandbox.runSync(\`
   config.secret = "hacked";  // Silently fails (no error, but no effect)
   delete config.secret;      // Silently fails
   config.newProp = "test";   // Silently fails
@@ -423,7 +440,9 @@ interpreter.evaluate(\`
               :
             </p>
             <CodeBlock
-              code={`interpreter.evaluate(\`
+              code={`const sandbox = createSandbox({ env: "es2024" });
+
+sandbox.runSync(\`
   const arr = new Uint8Array(3);
   arr[0] = 10;  // Allowed - numeric index write
   arr[1] = 20;  // Allowed
@@ -447,7 +466,9 @@ interpreter.evaluate(\`
               require actual TypedArray instances, not Proxy objects.
             </p>
             <CodeBlock
-              code={`interpreter.evaluate(\`
+              code={`const sandbox = createSandbox({ env: "es2024" });
+
+sandbox.runSync(\`
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const bytes = encoder.encode('hello');  // Returns proxied Uint8Array
@@ -517,10 +538,14 @@ interpreter.evaluate(\`
               Prevent infinite loops and excessive resource consumption:
             </p>
             <CodeBlock
-              code={`interpreter.evaluate(code, {
-  maxCallStackDepth: 100,
-  maxLoopIterations: 10000,
-  maxMemory: 10 * 1024 * 1024,
+              code={`const sandbox = createSandbox();
+
+sandbox.runSync(code, {
+  limits: {
+    callDepth: 100,
+    loops: 10000,
+    memoryBytes: 10 * 1024 * 1024,
+  },
 });`}
             />
           </div>
@@ -534,7 +559,9 @@ interpreter.evaluate(\`
               safety:
             </p>
             <CodeBlock
-              code={`interpreter.evaluate(code, {
+              code={`const sandbox = createSandbox();
+
+sandbox.runSync(code, {
   globals: { state: structuredClone(sharedState) },
 });`}
             />
@@ -546,22 +573,21 @@ interpreter.evaluate(\`
             </h3>
             <p className="text-neutral-400 text-sm mb-3">Never trust input from sandbox code:</p>
             <CodeBlock
-              code={`const interpreter = new Interpreter(
-  preset(ES2024, {
-    globals: {
-      readFile: (path) => {
-        // ALWAYS validate arguments from sandbox
-        if (typeof path !== 'string') {
-          throw new Error('Path must be a string');
-        }
-        if (path.includes('..') || path.startsWith('/')) {
-          throw new Error('Invalid path');
-        }
-        return fs.readFileSync(\`./allowed/\${path}\`, 'utf8');
-      },
+              code={`const sandbox = createSandbox({
+  env: "es2024",
+  globals: {
+    readFile: (path) => {
+      // ALWAYS validate arguments from sandbox
+      if (typeof path !== 'string') {
+        throw new Error('Path must be a string');
+      }
+      if (path.includes('..') || path.startsWith('/')) {
+        throw new Error('Invalid path');
+      }
+      return fs.readFileSync(\`./allowed/\${path}\`, 'utf8');
     },
-  })
-);`}
+  },
+});`}
             />
           </div>
 
@@ -573,9 +599,11 @@ interpreter.evaluate(\`
               Provide context-specific data per evaluation:
             </p>
             <CodeBlock
-              code={`// Each user gets their own isolated context
+              code={`const sandbox = createSandbox({ env: "es2024" });
+
+// Each user gets their own isolated context
 function evaluateUserCode(userId: string, code: string) {
-  return interpreter.evaluate(code, {
+  return sandbox.runSync(code, {
     globals: {
       userId,
       userData: getUserData(userId),
@@ -593,15 +621,14 @@ function evaluateUserCode(userId: string, code: string) {
               Only disable error hiding during development:
             </p>
             <CodeBlock
-              code={`const interpreter = new Interpreter(
-  preset(ES2024, {
-    security: {
-      // For debugging only - remove in production
-      sanitizeErrors: process.env.NODE_ENV === 'development',
-      hideHostErrorMessages: process.env.NODE_ENV === 'development',
-    },
-  })
-);`}
+              code={`const sandbox = createSandbox({
+  env: "es2024",
+  security: {
+    // For debugging only - remove in production
+    sanitizeErrors: process.env.NODE_ENV === 'development',
+    hideHostErrorMessages: process.env.NODE_ENV === 'development',
+  },
+});`}
             />
           </div>
         </div>

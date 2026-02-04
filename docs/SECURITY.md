@@ -13,10 +13,11 @@ The interpreter provides a secure sandbox for executing untrusted JavaScript cod
 
 ## Security Options
 
-The interpreter accepts a `security` option with the following settings:
+The sandbox accepts a `security` option with the following settings:
 
 ```typescript
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
+  env: "es2022",
   globals: {
     /* ... */
   },
@@ -29,6 +30,14 @@ const interpreter = new Interpreter({
   },
 });
 ```
+
+### Simplified API Policy Mapping
+
+When using `createSandbox`, you can set `policy.errors` instead of `security` directly:
+
+- `safe` -> sanitize errors and hide host error messages
+- `sanitize` -> sanitize errors but keep host error messages
+- `full` -> disable sanitization and show full host errors
 
 ### `sanitizeErrors` (default: `true`)
 
@@ -142,7 +151,9 @@ TypedArrays (e.g., `Uint8Array`, `Int32Array`) and `ArrayBuffer` instances have 
 Unlike other host objects which are fully read-only, TypedArrays allow **element mutation via numeric indices**. This enables common patterns like:
 
 ```typescript
-interpreter.evaluate(`
+const sandbox = createSandbox({ env: "es2022", apis: ["text", "buffer"] });
+
+await sandbox.run(`
   const arr = new Uint8Array(3);
   arr[0] = 10;  // Allowed - numeric index write
   arr[1] = 20;  // Allowed
@@ -156,7 +167,7 @@ interpreter.evaluate(`
 However, non-index property modifications are still blocked:
 
 ```typescript
-interpreter.evaluate(`
+await sandbox.run(`
   const arr = new Uint8Array(3);
   arr.foo = 'bar';  // Blocked - not a numeric index
 `);
@@ -167,9 +178,9 @@ interpreter.evaluate(`
 When TypedArrays or `ArrayBuffer` instances are passed to host functions, they are **automatically unwrapped** from their `ReadOnlyProxy` wrapper. This is necessary because native methods like `TextDecoder.decode()` require actual TypedArray instances, not Proxy objects.
 
 ```typescript
-const interpreter = new Interpreter(preset(ES2024, TextCodecAPI, BufferAPI));
+const sandbox = createSandbox({ env: "es2024", apis: ["text", "buffer"] });
 
-interpreter.evaluate(`
+await sandbox.run(`
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const bytes = encoder.encode('hello');  // Returns proxied Uint8Array
@@ -216,12 +227,13 @@ By default, host error messages are hidden from the sandbox. If you need to see 
 
 ## Execution Limits
 
-The interpreter provides execution limits to protect against denial-of-service attacks from untrusted code. These limits are configured per-call via `EvaluateOptions`:
+The sandbox provides execution limits to protect against denial-of-service attacks from untrusted
+code. These limits are configured per run:
 
 ```typescript
-const interpreter = new Interpreter();
+const sandbox = createSandbox({ env: "es2022" });
 
-const result = interpreter.evaluate(
+const result = sandbox.runSync(
   `
   function factorial(n) {
     if (n <= 1) return 1;
@@ -230,14 +242,11 @@ const result = interpreter.evaluate(
   factorial(10);
 `,
   {
-    // Maximum call stack depth (protects against infinite recursion)
-    maxCallStackDepth: 100,
-
-    // Maximum iterations per loop (protects against infinite loops)
-    maxLoopIterations: 10000,
-
-    // Maximum memory usage in bytes (best-effort estimate)
-    maxMemory: 10 * 1024 * 1024, // 10 MB
+    limits: {
+      callDepth: 100,
+      loops: 10000,
+      memoryBytes: 10 * 1024 * 1024, // 10 MB
+    },
   },
 );
 ```
@@ -250,12 +259,14 @@ Limits the depth of function call nesting. When exceeded, throws `InterpreterErr
 
 ```typescript
 // This will throw when maxCallStackDepth is exceeded
-interpreter.evaluate(
+const sandbox = createSandbox({ env: "es2022" });
+
+sandbox.runSync(
   `
   function infinite() { return infinite(); }
   infinite();
 `,
-  { maxCallStackDepth: 50 },
+  { limits: { callDepth: 50 } },
 );
 ```
 
@@ -267,15 +278,19 @@ Limits the number of iterations **per loop**. Each loop (while, for, do-while, f
 
 ```typescript
 // This will throw when maxLoopIterations is exceeded
-interpreter.evaluate(`while (true) { }`, { maxLoopIterations: 1000 });
+const sandbox = createSandbox({ env: "es2022" });
+
+sandbox.runSync(`while (true) { }`, { limits: { loops: 1000 } });
 
 // This works because each loop is under the limit
-interpreter.evaluate(
+const sandbox = createSandbox({ env: "es2022" });
+
+sandbox.runSync(
   `
   for (let i = 0; i < 500; i++) { }  // 500 iterations
   for (let j = 0; j < 500; j++) { }  // 500 iterations
 `,
-  { maxLoopIterations: 1000 },
+  { limits: { loops: 1000 } },
 );
 ```
 
@@ -293,28 +308,31 @@ When exceeded, throws `InterpreterError: Maximum memory limit exceeded`.
 
 ```typescript
 // This will throw when estimated memory exceeds the limit
-interpreter.evaluate(
+const sandbox = createSandbox({ env: "es2022" });
+
+sandbox.runSync(
   `
   const huge = [];
   for (let i = 0; i < 100000; i++) {
     huge.push([1, 2, 3, 4, 5]);
   }
 `,
-  { maxMemory: 1024 * 1024, maxLoopIterations: 1000000 },
+  { limits: { memoryBytes: 1024 * 1024, loops: 1000000 } },
 );
 ```
 
 ### Combined with Timeout
 
-For comprehensive protection, combine execution limits with the existing `timeout` option:
+For comprehensive protection, combine execution limits with a host-side timeout:
 
 ```typescript
-interpreter.evaluate(code, {
-  timeout: 5000, // 5 seconds wall-clock time
-  maxCallStackDepth: 100,
-  maxLoopIterations: 100000,
-  maxMemory: 10 * 1024 * 1024,
-});
+const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
+await Promise.race([
+  sandbox.run(code, {
+    limits: { callDepth: 100, loops: 100000, memoryBytes: 10 * 1024 * 1024 },
+  }),
+  timeout,
+]);
 ```
 
 ### Execution Limits and AbortSignal
@@ -327,9 +345,9 @@ const controller = new AbortController();
 // Cancel after 1 second
 setTimeout(() => controller.abort(), 1000);
 
-interpreter.evaluate(code, {
+await sandbox.run(code, {
   signal: controller.signal,
-  maxLoopIterations: 100000,
+  limits: { loops: 100000 },
 });
 ```
 
@@ -349,32 +367,30 @@ Integrated resource tracking enables:
 ### Quick Start
 
 ```typescript
-import { Interpreter, ResourceExhaustedError } from "nookjs";
+import { createSandbox, ResourceExhaustedError } from "nookjs";
 
-// Create interpreter with resource tracking enabled
-const interpreter = new Interpreter({
-  globals: { console },
-  resourceTracking: true,
+const sandbox = createSandbox({
+  env: "es2022",
+  limits: {
+    total: {
+      memoryBytes: 100 * 1024 * 1024, // 100 MB
+      iterations: 1_000_000, // 1M iterations
+      functionCalls: 10_000, // 10K calls
+      evaluations: 100, // 100 evaluations
+    },
+  },
 });
 
-// Set cumulative limits
-interpreter.setResourceLimit("maxTotalMemory", 100 * 1024 * 1024); // 100 MB
-interpreter.setResourceLimit("maxTotalIterations", 1000000); // 1M iterations
-interpreter.setResourceLimit("maxFunctionCalls", 10000); // 10K calls
-interpreter.setResourceLimit("maxEvaluations", 100); // 100 evaluations
-
-// Run code
 try {
-  interpreter.evaluate("const arr = Array(1000).fill(0).map((_, i) => i)");
-  interpreter.evaluate("for (let i = 0; i < 10000; i++) { }");
+  await sandbox.run("const arr = Array(1000).fill(0).map((_, i) => i)");
+  await sandbox.run("for (let i = 0; i < 10000; i++) { }");
 } catch (error) {
   if (error instanceof ResourceExhaustedError) {
     console.log(`Resource limit exceeded: ${error.resourceType}`);
   }
 }
 
-// Get current stats
-const stats = interpreter.getResourceStats();
+const stats = sandbox.resources();
 console.log(stats);
 /*
 {
@@ -395,17 +411,10 @@ console.log(stats);
 */
 ```
 
-### Interpreter Resource Methods
+### Internal Resource Methods
 
-When `resourceTracking: true` is set, the Interpreter exposes these methods:
-
-| Method                       | Description                         |
-| ---------------------------- | ----------------------------------- |
-| `getResourceStats()`         | Returns current resource statistics |
-| `resetResourceStats()`       | Clears all statistics and history   |
-| `getResourceHistory()`       | Returns array of past eval stats    |
-| `setResourceLimit(key, val)` | Sets a cumulative limit             |
-| `getResourceLimit(key)`      | Gets a specific limit value         |
+Low-level resource APIs (history, resets, and explicit limit setters) are available on the
+internal `Interpreter` class. See [Internal Classes](INTERNAL_CLASSES.md).
 
 ### ResourceLimits
 
@@ -449,14 +458,16 @@ type ResourceStats = {
 When a limit is exceeded, a `ResourceExhaustedError` is thrown:
 
 ```typescript
-import { Interpreter, ResourceExhaustedError } from "nookjs";
+import { createSandbox, ResourceExhaustedError } from "nookjs";
 
-const interpreter = new Interpreter({ resourceTracking: true });
-interpreter.setResourceLimit("maxEvaluations", 5);
+const sandbox = createSandbox({
+  env: "es2022",
+  limits: { total: { evaluations: 5 } },
+});
 
 try {
   for (let i = 0; i < 10; i++) {
-    interpreter.evaluate("1 + 1");
+    sandbox.runSync("1 + 1");
   }
 } catch (error) {
   if (error instanceof ResourceExhaustedError) {
@@ -473,21 +484,20 @@ try {
 Track resource usage per plugin to enforce fair allocation:
 
 ```typescript
-function createPluginInterpreter(pluginId: string, memoryLimit: number) {
-  const interpreter = new Interpreter({
-    resourceTracking: true,
+function createPluginSandbox(pluginId: string, memoryLimit: number) {
+  return createSandbox({
+    env: "es2022",
     globals: getPluginGlobals(pluginId),
+    limits: { total: { memoryBytes: memoryLimit } },
   });
-  interpreter.setResourceLimit("maxTotalMemory", memoryLimit);
-  return interpreter;
 }
 
-const plugin1 = createPluginInterpreter("plugin1", 50 * 1024 * 1024);
-const plugin2 = createPluginInterpreter("plugin2", 50 * 1024 * 1024);
+const plugin1 = createPluginSandbox("plugin1", 50 * 1024 * 1024);
+const plugin2 = createPluginSandbox("plugin2", 50 * 1024 * 1024);
 
-plugin1.evaluate(plugin1Code);
-const stats = plugin1.getResourceStats();
-if (stats.memoryBytes > 40 * 1024 * 1024) {
+plugin1.runSync(plugin1Code);
+const stats = plugin1.resources();
+if ((stats?.memoryBytes ?? 0) > 40 * 1024 * 1024) {
   console.log("Plugin1 approaching memory limit");
 }
 ```
@@ -497,14 +507,14 @@ if (stats.memoryBytes > 40 * 1024 * 1024) {
 Monitor student code for excessive resource consumption:
 
 ```typescript
-const studentInterpreter = new Interpreter({ resourceTracking: true });
-studentInterpreter.setResourceLimit("maxEvaluations", 50);
-studentInterpreter.setResourceLimit("maxTotalIterations", 100000);
-studentInterpreter.setResourceLimit("maxCpuTime", 5000);
+const studentSandbox = createSandbox({
+  env: "es2022",
+  limits: { total: { evaluations: 50, iterations: 100000, cpuTimeMs: 5000 } },
+});
 
 // Allow multiple submissions
 for (const code of studentSubmissions) {
-  studentInterpreter.evaluate(code);
+  studentSandbox.runSync(code);
 }
 ```
 
@@ -513,13 +523,18 @@ for (const code of studentSubmissions) {
 Implement evaluation-count-based rate limiting:
 
 ```typescript
-const interpreter = new Interpreter({ resourceTracking: true });
-interpreter.setResourceLimit("maxEvaluations", 1000);
+let sandbox = createSandbox({
+  env: "es2022",
+  limits: { total: { evaluations: 1000 } },
+});
 
 // Reset at the start of each billing cycle
 setInterval(
   () => {
-    interpreter.resetResourceStats();
+    sandbox = createSandbox({
+      env: "es2022",
+      limits: { total: { evaluations: 1000 } },
+    });
   },
   24 * 60 * 60 * 1000,
 ); // Daily reset
@@ -527,17 +542,8 @@ setInterval(
 
 ### History Tracking
 
-The interpreter maintains a history of past evaluations for analytics:
-
-```typescript
-const interpreter = new Interpreter({ resourceTracking: true });
-
-interpreter.evaluate(code1);
-interpreter.evaluate(code2);
-
-const history = interpreter.getResourceHistory();
-// [{ timestamp: Date, memoryBytes: 1234, iterations: 500, functionCalls: 5, evaluationNumber: 1 }, ...]
-```
+For evaluation history and detailed inspection, use the internal Interpreter API
+(see [Internal Classes](INTERNAL_CLASSES.md)).
 
 ### Performance Considerations
 
@@ -570,7 +576,8 @@ The interpreter includes comprehensive security tests in:
 The default security settings provide maximum protection. For debugging during development, you may want to temporarily disable error hiding:
 
 ```typescript
-const interpreter = new Interpreter({
+const sandbox = createSandbox({
+  env: "es2022",
   globals: {
     // Only inject what's absolutely necessary
     console: { log: (...args) => console.log(...args) },

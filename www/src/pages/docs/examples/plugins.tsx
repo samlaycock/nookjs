@@ -16,12 +16,7 @@ export function PluginsExamples() {
           A simple plugin system where users can extend functionality:
         </p>
         <CodeBlock
-          code={`import {
-  Interpreter,
-  ES2024,
-  preset,
-  InterpreterError
-} from "nookjs";
+          code={`import { createSandbox, InterpreterError, type Sandbox } from "nookjs";
 
 interface Plugin {
   id: string;
@@ -37,40 +32,41 @@ interface PluginContext {
 
 class PluginManager {
   private plugins: Map<string, Plugin> = new Map();
-  private interpreters: Map<string, Interpreter> = new Map();
+  private sandboxes: Map<string, Sandbox> = new Map();
 
   registerPlugin(plugin: Plugin) {
-    // Create isolated interpreter for this plugin with resource tracking
-    const interpreter = new Interpreter(
-      preset(ES2024, {
-        resourceTracking: true,
-        globals: {
-          // Plugin API
-          log: (...args: unknown[]) =>
-            console.log(\`[Plugin:\${plugin.id}]\`, ...args),
+    // Create isolated sandbox for this plugin with resource tracking
+    const sandbox = createSandbox({
+      env: "es2024",
+      trackResources: true,
+      limits: {
+        total: {
+          memoryBytes: 50 * 1024 * 1024, // 50 MB
+          evaluations: 10000,
+          iterations: 100000,
         },
-      })
-    );
-
-    // Set resource limits for this plugin
-    interpreter.setResourceLimit("maxTotalMemory", 50 * 1024 * 1024); // 50 MB
-    interpreter.setResourceLimit("maxEvaluations", 10000);
-    interpreter.setResourceLimit("maxTotalIterations", 100000);
+      },
+      globals: {
+        // Plugin API
+        log: (...args: unknown[]) =>
+          console.log(\`[Plugin:\${plugin.id}]\`, ...args),
+      },
+    });
 
     this.plugins.set(plugin.id, plugin);
-    this.interpreters.set(plugin.id, interpreter);
+    this.sandboxes.set(plugin.id, sandbox);
   }
 
   async executePlugin(pluginId: string, context: PluginContext) {
     const plugin = this.plugins.get(pluginId);
-    const interpreter = this.interpreters.get(pluginId);
+    const sandbox = this.sandboxes.get(pluginId);
 
-    if (!plugin || !interpreter || !plugin.enabled) {
+    if (!plugin || !sandbox || !plugin.enabled) {
       return null;
     }
 
     try {
-      return await interpreter.evaluateAsync(plugin.code, {
+      return await sandbox.run(plugin.code, {
         globals: { context },
       });
     } catch (error) {
@@ -83,7 +79,7 @@ class PluginManager {
   }
 
   getPluginStats(pluginId: string) {
-    return this.interpreters.get(pluginId)?.getResourceStats();
+    return this.sandboxes.get(pluginId)?.resources();
   }
 }
 
@@ -131,7 +127,7 @@ console.log(result); // { discount: 0.25, finalPrice: 150 }`}
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Event-Based Plugin System</h2>
         <p className="text-neutral-300 mb-4">Let plugins hook into application events:</p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset, ResourceTracker } from "nookjs";
+          code={`import { createSandbox, type Sandbox } from "nookjs";
 
 type EventType = "order.created" | "order.shipped" | "user.registered";
 
@@ -143,28 +139,27 @@ interface EventPlugin {
 
 class EventPluginSystem {
   private plugins: Map<string, EventPlugin> = new Map();
-  private interpreters: Map<string, Interpreter> = new Map();
+  private sandboxes: Map<string, Sandbox> = new Map();
 
   register(plugin: EventPlugin) {
-    const interpreter = new Interpreter(
-      preset(ES2024, {
-        globals: {
-          // Event handling API
-          log: console.log,
-          sendNotification: async (to: string, message: string) => {
-            console.log(\`Notification to \${to}: \${message}\`);
-            return { sent: true };
-          },
-          updateRecord: async (table: string, id: string, data: unknown) => {
-            console.log(\`Update \${table}[\${id}]\`, data);
-            return { updated: true };
-          },
+    const sandbox = createSandbox({
+      env: "es2024",
+      globals: {
+        // Event handling API
+        log: console.log,
+        sendNotification: async (to: string, message: string) => {
+          console.log(\`Notification to \${to}: \${message}\`);
+          return { sent: true };
         },
-      })
-    );
+        updateRecord: async (table: string, id: string, data: unknown) => {
+          console.log(\`Update \${table}[\${id}]\`, data);
+          return { updated: true };
+        },
+      },
+    });
 
     this.plugins.set(plugin.id, plugin);
-    this.interpreters.set(plugin.id, interpreter);
+    this.sandboxes.set(plugin.id, sandbox);
   }
 
   async emit(event: EventType, payload: Record<string, unknown>) {
@@ -173,10 +168,10 @@ class EventPluginSystem {
     for (const [pluginId, plugin] of this.plugins) {
       if (!plugin.events.includes(event)) continue;
 
-      const interpreter = this.interpreters.get(pluginId)!;
+      const sandbox = this.sandboxes.get(pluginId)!;
 
       try {
-        const result = await interpreter.evaluateAsync(plugin.code, {
+        const result = await sandbox.run(plugin.code, {
           globals: { event, payload },
         });
         results.push({ pluginId, result });
@@ -249,7 +244,7 @@ await events.emit("order.created", {
           Create a middleware system where plugins can transform data:
         </p>
         <CodeBlock
-          code={`import { Interpreter, ES2024, preset } from "nookjs";
+          code={`import { createSandbox, type Sandbox } from "nookjs";
 
 interface Middleware {
   id: string;
@@ -259,16 +254,15 @@ interface Middleware {
 
 class MiddlewarePipeline<T> {
   private middlewares: Middleware[] = [];
-  private interpreter: Interpreter;
+  private sandbox: Sandbox;
 
   constructor() {
-    this.interpreter = new Interpreter(
-      preset(ES2024, {
-        globals: {
-          log: console.log,
-        },
-      })
-    );
+    this.sandbox = createSandbox({
+      env: "es2024",
+      globals: {
+        log: console.log,
+      },
+    });
   }
 
   use(middleware: Middleware) {
@@ -281,7 +275,7 @@ class MiddlewarePipeline<T> {
 
     for (const middleware of this.middlewares) {
       try {
-        const result = await this.interpreter.evaluateAsync(middleware.code, {
+        const result = await this.sandbox.run(middleware.code, {
           globals: { input: current },
         });
 
@@ -366,12 +360,7 @@ console.log(result.metadata);
           A complete plugin system with installation, versioning, and sandboxing:
         </p>
         <CodeBlock
-          code={`import {
-  Interpreter,
-  ES2024,
-  preset,
-  InterpreterError
-} from "nookjs";
+          code={`import { createSandbox, InterpreterError, type Sandbox } from "nookjs";
 
 interface InstalledPlugin {
   id: string;
@@ -396,7 +385,7 @@ interface PluginAPI {
 
 class PluginRuntime {
   private plugins: Map<string, InstalledPlugin> = new Map();
-  private interpreters: Map<string, Interpreter> = new Map();
+  private sandboxes: Map<string, Sandbox> = new Map();
   private storage: Map<string, Map<string, unknown>> = new Map();
 
   install(plugin: InstalledPlugin) {
@@ -406,26 +395,27 @@ class PluginRuntime {
     // Build API based on permissions
     const api = this.buildAPI(plugin);
 
-    // Create interpreter with resource tracking
-    const interpreter = new Interpreter(
-      preset(ES2024, {
-        resourceTracking: true,
-        globals: {
-          ...api,
-          config: plugin.config,
-          log: (...args: unknown[]) =>
-            console.log(\`[Plugin:\${plugin.id}]\`, ...args),
+    // Create sandbox with resource tracking
+    const sandbox = createSandbox({
+      env: "es2024",
+      trackResources: true,
+      limits: {
+        total: {
+          memoryBytes: 100 * 1024 * 1024,
+          evaluations: 50000,
+          cpuTimeMs: 60000, // 1 minute cumulative
         },
-      })
-    );
-
-    // Set resource limits
-    interpreter.setResourceLimit("maxTotalMemory", 100 * 1024 * 1024);
-    interpreter.setResourceLimit("maxEvaluations", 50000);
-    interpreter.setResourceLimit("maxCpuTime", 60000); // 1 minute cumulative
+      },
+      globals: {
+        ...api,
+        config: plugin.config,
+        log: (...args: unknown[]) =>
+          console.log(\`[Plugin:\${plugin.id}]\`, ...args),
+      },
+    });
 
     this.plugins.set(plugin.id, plugin);
-    this.interpreters.set(plugin.id, interpreter);
+    this.sandboxes.set(plugin.id, sandbox);
   }
 
   private buildAPI(plugin: InstalledPlugin): Partial<PluginAPI> {
@@ -468,11 +458,11 @@ class PluginRuntime {
   }
 
   async run(pluginId: string, method: string, args: unknown[] = []) {
-    const interpreter = this.interpreters.get(pluginId);
-    if (!interpreter) throw new Error(\`Plugin \${pluginId} not installed\`);
+    const sandbox = this.sandboxes.get(pluginId);
+    if (!sandbox) throw new Error(\`Plugin \${pluginId} not installed\`);
 
     try {
-      return await interpreter.evaluateAsync(
+      return await sandbox.run(
         \`(\${method})(...args)\`,
         { globals: { args } }
       );
@@ -485,12 +475,12 @@ class PluginRuntime {
   }
 
   getStats(pluginId: string) {
-    return this.interpreters.get(pluginId)?.getResourceStats();
+    return this.sandboxes.get(pluginId)?.resources();
   }
 
   uninstall(pluginId: string) {
     this.plugins.delete(pluginId);
-    this.interpreters.delete(pluginId);
+    this.sandboxes.delete(pluginId);
     this.storage.delete(pluginId);
   }
 }
@@ -547,8 +537,8 @@ console.log(runtime.getStats("analytics-tracker"));`}
               1. Always enable resource tracking
             </h3>
             <p className="text-neutral-400 text-sm">
-              Each plugin should have its own interpreter with resource tracking enabled to prevent
-              any single plugin from consuming all resources.
+              Each plugin should have its own sandbox with resource tracking enabled to prevent any
+              single plugin from consuming all resources.
             </p>
           </div>
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
