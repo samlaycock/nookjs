@@ -32,6 +32,32 @@ export {
   type ResourceHistoryEntry,
 } from "./resource-tracker";
 
+export {
+  createSandbox,
+  run,
+  parse,
+  type FeatureToggles,
+  type ParseOnceOptions,
+  type ResultMode,
+  type RunLimits,
+  type RunModuleOptions,
+  type RunModuleOptionsFull,
+  type RunOnceOptions,
+  type RunOnceOptionsFull,
+  type RunOptions,
+  type RunOptionsFull,
+  type RunResult,
+  type Sandbox,
+  type SandboxApi,
+  type SandboxEnv,
+  type SandboxLimits,
+  type SandboxModules,
+  type SandboxOptions,
+  type SandboxParseOptions,
+  type SandboxPolicy,
+  type TotalLimits,
+} from "./sandbox";
+
 export type {
   ModuleResolver,
   ModuleResolverContext,
