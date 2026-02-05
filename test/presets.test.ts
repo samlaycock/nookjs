@@ -236,7 +236,10 @@ describe("Presets", () => {
 
           const start = Date.now();
           await interpreter.evaluateAsync(`
-            await new Promise(resolve => setTimeout(resolve, 50));
+            async function run() {
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            run()
           `);
           const elapsed = Date.now() - start;
 

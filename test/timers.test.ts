@@ -68,11 +68,14 @@ describe("Timers", () => {
 
       it("should clear timeout before execution", async () => {
         const result = await interpreter.evaluateAsync(`
-          let executed = false;
-          const timeoutId = setTimeout(() => { executed = true; }, 10);
-          clearTimeout(timeoutId);
-          await new Promise(resolve => setTimeout(resolve, 20));
-          executed
+          async function run() {
+            let executed = false;
+            const timeoutId = setTimeout(() => { executed = true; }, 10);
+            clearTimeout(timeoutId);
+            await new Promise(resolve => setTimeout(resolve, 20));
+            return executed;
+          }
+          run()
         `);
         expect(result).toBe(false);
       });

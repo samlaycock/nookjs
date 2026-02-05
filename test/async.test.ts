@@ -982,16 +982,19 @@ describe("Async", () => {
         test("iterates over async generator values", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            async function* gen() {
-              yield 1;
-              yield 2;
-              yield 3;
+            async function run() {
+              async function* gen() {
+                yield 1;
+                yield 2;
+                yield 3;
+              }
+              let sum = 0;
+              for await (const val of gen()) {
+                sum = sum + val;
+              }
+              return sum;
             }
-            let sum = 0;
-            for await (const val of gen()) {
-              sum = sum + val;
-            }
-            sum;
+            run()
           `);
           expect(result).toBe(6);
         });
@@ -999,16 +1002,19 @@ describe("Async", () => {
         test("collects async generator values into array", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            async function* gen() {
-              yield "a";
-              yield "b";
-              yield "c";
+            async function run() {
+              async function* gen() {
+                yield "a";
+                yield "b";
+                yield "c";
+              }
+              const items = [];
+              for await (const val of gen()) {
+                items.push(val);
+              }
+              return items;
             }
-            const items = [];
-            for await (const val of gen()) {
-              items.push(val);
-            }
-            items;
+            run()
           `);
           expect(result).toEqual(["a", "b", "c"]);
         });
@@ -1016,18 +1022,21 @@ describe("Async", () => {
         test("break in for await...of", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            async function* gen() {
-              yield 1;
-              yield 2;
-              yield 3;
-              yield 4;
+            async function run() {
+              async function* gen() {
+                yield 1;
+                yield 2;
+                yield 3;
+                yield 4;
+              }
+              let last = 0;
+              for await (const val of gen()) {
+                last = val;
+                if (val === 2) break;
+              }
+              return last;
             }
-            let last = 0;
-            for await (const val of gen()) {
-              last = val;
-              if (val === 2) break;
-            }
-            last;
+            run()
           `);
           expect(result).toBe(2);
         });
@@ -1037,11 +1046,14 @@ describe("Async", () => {
         test("for await...of over regular array", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            const items = [];
-            for await (const val of [10, 20, 30]) {
-              items.push(val);
+            async function run() {
+              const items = [];
+              for await (const val of [10, 20, 30]) {
+                items.push(val);
+              }
+              return items;
             }
-            items;
+            run()
           `);
           expect(result).toEqual([10, 20, 30]);
         });
@@ -1049,15 +1061,18 @@ describe("Async", () => {
         test("for await...of over sync generator", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            function* gen() {
-              yield 1;
-              yield 2;
+            async function run() {
+              function* gen() {
+                yield 1;
+                yield 2;
+              }
+              let sum = 0;
+              for await (const val of gen()) {
+                sum = sum + val;
+              }
+              return sum;
             }
-            let sum = 0;
-            for await (const val of gen()) {
-              sum = sum + val;
-            }
-            sum;
+            run()
           `);
           expect(result).toBe(3);
         });
@@ -1067,15 +1082,18 @@ describe("Async", () => {
         test("for await with let declaration", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            async function* gen() {
-              yield 1;
-              yield 2;
+            async function run() {
+              async function* gen() {
+                yield 1;
+                yield 2;
+              }
+              let total = 0;
+              for await (let val of gen()) {
+                total = total + val;
+              }
+              return total;
             }
-            let total = 0;
-            for await (let val of gen()) {
-              total = total + val;
-            }
-            total;
+            run()
           `);
           expect(result).toBe(3);
         });
@@ -1088,7 +1106,7 @@ describe("Async", () => {
             interpreter.evaluate(`
               for await (const val of [1, 2, 3]) {}
             `),
-          ).toThrow("Cannot use for await...of in synchronous evaluate()");
+          ).toThrow("Unexpected token: await");
         });
       });
 
@@ -1100,11 +1118,14 @@ describe("Async", () => {
           }
           const interpreter = new Interpreter({ globals: { hostGen } });
           const result = await interpreter.evaluateAsync(`
-            const items = [];
-            for await (const val of hostGen()) {
-              items.push(val);
+            async function run() {
+              const items = [];
+              for await (const val of hostGen()) {
+                items.push(val);
+              }
+              return items;
             }
-            items;
+            run()
           `);
           expect(result).toEqual([100, 200]);
         });

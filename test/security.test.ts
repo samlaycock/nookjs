@@ -1078,9 +1078,14 @@ describe("Security", () => {
           security: { hideHostErrorMessages: true },
         });
 
-        return expect(interpreter.evaluateAsync("await asyncThrow()")).rejects.toThrow(
-          "[error details hidden]",
-        );
+        return expect(
+          interpreter.evaluateAsync(`
+          async function run() {
+            return await asyncThrow();
+          }
+          run()
+        `),
+        ).rejects.toThrow("[error details hidden]");
       });
     });
 

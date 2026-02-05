@@ -1456,17 +1456,20 @@ describe("Functions", () => {
         test("simple async generator", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            async function* asyncGen() {
-              yield 1;
-              yield 2;
-              yield 3;
+            async function run() {
+              async function* asyncGen() {
+                yield 1;
+                yield 2;
+                yield 3;
+              }
+              const g = asyncGen();
+              const results = [];
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              return results;
             }
-            const g = asyncGen();
-            const results = [];
-            results.push((await g.next()).value);
-            results.push((await g.next()).value);
-            results.push((await g.next()).value);
-            results;
+            run()
           `);
           expect(result).toEqual([1, 2, 3]);
         });
@@ -1478,16 +1481,19 @@ describe("Functions", () => {
             },
           });
           const result = await interpreter.evaluateAsync(`
-            async function* asyncGen() {
-              const val = await asyncValue();
-              yield val;
-              yield val + 1;
+            async function run() {
+              async function* asyncGen() {
+                const val = await asyncValue();
+                yield val;
+                yield val + 1;
+              }
+              const g = asyncGen();
+              const results = [];
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              return results;
             }
-            const g = asyncGen();
-            const results = [];
-            results.push((await g.next()).value);
-            results.push((await g.next()).value);
-            results;
+            run()
           `);
           expect(result).toEqual([42, 43]);
         });
@@ -1495,13 +1501,16 @@ describe("Functions", () => {
         test("async generator returns done: true when exhausted", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            async function* asyncGen() {
-              yield 1;
+            async function run() {
+              async function* asyncGen() {
+                yield 1;
+              }
+              const g = asyncGen();
+              await g.next(); // value: 1, done: false
+              const final = await g.next(); // value: undefined, done: true
+              return final.done;
             }
-            const g = asyncGen();
-            await g.next(); // value: 1, done: false
-            const final = await g.next(); // value: undefined, done: true
-            final.done;
+            run()
           `);
           expect(result).toBe(true);
         });
@@ -1663,15 +1672,18 @@ describe("Functions", () => {
         test("async yield* with array", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            async function* gen() {
-              yield* [1, 2, 3];
+            async function run() {
+              async function* gen() {
+                yield* [1, 2, 3];
+              }
+              const g = gen();
+              const results = [];
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              return results;
             }
-            const g = gen();
-            const results = [];
-            results.push((await g.next()).value);
-            results.push((await g.next()).value);
-            results.push((await g.next()).value);
-            results;
+            run()
           `);
           expect(result).toEqual([1, 2, 3]);
         });
@@ -1679,22 +1691,25 @@ describe("Functions", () => {
         test("async yield* with another async generator", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            async function* inner() {
-              yield 'x';
-              yield 'y';
+            async function run() {
+              async function* inner() {
+                yield 'x';
+                yield 'y';
+              }
+              async function* outer() {
+                yield 1;
+                yield* inner();
+                yield 2;
+              }
+              const g = outer();
+              const results = [];
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              return results;
             }
-            async function* outer() {
-              yield 1;
-              yield* inner();
-              yield 2;
-            }
-            const g = outer();
-            const results = [];
-            results.push((await g.next()).value);
-            results.push((await g.next()).value);
-            results.push((await g.next()).value);
-            results.push((await g.next()).value);
-            results;
+            run()
           `);
           expect(result).toEqual([1, "x", "y", 2]);
         });
@@ -1791,17 +1806,20 @@ describe("Functions", () => {
         test("async generator with yield inside for...of loop", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            async function* gen() {
-              for (const x of [1, 2, 3]) {
-                yield x * 10;
+            async function run() {
+              async function* gen() {
+                for (const x of [1, 2, 3]) {
+                  yield x * 10;
+                }
               }
+              const g = gen();
+              const results = [];
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              return results;
             }
-            const g = gen();
-            const results = [];
-            results.push((await g.next()).value);
-            results.push((await g.next()).value);
-            results.push((await g.next()).value);
-            results;
+            run()
           `);
           expect(result).toEqual([10, 20, 30]);
         });
@@ -1946,20 +1964,23 @@ describe("Functions", () => {
         test("async return() executes finally block", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            const log = [];
-            async function* gen() {
-              try {
-                log.push('try-start');
-                yield 1;
-                log.push('after-yield');
-              } finally {
-                log.push('finally');
+            async function run() {
+              const log = [];
+              async function* gen() {
+                try {
+                  log.push('try-start');
+                  yield 1;
+                  log.push('after-yield');
+                } finally {
+                  log.push('finally');
+                }
               }
+              const g = gen();
+              await g.next();
+              await g.return(42);
+              return log;
             }
-            const g = gen();
-            await g.next();
-            await g.return(42);
-            log;
+            run()
           `);
           expect(result).toEqual(["try-start", "finally"]);
         });
@@ -2057,15 +2078,18 @@ describe("Functions", () => {
         test("async generator next(value) passes value to yield", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
-            async function* gen() {
-              const x = yield 1;
-              yield x * 2;
+            async function run() {
+              async function* gen() {
+                const x = yield 1;
+                yield x * 2;
+              }
+              const g = gen();
+              const results = [];
+              results.push((await g.next()).value);
+              results.push((await g.next(10)).value);
+              return results;
             }
-            const g = gen();
-            const results = [];
-            results.push((await g.next()).value);
-            results.push((await g.next(10)).value);
-            results;
+            run()
           `);
           expect(result).toEqual([1, 20]);
         });
@@ -2219,19 +2243,22 @@ describe("Functions", () => {
         test("async generator throw() basic", async () => {
           const interpreter = new Interpreter({ globals: { Error } });
           const result = await interpreter.evaluateAsync(`
-            async function* gen() {
-              yield 1;
-              yield 2;
+            async function run() {
+              async function* gen() {
+                yield 1;
+                yield 2;
+              }
+              const g = gen();
+              await g.next();  // yields 1
+              let caught = null;
+              try {
+                await g.throw(new Error('async error'));
+              } catch (e) {
+                caught = e.message;
+              }
+              return caught;
             }
-            const g = gen();
-            await g.next();  // yields 1
-            let caught = null;
-            try {
-              await g.throw(new Error('async error'));
-            } catch (e) {
-              caught = e.message;
-            }
-            caught;
+            run()
           `);
           expect(result).toBe("async error");
         });
@@ -2239,21 +2266,24 @@ describe("Functions", () => {
         test("async generator throw() with try/catch", async () => {
           const interpreter = new Interpreter({ globals: { Error } });
           const result = await interpreter.evaluateAsync(`
-            async function* gen() {
-              try {
-                yield 1;
-                yield 2;
-              } catch (e) {
-                yield 'caught: ' + e.message;
+            async function run() {
+              async function* gen() {
+                try {
+                  yield 1;
+                  yield 2;
+                } catch (e) {
+                  yield 'caught: ' + e.message;
+                }
+                yield 3;
               }
-              yield 3;
+              const g = gen();
+              const results = [];
+              results.push((await g.next()).value);  // yields 1
+              results.push((await g.throw(new Error('oops'))).value);  // caught, yields 'caught: oops'
+              results.push((await g.next()).value);  // yields 3
+              return results;
             }
-            const g = gen();
-            const results = [];
-            results.push((await g.next()).value);  // yields 1
-            results.push((await g.throw(new Error('oops'))).value);  // caught, yields 'caught: oops'
-            results.push((await g.next()).value);  // yields 3
-            results;
+            run()
           `);
           expect(result).toEqual([1, "caught: oops", 3]);
         });

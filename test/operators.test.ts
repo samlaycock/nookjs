@@ -1899,10 +1899,13 @@ describe("Operators", () => {
         test("+= on object property in async context", async () => {
           const interpreter = new Interpreter({ globals: { Promise } });
           const result = await interpreter.evaluateAsync(`
-            let obj = { value: 10 };
-            await Promise.resolve();
-            obj.value += 5;
-            obj.value;
+            async function run() {
+              let obj = { value: 10 };
+              await Promise.resolve();
+              obj.value += 5;
+              return obj.value;
+            }
+            run()
           `);
           expect(result).toBe(15);
         });

@@ -61,6 +61,7 @@ const result = await sandbox.run(code);`,
       const result = await sandbox.run(code);
 
       if (result) {
+        // eslint-disable-next-line
         setOutput(String(result));
       } else {
         setOutput(null);
