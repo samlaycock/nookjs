@@ -14,10 +14,13 @@ const sandbox = createSandbox({
 });
 
 await sandbox.run(`
-  console.log('Fetching data...');
-  const response = await fetch('https://api.example.com/data');
-  const data = await response.json();
-  console.log('Got:', data);
+  async function run() {
+    console.log('Fetching data...');
+    const response = await fetch('https://api.example.com/data');
+    const data = await response.json();
+    console.log('Got:', data);
+  }
+  run();
 `);
 ```
 
@@ -34,10 +37,13 @@ const sandbox = createSandbox({
 });
 
 await sandbox.run(`
-  console.log("Fetching data...");
-  const response = await fetch("https://api.example.com/data");
-  const data = await response.json();
-  console.log("Got:", data);
+  async function run() {
+    console.log("Fetching data...");
+    const response = await fetch("https://api.example.com/data");
+    const data = await response.json();
+    console.log("Got:", data);
+  }
+  run();
 `);
 ```
 
@@ -163,8 +169,11 @@ import { createSandbox } from "nookjs";
 const sandbox = createSandbox({ env: "es2022", apis: ["fetch"] });
 
 await sandbox.run(`
-  const response = await fetch('https://api.example.com/data');
-  const data = await response.json();
+  async function run() {
+    const response = await fetch('https://api.example.com/data');
+    const data = await response.json();
+  }
+  run();
 `);
 ```
 
@@ -193,8 +202,11 @@ Provides timer functions. Note: These are async operations.
 const sandbox = createSandbox({ env: "es2022", apis: ["timers"] });
 
 await sandbox.run(`
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  console.log('1 second later');
+  async function run() {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log('1 second later');
+  }
+  run();
 `);
 ```
 

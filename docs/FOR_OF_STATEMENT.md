@@ -13,5 +13,5 @@ Iterates over values of an iterable: `for (const x of iterable)`.
 
 ## Gotchas
 
-- `for await...of` is only supported in `evaluateAsync`.
+- `for await...of` is only supported in async evaluation and must be inside an async function (or module evaluation).
 - Non-iterables throw.

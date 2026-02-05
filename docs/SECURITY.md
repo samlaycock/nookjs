@@ -154,13 +154,16 @@ Unlike other host objects which are fully read-only, TypedArrays allow **element
 const sandbox = createSandbox({ env: "es2022", apis: ["text", "buffer"] });
 
 await sandbox.run(`
-  const arr = new Uint8Array(3);
-  arr[0] = 10;  // Allowed - numeric index write
-  arr[1] = 20;  // Allowed
-  
-  const encoder = new TextEncoder();
-  const buffer = new Uint8Array(100);
-  encoder.encodeInto('Hello', buffer);  // Allowed - writes to buffer
+  async function run() {
+    const arr = new Uint8Array(3);
+    arr[0] = 10;  // Allowed - numeric index write
+    arr[1] = 20;  // Allowed
+    
+    const encoder = new TextEncoder();
+    const buffer = new Uint8Array(100);
+    encoder.encodeInto('Hello', buffer);  // Allowed - writes to buffer
+  }
+  run();
 `);
 ```
 
@@ -168,8 +171,11 @@ However, non-index property modifications are still blocked:
 
 ```typescript
 await sandbox.run(`
-  const arr = new Uint8Array(3);
-  arr.foo = 'bar';  // Blocked - not a numeric index
+  async function run() {
+    const arr = new Uint8Array(3);
+    arr.foo = 'bar';  // Blocked - not a numeric index
+  }
+  run();
 `);
 ```
 
@@ -181,10 +187,13 @@ When TypedArrays or `ArrayBuffer` instances are passed to host functions, they a
 const sandbox = createSandbox({ env: "es2024", apis: ["text", "buffer"] });
 
 await sandbox.run(`
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-  const bytes = encoder.encode('hello');  // Returns proxied Uint8Array
-  decoder.decode(bytes);                   // bytes is unwrapped for native decode()
+  async function run() {
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const bytes = encoder.encode('hello');  // Returns proxied Uint8Array
+    decoder.decode(bytes);                   // bytes is unwrapped for native decode()
+  }
+  run();
 `);
 ```
 

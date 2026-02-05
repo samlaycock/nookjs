@@ -192,8 +192,11 @@ sandbox.runSync("double(21)"); // 42
 sandbox.runSync("getConfig().maxItems"); // 100
 
 await sandbox.run(\`
-  const data = await fetchData(123);
-  data.name
+  async function run() {
+    const data = await fetchData(123);
+    return data.name;
+  }
+  run();
 \`);`}
         />
 

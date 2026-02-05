@@ -170,8 +170,11 @@ const value = interpreter.evaluate("x * multiplier", {
 );
 
 const name = await interpreter.evaluateAsync(\`
-  const user = await fetchUser(123);
-  user.name
+  async function run() {
+    const user = await fetchUser(123);
+    return user.name;
+  }
+  run();
 \`); // "John"`}
               />
             </div>

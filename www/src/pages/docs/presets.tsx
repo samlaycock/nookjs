@@ -52,7 +52,9 @@ const sandbox = createSandbox({
   apis: ["fetch", "console"],
 });
 
-await sandbox.run("console.log(await (await fetch('https://example.com')).status)");`}
+await sandbox.run(
+  "async function run() { console.log(await (await fetch('https://example.com')).status); } run();"
+);`}
         />
         <p className="text-neutral-300 mt-4">
           Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">preset()</code> directly
@@ -268,8 +270,11 @@ await sandbox.run("console.log(await (await fetch('https://example.com')).status
 });
 
 await sandbox.run(\`
-  const response = await fetch('https://api.example.com/data');
-  const data = await response.json();
+  async function run() {
+    const response = await fetch('https://api.example.com/data');
+    const data = await response.json();
+  }
+  run();
 \`);`}
             />
           </div>
@@ -306,8 +311,11 @@ sandbox.runSync(\`
 });
 
 await sandbox.run(\`
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  console.log('1 second later');
+  async function run() {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log('1 second later');
+  }
+  run();
 \`);`}
             />
           </div>

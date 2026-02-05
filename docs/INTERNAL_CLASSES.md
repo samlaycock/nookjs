@@ -27,7 +27,12 @@ console.log(result); // 42
 Async evaluation:
 
 ```typescript
-const value = await interpreter.evaluateAsync("await Promise.resolve(123)");
+const value = await interpreter.evaluateAsync(`
+  async function run() {
+    return await Promise.resolve(123);
+  }
+  run();
+`);
 console.log(value); // 123
 ```
 

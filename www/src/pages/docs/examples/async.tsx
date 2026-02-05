@@ -31,8 +31,11 @@ const sandbox = createSandbox({
 });
 
 const result = await sandbox.run(\`
-  const user = await fetchUser(123);
-  user.name
+  async function run() {
+    const user = await fetchUser(123);
+    return user.name;
+  }
+  run();
 \`);
 
 console.log(result); // "John Doe"`}
@@ -53,16 +56,22 @@ console.log(result); // "John Doe"`}
 
 // Using .then()
 const result1 = await sandbox.run(\`
-  fetchData('/api/data')
-    .then(data => data.items)
-    .then(items => items.length)
+  async function run() {
+    return fetchData('/api/data')
+      .then(data => data.items)
+      .then(items => items.length);
+  }
+  run();
 \`);
 
 // Using async/await
 const result2 = await sandbox.run(\`
-  const data = await fetchData('/api/data');
-  const items = data.items;
-  items.length
+  async function run() {
+    const data = await fetchData('/api/data');
+    const items = data.items;
+    return items.length;
+  }
+  run();
 \`);`}
         />
       </section>
@@ -84,21 +93,24 @@ const result2 = await sandbox.run(\`
 });
 
 const result = await sandbox.run(\`
-  const userId = 123;
+  async function run() {
+    const userId = 123;
 
-  // Parallel fetch
-  const [user, orders, preferences] = await Promise.all([
-    fetchUser(userId),
-    fetchOrders(userId),
-    fetchPreferences(userId),
-  ]);
+    // Parallel fetch
+    const [user, orders, preferences] = await Promise.all([
+      fetchUser(userId),
+      fetchOrders(userId),
+      fetchPreferences(userId),
+    ]);
 
-  {
-    user,
-    orderCount: orders.length,
-    totalSpent: orders.reduce((sum, o) => sum + o.total, 0),
-    theme: preferences.theme,
+    return {
+      user,
+      orderCount: orders.length,
+      totalSpent: orders.reduce((sum, o) => sum + o.total, 0),
+      theme: preferences.theme,
+    };
   }
+  run();
 \`);
 
 console.log(result);
@@ -127,16 +139,19 @@ console.log(result);
 
 // Try-catch in sandbox code
 const result = await sandbox.run(\`
-  let data;
-  let error = null;
+  async function run() {
+    let data;
+    let error = null;
 
-  try {
-    data = await fetchData('/api/data');
-  } catch (e) {
-    error = e.message;
+    try {
+      data = await fetchData('/api/data');
+    } catch (e) {
+      error = e.message;
+    }
+
+    return { data, error };
   }
-
-  { data, error }
+  run();
 \`);
 
 // Or handle at the host level
@@ -144,8 +159,11 @@ import { RuntimeError } from "nookjs";
 
 try {
   await sandbox.run(\`
-    const data = await fetchData('/api/nonexistent');
-    data
+    async function run() {
+      const data = await fetchData('/api/nonexistent');
+      return data;
+    }
+    run();
   \`);
 } catch (error) {
   if (error instanceof RuntimeError) {
@@ -178,8 +196,11 @@ const timeout = setTimeout(() => controller.abort(), 5000);
 try {
   const result = await sandbox.run(
     \`
-    const result = await slowOperation();
-    result
+    async function run() {
+      const result = await slowOperation();
+      return result;
+    }
+    run();
   \`,
     { signal: controller.signal }
   );
@@ -220,35 +241,38 @@ try {
 });
 
 const result = await sandbox.run(\`
-  // Fetch data in parallel
-  const [users, departments] = await Promise.all([
-    fetchUsers(),
-    fetchDepartments(),
-  ]);
+  async function run() {
+    // Fetch data in parallel
+    const [users, departments] = await Promise.all([
+      fetchUsers(),
+      fetchDepartments(),
+    ]);
 
-  // Create lookup map
-  const deptMap = {};
-  for (const dept of departments) {
-    deptMap[dept.id] = dept.name;
-  }
-
-  // Transform data
-  const enrichedUsers = users.map(user => ({
-    ...user,
-    departmentName: deptMap[user.departmentId],
-  }));
-
-  // Group by department
-  const byDepartment = {};
-  for (const user of enrichedUsers) {
-    const dept = user.departmentName;
-    if (!byDepartment[dept]) {
-      byDepartment[dept] = [];
+    // Create lookup map
+    const deptMap = {};
+    for (const dept of departments) {
+      deptMap[dept.id] = dept.name;
     }
-    byDepartment[dept].push(user.name);
-  }
 
-  byDepartment
+    // Transform data
+    const enrichedUsers = users.map(user => ({
+      ...user,
+      departmentName: deptMap[user.departmentId],
+    }));
+
+    // Group by department
+    const byDepartment = {};
+    for (const user of enrichedUsers) {
+      const dept = user.departmentName;
+      if (!byDepartment[dept]) {
+        byDepartment[dept] = [];
+      }
+      byDepartment[dept].push(user.name);
+    }
+
+    return byDepartment;
+  }
+  run();
 \`);
 
 console.log(result);
@@ -298,35 +322,38 @@ function createWebhookHandler(userScript: string) {
 
 // User-defined webhook handler
 const handleOrderWebhook = createWebhookHandler(\`
-  const { event, data } = payload;
+  async function run() {
+    const { event, data } = payload;
 
-  if (event === "order.created") {
-    // Notify team
-    await sendSlack("#orders", \`New order: \${data.orderId} - $\${data.total}\`);
+    if (event === "order.created") {
+      // Notify team
+      await sendSlack("#orders", \`New order: \${data.orderId} - $\${data.total}\`);
 
-    // Send confirmation to customer
-    await sendEmail(
-      data.customerEmail,
-      "Order Confirmation",
-      \`Thank you for your order #\${data.orderId}!\`
-    );
+      // Send confirmation to customer
+      await sendEmail(
+        data.customerEmail,
+        "Order Confirmation",
+        \`Thank you for your order #\${data.orderId}!\`
+      );
 
-    return { handled: true, actions: ["slack", "email"] };
+      return { handled: true, actions: ["slack", "email"] };
+    }
+
+    if (event === "order.shipped") {
+      await sendEmail(
+        data.customerEmail,
+        "Your order has shipped!",
+        \`Tracking: \${data.trackingNumber}\`
+      );
+
+      await updateDatabase("orders", data.orderId, { status: "shipped" });
+
+      return { handled: true, actions: ["email", "database"] };
+    }
+
+    return { handled: false };
   }
-
-  if (event === "order.shipped") {
-    await sendEmail(
-      data.customerEmail,
-      "Your order has shipped!",
-      \`Tracking: \${data.trackingNumber}\`
-    );
-
-    await updateDatabase("orders", data.orderId, { status: "shipped" });
-
-    return { handled: true, actions: ["email", "database"] };
-  }
-
-  return { handled: false };
+  run();
 \`);
 
 // Process webhooks

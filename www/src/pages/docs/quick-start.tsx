@@ -44,7 +44,7 @@ console.log(result); // 10`}
 });
 
 await sandbox.run(
-  "console.log(await (await fetch('https://example.com')).status)"
+  "async function run() { console.log(await (await fetch('https://example.com')).status); } run();"
 );`}
         />
       </section>
@@ -81,7 +81,7 @@ await sandbox.run(
 });
 
 const name = await sandbox.run(
-  "const user = await fetchUser(123); user.name"
+  "async function run() { const user = await fetchUser(123); return user.name; } run();"
 );
 
 console.log(name); // "John Doe"`}

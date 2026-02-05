@@ -191,13 +191,16 @@ events.register({
   id: "welcome-email",
   events: ["user.registered"],
   code: \`
-    if (event === "user.registered") {
-      await sendNotification(
-        payload.email,
-        \`Welcome to our platform, \${payload.name}!\`
-      );
-      return { action: "welcome-email-sent" };
+    async function run() {
+      if (event === "user.registered") {
+        await sendNotification(
+          payload.email,
+          \`Welcome to our platform, \${payload.name}!\`
+        );
+        return { action: "welcome-email-sent" };
+      }
     }
+    run();
   \`,
 });
 
@@ -205,23 +208,26 @@ events.register({
   id: "inventory-update",
   events: ["order.created", "order.shipped"],
   code: \`
-    if (event === "order.created") {
-      for (const item of payload.items) {
-        await updateRecord("inventory", item.productId, {
-          reserved: item.quantity,
-        });
+    async function run() {
+      if (event === "order.created") {
+        for (const item of payload.items) {
+          await updateRecord("inventory", item.productId, {
+            reserved: item.quantity,
+          });
+        }
+        return { action: "inventory-reserved" };
       }
-      return { action: "inventory-reserved" };
-    }
 
-    if (event === "order.shipped") {
-      for (const item of payload.items) {
-        await updateRecord("inventory", item.productId, {
-          shipped: item.quantity,
-        });
+      if (event === "order.shipped") {
+        for (const item of payload.items) {
+          await updateRecord("inventory", item.productId, {
+            shipped: item.quantity,
+          });
+        }
+        return { action: "inventory-shipped" };
       }
-      return { action: "inventory-shipped" };
     }
+    run();
   \`,
 });
 
