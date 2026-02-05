@@ -53,6 +53,16 @@ export function Modules() {
             </span>
           </li>
         </ul>
+        <div className="p-4 bg-amber-950/30 border border-amber-800/50 rounded mt-6">
+          <h4 className="text-amber-400 font-medium mb-2">Top-level await</h4>
+          <p className="text-neutral-300 text-sm">
+            Top-level <code className="text-amber-400">await</code> is only supported in module
+            evaluation (use <code className="text-amber-400">runModule()</code> or
+            <code className="text-amber-400">evaluateModuleAsync()</code>). Script evaluation via
+            <code className="text-amber-400">run()</code> only allows{" "}
+            <code className="text-amber-400">await</code> inside async functions.
+          </p>
+        </div>
       </section>
 
       <section className="mb-12">
