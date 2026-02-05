@@ -1728,6 +1728,9 @@ class Parser {
       (this.currentType === TOKEN.Keyword || this.currentType === TOKEN.Identifier) &&
       this.currentValue === "await";
     if (isAwait) {
+      if (!this.inAsync && !this.allowTopLevelAwait) {
+        throw new ParseError("Unexpected token: await");
+      }
       this.next();
     }
 
@@ -4177,6 +4180,11 @@ class Parser {
 
 export function parseModule(input: string, _options: ParseOptions = {}): ESTree.Program {
   const parser = new Parser(input, true);
+  return parser.parseProgram();
+}
+
+export function parseScript(input: string, _options: ParseOptions = {}): ESTree.Program {
+  const parser = new Parser(input, false);
   return parser.parseProgram();
 }
 

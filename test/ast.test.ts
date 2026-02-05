@@ -601,11 +601,14 @@ describe("AST", () => {
         const interpreter = new Interpreter({ globals: { delay } });
 
         const ast = interpreter.parse(`
-        let count = 0;
-        while (true) {
-          count = count + 1;
-          await delay(1);
+        async function run() {
+          let count = 0;
+          while (true) {
+            count = count + 1;
+            await delay(1);
+          }
         }
+        run()
       `);
 
         setTimeout(() => controller.abort(), 25);

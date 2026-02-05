@@ -130,6 +130,8 @@ const exports = await sandbox.runModule(
 );
 ```
 
+`runModule` accepts the same per-run options as `run` (globals, features, limits, validator, signal) plus the required `path`.
+
 ### `result: "full"`
 
 Return stats and resource usage alongside the result.

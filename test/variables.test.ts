@@ -1633,7 +1633,10 @@ describe("Variables", () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
             async function foo({ x, y }) { return x + y; }
-            await foo({ x: 10, y: 5 });
+            async function run() {
+              return await foo({ x: 10, y: 5 });
+            }
+            run();
           `);
           expect(result).toBe(15);
         });

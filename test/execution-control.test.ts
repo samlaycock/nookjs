@@ -59,10 +59,13 @@ describe("Execution Control", () => {
           return expect(
             interpreter.evaluateAsync(
               `
-          async function recurse(n) {
-            return await recurse(n + 1);
+          async function run() {
+            async function recurse(n) {
+              return await recurse(n + 1);
+            }
+            return await recurse(0);
           }
-          await recurse(0);
+          run()
         `,
               { maxCallStackDepth: 50 },
             ),
@@ -234,9 +237,12 @@ describe("Execution Control", () => {
           return expect(
             interpreter.evaluateAsync(
               `
-          while (true) {
-            await Promise.resolve();
+          async function run() {
+            while (true) {
+              await Promise.resolve();
+            }
           }
+          run()
         `,
               { maxLoopIterations: 100 },
             ),
@@ -322,11 +328,14 @@ describe("Execution Control", () => {
           return expect(
             interpreter.evaluateAsync(
               `
-          const objects = [];
-          for (let i = 0; i < 1000; i++) {
-            objects.push({ a: 1, b: 2, c: 3 });
-            await Promise.resolve();
+          async function run() {
+            const objects = [];
+            for (let i = 0; i < 1000; i++) {
+              objects.push({ a: 1, b: 2, c: 3 });
+              await Promise.resolve();
+            }
           }
+          run()
         `,
               { maxMemory: 1000, maxLoopIterations: 100000 },
             ),
@@ -449,11 +458,14 @@ describe("Execution Control", () => {
         return expect(
           interpreter.evaluateAsync(
             `
-        var count = 0;
-        while (true) {
-          count = count + 1;
-          await delay(1);
+        async function run() {
+          var count = 0;
+          while (true) {
+            count = count + 1;
+            await delay(1);
+          }
         }
+        run()
       `,
             { signal: controller.signal },
           ),

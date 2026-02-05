@@ -158,9 +158,8 @@ export interface RunOptionsFull extends RunOptions {
   readonly result: "full";
 }
 
-export interface RunModuleOptions {
+export interface RunModuleOptions extends RunOptions {
   readonly path: string;
-  readonly result?: ResultMode;
 }
 
 export interface RunModuleOptionsFull extends RunModuleOptions {
@@ -370,15 +369,6 @@ const resolveModules = (modules?: SandboxModules): ModuleOptions | undefined => 
   const files = modules.files ?? {};
   const ast = modules.ast ?? {};
   const externals = modules.externals ?? {};
-  const hasLocalModules =
-    Object.keys(files).length > 0 ||
-    Object.keys(ast).length > 0 ||
-    Object.keys(externals).length > 0;
-
-  if (!hasLocalModules && !modules.resolver) {
-    return undefined;
-  }
-
   const resolver: ModuleResolver = {
     resolve(specifier, importer, context) {
       if (Object.prototype.hasOwnProperty.call(files, specifier)) {
@@ -538,7 +528,11 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
     code: string,
     runOptions: RunModuleOptions,
   ): Promise<Record<string, unknown> | RunResult<Record<string, unknown>>> {
-    const exports = await interpreter.evaluateModuleAsync(code, { path: runOptions.path });
+    const evaluateOptions = buildEvaluateOptions(baseFeatureSet, defaultLimits, runOptions);
+    const exports = await interpreter.evaluateModuleAsync(code, {
+      path: runOptions.path,
+      ...evaluateOptions,
+    });
     return formatResult(exports, runOptions.result, interpreter, trackResources);
   }
 

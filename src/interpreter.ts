@@ -17,7 +17,7 @@ import type { ESTree, Location } from "./ast";
 import type { StackFrame } from "./errors";
 import type { ModuleOptions, ModuleMetadata } from "./modules";
 
-import { parseModule } from "./ast";
+import { parseModule, parseScript } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
 import { InterpreterError, SecurityError, ErrorCode } from "./errors";
 import { ModuleSystem } from "./modules";
@@ -2207,6 +2207,10 @@ export type EvaluateOptions = {
   maxMemory?: number;
 };
 
+export interface ModuleEvaluateOptions extends EvaluateOptions {
+  readonly path: string;
+}
+
 export type ParseOptions = {
   validator?: ASTValidator;
 };
@@ -2331,6 +2335,7 @@ export class Interpreter {
   public environment: Environment;
   private constructorGlobals: Record<string, any>; // Globals that persist across all evaluate() calls
   private constructorValidator?: ASTValidator; // AST validator that applies to all evaluate() calls
+  private currentValidator?: ASTValidator; // Per-call validator (applies to module imports)
   private constructorFeatureControl?: FeatureControl; // Feature control that applies to all evaluate() calls
   private constructorFeatureSet?: Set<LanguageFeature>; // Cached feature set for faster lookup
   private securityOptions: SecurityOptions; // Security options for sandbox
@@ -2715,6 +2720,8 @@ export class Interpreter {
       );
     }
 
+    this.currentValidator = options?.validator;
+
     // Inject per-call globals if provided (with override capability).
     if (options?.globals) {
       this.injectGlobals(options.globals, true, true);
@@ -2804,6 +2811,7 @@ export class Interpreter {
       this.currentFeatureControl = undefined;
       this.currentFeatureSet = undefined;
     }
+    this.currentValidator = undefined;
     // Clear execution control.
     this.abortSignal = undefined;
 
@@ -2819,27 +2827,96 @@ export class Interpreter {
     this.currentMemoryUsage = 0;
   }
 
+  private validateAst(ast: ESTree.Program, options?: EvaluateOptions): void {
+    const validator = options?.validator ?? this.currentValidator ?? this.constructorValidator;
+    if (!validator) {
+      return;
+    }
+    const isValid = validator(ast);
+    if (!isValid) {
+      throw new InterpreterError("AST validation failed: code is not allowed");
+    }
+  }
+
+  private ensureNoTopLevelAwait(ast: ESTree.Program): void {
+    const visit = (value: unknown, inAsync: boolean): void => {
+      if (!value || typeof value !== "object") {
+        return;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          visit(item, inAsync);
+        }
+        return;
+      }
+      const node = value as ESTree.Node;
+      if (typeof node.type !== "string") {
+        return;
+      }
+
+      if (node.type === "AwaitExpression" && !inAsync) {
+        throw new InterpreterError("Unexpected token: await");
+      }
+      if (node.type === "ForOfStatement" && (node as ESTree.ForOfStatement).await && !inAsync) {
+        throw new InterpreterError("Unexpected token: await");
+      }
+
+      if (
+        node.type === "FunctionDeclaration" ||
+        node.type === "FunctionExpression" ||
+        node.type === "ArrowFunctionExpression"
+      ) {
+        const fn = node as
+          | ESTree.FunctionDeclaration
+          | ESTree.FunctionExpression
+          | ESTree.ArrowFunctionExpression;
+        const nextAsync = fn.async === true;
+        visit(fn.params, nextAsync);
+        visit(fn.body, nextAsync);
+        return;
+      }
+
+      for (const key of Object.keys(node)) {
+        if (key === "type" || key === "loc" || key === "line") {
+          continue;
+        }
+        const record = node as unknown as Record<string, unknown>;
+        visit(record[key], inAsync);
+      }
+    };
+
+    visit(ast, false);
+  }
+
   private parseAndValidate(
     input: string | ESTree.Program,
     options?: EvaluateOptions,
   ): ESTree.Program {
-    let ast: ESTree.Program;
+    const ast =
+      typeof input === "string"
+        ? parseScript(input, {
+            next: true,
+          })
+        : input;
 
-    if (typeof input === "string") {
-      ast = parseModule(input, {
-        next: true,
-      });
-    } else {
-      ast = input;
-    }
+    this.validateAst(ast, options);
+    this.ensureNoTopLevelAwait(ast);
 
-    const validator = options?.validator || this.constructorValidator;
-    if (validator) {
-      const isValid = validator(ast);
-      if (!isValid) {
-        throw new InterpreterError("AST validation failed: code is not allowed");
-      }
-    }
+    return ast;
+  }
+
+  private parseModuleAndValidate(
+    input: string | ESTree.Program,
+    options?: EvaluateOptions,
+  ): ESTree.Program {
+    const ast =
+      typeof input === "string"
+        ? parseModule(input, {
+            next: true,
+          })
+        : input;
+
+    this.validateAst(ast, options);
 
     return ast;
   }
@@ -2961,7 +3038,7 @@ export class Interpreter {
    * ```
    */
   parse(code: string, options?: ParseOptions): ESTree.Program {
-    const ast = parseModule(code, { next: true });
+    const ast = parseScript(code, { next: true });
 
     if (options?.validator) {
       const isValid = options.validator(ast);
@@ -3367,15 +3444,35 @@ export class Interpreter {
    * console.log(exports.sum); // 3
    * ```
    */
-  async evaluateModuleAsync(code: string, options: { path: string }): Promise<Record<string, any>> {
+  async evaluateModuleAsync(
+    code: string,
+    options: ModuleEvaluateOptions,
+  ): Promise<Record<string, any>> {
     if (!this.moduleSystem) {
       throw new InterpreterError(
         "Module system is not enabled. Create Interpreter with { modules: { enabled: true, resolver: ... } }.",
       );
     }
 
-    const ast = parseModule(code, { next: true });
-    return this.evaluateModuleAstAsync(ast, options.path);
+    this.currentSourceCode = code;
+    this.callStack = [];
+    this.beginEvaluation(options);
+    this.abortSignal = options.signal;
+    if (this.abortSignal?.aborted) {
+      this.endEvaluation(options);
+      throw new InterpreterError("Execution aborted");
+    }
+
+    try {
+      const ast = this.parseModuleAndValidate(code, options);
+      return await this.evaluateModuleAstAsync(ast, options.path);
+    } catch (error) {
+      throw this.enhanceError(error);
+    } finally {
+      this.endEvaluation(options);
+      this.currentSourceCode = "";
+      this.callStack = [];
+    }
   }
 
   /**
@@ -3453,6 +3550,8 @@ export class Interpreter {
     } else {
       throw new InterpreterError(`Module '${specifier}' has no source or AST`);
     }
+
+    this.validateAst(ast);
 
     const exports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
     this.moduleSystem.setModuleExports(specifier, exports);

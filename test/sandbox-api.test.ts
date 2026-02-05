@@ -144,7 +144,11 @@ describe("Simplified API", () => {
         resolver: {
           resolve(specifier) {
             if (specifier === "answer") {
-              return { type: "source", code: "export const value = 42;", path: specifier };
+              return {
+                type: "source",
+                code: "export const value = 42;",
+                path: specifier,
+              };
             }
             return null;
           },
@@ -184,6 +188,58 @@ describe("Simplified API", () => {
 
     expect(first.result).toBe(1);
     expect(second.result).toBe(2);
+  });
+
+  it("runModule() should use per-run globals", async () => {
+    const sandbox = createSandbox({ env: "es2022", modules: {} });
+
+    const exports = await sandbox.runModule("export const value = answer + 1;", {
+      path: "main.js",
+      globals: { answer: 41 },
+    });
+
+    expect(exports.value).toBe(42);
+
+    expect(
+      sandbox.runModule("export const value = answer;", { path: "second.js" }),
+    ).rejects.toThrow("Undefined variable 'answer'");
+  });
+
+  it("runModule() should enforce per-run limits", async () => {
+    const sandbox = createSandbox({ env: "es2022", modules: {} });
+
+    expect(
+      sandbox.runModule(
+        `
+        let total = 0;
+        for (let i = 0; i < 10; i++) {
+          total += i;
+        }
+        export const value = total;
+        `,
+        { path: "main.js", limits: { loops: 1 } },
+      ),
+    ).rejects.toThrow("Maximum loop iterations exceeded");
+  });
+
+  it("run() should reject top-level await in scripts", async () => {
+    const sandbox = createSandbox({ env: "es2022" });
+
+    expect(sandbox.run("await Promise.resolve(1)")).rejects.toThrow();
+  });
+
+  it("runModule() should allow top-level await", async () => {
+    const sandbox = createSandbox({ env: "es2022", modules: {} });
+
+    const exports = await sandbox.runModule(
+      `
+      const value = await Promise.resolve(3);
+      export const result = value + 1;
+      `,
+      { path: "main.js" },
+    );
+
+    expect(exports.result).toBe(4);
   });
 
   it("should support env aliases", async () => {

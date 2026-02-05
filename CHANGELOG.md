@@ -5,7 +5,6 @@
 ### Minor Changes
 
 - 35fe723: Add ES module support with import/export syntax
-
   - Support all import types: named, default, namespace, side-effect only
   - Support all export types: named declarations, default, re-exports, `export * as namespace`
   - Pluggable `ModuleResolver` interface for loading modules from any source
@@ -17,7 +16,6 @@
 
 - a76f9e2: Add simplified `createSandbox` and `run` APIs with env presets, add-on APIs, and structured limits.
 - 72e527a: Add TypedArray support for mutation and static methods
-
   - Enable TypedArray element mutation via numeric indices (e.g., `arr[0] = 10`)
   - Allow inherited static methods on host functions (e.g., `Uint8Array.from()`, `Uint8Array.of()`)
   - Unwrap TypedArray/ArrayBuffer proxies when passed to native host methods like `TextDecoder.decode()`
@@ -26,7 +24,6 @@
 ### Patch Changes
 
 - b6850f7: Fix Promise support in async evaluation
-
   - Prevent auto-awaiting of Promise values returned from host functions, preserving Promise identity for `.then()` chaining
   - Allow `.catch` and `.finally` access on Promises (previously only `.then` was allowlisted)
   - Unwrap non-plain-object proxies for native method compatibility (e.g., `clearTimeout` with proxied `Timeout` objects)
