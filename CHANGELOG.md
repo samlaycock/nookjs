@@ -1,10 +1,26 @@
 # nookjs
 
+## 0.4.0
+
+### Minor Changes
+
+- 9cf6162: Improve the simplified sandbox API and onboarding experience:
+
+  - add safe default per-run limits for `createSandbox()` (`callDepth`, `loops`, `memoryBytes`)
+  - add first-class `timeoutMs` support for async `run()` and `runModule()` (sandbox default + per-call override)
+  - add typed generics for `run`, `runSync`, and `runModule` return values
+  - add a `test` script to `package.json`
+  - migrate examples to the simplified API and move internal `Interpreter` usage to `examples/internal`
+  - document timeout support, safe defaults, typed run helpers, and example organization
+
+- a1c00b8: Restrict top-level await to module evaluation and run modules through the full per-run evaluation options (globals, limits, validator, signal).
+
 ## 0.3.0
 
 ### Minor Changes
 
 - 35fe723: Add ES module support with import/export syntax
+
   - Support all import types: named, default, namespace, side-effect only
   - Support all export types: named declarations, default, re-exports, `export * as namespace`
   - Pluggable `ModuleResolver` interface for loading modules from any source
@@ -24,6 +40,7 @@
 ### Patch Changes
 
 - b6850f7: Fix Promise support in async evaluation
+
   - Prevent auto-awaiting of Promise values returned from host functions, preserving Promise identity for `.then()` chaining
   - Allow `.catch` and `.finally` access on Promises (previously only `.then` was allowlisted)
   - Unwrap non-plain-object proxies for native method compatibility (e.g., `clearTimeout` with proxied `Timeout` objects)
