@@ -409,6 +409,189 @@ Supported (stripped):
 - `as` assertions
 - `type` and `interface` declarations
 
+## FAQ
+
+### Is NookJS a VM or process sandbox?
+
+No. NookJS is a **language-level interpreter sandbox**. It blocks dangerous language/runtime access
+(`eval`, `Function`, prototype-escape paths) and isolates interpreted code from your host values, but
+it is not a substitute for OS/process isolation when your threat model requires kernel boundaries.
+
+### Is it safe for untrusted code?
+
+It is designed for untrusted code execution with:
+
+- Read-only wrapping of injected host values
+- Dangerous property blocking
+- Forbidden global injection (`eval`, `Function`, `Proxy`, `Reflect`, etc.)
+- Error sanitization controls
+- Execution guards (`limits`, `timeoutMs`, `AbortSignal`)
+
+For production multi-tenant workloads, pair interpreter controls with external isolation/rate-limits.
+See [Security Guide](docs/SECURITY.md).
+
+### Does NookJS implement all of JavaScript?
+
+No. It supports a large, practical subset controlled by presets/feature flags, with explicit
+interpreter-specific behavior in some areas. See [Language Features](docs/README.md) for
+feature-by-feature behavior and gotchas.
+
+### How should I choose between `run()`, `runSync()`, `runModule()`, and `parse()`?
+
+- `run()` for async-capable script evaluation
+- `runSync()` for sync-only script evaluation
+- `runModule()` for ES module code (`import`/`export`, top-level `await`)
+- `parse()` when you want AST-only parsing without execution
+
+### What TypeScript does it support?
+
+NookJS strips TypeScript-style annotations/comments and executes the resulting JavaScript.
+Supported stripping includes annotations, return types, `as`, and `type/interface` declarations.
+
+Not supported as TypeScript input:
+
+- TSX/JSX
+- `enum` / `namespace`
+- Type-only imports/exports (`import type`, `export type`)
+
+### How do `env`, `features`, and `apis` differ?
+
+- `env`: language/builtin baseline (`es5` ... `es2024`, `esnext`, `minimal`)
+- `features`: explicit enable/disable control for syntax/runtime features
+- `apis`: host-like globals (`fetch`, `console`, `timers`, `crypto`, etc.)
+
+Use `env` for default posture, then tighten/relax with `features` and `apis`.
+
+### What globals are available by default?
+
+Always available: `undefined`, `NaN`, `Infinity`, `Symbol`, `Promise`, `globalThis`, `global`.
+
+`globalThis` and `global` are sandbox-owned objects and are separate references. They do not
+automatically mirror lexical variables or injected globals. See [Builtin Globals](docs/BUILTIN_GLOBALS.md).
+
+### Do globals and variables persist across runs?
+
+With a reusable sandbox/interpreter, user-declared variables and constructor globals persist across
+runs. Per-call globals apply only to that call and are cleaned up afterward.
+
+### Can sandbox code mutate host objects I inject?
+
+Generally no. Injected host objects are read-only wrapped. Notable exception: typed array element
+writes by numeric index are allowed for compatibility (e.g., `TextEncoder.encodeInto` flows). See
+[Security Guide](docs/SECURITY.md#known-limitations).
+
+### Why does `myHostFunc.name` or `myHostFunc.call(...)` throw?
+
+Host function property access is intentionally restricted to avoid escape vectors. Direct invocation is
+allowed (`myHostFunc(...)`), but dangerous/introspective function properties are blocked.
+
+### How do I prevent infinite loops or expensive code paths?
+
+Use multiple controls together:
+
+- Per-run limits (`loops`, `callDepth`, `memoryBytes`)
+- Total limits for cumulative usage (`limits.total`)
+- Async timeout (`timeoutMs`)
+- Optional cancellation (`AbortSignal`)
+
+### How do I get better error details during development?
+
+Use `policy.errors`:
+
+- `"safe"` (default): hide host details + sanitize stack
+- `"sanitize"`: keep host messages, sanitize stack
+- `"full"`: full host errors (use carefully for production)
+
+### How do modules work?
+
+Enable `modules` and use `runModule()` with a module `path`. You can provide module sources via
+`files`, `ast`, or `externals`, or supply a custom resolver.
+
+### Does `run()` support top-level `await`?
+
+No. Top-level `await` is supported only for module evaluation (`runModule()`).
+
+### Can I use `require()` or Node-style module resolution?
+
+`require` is not available. The ES module system is resolver-driven and does not do automatic
+Node-style resolution unless your resolver implements it.
+
+### Is module output mutable?
+
+No. Export namespaces are read-only/frozen from sandbox code. Module caching is enabled by default
+and can be disabled/configured.
+
+### How can I inspect resource usage?
+
+Use `result: "full"` per call for execution stats, and `sandbox.resources()` for cumulative stats when
+resource tracking is enabled.
+
+## Limitations
+
+### Security model boundaries
+
+- Language-level sandboxing only; not a process/VM boundary.
+- Host functions are trusted by design. If you expose dangerous host behavior, sandbox code can call it.
+- Dangerous property names and symbols are blocked, which may differ from native JS expectations.
+- `eval`, `Function`, `Proxy`, `Reflect`, async/generator function constructors cannot be injected.
+
+### Language semantics that differ from native JS
+
+- Arrow functions currently do not implement lexical `this`/`arguments`; they behave like normal functions.
+- Function declarations are evaluated in order (no full native hoisting behavior).
+- `var` is not hoisted to `undefined`; it is created at evaluation time.
+- `division`/`modulo` by zero throws `InterpreterError` instead of yielding JS numeric infinities/NaN.
+- Generator/async generator objects do not provide full native prototype/`instanceof` behavior.
+
+### Syntax/feature scope
+
+- Parser targets interpreter-supported syntax, not arbitrary JS/TS grammar.
+- Hashbang (`#!`) is not stripped by the parser.
+- TypeScript support is strip-only and excludes TSX/JSX, `enum`, `namespace`, and type-only import/export.
+- Some constructs have intentionally narrower behavior (for example, spread/destructuring/loop gotchas in feature docs).
+
+### Module system gaps vs native ESM
+
+- No dynamic `import()`.
+- No `import.meta`.
+- No live bindings; exports are snapshot-based.
+- Module resolution is custom/resolver-driven (no automatic Node resolution).
+- Module system is opt-in and disabled unless `modules` config is provided.
+
+### Host interop and reflection constraints
+
+- Many prototype/reflection access paths are intentionally blocked for safety.
+- Host function internals/properties are restricted; direct calls are allowed.
+- Dangerous/inherited symbol property access is blocked in security-sensitive paths.
+- `call`/`apply`/`bind` on host functions are blocked.
+
+### Built-in/runtime API coverage
+
+- Available globals depend on selected `env` and explicit `apis`.
+- Web/runtime APIs are opt-in via `apis` and depend on what the host runtime provides.
+- Built-in method exposure is curated; some standard prototype methods are intentionally unavailable.
+
+### Data model and mutability constraints
+
+- Injected host objects are read-only proxied.
+- Custom host `valueOf` is intentionally not invoked to avoid data leakage.
+- Typed arrays are special-cased: numeric index writes are allowed and may be unwrapped for native host APIs.
+- Promise objects pass through unwrapped for correct async behavior.
+
+### Execution control limitations
+
+- Memory and CPU tracking are best-effort heuristics, not exact runtime accounting.
+- Loop limits are per-loop counters (they reset between loops).
+- `timeoutMs` is an async execution guard (use external process-level limits for hard enforcement).
+- In sync mode (`runSync()` / `evaluate()`), async host function flows are not supported.
+
+### Operational behavior to plan for
+
+- Reused sandboxes are stateful by default (variables can persist across runs).
+- Per-call globals are temporary and do not persist after the call.
+- Module caching is enabled by default unless configured otherwise.
+- `run()` script mode does not allow top-level `await`; use `runModule()` for that.
+
 ## Documentation
 
 - [Security Guide](docs/SECURITY.md) - Sandboxing model and recommendations
