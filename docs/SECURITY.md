@@ -237,7 +237,13 @@ By default, host error messages are hidden from the sandbox. If you need to see 
 ## Execution Limits
 
 The sandbox provides execution limits to protect against denial-of-service attacks from untrusted
-code. These limits are configured per run:
+code. Safe per-run defaults are enabled automatically:
+
+- `callDepth: 250`
+- `loops: 100_000`
+- `memoryBytes: 16 * 1024 * 1024`
+
+You can tighten or relax these limits per run:
 
 ```typescript
 const sandbox = createSandbox({ env: "es2022" });
@@ -332,16 +338,13 @@ sandbox.runSync(
 
 ### Combined with Timeout
 
-For comprehensive protection, combine execution limits with a host-side timeout:
+For async evaluations, use first-class `timeoutMs`:
 
 ```typescript
-const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
-await Promise.race([
-  sandbox.run(code, {
-    limits: { callDepth: 100, loops: 100000, memoryBytes: 10 * 1024 * 1024 },
-  }),
-  timeout,
-]);
+await sandbox.run(code, {
+  timeoutMs: 5000,
+  limits: { callDepth: 100, loops: 100000, memoryBytes: 10 * 1024 * 1024 },
+});
 ```
 
 ### Execution Limits and AbortSignal

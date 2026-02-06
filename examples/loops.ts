@@ -1,8 +1,8 @@
-import { Interpreter, ts } from "../src/index";
+import { createSandbox, ts } from "../src/index";
 
-const interpreter = new Interpreter();
+const sandbox = createSandbox({ env: "es2022" });
 
-interpreter.evaluate(ts`
+const oddSum = await sandbox.run<number>(ts`
   let sum = 0;
   for (let i = 0; i < 20; i++) {
     if (i > 15) {
@@ -16,28 +16,26 @@ interpreter.evaluate(ts`
   sum
 `);
 
-interpreter.evaluate(ts`
-  let isPrime = n => {
+const primeCount = await sandbox.run<number>(ts`
+  const isPrime = (n) => {
     if (n <= 1) {
-      return 0;
+      return false;
     }
     for (let i = 2; i * i <= n; i++) {
       if (n % i === 0) {
-        return 0;
+        return false;
       }
     }
-    return 1;
+    return true;
   };
 
-  let countPrimes = max => {
-    let count = 0;
-    for (let i = 2; i <= max; i++) {
-      if (isPrime(i)) {
-        count = count + 1;
-      }
+  let count = 0;
+  for (let i = 2; i <= 20; i++) {
+    if (isPrime(i)) {
+      count = count + 1;
     }
-    return count;
-  };
-
-  countPrimes(20)
+  }
+  count
 `);
+
+console.log({ oddSum, primeCount });

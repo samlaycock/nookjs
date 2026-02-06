@@ -1,76 +1,35 @@
-import { Interpreter, ts } from "../src/index";
-
-const mathInterpreter = new Interpreter({ globals: { Math } });
-
-mathInterpreter.evaluate(ts`Math.floor(4.7)`);
-mathInterpreter.evaluate(ts`Math.PI * 2`);
-mathInterpreter.evaluate(ts`Math.sqrt(16)`);
-mathInterpreter.evaluate(ts`Math.max(10, 20, 5, 15)`);
-mathInterpreter.evaluate(ts`
-  let radius = 5;
-  let area = Math.PI * Math.pow(radius, 2);
-  Math.round(area)
-`);
+import { createSandbox, ts } from "../src/index";
 
 const logs: string[] = [];
-const mockConsole = {
-  log: (...args: any[]) => {
-    logs.push(args.join(" "));
+const sandbox = createSandbox({
+  env: "es2022",
+  globals: {
+    Math,
+    console: {
+      log: (...args: unknown[]) => logs.push(args.map(String).join(" ")),
+    },
+    api: {
+      version: "1.0.0",
+      calculate(x: number, y: number) {
+        return x * y + 10;
+      },
+    },
   },
-};
-const consoleInterpreter = new Interpreter({
-  globals: { console: mockConsole },
 });
 
-consoleInterpreter.evaluate(ts`
-  console.log("Hello from sandbox!");
-  console.log("Number:", 42);
+const mathResult = await sandbox.run<number>(ts`
+  const radius = 5;
+  Math.round(Math.PI * Math.pow(radius, 2))
 `);
 
-const customAPI = {
-  version: "1.0.0",
-  getValue() {
-    return 42;
-  },
-  calculate(x: number, y: number) {
-    return x * y + 10;
-  },
-};
-const apiInterpreter = new Interpreter({ globals: { api: customAPI } });
+const apiResult = await sandbox.run<number>("api.calculate(5, 3)");
+await sandbox.run('console.log("Hello from sandbox", api.version)');
 
-apiInterpreter.evaluate(ts`api.getValue()`);
-apiInterpreter.evaluate(ts`api.calculate(5, 3)`);
-apiInterpreter.evaluate(ts`api.version`);
-
-const secureInterpreter = new Interpreter({ globals: { Math } });
-
+let blockedProperty = false;
 try {
-  secureInterpreter.evaluate(ts`Math.PI = 3`);
+  await sandbox.run("Math.constructor");
 } catch {
-  // Blocked
+  blockedProperty = true;
 }
 
-try {
-  secureInterpreter.evaluate(ts`Math.__proto__`);
-} catch {
-  // Blocked
-}
-
-try {
-  secureInterpreter.evaluate(ts`Math.constructor`);
-} catch {
-  // Blocked
-}
-
-const interpreter = new Interpreter();
-
-interpreter.evaluate(ts`
-  let myVar = "test";
-  globalThis.myVar
-`);
-
-interpreter.evaluate(ts`
-  global.x = 5;
-  global.y = 10;
-  global.x + global.y
-`);
+console.log({ mathResult, apiResult, blockedProperty, logs });

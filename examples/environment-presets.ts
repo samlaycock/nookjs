@@ -1,24 +1,32 @@
-import { Interpreter } from "../src/interpreter";
-import { Browser, WinterCG, NodeJS, Minimal } from "../src/presets";
-import { ts } from "../src/utils";
+import { createSandbox } from "../src/index";
 
-const browserInterpreter = new Interpreter(Browser);
-browserInterpreter.evaluate(ts`typeof fetch`);
-browserInterpreter.evaluate(ts`typeof console`);
-browserInterpreter.evaluate(ts`typeof setTimeout`);
+const browser = createSandbox({ env: "browser" });
+const wintercg = createSandbox({ env: "wintercg" });
+const node = createSandbox({ env: "node" });
+const minimal = createSandbox({ env: "minimal" });
 
-const winterCGInterpreter = new Interpreter(WinterCG);
-winterCGInterpreter.evaluate(ts`typeof fetch`);
-winterCGInterpreter.evaluate(ts`typeof console`);
-winterCGInterpreter.evaluate(ts`typeof setTimeout`);
+const availability = {
+  browser: {
+    fetch: await browser.run<string>("typeof fetch"),
+    console: await browser.run<string>("typeof console"),
+    timers: await browser.run<string>("typeof setTimeout"),
+  },
+  wintercg: {
+    fetch: await wintercg.run<string>("typeof fetch"),
+    console: await wintercg.run<string>("typeof console"),
+    timers: await wintercg.run<string>("typeof setTimeout"),
+  },
+  node: {
+    fetch: await node.run<string>("typeof fetch"),
+    console: await node.run<string>("typeof console"),
+    timers: await node.run<string>("typeof setTimeout"),
+    arrayBuffer: await node.run<string>("typeof ArrayBuffer"),
+  },
+  minimal: {
+    math: await minimal.run<string>("typeof Math"),
+    fetch: await minimal.run<string>("typeof fetch"),
+    console: await minimal.run<string>("typeof console"),
+  },
+};
 
-const nodeJSInterpreter = new Interpreter(NodeJS);
-nodeJSInterpreter.evaluate(ts`typeof fetch`);
-nodeJSInterpreter.evaluate(ts`typeof console`);
-nodeJSInterpreter.evaluate(ts`typeof setTimeout`);
-nodeJSInterpreter.evaluate(ts`typeof ArrayBuffer`);
-
-const minimalInterpreter = new Interpreter(Minimal);
-minimalInterpreter.evaluate(ts`typeof Math`);
-minimalInterpreter.evaluate(ts`typeof fetch`);
-minimalInterpreter.evaluate(ts`typeof console`);
+console.log(availability);

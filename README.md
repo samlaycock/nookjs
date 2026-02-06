@@ -114,12 +114,14 @@ await sandbox.run("Math.PI"); // Error: Math is not defined
 
 ### Security Best Practices
 
-1. **Always use timeouts** to prevent infinite loops:
+1. **Use built-in timeouts** for async/untrusted workloads:
 
 ```typescript
-const sandbox = createSandbox({ env: "es2022" });
-const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
-const result = await Promise.race([sandbox.run(untrustedCode), timeout]);
+const sandbox = createSandbox({ env: "es2022", timeoutMs: 5000 });
+const result = await sandbox.run(untrustedCode);
+
+// Optional per-run override
+await sandbox.run(untrustedCode, { timeoutMs: 1000 });
 ```
 
 2. **Clone sensitive data** before passing as globals:
@@ -414,6 +416,7 @@ Supported (stripped):
 - [Module System](docs/MODULES.md) - ES module support with import/export syntax
 - [Language Features](docs/README.md) - Detailed documentation for each supported feature
 - [Builtin Globals](docs/BUILTIN_GLOBALS.md) - Available built-in globals
+- [Examples](examples/README.md) - Simplified API examples and advanced/internal examples
 
 ## API Reference
 
@@ -447,8 +450,10 @@ const ast = parse("1 + 2");
 - `env`: Language preset (`"minimal"`, `"es2022"`, `"esnext"`, `"browser"`, `"node"`, `"wintercg"`)
 - `apis`: Add-on globals (`"fetch"`, `"console"`, `"timers"`, `"crypto"`, `"text"`, `"streams"`, etc.)
 - `globals`: Host-provided values
-- `limits.perRun`: Per-evaluation guards (`loops`, `callDepth`, `memoryBytes`)
+- `limits.perRun`: Per-evaluation guards (`loops`, `callDepth`, `memoryBytes`) with safe defaults
+  of `{ loops: 100_000, callDepth: 250, memoryBytes: 16MB }`
 - `limits.total`: Cumulative resource limits (requires integrated tracking)
+- `timeoutMs`: First-class async timeout (sandbox-level default or per-run override)
 - `policy.errors`: `"safe"` | `"sanitize"` | `"full"`
 - `modules`: `{ files, ast, externals }` for easy module resolution
 
