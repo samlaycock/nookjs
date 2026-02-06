@@ -138,6 +138,7 @@ export interface SandboxOptions {
   readonly globals?: Record<string, unknown>;
   readonly features?: FeatureToggles;
   readonly limits?: SandboxLimits;
+  readonly timeoutMs?: number;
   readonly policy?: SandboxPolicy;
   readonly modules?: SandboxModules;
   readonly validator?: (ast: ESTree.Program) => boolean;
@@ -151,6 +152,7 @@ export interface RunOptions {
   readonly limits?: RunLimits;
   readonly validator?: (ast: ESTree.Program) => boolean;
   readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
   readonly result?: ResultMode;
 }
 
@@ -189,15 +191,18 @@ export interface RunResult<T = unknown> {
 }
 
 export interface Sandbox {
-  run(code: string, options: RunOptionsFull): Promise<RunResult>;
-  runSync(code: string, options: RunOptionsFull): RunResult;
-  run(code: string, options?: RunOptions): Promise<unknown>;
-  runSync(code: string, options?: RunOptions): unknown;
-  runModule(
+  run<T = unknown>(code: string, options: RunOptionsFull): Promise<RunResult<T>>;
+  runSync<T = unknown>(code: string, options: RunOptionsFull): RunResult<T>;
+  run<T = unknown>(code: string, options?: RunOptions): Promise<T>;
+  runSync<T = unknown>(code: string, options?: RunOptions): T;
+  runModule<T extends Record<string, unknown> = Record<string, unknown>>(
     code: string,
     options: RunModuleOptionsFull,
-  ): Promise<RunResult<Record<string, unknown>>>;
-  runModule(code: string, options: RunModuleOptions): Promise<Record<string, unknown>>;
+  ): Promise<RunResult<T>>;
+  runModule<T extends Record<string, unknown> = Record<string, unknown>>(
+    code: string,
+    options: RunModuleOptions,
+  ): Promise<T>;
   parse(code: string, options?: SandboxParseOptions): ESTree.Program;
   stats(): ExecutionStats;
   resources(): ResourceStats | undefined;
@@ -239,6 +244,12 @@ const API_PRESET_MAP: Record<string, InterpreterOptions> = {
   blob: BlobAPI,
   performance: PerformanceAPI,
   events: EventAPI,
+};
+
+const DEFAULT_SAFE_RUN_LIMITS: RunLimits = {
+  callDepth: 250,
+  loops: 100_000,
+  memoryBytes: 16 * 1024 * 1024,
 };
 
 const resolveEnvPreset = (env?: SandboxEnv): InterpreterOptions => {
@@ -422,6 +433,7 @@ const buildEvaluateOptions = (
   baseFeatureControl: FeatureControl | undefined,
   defaultLimits: RunLimits | undefined,
   options?: RunOptions,
+  signal?: AbortSignal,
 ): EvaluateOptions => {
   const featureControl = resolveFeatureControl(baseFeatureControl, options?.features);
   const limits = mergeRunLimits(defaultLimits, options?.limits);
@@ -430,11 +442,87 @@ const buildEvaluateOptions = (
     ...(options?.globals ? { globals: options.globals } : {}),
     ...(options?.validator ? { validator: options.validator } : {}),
     ...(featureControl ? { featureControl } : {}),
-    ...(options?.signal ? { signal: options.signal } : {}),
+    ...(signal ? { signal } : {}),
     ...(limits?.callDepth !== undefined ? { maxCallStackDepth: limits.callDepth } : {}),
     ...(limits?.loops !== undefined ? { maxLoopIterations: limits.loops } : {}),
     ...(limits?.memoryBytes !== undefined ? { maxMemory: limits.memoryBytes } : {}),
   };
+};
+
+interface ResolvedRunSignal {
+  readonly signal?: AbortSignal;
+  cleanup(): void;
+}
+
+const validateTimeoutMs = (timeoutMs: number): void => {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("timeoutMs must be a positive finite number");
+  }
+};
+
+const resolveRunSignal = (defaultTimeoutMs?: number, options?: RunOptions): ResolvedRunSignal => {
+  const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+  const externalSignal = options?.signal;
+
+  if (timeoutMs === undefined) {
+    return {
+      signal: externalSignal,
+      cleanup: () => {},
+    };
+  }
+
+  validateTimeoutMs(timeoutMs);
+
+  const controller = new AbortController();
+  let cleaned = false;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const onExternalAbort = () => {
+    controller.abort();
+    cleanup();
+  };
+
+  const cleanup = () => {
+    if (cleaned) {
+      return;
+    }
+    cleaned = true;
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+    if (externalSignal) {
+      externalSignal.removeEventListener("abort", onExternalAbort);
+    }
+  };
+
+  if (externalSignal?.aborted) {
+    controller.abort();
+    return {
+      signal: controller.signal,
+      cleanup,
+    };
+  }
+
+  if (externalSignal) {
+    externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+  }
+
+  timeoutId = setTimeout(() => {
+    controller.abort();
+    cleanup();
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    cleanup,
+  };
+};
+
+const assertSyncTimeoutIsDisabled = (defaultTimeoutMs?: number, options?: RunOptions): void => {
+  const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
+  if (timeoutMs !== undefined) {
+    throw new Error("timeoutMs is only supported for async execution");
+  }
 };
 
 const formatResult = <T>(
@@ -499,41 +587,69 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
   const interpreter = new Interpreter(interpreterOptions);
   applyTotalLimits(interpreter, options.limits?.total);
 
-  const defaultLimits = options.limits?.perRun;
+  const defaultLimits = mergeRunLimits(DEFAULT_SAFE_RUN_LIMITS, options.limits?.perRun);
+  const defaultTimeoutMs = options.timeoutMs;
   const baseFeatureSet = featureControl ?? baseOptions.featureControl;
   const defaultParseOptions = options.validator ? { validator: options.validator } : undefined;
 
-  function run(code: string, runOptions: RunOptionsFull): Promise<RunResult>;
-  function run(code: string, runOptions?: RunOptions): Promise<unknown>;
-  async function run(code: string, runOptions?: RunOptions): Promise<unknown> {
+  function run<T = unknown>(code: string, runOptions: RunOptionsFull): Promise<RunResult<T>>;
+  function run<T = unknown>(code: string, runOptions?: RunOptions): Promise<T>;
+  async function run<T = unknown>(
+    code: string,
+    runOptions?: RunOptions,
+  ): Promise<T | RunResult<T>> {
+    const resolvedSignal = resolveRunSignal(defaultTimeoutMs, runOptions);
+    const evaluateOptions = buildEvaluateOptions(
+      baseFeatureSet,
+      defaultLimits,
+      runOptions,
+      resolvedSignal.signal,
+    );
+    try {
+      const value = (await interpreter.evaluateAsync(code, evaluateOptions)) as T;
+      return formatResult(value, runOptions?.result, interpreter, trackResources);
+    } finally {
+      resolvedSignal.cleanup();
+    }
+  }
+
+  function runSync<T = unknown>(code: string, runOptions: RunOptionsFull): RunResult<T>;
+  function runSync<T = unknown>(code: string, runOptions?: RunOptions): T;
+  function runSync<T = unknown>(code: string, runOptions?: RunOptions): T | RunResult<T> {
+    assertSyncTimeoutIsDisabled(defaultTimeoutMs, runOptions);
     const evaluateOptions = buildEvaluateOptions(baseFeatureSet, defaultLimits, runOptions);
-    const value = await interpreter.evaluateAsync(code, evaluateOptions);
+    const value = interpreter.evaluate(code, evaluateOptions) as T;
     return formatResult(value, runOptions?.result, interpreter, trackResources);
   }
 
-  function runSync(code: string, runOptions: RunOptionsFull): RunResult;
-  function runSync(code: string, runOptions?: RunOptions): unknown;
-  function runSync(code: string, runOptions?: RunOptions): unknown {
-    const evaluateOptions = buildEvaluateOptions(baseFeatureSet, defaultLimits, runOptions);
-    const value = interpreter.evaluate(code, evaluateOptions);
-    return formatResult(value, runOptions?.result, interpreter, trackResources);
-  }
-
-  function runModule(
+  function runModule<T extends Record<string, unknown> = Record<string, unknown>>(
     code: string,
     runOptions: RunModuleOptionsFull,
-  ): Promise<RunResult<Record<string, unknown>>>;
-  function runModule(code: string, runOptions: RunModuleOptions): Promise<Record<string, unknown>>;
-  async function runModule(
+  ): Promise<RunResult<T>>;
+  function runModule<T extends Record<string, unknown> = Record<string, unknown>>(
     code: string,
     runOptions: RunModuleOptions,
-  ): Promise<Record<string, unknown> | RunResult<Record<string, unknown>>> {
-    const evaluateOptions = buildEvaluateOptions(baseFeatureSet, defaultLimits, runOptions);
-    const exports = await interpreter.evaluateModuleAsync(code, {
-      path: runOptions.path,
-      ...evaluateOptions,
-    });
-    return formatResult(exports, runOptions.result, interpreter, trackResources);
+  ): Promise<T>;
+  async function runModule<T extends Record<string, unknown> = Record<string, unknown>>(
+    code: string,
+    runOptions: RunModuleOptions,
+  ): Promise<T | RunResult<T>> {
+    const resolvedSignal = resolveRunSignal(defaultTimeoutMs, runOptions);
+    const evaluateOptions = buildEvaluateOptions(
+      baseFeatureSet,
+      defaultLimits,
+      runOptions,
+      resolvedSignal.signal,
+    );
+    try {
+      const exports = (await interpreter.evaluateModuleAsync(code, {
+        path: runOptions.path,
+        ...evaluateOptions,
+      })) as T;
+      return formatResult(exports, runOptions.result, interpreter, trackResources);
+    } finally {
+      resolvedSignal.cleanup();
+    }
   }
 
   const parse = (code: string, parseOptions?: SandboxParseOptions): ESTree.Program => {
@@ -554,11 +670,14 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
   };
 };
 
-export function run(code: string, options: RunOnceOptionsFull): Promise<RunResult>;
-export function run(code: string, options?: RunOnceOptions): Promise<unknown>;
-export async function run(code: string, options?: RunOnceOptions): Promise<unknown> {
+export function run<T = unknown>(code: string, options: RunOnceOptionsFull): Promise<RunResult<T>>;
+export function run<T = unknown>(code: string, options?: RunOnceOptions): Promise<T>;
+export async function run<T = unknown>(
+  code: string,
+  options?: RunOnceOptions,
+): Promise<T | RunResult<T>> {
   const sandbox = createSandbox(options?.sandbox);
-  return sandbox.run(code, options);
+  return sandbox.run<T>(code, options);
 }
 
 export const parse = (code: string, options?: ParseOnceOptions): ESTree.Program => {

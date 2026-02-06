@@ -20,6 +20,7 @@ import { createSandbox } from "nookjs";
 const sandbox = createSandbox({
   env: "es2022",
   apis: ["console"],
+  timeoutMs: 5000,
   globals: {
     PI: 3.14159,
     double: (x: number) => x * 2,
@@ -89,6 +90,12 @@ const sandbox = createSandbox({
 
 Guard execution per run and over time.
 
+Safe per-run defaults are enabled automatically:
+
+- `loops: 100_000`
+- `callDepth: 250`
+- `memoryBytes: 16 * 1024 * 1024`
+
 ```typescript
 const sandbox = createSandbox({
   env: "es2022",
@@ -97,6 +104,19 @@ const sandbox = createSandbox({
     total: { evaluations: 100, memoryBytes: 50_000_000 },
   },
 });
+```
+
+### `timeoutMs`
+
+Set async execution timeouts without wrapping `run()` in `Promise.race`.
+
+```typescript
+const sandbox = createSandbox({
+  env: "es2022",
+  timeoutMs: 5000, // default timeout for sandbox.run/runModule
+});
+
+await sandbox.run(untrustedCode, { timeoutMs: 1000 }); // per-call override
 ```
 
 ### `policy`
@@ -130,7 +150,7 @@ const exports = await sandbox.runModule(
 );
 ```
 
-`runModule` accepts the same per-run options as `run` (globals, features, limits, validator, signal) plus the required `path`.
+`runModule` accepts the same per-run options as `run` (globals, features, limits, timeoutMs, validator, signal) plus the required `path`.
 
 ### `result: "full"`
 
@@ -139,6 +159,17 @@ Return stats and resource usage alongside the result.
 ```typescript
 const out = await sandbox.run("1 + 2", { result: "full" });
 console.log(out.value, out.stats);
+```
+
+### Typed result helpers
+
+Use generics when you want typed return values from `run` and `runModule`:
+
+```typescript
+const value = await sandbox.run<number>("40 + 2");
+const moduleExports = await sandbox.runModule<{ result: number }>("export const result = 40 + 2;", {
+  path: "main.js",
+});
 ```
 
 ## Advanced API

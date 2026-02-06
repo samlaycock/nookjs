@@ -1,48 +1,51 @@
-import { Interpreter, ts } from "../src/index";
+import type { ESTree } from "../src/index";
 
-const noLoopsValidator = (ast: any) => {
-  const code = JSON.stringify(ast);
-  return !code.includes('"WhileStatement"') && !code.includes('"ForStatement"');
+import { createSandbox, ts } from "../src/index";
+
+const noLoopsValidator = (ast: ESTree.Program): boolean => {
+  const serializedAst = JSON.stringify(ast);
+  return !serializedAst.includes('"WhileStatement"') && !serializedAst.includes('"ForStatement"');
 };
 
-const validatedInterpreter = new Interpreter({
-  globals: { MAX: 100 },
+const readOnlyValidator = (ast: ESTree.Program): boolean => {
+  return !JSON.stringify(ast).includes('"VariableDeclaration"');
+};
+
+const noLoopSandbox = createSandbox({
+  env: "es2022",
   validator: noLoopsValidator,
 });
 
-validatedInterpreter.evaluate(ts`5 + 10`);
+const readOnlySandbox = createSandbox({ env: "es2022" });
 
+const safeValue = await noLoopSandbox.run<number>("5 + 10");
+
+let blockedLoop = false;
 try {
-  validatedInterpreter.evaluate(ts`let i = 0; while (i < 5) { i = i + 1; }`);
+  await noLoopSandbox.run("let i = 0; while (i < 5) { i = i + 1; }");
 } catch {
-  // Blocked
+  blockedLoop = true;
 }
 
-const simpleInterpreter = new Interpreter();
+const readOnlyValue = await readOnlySandbox.run<number>("5 * 3", {
+  validator: readOnlyValidator,
+});
 
-const readOnlyValidator = (ast: any) => {
-  const code = JSON.stringify(ast);
-  return !code.includes('"VariableDeclaration"');
-};
-
-simpleInterpreter.evaluate(ts`10 + 20`);
-simpleInterpreter.evaluate(ts`5 * 3`, { validator: readOnlyValidator });
-
+let blockedWrite = false;
 try {
-  simpleInterpreter.evaluate(ts`let x = 10`, { validator: readOnlyValidator });
+  await readOnlySandbox.run("let x = 10", { validator: readOnlyValidator });
 } catch {
-  // Blocked
+  blockedWrite = true;
 }
 
-const sizeValidator = (ast: any) => {
-  return ast.body.length <= 3;
-};
+const sizeValidator = (ast: ESTree.Program): boolean => ast.body.length <= 3;
+const sizeLimitedSandbox = createSandbox({ env: "es2022", validator: sizeValidator });
 
-const sizeLimitedInterpreter = new Interpreter({ validator: sizeValidator });
-sizeLimitedInterpreter.evaluate(ts`let x = 5; x + 10`);
-
+let blockedLargeProgram = false;
 try {
-  sizeLimitedInterpreter.evaluate(ts`let a = 1; let b = 2; let c = 3; let d = 4;`);
+  await sizeLimitedSandbox.run(ts`let a = 1; let b = 2; let c = 3; let d = 4;`);
 } catch {
-  // Blocked
+  blockedLargeProgram = true;
 }
+
+console.log({ safeValue, readOnlyValue, blockedLoop, blockedWrite, blockedLargeProgram });

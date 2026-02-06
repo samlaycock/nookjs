@@ -291,6 +291,113 @@ describe("Simplified API", () => {
     );
   });
 
+  it("should apply safe default per-run call depth limits", () => {
+    const sandbox = createSandbox({ env: "es2022" });
+
+    expect(() =>
+      sandbox.runSync(`
+      function dive(n) {
+        if (n <= 0) {
+          return 0;
+        }
+        return dive(n - 1) + 1;
+      }
+      dive(300);
+    `),
+    ).toThrow("Maximum call stack depth exceeded");
+  });
+
+  it("should allow overriding default per-run limits", () => {
+    const sandbox = createSandbox({
+      env: "es2022",
+      limits: { perRun: { callDepth: 500 } },
+    });
+
+    const value = sandbox.runSync(`
+      function dive(n) {
+        if (n <= 0) {
+          return 0;
+        }
+        return dive(n - 1) + 1;
+      }
+      dive(300);
+    `);
+
+    expect(value).toBe(300);
+  });
+
+  it("run() should support timeoutMs for async execution", async () => {
+    const sandbox = createSandbox({
+      env: "es2022",
+      globals: {
+        pause: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+      },
+    });
+
+    const timeoutRun = sandbox.run(
+      `
+      async function spin() {
+        while (true) {
+          await pause();
+        }
+      }
+      spin();
+    `,
+      { timeoutMs: 10 },
+    );
+
+    const guard = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Guard timeout exceeded")), 200);
+    });
+
+    try {
+      await Promise.race([timeoutRun, guard]);
+      expect.unreachable("Expected async timeout to abort execution");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain("Execution aborted");
+    }
+  });
+
+  it("createSandbox() timeoutMs should apply as default", async () => {
+    const sandbox = createSandbox({
+      env: "es2022",
+      timeoutMs: 10,
+      globals: {
+        pause: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+      },
+    });
+
+    const timeoutRun = sandbox.run(`
+      async function spin() {
+        while (true) {
+          await pause();
+        }
+      }
+      spin();
+    `);
+
+    const guard = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Guard timeout exceeded")), 200);
+    });
+
+    try {
+      await Promise.race([timeoutRun, guard]);
+      expect.unreachable("Expected sandbox default timeout to abort execution");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain("Execution aborted");
+    }
+  });
+
+  it("runSync() should reject timeoutMs", () => {
+    const sandbox = createSandbox({ env: "es2022" });
+
+    expect(() => sandbox.runSync("1 + 1", { timeoutMs: 10 })).toThrow(
+      "timeoutMs is only supported for async execution",
+    );
+  });
+
   it("should enforce total evaluation limits", () => {
     const sandbox = createSandbox({
       env: "es2022",

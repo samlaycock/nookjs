@@ -5,6 +5,7 @@ fine-grained control, you can use the internal classes exposed from the package.
 
 > These are advanced APIs. Prefer `createSandbox` unless you need direct access to the
 > interpreter or module internals.
+> See also: [`examples/internal/interpreter.ts`](../examples/internal/interpreter.ts).
 
 ## Interpreter
 

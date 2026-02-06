@@ -24,6 +24,7 @@
     "provenance": true
   },
   "scripts": {
+    "test": "bun test",
     "lint": "oxlint . --type-aware",
     "lint:fix": "oxlint . --type-aware --fix",
     "fmt": "oxfmt .",

@@ -1,36 +1,26 @@
-import { Interpreter, ts } from "../src/index";
+import { createSandbox, ts } from "../src/index";
 
-const results: string[] = [];
-const interpreterWithHostFunctions = new Interpreter({
+const logs: string[] = [];
+const sandbox = createSandbox({
+  env: "es2022",
   globals: {
     double: (x: number) => x * 2,
     add: (a: number, b: number) => a + b,
-    log: (msg: string) => results.push(msg),
+    log: (message: string) => logs.push(message),
   },
 });
 
-interpreterWithHostFunctions.evaluate(ts`double(5)`);
-interpreterWithHostFunctions.evaluate(ts`add(3, 7)`);
-interpreterWithHostFunctions.evaluate(ts`
-  log("Hello from sandbox!");
-  log("Calculated: " + add(double(5), 3));
+const doubled = await sandbox.run<number>("double(5)");
+const combined = await sandbox.run<number>("add(double(5), 3)");
+await sandbox.run(ts`
+  log("Host functions are available");
+  log("combined=" + add(double(5), 3));
 `);
 
-const perCallInterpreter = new Interpreter();
-perCallInterpreter.evaluate(ts`multiply(4, 5)`, {
+const perCall = await sandbox.run<number>("multiply(4, 5)", {
   globals: {
     multiply: (a: number, b: number) => a * b,
   },
 });
 
-const mixedInterpreter = new Interpreter({
-  globals: {
-    hostDouble: (x: number) => x * 2,
-  },
-});
-mixedInterpreter.evaluate(ts`
-  function sandboxTriple(x) {
-    return x * 3;
-  }
-  hostDouble(5) + sandboxTriple(5)
-`);
+console.log({ doubled, combined, perCall, logs });

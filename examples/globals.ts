@@ -1,42 +1,36 @@
-import { Interpreter, ts } from "../src/index";
+import { createSandbox, ts } from "../src/index";
 
-const interpreterWithGlobals = new Interpreter({
+const sandbox = createSandbox({
+  env: "es2022",
   globals: {
     PI: 3.14159,
     E: 2.71828,
-    MAX_ITERATIONS: 1000,
-  },
-});
-
-interpreterWithGlobals.evaluate(ts`
-  let radius = 10;
-  PI * radius * radius
-`);
-
-const interpreterForGlobals = new Interpreter();
-interpreterForGlobals.evaluate(ts`multiplier * value`, {
-  globals: { multiplier: 5, value: 20 },
-});
-
-const interpreterMerged = new Interpreter({ globals: { x: 10 } });
-interpreterMerged.evaluate(ts`x + y + z`, {
-  globals: { y: 20, z: 30 },
-});
-
-const interpreterWithConfig = new Interpreter({
-  globals: {
     config: {
       maxRetries: 3,
-      timeout: 5000,
       debug: true,
     },
   },
 });
 
-interpreterWithConfig.evaluate(ts`
-  let retries = 0;
-  while (retries < config.maxRetries) {
-    retries = retries + 1;
-  }
-  retries
+const area = await sandbox.run<number>(ts`
+  const radius = 10;
+  PI * radius * radius
 `);
+
+const perCall = await sandbox.run<number>("multiplier * value", {
+  globals: { multiplier: 5, value: 20 },
+});
+
+const merged = await sandbox.run<number>("x + y + z", {
+  globals: { x: 10, y: 20, z: 30 },
+});
+
+const retries = await sandbox.run<number>(ts`
+  let count = 0;
+  while (count < config.maxRetries) {
+    count = count + 1;
+  }
+  count
+`);
+
+console.log({ area, perCall, merged, retries });
