@@ -595,6 +595,156 @@ describe("Module System", () => {
         }),
       ).rejects.toThrow("Cannot find module");
     });
+
+    test("should enforce importer-aware resolver policy on cached modules", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier, importer) {
+          if (specifier === "./secret") {
+            if (importer === "allowed.js") {
+              return {
+                type: "source",
+                code: 'export const token = "TOPSECRET";',
+                path: "/tenantA/secret.js",
+              };
+            }
+            if (importer === "attacker.js") {
+              return null;
+            }
+          }
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      const allowed = await interpreter.evaluateModuleAsync(
+        `import { token } from "./secret"; export const out = token;`,
+        { path: "allowed.js" },
+      );
+      expect(allowed.out).toBe("TOPSECRET");
+
+      expect(
+        interpreter.evaluateModuleAsync(
+          `import { token } from "./secret"; export const out = token;`,
+          { path: "attacker.js" },
+        ),
+      ).rejects.toThrow("Cannot find module");
+    });
+
+    test("should enforce resolver policy with cache disabled", async () => {
+      let resolveCount = 0;
+      const resolver: ModuleResolver = {
+        resolve(specifier, importer) {
+          resolveCount++;
+          if (specifier === "./api") {
+            if (importer === "authorized.js") {
+              return {
+                type: "source",
+                code: 'export const data = "secret";',
+                path: "/api.js",
+              };
+            }
+            return null;
+          }
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: false },
+      });
+
+      await interpreter.evaluateModuleAsync(
+        `import { data } from "./api"; export const result = data;`,
+        { path: "authorized.js" },
+      );
+
+      expect(resolveCount).toBe(1);
+
+      expect(
+        interpreter.evaluateModuleAsync(
+          `import { data } from "./api"; export const result = data;`,
+          { path: "unauthorized.js" },
+        ),
+      ).rejects.toThrow("Cannot find module");
+
+      expect(resolveCount).toBe(2);
+    });
+
+    test("should resolve same specifier to same path for authorized importers", async () => {
+      const resolvedPaths: string[] = [];
+      const resolver: ModuleResolver = {
+        resolve(specifier, importer) {
+          if (specifier === "./shared") {
+            resolvedPaths.push(importer ?? "entry");
+            return {
+              type: "source",
+              code: "export const value = 1;",
+              path: "/shared/utils.js",
+            };
+          }
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      await interpreter.evaluateModuleAsync(
+        `import { value } from "./shared"; export const a = value;`,
+        { path: "moduleA.js" },
+      );
+
+      await interpreter.evaluateModuleAsync(
+        `import { value } from "./shared"; export const b = value;`,
+        { path: "moduleB.js" },
+      );
+
+      expect(resolvedPaths).toEqual(["moduleA.js", "moduleB.js"]);
+      expect(interpreter.getModuleCacheSize()).toBe(1);
+    });
+
+    test("should handle circular dependencies correctly", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier === "./a.js") {
+            return {
+              type: "source",
+              code: `
+                import { b } from "./b.js";
+                export const a = "a" + b;
+              `,
+              path: "/a.js",
+            };
+          }
+          if (specifier === "./b.js") {
+            return {
+              type: "source",
+              code: `
+                import { a } from "./a.js";
+                export const b = "b";
+              `,
+              path: "/b.js",
+            };
+          }
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { a } from "./a.js"; export const result = a;`,
+        { path: "main.js" },
+      );
+
+      expect(result.result).toBe("ab");
+    });
   });
 
   describe("Max Depth", () => {

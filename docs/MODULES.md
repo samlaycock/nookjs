@@ -445,6 +445,38 @@ const sandbox = createSandbox({
 });
 ```
 
+### Resolver Authorization and Caching
+
+The module system enforces resolver authorization on **every import request**, including cached modules. This ensures importer-aware access control policies are never bypassed through cache lookups.
+
+**Key behaviors:**
+
+1. **Resolver-first policy**: The resolver is always consulted before returning cached modules. A module cached by one importer cannot be accessed by another importer unless the resolver explicitly allows it.
+
+2. **Path-based caching**: Modules are cached by their resolved path (not by specifier alone). This prevents cache key collisions while allowing legitimate cache reuse when the resolver returns the same path.
+
+3. **Importer-aware decisions**: When your resolver implements importer-specific authorization, each import request is evaluated independently:
+
+```typescript
+const resolver = {
+  resolve(specifier, importer) {
+    if (specifier === "./secret") {
+      if (importer === "allowed.js") {
+        return { type: "source", code: "...", path: "/secret.js" };
+      }
+      if (importer === "attacker.js") {
+        return null; // Blocked
+      }
+    }
+    return null;
+  },
+};
+```
+
+With this resolver, `attacker.js` cannot access `./secret` even if `allowed.js` has already loaded and cached it.
+
+4. **Circular dependencies**: The system handles circular imports correctly while maintaining security. When a module is being initialized, subsequent imports from the same import chain receive the partial record to complete evaluation.
+
 ## Terminology
 
 - **Specifier**: The string in an import statement (e.g., `"./utils.js"`, `"lodash"`)
