@@ -474,6 +474,30 @@ automatically mirror lexical variables or injected globals. See [Builtin Globals
 With a reusable sandbox/interpreter, user-declared variables and constructor globals persist across
 runs. Per-call globals apply only to that call and are cleaned up afterward.
 
+### Does the sandbox support concurrent runs?
+
+Yes. The interpreter supports concurrent async evaluations with proper policy isolation:
+
+- Per-call feature controls (feature toggles) are scoped to each run
+- Per-call validators apply only to their run
+- Per-call abort signals do not affect sibling runs
+- Per-call limits are isolated per execution
+
+```typescript
+const sb = createSandbox({ env: "es2022" });
+
+const run1 = sb.run(code1, {
+  features: { mode: "blacklist", disable: ["MemberExpression"] },
+});
+
+const run2 = sb.run(code2); // No feature restrictions
+
+const [result1, result2] = await Promise.all([run1, run2]);
+// Both runs use their own policies - no cross-contamination
+```
+
+**Note:** The sandbox is designed for **concurrent execution with isolation**, not parallel processing. All runs share the same interpreter instance and its global state (declared variables, functions, etc.). If you need complete isolation between runs (including no shared state), create separate sandbox instances.
+
 ### Can sandbox code mutate host objects I inject?
 
 Generally no. Injected host objects are read-only wrapped. Notable exception: typed array element

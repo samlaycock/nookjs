@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 
+import type { ESTree } from "../src/ast";
 import { Interpreter } from "../src/interpreter";
 import { ReadOnlyProxy, sanitizeErrorStack } from "../src/readonly-proxy";
 
@@ -1725,6 +1726,232 @@ describe("Security", () => {
         expect(() => {
           interpreter.evaluate("obj.hasOwnProperty('secret')");
         }).toThrow("Cannot access hasOwnProperty on global 'obj'");
+      });
+    });
+  });
+
+  describe("Security: Concurrent Run Policy Isolation", () => {
+    describe("Feature control isolation", () => {
+      it("should enforce per-call feature control during concurrent async execution", async () => {
+        const { createSandbox } = await import("../src/sandbox");
+        const sb = createSandbox({ env: "es2022" });
+
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+        const restrictedRun = sb.run(
+          "async function a(){ await sleep(50); return obj.secret; } a()",
+          {
+            globals: { obj: { secret: "TOP" }, sleep },
+            features: { mode: "blacklist", disable: ["MemberExpression"] },
+          },
+        );
+
+        const overlappingRun = sb.run(
+          "async function b(){ await sleep(10); return 1; } b()",
+          { globals: { sleep } },
+        );
+
+        await expect(Promise.all([restrictedRun, overlappingRun])).rejects.toThrow(
+          "MemberExpression is not enabled",
+        );
+      });
+
+      it("should not leak feature control from first call to subsequent call", async () => {
+        const { createSandbox } = await import("../src/sandbox");
+        const sb = createSandbox({ env: "es2022" });
+
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+        await sb.run(
+          "async function a(){ await sleep(10); return obj.secret; } a()",
+          {
+            globals: { obj: { secret: "TOP" }, sleep },
+            features: { mode: "blacklist", disable: ["MemberExpression"] },
+          },
+        );
+
+        await expect(
+          sb.run("async function b(){ await sleep(10); return obj.secret; } b()", {
+            globals: { obj: { secret: "TOP" }, sleep },
+            features: { mode: "blacklist", disable: ["MemberExpression"] },
+          }),
+        ).rejects.toThrow("MemberExpression is not enabled");
+      });
+
+      it("should correctly apply constructor feature control after per-call override", async () => {
+        const { createSandbox } = await import("../src/sandbox");
+        const sb = createSandbox({
+          env: "es2022",
+          features: { mode: "blacklist", disable: ["MemberExpression"] },
+        });
+
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+        expect(
+          sb.run(
+            "async function a(){ await sleep(10); return obj.secret; } a()",
+            {
+              globals: { obj: { secret: "TOP" }, sleep },
+            },
+          ),
+        ).rejects.toThrow("MemberExpression is not enabled");
+      });
+    });
+
+    describe("Validator isolation", () => {
+      it("should not cross-apply validators between concurrent runs", async () => {
+        const { createSandbox } = await import("../src/sandbox");
+        const sb = createSandbox({ env: "es2022" });
+
+        let validator1Called = false;
+        let validator2Called = false;
+
+        const validator1 = (ast: ESTree.Program) => {
+          validator1Called = true;
+          return true;
+        };
+
+        const validator2 = (ast: ESTree.Program) => {
+          validator2Called = true;
+          return true;
+        };
+
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+        const run1 = sb.run("1 + 1", { validator: validator1 });
+        const run2 = sb.run("2 + 2", { validator: validator2 });
+
+        await Promise.all([run1, run2]);
+
+        expect(validator1Called).toBe(true);
+        expect(validator2Called).toBe(true);
+      });
+
+      it("should not leak validator from one call to another", async () => {
+        const { createSandbox } = await import("../src/sandbox");
+        const sb = createSandbox({ env: "es2022" });
+
+        let validatorCalled = false;
+        const validator = (ast: ESTree.Program) => {
+          validatorCalled = true;
+          return true;
+        };
+
+        await sb.run("1 + 1", { validator });
+
+        validatorCalled = false;
+
+        await sb.run("2 + 2");
+
+        expect(validatorCalled).toBe(false);
+      });
+    });
+
+    describe("Abort signal isolation", () => {
+      it("should not abort sibling run when one run is aborted", async () => {
+        const { createSandbox } = await import("../src/sandbox");
+        const sb = createSandbox({ env: "es2022" });
+
+        const controller = new AbortController();
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+        const abortRun = sb.run(
+          "async function a(){ await sleep(500); return 'should-not-complete'; } a()",
+          { signal: controller.signal, timeoutMs: 1000 },
+        );
+
+        const normalRun = sb.run(
+          "async function b(){ await sleep(50); return 'completed'; } b()",
+          { timeoutMs: 1000 },
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        controller.abort();
+
+        const [abortResult, normalResult] = await Promise.allSettled([
+          abortRun,
+          normalRun,
+        ]);
+
+        expect(normalResult.status).toBe("fulfilled");
+        expect((normalResult as PromiseFulfilledResult<any>).value).toBe("completed");
+      });
+    });
+
+    describe("Per-run limits isolation", () => {
+      it("should not leak per-call limit overrides between runs", async () => {
+        const { createSandbox } = await import("../src/sandbox");
+        const sb = createSandbox({
+          env: "es2022",
+          limits: { perRun: { loops: 1000 } },
+        });
+
+        await sb.run("let x = 0; while(x < 100) x++;", {
+          limits: { loops: 50 },
+        });
+
+        expect(
+          sb.run("let x = 0; while(x < 100) x++;", {
+            limits: { loops: 50 },
+          }),
+        ).rejects.toThrow("Maximum loop iterations exceeded");
+      });
+
+      it("should apply constructor limits after per-call run completes", async () => {
+        const { createSandbox } = await import("../src/sandbox");
+        const sb = createSandbox({
+          env: "es2022",
+          limits: { perRun: { loops: 1000 } },
+        });
+
+        await sb.run("let x = 0; while(x < 50) x++;");
+
+        expect(sb.run("let x = 0; while(x < 2000) x++;")).rejects.toThrow(
+          "Maximum loop iterations exceeded",
+        );
+      });
+    });
+
+    describe("Feature control state reset", () => {
+      it("should clear feature control state between consecutive calls", () => {
+        const interpreter = new Interpreter({
+          featureControl: { mode: "blacklist", features: ["ForStatement"] },
+        });
+
+        interpreter.evaluate("1 + 1");
+
+        const result = interpreter.evaluate("1 + 2", {
+          featureControl: {
+            mode: "whitelist",
+            features: ["BinaryOperators"],
+          },
+        });
+
+        expect(result).toBe(3);
+
+        expect(() => {
+          interpreter.evaluate("for(let i=0; i<1; i++) {}");
+        }).toThrow("ForStatement is not enabled");
+      });
+
+      it("should properly fall back to constructor feature control", () => {
+        const interpreter = new Interpreter({
+          featureControl: {
+            mode: "whitelist",
+            features: ["BinaryOperators", "CallExpression"],
+          },
+        });
+
+        interpreter.evaluate("1 + 1", {
+          featureControl: {
+            mode: "blacklist",
+            features: ["BinaryOperators"],
+          },
+        });
+
+        expect(() => {
+          interpreter.evaluate("1 + 2");
+        }).toThrow("BinaryOperators is not enabled");
       });
     });
   });

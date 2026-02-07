@@ -601,3 +601,98 @@ const sandbox = createSandbox({
   },
 });
 ```
+
+## Concurrent Run Isolation
+
+The interpreter guarantees policy isolation between concurrent runs on the same sandbox instance. Each run has its own isolated execution context for:
+
+### Feature Control Isolation
+
+Per-call feature toggles are scoped to each evaluation:
+
+```typescript
+const sb = createSandbox({ env: "es2022" });
+
+const run1 = sb.run(
+  "obj.secret",
+  { features: { mode: "blacklist", disable: ["MemberExpression"] } },
+);
+
+const run2 = sb.run("obj.value"); // No restrictions
+
+await Promise.all([run1, run2]);
+// run1 throws "MemberExpression is not enabled"
+// run2 succeeds
+```
+
+### Validator Isolation
+
+Per-call validators apply only to their evaluation:
+
+```typescript
+const sb = createSandbox({ env: "es2022" });
+
+const validator1 = (ast) => {
+  console.log("validator1 called");
+  return true;
+};
+
+const validator2 = (ast) => {
+  console.log("validator2 called");
+  return true;
+};
+
+await Promise.all([
+  sb.run(code1, { validator: validator1 }),
+  sb.run(code2, { validator: validator2 }),
+]);
+// Both validators are called independently
+```
+
+### Abort Signal Isolation
+
+Aborting one run does not affect sibling runs:
+
+```typescript
+const sb = createSandbox({ env: "es2022" });
+const controller = new AbortController();
+
+const run1 = sb.run(longRunningCode, { signal: controller.signal });
+const run2 = sb.run(shortCode); // No abort signal
+
+controller.abort(); // Only run1 is cancelled
+
+const [result1, result2] = await Promise.allSettled([run1, run2]);
+// result1: rejected (aborted)
+// result2: fulfilled
+```
+
+### Limit Isolation
+
+Per-run limits are applied independently:
+
+```typescript
+const sb = createSandbox({ env: "es2022" });
+
+await sb.run(heavyLoop, { limits: { loops: 100 } });
+await sb.run(heavyLoop, { limits: { loops: 100 } });
+// Both runs get 100 loop iterations - no leakage
+```
+
+### Shared State Considerations
+
+While policy controls are isolated, **shared interpreter state persists**:
+
+- Declared variables and functions persist across runs
+- Constructor globals remain available
+- Module cache is shared
+
+For complete isolation (no shared state), use separate sandbox instances:
+
+```typescript
+// Each run gets a fresh interpreter
+const [result1, result2] = await Promise.all([
+  run("code1", { sandbox: createSandbox() }),
+  run("code2", { sandbox: createSandbox() }),
+]);
+```
