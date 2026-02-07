@@ -161,12 +161,13 @@ function deepClone<T>(obj: T, seen = new WeakMap()): T {
 }
 
 export class ModuleSystem {
-  // Cache by resolved path, not specifier (fixes cache key collision)
+  // Cache by resolved path for fully initialized modules
+  // SECURITY: We use path-based caching with importer-aware resolver checks
+  // to prevent cache key collisions that could bypass authorization.
   private cacheByPath: Map<string, ModuleRecord> = new Map();
-  // Secondary index: specifier -> path (for specifier-based lookups)
+  // Secondary index: specifier -> path (for specifier-based lookups when resolver approves)
   private specifierToPath: Map<string, string> = new Map();
   private options: ModuleOptions;
-  // Track depth per evaluation context using a stack (fixes shared depth counter)
   private evaluationStack: string[] = [];
 
   constructor(options: ModuleOptions) {
@@ -213,22 +214,12 @@ export class ModuleSystem {
       throw new Error("Module system is not enabled");
     }
 
-    // Check cache by specifier first (for already resolved modules)
-    if (this.options.cache) {
-      const cachedPath = this.specifierToPath.get(specifier);
-      if (cachedPath) {
-        const cached = this.cacheByPath.get(cachedPath);
-        if (cached && cached.status === "initialized") {
-          return cached;
-        }
-        // If initializing, return it to handle circular deps
-        if (cached && cached.status === "initializing") {
-          return cached;
-        }
-      }
-    }
+    // SECURITY: Always check resolver first to enforce importer-aware authorization.
+    // We must NOT return cached modules before resolver approval, as this would
+    // allow an attacker to import a module that was previously cached by a different
+    // (authorized) importer, bypassing resolver policy.
 
-    // Check depth limit
+    // Check depth limit first
     if (
       this.options.maxDepth !== undefined &&
       this.evaluationStack.length >= this.options.maxDepth
@@ -240,19 +231,31 @@ export class ModuleSystem {
       throw error;
     }
 
-    try {
-      // Build resolver context
-      const context: ModuleResolverContext = {
-        specifier,
-        importer,
-        importerChain: this.getImporterChain(),
-      };
+    // Build resolver context for authorization check
+    const context: ModuleResolverContext = {
+      specifier,
+      importer,
+      importerChain: this.getImporterChain(),
+    };
 
+    try {
+      // SECURITY: Call resolver FIRST before any cache access
+      // This ensures importer-aware policy is enforced on every import request
       const source = await this.options.resolver.resolve(specifier, importer, context);
       if (source === null) {
         return null;
       }
 
+      // Check for circular dependency: if this path is already being initialized,
+      // return the existing record to allow circular imports to resolve
+      if (this.options.cache) {
+        const existing = this.cacheByPath.get(source.path);
+        if (existing && existing.status === "initializing") {
+          return existing;
+        }
+      }
+
+      // Create record for the resolved module
       const record: ModuleRecord = {
         path: source.path,
         specifier,
@@ -261,15 +264,16 @@ export class ModuleSystem {
         loadedAt: Date.now(),
       };
 
+      // Cache the record by PATH (not specifier alone)
+      // SECURITY: Path-based caching is safe because the resolver already approved
+      // this specific (specifier, importer) pair. The same path can be legitimately
+      // reused when the resolver returns the same path for authorized imports.
       if (this.options.cache) {
         this.cacheByPath.set(source.path, record);
         this.specifierToPath.set(specifier, source.path);
       }
 
       if (source.type === "namespace") {
-        // Deep clone namespace exports to prevent mutations affecting resolver
-        // Note: Don't freeze here - ReadOnlyProxy handles immutability and freezing
-        // causes issues with proxy wrapping
         record.exports = deepClone(source.exports);
         record.status = "initialized";
         this.options.resolver.onLoad?.(specifier, source.path, record.exports);
