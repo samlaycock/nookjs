@@ -2720,21 +2720,22 @@ export class Interpreter {
       );
     }
 
+    this.currentFeatureControl = undefined;
+    this.currentFeatureSet = undefined;
+    this.currentValidator = undefined;
+    this.abortSignal = undefined;
+
+    if (options?.featureControl) {
+      this.currentFeatureControl = options.featureControl;
+      this.currentFeatureSet = new Set(options.featureControl.features);
+    }
+
     this.currentValidator = options?.validator;
 
     // Inject per-call globals if provided (with override capability).
     if (options?.globals) {
       this.injectGlobals(options.globals, true, true);
     }
-
-    // Set per-call feature control if provided.
-    if (options?.featureControl) {
-      this.currentFeatureControl = options.featureControl;
-      this.currentFeatureSet = new Set(options.featureControl.features);
-    }
-
-    // Signal is set separately by evaluateAsync(); not used in sync evaluate().
-    this.abortSignal = undefined;
     this.executionCheckCounter = Interpreter.EXECUTION_CHECK_MASK;
 
     // Initialize call stack limiting.
