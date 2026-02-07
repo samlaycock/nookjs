@@ -96,6 +96,69 @@ class ControlFlowSignal {
   ) {}
 }
 
+/**
+ * Simple async mutex for serializing concurrent evaluations.
+ * Prevents race conditions where concurrent runs could leak per-call globals.
+ */
+class AsyncMutex {
+  private isRunning = false;
+  private queue: Array<{
+    fn: () => any | Promise<any>;
+    resolve: (value: any) => void;
+    reject: (error: any) => void;
+  }> = [];
+
+  run<T>(fn: () => T | Promise<T>): T | Promise<T> {
+    if (!this.isRunning) {
+      this.isRunning = true;
+      try {
+        const result = fn();
+        if (result instanceof Promise) {
+          return result.finally(() => this.processQueue());
+        }
+        this.isRunning = false;
+        this.processQueue();
+        return result;
+      } catch (error) {
+        this.isRunning = false;
+        this.processQueue();
+        throw error;
+      }
+    }
+    return new Promise<T>((resolve, reject) => {
+      this.queue.push({ fn, resolve, reject });
+    });
+  }
+
+  processQueue(): void {
+    if (this.queue.length === 0) {
+      this.isRunning = false;
+      return;
+    }
+    const next = this.queue.shift()!;
+    this.isRunning = true;
+    try {
+      try {
+        const result = next.fn();
+        if (result instanceof Promise) {
+          result.then(next.resolve).catch(next.reject).finally(() => this.processQueue());
+        } else {
+          next.resolve(result);
+          this.processQueue();
+        }
+      } finally {
+        this.isRunning = false;
+        if (this.queue.length > 0) {
+          this.processQueue();
+        }
+      }
+    } catch (error) {
+      next.reject(error);
+      this.processQueue();
+    }
+  }
+}
+
 // Reuse a single marker instance to avoid per-chain allocations.
 const OPTIONAL_CHAIN_SHORT_CIRCUIT = new ControlFlowSignal("optional-chain");
 
@@ -2344,6 +2407,9 @@ export class Interpreter {
   private currentFeatureControl?: FeatureControl; // Active feature control (per-call overrides constructor)
   private currentFeatureSet?: Set<LanguageFeature>; // Cached per-call feature set
 
+  // Concurrency control - ensures evaluate/evaluateAsync are serialized
+  private evaluationMutex: AsyncMutex = new AsyncMutex();
+
   // Execution control (async-only abort signal)
   private abortSignal?: AbortSignal; // Signal for async cancellation
   private executionCheckCounter = 0;
@@ -2922,65 +2988,69 @@ export class Interpreter {
   }
 
   evaluate(input: string | ESTree.Program, options?: EvaluateOptions): any {
-    const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
-    this.currentSourceCode = sourceCode;
-    this.callStack = [];
-    this.beginEvaluation(options);
-    try {
-      const ast = this.parseAndValidate(input, options);
-      const needsFreshScope = typeof input !== "string";
-      const previousEnv = this.environment;
-      if (needsFreshScope) {
-        this.environment = new Environment(this.environment);
-      }
-      try {
-        return this.evaluateNode(ast);
-      } finally {
-        if (needsFreshScope) {
-          this.environment = previousEnv;
-        }
-      }
-    } catch (error) {
-      throw this.enhanceError(error);
-    } finally {
-      this.endEvaluation(options);
-      this.currentSourceCode = "";
+    return this.evaluationMutex.run(() => {
+      const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
+      this.currentSourceCode = sourceCode;
       this.callStack = [];
-    }
+      this.beginEvaluation(options);
+      try {
+        const ast = this.parseAndValidate(input, options);
+        const needsFreshScope = typeof input !== "string";
+        const previousEnv = this.environment;
+        if (needsFreshScope) {
+          this.environment = new Environment(this.environment);
+        }
+        try {
+          return this.evaluateNode(ast);
+        } finally {
+          if (needsFreshScope) {
+            this.environment = previousEnv;
+          }
+        }
+      } catch (error) {
+        throw this.enhanceError(error);
+      } finally {
+        this.endEvaluation(options);
+        this.currentSourceCode = "";
+        this.callStack = [];
+      }
+    });
   }
 
   async evaluateAsync(input: string | ESTree.Program, options?: EvaluateOptions): Promise<any> {
-    const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
-    this.currentSourceCode = sourceCode;
-    this.callStack = [];
-    this.beginEvaluation(options);
-    this.abortSignal = options?.signal;
-    if (this.abortSignal?.aborted) {
-      this.endEvaluation(options);
-      throw new InterpreterError("Execution aborted");
-    }
-    try {
-      const ast = this.parseAndValidate(input, options);
-      const needsFreshScope = typeof input !== "string";
-      const previousEnv = this.environment;
-      if (needsFreshScope) {
-        this.environment = new Environment(this.environment);
+    return this.evaluationMutex.run(async () => {
+      const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
+      this.currentSourceCode = sourceCode;
+      this.callStack = [];
+      this.beginEvaluation(options);
+      this.abortSignal = options?.signal;
+      if (this.abortSignal?.aborted) {
+        this.endEvaluation(options);
+        throw new InterpreterError("Execution aborted");
       }
       try {
-        const result = await this.evaluateNodeAsync(ast);
-        return result instanceof RawValue ? result.value : result;
-      } finally {
+        const ast = this.parseAndValidate(input, options);
+        const needsFreshScope = typeof input !== "string";
+        const previousEnv = this.environment;
         if (needsFreshScope) {
-          this.environment = previousEnv;
+          this.environment = new Environment(this.environment);
         }
+        try {
+          const result = await this.evaluateNodeAsync(ast);
+          return result instanceof RawValue ? result.value : result;
+        } finally {
+          if (needsFreshScope) {
+            this.environment = previousEnv;
+          }
+        }
+      } catch (error) {
+        throw this.enhanceError(error);
+      } finally {
+        this.endEvaluation(options);
+        this.currentSourceCode = "";
+        this.callStack = [];
       }
-    } catch (error) {
-      throw this.enhanceError(error);
-    } finally {
-      this.endEvaluation(options);
-      this.currentSourceCode = "";
-      this.callStack = [];
-    }
+    }) as Promise<any>;
   }
 
   /**
