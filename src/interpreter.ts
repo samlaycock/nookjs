@@ -138,19 +138,12 @@ class AsyncMutex {
     const next = this.queue.shift()!;
     this.isRunning = true;
     try {
-      try {
-        const result = next.fn();
-        if (result instanceof Promise) {
-          result.then(next.resolve).catch(next.reject).finally(() => this.processQueue());
-        } else {
-          next.resolve(result);
-          this.processQueue();
-        }
-      } finally {
-        this.isRunning = false;
-        if (this.queue.length > 0) {
-          this.processQueue();
-        }
+      const result = next.fn();
+      if (result instanceof Promise) {
+        result.then(next.resolve).catch(next.reject).finally(() => this.processQueue());
+      } else {
+        next.resolve(result);
+        this.processQueue();
       }
     } catch (error) {
       next.reject(error);

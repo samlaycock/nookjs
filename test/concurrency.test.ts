@@ -141,7 +141,7 @@ describe("Concurrency", () => {
       expect(b).toBe("B");
     });
 
-    it("should complete fast runs before slow runs when started concurrently", async () => {
+    it("should serialize async evaluations (FIFO order)", async () => {
       const sb = createSandbox({ env: "es2022" });
 
       const delayedReturn = async (value: string, delay: number) => {
@@ -158,7 +158,7 @@ describe("Concurrency", () => {
 
       expect(slow).toBe("slow");
       expect(fast).toBe("fast");
-      expect(elapsed).toBeGreaterThanOrEqual(45);
+      expect(elapsed).toBeGreaterThanOrEqual(55);
     });
 
     it("should not leak globals when one evaluation throws", async () => {
