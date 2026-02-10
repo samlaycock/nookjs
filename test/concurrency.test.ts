@@ -146,18 +146,29 @@ describe("Concurrency", () => {
     it("should serialize async evaluations", async () => {
       const sb = createSandbox({ env: "es2022" });
 
-      const delayedReturn = async (value: string, delay: number) => {
-        await new Promise((r) => setTimeout(r, delay));
-        return value;
+      const executionOrder: string[] = [];
+      const recordOrder = (name: string) => {
+        executionOrder.push(name);
       };
 
-      const runSlow = sb.run("delayedReturn('slow', 50)", { globals: { delayedReturn } });
-      const runFast = sb.run("delayedReturn('fast', 10)", { globals: { delayedReturn } });
+      const delayedRecord = async (name: string, delay: number) => {
+        await new Promise((r) => setTimeout(r, delay));
+        recordOrder(name);
+        return name;
+      };
+
+      const runSlow = sb.run("delayedRecord('slow', 50)", {
+        globals: { delayedRecord },
+      });
+      const runFast = sb.run("delayedRecord('fast', 10)", {
+        globals: { delayedRecord },
+      });
 
       const [slow, fast] = await Promise.all([runSlow, runFast]);
 
       expect(slow).toBe("slow");
       expect(fast).toBe("fast");
+      expect(executionOrder).toEqual(["slow", "fast"]);
     });
 
     it("should not leak globals when one evaluation throws", async () => {

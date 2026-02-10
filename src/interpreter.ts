@@ -114,7 +114,10 @@ class AsyncMutex {
       try {
         const result = fn();
         if (result instanceof Promise) {
-          return result.finally(() => this.processQueue());
+          return result.finally(() => {
+            this.isRunning = false;
+            this.processQueue();
+          });
         }
         this.isRunning = false;
         this.processQueue();
