@@ -103,7 +103,7 @@ class ControlFlowSignal {
 class AsyncMutex {
   private isRunning = false;
   private queue: Array<{
-    fn: () => any | Promise<any>;
+    fn: () => any;
     resolve: (value: any) => void;
     reject: (error: any) => void;
   }> = [];

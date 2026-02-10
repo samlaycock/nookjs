@@ -783,10 +783,10 @@ describe("Async", () => {
           );
         });
 
-        it("should throw error when calling async sandbox function in sync mode", () => {
+        it("should throw error when calling async sandbox function in sync mode", async () => {
           const interpreter = new Interpreter();
-          // First declare the async function in async mode
-          void interpreter.evaluateAsync(`
+          // First declare the async function in async mode (must await for it to be available)
+          await interpreter.evaluateAsync(`
             async function asyncFunc() {
               return 42;
             }
