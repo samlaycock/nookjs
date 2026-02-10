@@ -114,16 +114,11 @@ class AsyncMutex {
       try {
         const result = fn();
         if (result instanceof Promise) {
-          return result.finally(() => {
-            this.isRunning = false;
-            this.processQueue();
-          });
+          return result.finally(() => this.processQueue());
         }
-        this.isRunning = false;
         this.processQueue();
         return result;
       } catch (error) {
-        this.isRunning = false;
         this.processQueue();
         throw error;
       }
@@ -145,18 +140,13 @@ class AsyncMutex {
         result
           .then(next.resolve)
           .catch(next.reject)
-          .finally(() => {
-            this.isRunning = false;
-            this.processQueue();
-          });
+          .finally(() => this.processQueue());
       } else {
         next.resolve(result);
-        this.isRunning = false;
         this.processQueue();
       }
     } catch (error) {
       next.reject(error);
-      this.isRunning = false;
       this.processQueue();
     }
   }

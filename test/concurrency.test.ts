@@ -205,5 +205,134 @@ describe("Concurrency", () => {
 
       expect(results).toEqual(["A", "B", "C"]);
     });
+
+    describe("AsyncMutex Mutual Exclusion", () => {
+      it("should not start next evaluation until current one completes", async () => {
+        const sb = createSandbox({ env: "es2022" });
+
+        const startTimes: number[] = [];
+        let evaluationIndex = 0;
+
+        const trackStart = (delay: number) => {
+          startTimes.push(evaluationIndex++);
+          return delay;
+        };
+
+        const _delayedReturn = async (value: string, delay: number) => {
+          await new Promise((r) => setTimeout(r, delay));
+          return value;
+        };
+
+        const run1 = sb.run("trackStart(50)", { globals: { trackStart } });
+        await new Promise((r) => setTimeout(r, 5));
+        const run2 = sb.run("trackStart(10)", { globals: { trackStart } });
+
+        await Promise.all([run1, run2]);
+
+        expect(startTimes).toEqual([0, 1]);
+      });
+
+      it("should block new concurrent calls during async evaluation", async () => {
+        const sb = createSandbox({ env: "es2022" });
+
+        const executionLog: string[] = [];
+        let _callCount = 0;
+
+        const startTask = (name: string, duration: number) => {
+          executionLog.push(`${name}_start`);
+          return new Promise<string>((resolve) => {
+            setTimeout(() => {
+              executionLog.push(`${name}_end`);
+              resolve(name);
+            }, duration);
+          });
+        };
+
+        const runLong = sb.run("startTask('long', 30)", {
+          globals: { startTask },
+        });
+
+        await new Promise((r) => setTimeout(r, 10));
+
+        const runShort = sb.run("startTask('short', 10)", {
+          globals: { startTask },
+        });
+
+        await Promise.all([runLong, runShort]);
+
+        expect(executionLog).toEqual(["long_start", "long_end", "short_start", "short_end"]);
+      });
+
+      it("should strictly serialize multiple queued async evaluations", async () => {
+        const sb = createSandbox({ env: "es2022" });
+
+        const executionOrder: string[] = [];
+
+        const recordAndWait = async (name: string, delay: number) => {
+          executionOrder.push(name);
+          await new Promise((r) => setTimeout(r, delay));
+          return name;
+        };
+
+        const runs = [
+          sb.run("recordAndWait('first', 20)", { globals: { recordAndWait } }),
+          sb.run("recordAndWait('second', 10)", { globals: { recordAndWait } }),
+          sb.run("recordAndWait('third', 5)", { globals: { recordAndWait } }),
+        ];
+
+        const results = await Promise.all(runs);
+
+        expect(results).toEqual(["first", "second", "third"]);
+        expect(executionOrder).toEqual(["first", "second", "third"]);
+      });
+
+      it("should not allow concurrent execution with side effects", async () => {
+        const sb = createSandbox({ env: "es2022" });
+
+        const sharedState: number[] = [];
+
+        const pushAndWait = async (value: number, delay: number) => {
+          sharedState.push(value);
+          await new Promise((r) => setTimeout(r, delay));
+          return value;
+        };
+
+        const run1 = sb.run("pushAndWait(1, 50)", { globals: { pushAndWait } });
+        const run2 = sb.run("pushAndWait(2, 30)", { globals: { pushAndWait } });
+        const run3 = sb.run("pushAndWait(3, 10)", { globals: { pushAndWait } });
+
+        await Promise.all([run1, run2, run3]);
+
+        expect(sharedState).toEqual([1, 2, 3]);
+      });
+
+      it("should serialize error-throwing evaluations correctly", async () => {
+        const sb = createSandbox({ env: "es2022" });
+
+        const executionOrder: string[] = [];
+
+        const recordAndThrow = async (name: string, shouldThrow: boolean) => {
+          executionOrder.push(`${name}_start`);
+          await new Promise((r) => setTimeout(r, 10));
+          if (shouldThrow) {
+            throw new Error(name);
+          }
+          executionOrder.push(`${name}_end`);
+          return name;
+        };
+
+        const runThrow = sb.run("recordAndThrow('error', true)", {
+          globals: { recordAndThrow },
+        });
+        const runSuccess = sb.run("recordAndThrow('success', false)", {
+          globals: { recordAndThrow },
+        });
+
+        await runThrow.catch(() => {});
+        await runSuccess;
+
+        expect(executionOrder).toEqual(["error_start", "success_start", "success_end"]);
+      });
+    });
   });
 });
