@@ -39,4 +39,4 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
-          model: openrouter/minimax/minimax-m2.1
+          model: openrouter/z-ai/glm-5
