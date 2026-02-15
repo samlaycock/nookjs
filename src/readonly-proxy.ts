@@ -104,6 +104,8 @@ export interface SecurityOptions {
 }
 
 // Global security options - can be set by the Interpreter
+// NOTE: This is a fallback for backwards compatibility. Prefer passing security
+// options directly to ReadOnlyProxy.wrap() for instance-scoped security.
 let globalSecurityOptions: SecurityOptions = {
   sanitizeErrors: true,
 };
@@ -111,6 +113,7 @@ let globalSecurityOptions: SecurityOptions = {
 /**
  * Set global security options for ReadOnlyProxy
  * Called by Interpreter constructor to configure security behavior
+ * @deprecated Use ReadOnlyProxy.wrap() with securityOptions parameter instead
  */
 export function setSecurityOptions(options: SecurityOptions): void {
   globalSecurityOptions = { ...globalSecurityOptions, ...options };
@@ -183,6 +186,7 @@ export class ReadOnlyProxy {
     iterator: Iterator<any> | AsyncIterator<any>,
     name: string,
     isAsync: boolean,
+    securityOptions?: SecurityOptions,
   ): any {
     return new Proxy(iterator as any, {
       get(target, prop, receiver) {
@@ -191,7 +195,7 @@ export class ReadOnlyProxy {
             return async (value?: any) => {
               const result = await (target as AsyncIterator<any>).next(value);
               if (result && typeof result === "object" && "value" in result) {
-                result.value = ReadOnlyProxy.wrap(result.value, `${name}[]`);
+                result.value = ReadOnlyProxy.wrap(result.value, `${name}[]`, securityOptions);
               }
               return result;
             };
@@ -199,7 +203,7 @@ export class ReadOnlyProxy {
           return (value?: any) => {
             const result = (target as Iterator<any>).next(value);
             if (result && typeof result === "object" && "value" in result) {
-              result.value = ReadOnlyProxy.wrap(result.value, `${name}[]`);
+              result.value = ReadOnlyProxy.wrap(result.value, `${name}[]`, securityOptions);
             }
             return result;
           };
@@ -214,9 +218,13 @@ export class ReadOnlyProxy {
    * Wrap a value to make it read-only and secure
    * @param value - The value to wrap (object, function, or primitive)
    * @param name - The name of the global (for error messages)
+   * @param securityOptions - Security options for this specific wrapping instance
    * @returns Proxied value that's safe to use in sandbox
    */
-  static wrap(value: any, name: string): any {
+  static wrap(value: any, name: string, securityOptions?: SecurityOptions): any {
+    // Use provided options, fall back to global for backwards compatibility
+    const effectiveOptions = securityOptions ?? globalSecurityOptions;
+
     // Primitives pass through unchanged
     if (value === null || value === undefined) {
       return value;
@@ -274,6 +282,7 @@ export class ReadOnlyProxy {
                 iterator.call(target),
                 name,
                 prop === Symbol.asyncIterator,
+                securityOptions,
               );
           }
           return iterator;
@@ -302,14 +311,14 @@ export class ReadOnlyProxy {
             }
             // For all other objects, return the wrapped object itself
             // This is the standard Object.prototype.valueOf behavior
-            return ReadOnlyProxy.wrap(target, name);
+            return ReadOnlyProxy.wrap(target, name, securityOptions);
           };
         }
 
         // Special handling for Error.stack - sanitize to remove host paths
         if (isError && prop === "stack") {
           const stack = Reflect.get(target, prop, target);
-          if (globalSecurityOptions.sanitizeErrors) {
+          if (effectiveOptions.sanitizeErrors) {
             return sanitizeErrorStack(stack);
           }
           return stack;
@@ -341,7 +350,7 @@ export class ReadOnlyProxy {
 
         // If it's an object (including arrays), recursively wrap it
         if (typeof val === "object" && val !== null) {
-          return ReadOnlyProxy.wrap(val, `${name}.${String(prop)}`);
+          return ReadOnlyProxy.wrap(val, `${name}.${String(prop)}`, securityOptions);
         }
 
         // Primitives and undefined pass through

@@ -24,7 +24,6 @@ import { ModuleSystem } from "./modules";
 import {
   ReadOnlyProxy,
   PROXY_TARGET,
-  setSecurityOptions,
   sanitizeErrorStack,
   unwrapForNative,
 } from "./readonly-proxy";
@@ -2455,9 +2454,6 @@ export class Interpreter {
       hideHostErrorMessages: options?.security?.hideHostErrorMessages ?? true,
     };
 
-    // Configure ReadOnlyProxy with security options
-    setSecurityOptions(this.securityOptions);
-
     // Initialize module system if provided
     if (options?.modules) {
       this.moduleSystem = new ModuleSystem(options.modules);
@@ -2630,7 +2626,7 @@ export class Interpreter {
       // - Functions become HostFunctionValue (via proxy)
       // - Objects get read-only protection and recursive wrapping
       // - Primitives pass through unchanged
-      const wrappedValue = ReadOnlyProxy.wrap(value, key);
+      const wrappedValue = ReadOnlyProxy.wrap(value, key, this.securityOptions);
 
       if (this.environment.has(key)) {
         // Variable already exists - decide whether to override
@@ -3638,7 +3634,7 @@ export class Interpreter {
         }
       }
 
-      return ReadOnlyProxy.wrap(exports, "module.exports");
+      return ReadOnlyProxy.wrap(exports, "module.exports", this.securityOptions);
     } finally {
       // Always pop from evaluation stack, even on error
       this.moduleSystem.popEvaluation();
@@ -3694,7 +3690,7 @@ export class Interpreter {
       if (spec.type === "ImportNamespaceSpecifier") {
         moduleEnv.declare(
           spec.local.name,
-          ReadOnlyProxy.wrap(importedExports, spec.local.name),
+          ReadOnlyProxy.wrap(importedExports, spec.local.name, this.securityOptions),
           "const",
         );
       } else if (spec.type === "ImportDefaultSpecifier") {
@@ -3703,7 +3699,7 @@ export class Interpreter {
         }
         moduleEnv.declare(
           spec.local.name,
-          ReadOnlyProxy.wrap(importedExports.default, spec.local.name),
+          ReadOnlyProxy.wrap(importedExports.default, spec.local.name, this.securityOptions),
           "const",
         );
       } else {
@@ -3714,7 +3710,7 @@ export class Interpreter {
         }
         moduleEnv.declare(
           spec.local.name,
-          ReadOnlyProxy.wrap(importedExports[importedName], spec.local.name),
+          ReadOnlyProxy.wrap(importedExports[importedName], spec.local.name, this.securityOptions),
           "const",
         );
       }
@@ -5515,7 +5511,7 @@ export class Interpreter {
   private executeHostConstructor(constructor: HostFunctionValue, args: any[]): any {
     try {
       const result = Reflect.construct(constructor.hostFunc, args);
-      return ReadOnlyProxy.wrap(result, constructor.name);
+      return ReadOnlyProxy.wrap(result, constructor.name, this.securityOptions);
     } catch (error: any) {
       throw new InterpreterError(
         this.formatHostError(`Constructor '${constructor.name}' threw error`, error),
@@ -7476,7 +7472,7 @@ export class Interpreter {
       // Call the host function
       try {
         const result = callee.hostFunc(...wrappedArgs);
-        return ReadOnlyProxy.wrap(result, callee.name);
+        return ReadOnlyProxy.wrap(result, callee.name, this.securityOptions);
       } catch (error: any) {
         // If rethrowErrors is true, propagate the error directly (used by generator.throw())
         if (callee.rethrowErrors) {
@@ -8836,9 +8832,9 @@ export class Interpreter {
         // If async host function, await the promise
         if (callee.isAsync) {
           const resolved = await result;
-          return ReadOnlyProxy.wrap(resolved, callee.name);
+          return ReadOnlyProxy.wrap(resolved, callee.name, this.securityOptions);
         }
-        const wrapped = ReadOnlyProxy.wrap(result, callee.name);
+        const wrapped = ReadOnlyProxy.wrap(result, callee.name, this.securityOptions);
         // Wrap Promise results in RawValue to prevent auto-awaiting by async/await
         // This preserves Promise identity for chaining (e.g., Promise.resolve(1).then(...))
         if (wrapped instanceof Promise) {

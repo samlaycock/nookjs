@@ -1021,6 +1021,80 @@ describe("Security", () => {
       });
     });
 
+    describe("Cross-Interpreter Security Isolation", () => {
+      it("should maintain interpreter A's sanitizeErrors setting after creating interpreter B", () => {
+        const err = new Error("x");
+        err.stack = "Error: x\n    at fn (/tmp/foo.ts:1:1)";
+
+        const a = new Interpreter({
+          security: { sanitizeErrors: true },
+          globals: { err },
+        });
+
+        const beforeStack = a.evaluate("err.stack");
+        expect(beforeStack).toContain("[native code]");
+        expect(beforeStack).not.toContain("/tmp/foo.ts");
+
+        const b = new Interpreter({
+          security: { sanitizeErrors: false },
+        });
+        void b;
+
+        const afterStack = a.evaluate("err.stack");
+        expect(afterStack).toContain("[native code]");
+        expect(afterStack).not.toContain("/tmp/foo.ts");
+      });
+
+      it("should allow mixed sanitizeErrors on/off interpreters to behave independently", () => {
+        const err = new Error("test");
+        err.stack = "Error: test\n    at fn (/var/log/app.js:10:20)";
+
+        const sanitizingInterpreter = new Interpreter({
+          security: { sanitizeErrors: true },
+          globals: { err },
+        });
+
+        const nonSanitizingInterpreter = new Interpreter({
+          security: { sanitizeErrors: false },
+          globals: { err },
+        });
+
+        const sanitizedStack = sanitizingInterpreter.evaluate("err.stack");
+        expect(sanitizedStack).toContain("[native code]");
+        expect(sanitizedStack).not.toContain("/var/log/app.js");
+
+        const unsanitizedStack = nonSanitizingInterpreter.evaluate("err.stack");
+        expect(unsanitizedStack).toContain("/var/log/app.js");
+        expect(unsanitizedStack).not.toContain("[native code]");
+      });
+
+      it("should maintain independent security settings across multiple interpreter instances", () => {
+        const err1 = new Error("leak1");
+        err1.stack = "Error: leak1\n    at test (/etc/passwd:1:1)";
+
+        const err2 = new Error("leak2");
+        err2.stack = "Error: leak2\n    at test (/root/secret:1:1)";
+
+        const sanitizing = new Interpreter({
+          security: { sanitizeErrors: true },
+          globals: { err: err1 },
+        });
+
+        const nonSanitizing = new Interpreter({
+          security: { sanitizeErrors: false },
+          globals: { err: err2 },
+        });
+
+        const stack1 = sanitizing.evaluate("err.stack");
+        expect(stack1).toContain("[native code]");
+        expect(stack1).not.toContain("/etc/passwd");
+
+        const stack2 = nonSanitizing.evaluate("err.stack");
+        expect(stack2).toContain("/root/secret");
+        expect(stack2).not.toContain("[native code]");
+      });
+    });
+
     describe("Host Error Message Hiding", () => {
       it("should hide host error messages by default", () => {
         const interpreter = new Interpreter({
