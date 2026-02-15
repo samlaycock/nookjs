@@ -20,11 +20,12 @@ describe("Concurrent Run Policy Isolation", () => {
         globals: { sleep },
       });
 
+      // Await the restricted run first since serialized execution means it
+      // completes before the overlapping run starts.
+      expect(restrictedRun).rejects.toThrow("MemberExpression is not enabled");
+
       const result2 = await overlappingRun;
       expect(result2).toBe(1);
-
-      const result = restrictedRun;
-      expect(result).rejects.toThrow();
     });
   });
 
