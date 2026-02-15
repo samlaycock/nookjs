@@ -1446,6 +1446,22 @@ describe("Security", () => {
         expect(result).toContain("[native code]");
       });
 
+      it("should sanitize paths with numeric colon segments before final line:column", () => {
+        const input = `Error: test
+      at foo (/home/123:456/project/file.ts:789:012)
+      at bar (file:///home/123:456/project/file.ts:789:012)
+      at baz (C:\\Users\\dev\\123:456\\project\\file.ts:789:012)`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("/home/123:456");
+        expect(result).not.toContain("file:///home/123:456");
+        expect(result).not.toContain("C:\\Users\\dev\\123:456");
+        expect(result).toContain("at foo ([native code])");
+        expect(result).toContain("at bar ([native code])");
+        expect(result).toContain("at baz ([native code])");
+      });
+
       it("should preserve parentheses around sanitized stack frames", () => {
         const input = `Error: test
       at foo (/home/user/project/file.ts:123:45)
