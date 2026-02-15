@@ -21,12 +21,7 @@ import { parseModule, parseScript } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
 import { InterpreterError, SecurityError, ErrorCode } from "./errors";
 import { ModuleSystem } from "./modules";
-import {
-  ReadOnlyProxy,
-  PROXY_TARGET,
-  sanitizeErrorStack,
-  unwrapForNative,
-} from "./readonly-proxy";
+import { ReadOnlyProxy, PROXY_TARGET, sanitizeErrorStack, unwrapForNative } from "./readonly-proxy";
 import { ResourceExhaustedError } from "./resource-tracker";
 
 type ASTNode = ESTree.Node;
