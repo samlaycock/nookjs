@@ -178,7 +178,8 @@ export function sanitizeErrorStack(stack: string | undefined): string {
   if (!stack) return "";
 
   const stackFramePattern = /^\s*at\s+/;
-  const absolutePathPattern = /(^|[\s(,])((?:file:\/\/\/?|[A-Za-z]:\\|\/)[^\s),]+(?::\d+:\d+)?)/g;
+  const absolutePathPattern =
+    /(^|[\s(,])((?:file:\/\/\/?|[A-Za-z]:\\|\/)[^),\n]+(?::\d+:\d+)?)(?=$|[),])/g;
 
   // Split into lines and process each.
   const lines = stack.split("\n");

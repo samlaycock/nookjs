@@ -1359,6 +1359,26 @@ describe("Security", () => {
         expect(result).toContain("[native code]");
       });
 
+      it("should redact Unix absolute paths with spaces", () => {
+        const input = `Error: test
+    at /home/my user/project/file.ts:1:1`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("/home/my user/project/file.ts:1:1");
+        expect(result).toContain("[native code]");
+      });
+
+      it("should redact Windows absolute paths with spaces", () => {
+        const input = `Error: test
+    at C:\\Program Files\\app\\file.ts:1:1`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("C:\\Program Files\\app\\file.ts:1:1");
+        expect(result).toContain("[native code]");
+      });
+
       it("should redact Bun-like eval frames containing multiple absolute paths", () => {
         const input = `Error: test
     at eval (eval at run (/Users/dev/project/dist/entry.mjs:11:7), /Users/dev/project/dist/bootstrap.mjs:21:5)`;
