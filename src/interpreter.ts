@@ -2665,7 +2665,11 @@ export class Interpreter {
     if (value === Function || value === eval || value === Proxy || value === Reflect) {
       return true;
     }
-    if (value === AsyncFunction || value === GeneratorFunction || value === AsyncGeneratorFunction) {
+    if (
+      value === AsyncFunction ||
+      value === GeneratorFunction ||
+      value === AsyncGeneratorFunction
+    ) {
       return true;
     }
     return false;
