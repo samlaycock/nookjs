@@ -549,6 +549,33 @@ describe("Security", () => {
           });
         }).toThrow("Global 'P' is not allowed for security reasons");
       });
+
+      it("should reject AsyncFunction constructor alias", () => {
+        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+        expect(() => {
+          new Interpreter({
+            globals: { AF: AsyncFunction },
+          });
+        }).toThrow("Global 'AF' is not allowed for security reasons");
+      });
+
+      it("should reject GeneratorFunction constructor alias", () => {
+        const GeneratorFunction = Object.getPrototypeOf(function* () {}).constructor;
+        expect(() => {
+          new Interpreter({
+            globals: { GF: GeneratorFunction },
+          });
+        }).toThrow("Global 'GF' is not allowed for security reasons");
+      });
+
+      it("should reject AsyncGeneratorFunction constructor alias", () => {
+        const AsyncGeneratorFunction = Object.getPrototypeOf(async function* () {}).constructor;
+        expect(() => {
+          new Interpreter({
+            globals: { AGF: AsyncGeneratorFunction },
+          });
+        }).toThrow("Global 'AGF' is not allowed for security reasons");
+      });
     });
 
     describe("internal object access protection", () => {
