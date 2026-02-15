@@ -1431,6 +1431,20 @@ describe("Security", () => {
         expect(result).not.toContain("/Users/dev");
         expect(result).toContain("[native code]");
       });
+
+      it("should sanitize paths containing colons in directory names", () => {
+        const input = `Error: test
+      at foo (/home/user/my:secret/project/file.ts:123:45)
+      at bar (file:///home/user/my:secret/project/file.ts:88:9)
+      at baz (C:\\Users\\dev\\my:secret\\project\\file.ts:10:5)`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("/home/user/my:secret");
+        expect(result).not.toContain("file:///home/user/my:secret");
+        expect(result).not.toContain("C:\\Users\\dev\\my:secret");
+        expect(result).toContain("[native code]");
+      });
     });
   });
 
