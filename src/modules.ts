@@ -155,10 +155,7 @@ function deepClone<T>(obj: T, seen = new WeakMap()): T {
   const cloned = Object.create(Object.getPrototypeOf(obj));
   seen.set(obj as object, cloned);
   for (const key of Reflect.ownKeys(obj as object)) {
-    cloned[key] = deepClone(
-      (obj as Record<string | symbol, unknown>)[key],
-      seen,
-    );
+    cloned[key] = deepClone((obj as Record<string | symbol, unknown>)[key], seen);
   }
   return cloned;
 }
@@ -211,10 +208,7 @@ export class ModuleSystem {
     return this.evaluationStack.length;
   }
 
-  async resolveModule(
-    specifier: string,
-    importer: string | null,
-  ): Promise<ModuleRecord | null> {
+  async resolveModule(specifier: string, importer: string | null): Promise<ModuleRecord | null> {
     if (!this.options.enabled) {
       throw new Error("Module system is not enabled");
     }
@@ -242,11 +236,7 @@ export class ModuleSystem {
         importerChain: this.getImporterChain(),
       };
 
-      const source = await this.options.resolver.resolve(
-        specifier,
-        importer,
-        context,
-      );
+      const source = await this.options.resolver.resolve(specifier, importer, context);
       if (source === null) {
         return null;
       }
@@ -323,9 +313,7 @@ export class ModuleSystem {
   /**
    * Get module exports by specifier.
    */
-  getModuleExportsBySpecifier(
-    specifier: string,
-  ): Record<string, any> | undefined {
+  getModuleExportsBySpecifier(specifier: string): Record<string, any> | undefined {
     const path = this.specifierToPath.get(specifier);
     if (path) {
       return this.getModuleExports(path);

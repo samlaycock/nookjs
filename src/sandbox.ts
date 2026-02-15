@@ -191,10 +191,7 @@ export interface RunResult<T = unknown> {
 }
 
 export interface Sandbox {
-  run<T = unknown>(
-    code: string,
-    options: RunOptionsFull,
-  ): Promise<RunResult<T>>;
+  run<T = unknown>(code: string, options: RunOptionsFull): Promise<RunResult<T>>;
   runSync<T = unknown>(code: string, options: RunOptionsFull): RunResult<T>;
   run<T = unknown>(code: string, options?: RunOptions): Promise<T>;
   runSync<T = unknown>(code: string, options?: RunOptions): T;
@@ -274,9 +271,7 @@ const resolveEnvPreset = (env?: SandboxEnv): InterpreterOptions => {
   throw new Error(`Unknown env preset: ${env}`);
 };
 
-const resolveApiPresets = (
-  apis?: readonly SandboxApi[],
-): InterpreterOptions[] => {
+const resolveApiPresets = (apis?: readonly SandboxApi[]): InterpreterOptions[] => {
   if (!apis || apis.length === 0) {
     return [];
   }
@@ -336,10 +331,7 @@ const resolveFeatureControl = (
   base: FeatureControl | undefined,
   toggles?: FeatureToggles,
 ): FeatureControl | undefined => {
-  if (
-    !toggles ||
-    (!toggles.enable?.length && !toggles.disable?.length && !toggles.mode)
-  ) {
+  if (!toggles || (!toggles.enable?.length && !toggles.disable?.length && !toggles.mode)) {
     return base;
   }
 
@@ -380,9 +372,7 @@ const resolveFeatureControl = (
   return { mode: "blacklist", features: [...blacklist] as LanguageFeature[] };
 };
 
-const resolveModules = (
-  modules?: SandboxModules,
-): ModuleOptions | undefined => {
+const resolveModules = (modules?: SandboxModules): ModuleOptions | undefined => {
   if (!modules) {
     return undefined;
   }
@@ -416,12 +406,10 @@ const resolveModules = (
       return modules.resolver?.resolve(specifier, importer, context) ?? null;
     },
     onLoad: modules.resolver?.onLoad
-      ? (specifier, path, exports) =>
-          modules.resolver?.onLoad?.(specifier, path, exports)
+      ? (specifier, path, exports) => modules.resolver?.onLoad?.(specifier, path, exports)
       : undefined,
     onError: modules.resolver?.onError
-      ? (specifier, importer, error) =>
-          modules.resolver?.onError?.(specifier, importer, error)
+      ? (specifier, importer, error) => modules.resolver?.onError?.(specifier, importer, error)
       : undefined,
   };
 
@@ -433,10 +421,7 @@ const resolveModules = (
   };
 };
 
-const mergeRunLimits = (
-  defaults?: RunLimits,
-  overrides?: RunLimits,
-): RunLimits | undefined => {
+const mergeRunLimits = (defaults?: RunLimits, overrides?: RunLimits): RunLimits | undefined => {
   if (!defaults && !overrides) {
     return undefined;
   }
@@ -450,10 +435,7 @@ const buildEvaluateOptions = (
   options?: RunOptions,
   signal?: AbortSignal,
 ): EvaluateOptions => {
-  const featureControl = resolveFeatureControl(
-    baseFeatureControl,
-    options?.features,
-  );
+  const featureControl = resolveFeatureControl(baseFeatureControl, options?.features);
   const limits = mergeRunLimits(defaultLimits, options?.limits);
 
   return {
@@ -461,13 +443,9 @@ const buildEvaluateOptions = (
     ...(options?.validator ? { validator: options.validator } : {}),
     ...(featureControl ? { featureControl } : {}),
     ...(signal ? { signal } : {}),
-    ...(limits?.callDepth !== undefined
-      ? { maxCallStackDepth: limits.callDepth }
-      : {}),
+    ...(limits?.callDepth !== undefined ? { maxCallStackDepth: limits.callDepth } : {}),
     ...(limits?.loops !== undefined ? { maxLoopIterations: limits.loops } : {}),
-    ...(limits?.memoryBytes !== undefined
-      ? { maxMemory: limits.memoryBytes }
-      : {}),
+    ...(limits?.memoryBytes !== undefined ? { maxMemory: limits.memoryBytes } : {}),
   };
 };
 
@@ -482,10 +460,7 @@ const validateTimeoutMs = (timeoutMs: number): void => {
   }
 };
 
-const resolveRunSignal = (
-  defaultTimeoutMs?: number,
-  options?: RunOptions,
-): ResolvedRunSignal => {
+const resolveRunSignal = (defaultTimeoutMs?: number, options?: RunOptions): ResolvedRunSignal => {
   const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
   const externalSignal = options?.signal;
 
@@ -543,10 +518,7 @@ const resolveRunSignal = (
   };
 };
 
-const assertSyncTimeoutIsDisabled = (
-  defaultTimeoutMs?: number,
-  options?: RunOptions,
-): void => {
+const assertSyncTimeoutIsDisabled = (defaultTimeoutMs?: number, options?: RunOptions): void => {
   const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
   if (timeoutMs !== undefined) {
     throw new Error("timeoutMs is only supported for async execution");
@@ -568,10 +540,7 @@ const formatResult = <T>(
   return { value, stats, resources };
 };
 
-const applyTotalLimits = (
-  interpreter: Interpreter,
-  limits?: TotalLimits,
-): void => {
+const applyTotalLimits = (interpreter: Interpreter, limits?: TotalLimits): void => {
   if (!limits) {
     return;
   }
@@ -597,14 +566,10 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
   const envPreset = resolveEnvPreset(options.env);
   const apiPresets = resolveApiPresets(options.apis);
   const baseOptions = preset(envPreset, ...apiPresets);
-  const featureControl = resolveFeatureControl(
-    baseOptions.featureControl,
-    options.features,
-  );
+  const featureControl = resolveFeatureControl(baseOptions.featureControl, options.features);
   const security = resolveSecurity(options.policy, options.security);
   const modules = resolveModules(options.modules);
-  const trackResources =
-    options.trackResources === true || hasTotalLimits(options.limits?.total);
+  const trackResources = options.trackResources === true || hasTotalLimits(options.limits?.total);
 
   const interpreterOptions: InterpreterOptions = {
     ...baseOptions,
@@ -622,20 +587,12 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
   const interpreter = new Interpreter(interpreterOptions);
   applyTotalLimits(interpreter, options.limits?.total);
 
-  const defaultLimits = mergeRunLimits(
-    DEFAULT_SAFE_RUN_LIMITS,
-    options.limits?.perRun,
-  );
+  const defaultLimits = mergeRunLimits(DEFAULT_SAFE_RUN_LIMITS, options.limits?.perRun);
   const defaultTimeoutMs = options.timeoutMs;
   const baseFeatureSet = featureControl ?? baseOptions.featureControl;
-  const defaultParseOptions = options.validator
-    ? { validator: options.validator }
-    : undefined;
+  const defaultParseOptions = options.validator ? { validator: options.validator } : undefined;
 
-  function run<T = unknown>(
-    code: string,
-    runOptions: RunOptionsFull,
-  ): Promise<RunResult<T>>;
+  function run<T = unknown>(code: string, runOptions: RunOptionsFull): Promise<RunResult<T>>;
   function run<T = unknown>(code: string, runOptions?: RunOptions): Promise<T>;
   async function run<T = unknown>(
     code: string,
@@ -649,49 +606,34 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
       resolvedSignal.signal,
     );
     try {
-      const value = (await interpreter.evaluateAsync(
-        code,
-        evaluateOptions,
-      )) as T;
-      return formatResult(
-        value,
-        runOptions?.result,
-        interpreter,
-        trackResources,
-      );
+      const value = (await interpreter.evaluateAsync(code, evaluateOptions)) as T;
+      return formatResult(value, runOptions?.result, interpreter, trackResources);
     } finally {
       resolvedSignal.cleanup();
     }
   }
 
-  function runSync<T = unknown>(
-    code: string,
-    runOptions: RunOptionsFull,
-  ): RunResult<T>;
+  function runSync<T = unknown>(code: string, runOptions: RunOptionsFull): RunResult<T>;
   function runSync<T = unknown>(code: string, runOptions?: RunOptions): T;
-  function runSync<T = unknown>(
-    code: string,
-    runOptions?: RunOptions,
-  ): T | RunResult<T> {
+  function runSync<T = unknown>(code: string, runOptions?: RunOptions): T | RunResult<T> {
     assertSyncTimeoutIsDisabled(defaultTimeoutMs, runOptions);
-    const evaluateOptions = buildEvaluateOptions(
-      baseFeatureSet,
-      defaultLimits,
-      runOptions,
-    );
+    const evaluateOptions = buildEvaluateOptions(baseFeatureSet, defaultLimits, runOptions);
     const value = interpreter.evaluate(code, evaluateOptions) as T;
     return formatResult(value, runOptions?.result, interpreter, trackResources);
   }
 
-  function runModule<
-    T extends Record<string, unknown> = Record<string, unknown>,
-  >(code: string, runOptions: RunModuleOptionsFull): Promise<RunResult<T>>;
-  function runModule<
-    T extends Record<string, unknown> = Record<string, unknown>,
-  >(code: string, runOptions: RunModuleOptions): Promise<T>;
-  async function runModule<
-    T extends Record<string, unknown> = Record<string, unknown>,
-  >(code: string, runOptions: RunModuleOptions): Promise<T | RunResult<T>> {
+  function runModule<T extends Record<string, unknown> = Record<string, unknown>>(
+    code: string,
+    runOptions: RunModuleOptionsFull,
+  ): Promise<RunResult<T>>;
+  function runModule<T extends Record<string, unknown> = Record<string, unknown>>(
+    code: string,
+    runOptions: RunModuleOptions,
+  ): Promise<T>;
+  async function runModule<T extends Record<string, unknown> = Record<string, unknown>>(
+    code: string,
+    runOptions: RunModuleOptions,
+  ): Promise<T | RunResult<T>> {
     const resolvedSignal = resolveRunSignal(defaultTimeoutMs, runOptions);
     const evaluateOptions = buildEvaluateOptions(
       baseFeatureSet,
@@ -704,21 +646,13 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
         path: runOptions.path,
         ...evaluateOptions,
       })) as T;
-      return formatResult(
-        exports,
-        runOptions.result,
-        interpreter,
-        trackResources,
-      );
+      return formatResult(exports, runOptions.result, interpreter, trackResources);
     } finally {
       resolvedSignal.cleanup();
     }
   }
 
-  const parse = (
-    code: string,
-    parseOptions?: SandboxParseOptions,
-  ): ESTree.Program => {
+  const parse = (code: string, parseOptions?: SandboxParseOptions): ESTree.Program => {
     const options = parseOptions?.validator
       ? { validator: parseOptions.validator }
       : defaultParseOptions;
@@ -731,20 +665,13 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
     runModule,
     parse,
     stats: () => interpreter.getStats(),
-    resources: () =>
-      trackResources ? interpreter.getResourceStats() : undefined,
+    resources: () => (trackResources ? interpreter.getResourceStats() : undefined),
     interpreter,
   };
 };
 
-export function run<T = unknown>(
-  code: string,
-  options: RunOnceOptionsFull,
-): Promise<RunResult<T>>;
-export function run<T = unknown>(
-  code: string,
-  options?: RunOnceOptions,
-): Promise<T>;
+export function run<T = unknown>(code: string, options: RunOnceOptionsFull): Promise<RunResult<T>>;
+export function run<T = unknown>(code: string, options?: RunOnceOptions): Promise<T>;
 export async function run<T = unknown>(
   code: string,
   options?: RunOnceOptions,
@@ -753,18 +680,13 @@ export async function run<T = unknown>(
   return sandbox.run<T>(code, options);
 }
 
-export const parse = (
-  code: string,
-  options?: ParseOnceOptions,
-): ESTree.Program => {
+export const parse = (code: string, options?: ParseOnceOptions): ESTree.Program => {
   if (options?.sandbox) {
     const sandbox = createSandbox(options.sandbox);
     return sandbox.parse(code, { validator: options.validator });
   }
 
   const interpreter = new Interpreter();
-  const parseOptions = options?.validator
-    ? { validator: options.validator }
-    : undefined;
+  const parseOptions = options?.validator ? { validator: options.validator } : undefined;
   return interpreter.parse(code, parseOptions);
 };

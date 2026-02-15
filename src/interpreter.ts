@@ -18,19 +18,10 @@ import type { StackFrame } from "./errors";
 import type { ModuleOptions, ModuleMetadata } from "./modules";
 
 import { parseModule, parseScript } from "./ast";
-import {
-  isDangerousProperty,
-  isDangerousSymbol,
-  isForbiddenGlobalName,
-} from "./constants";
+import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
 import { InterpreterError, SecurityError, ErrorCode } from "./errors";
 import { ModuleSystem } from "./modules";
-import {
-  ReadOnlyProxy,
-  PROXY_TARGET,
-  sanitizeErrorStack,
-  unwrapForNative,
-} from "./readonly-proxy";
+import { ReadOnlyProxy, PROXY_TARGET, sanitizeErrorStack, unwrapForNative } from "./readonly-proxy";
 import { ResourceExhaustedError } from "./resource-tracker";
 
 type ASTNode = ESTree.Node;
@@ -48,9 +39,7 @@ function getNodeLocation(node: ESTree.Node): Location | undefined {
   return undefined;
 }
 
-function getLocationFromNode(
-  node?: ESTree.Node,
-): { line: number; column: number } | undefined {
+function getLocationFromNode(node?: ESTree.Node): { line: number; column: number } | undefined {
   if (!node) {
     return undefined;
   }
@@ -86,12 +75,7 @@ function validatePropertyName(name: string, node?: ESTree.Node): void {
   }
 }
 
-type ControlFlowKind =
-  | "return"
-  | "break"
-  | "continue"
-  | "yield"
-  | "optional-chain";
+type ControlFlowKind = "return" | "break" | "continue" | "yield" | "optional-chain";
 
 /**
  * Unified control-flow signal used for return/break/continue/yield/optional-chain.
@@ -112,10 +96,7 @@ const OPTIONAL_CHAIN_SHORT_CIRCUIT = new ControlFlowSignal("optional-chain");
 const isControlFlowSignal = (value: any): value is ControlFlowSignal =>
   value instanceof ControlFlowSignal;
 
-const isControlFlowKind = (
-  value: any,
-  kind: ControlFlowKind,
-): value is ControlFlowSignal =>
+const isControlFlowKind = (value: any, kind: ControlFlowKind): value is ControlFlowSignal =>
   value instanceof ControlFlowSignal && value.kind === kind;
 
 /**
@@ -135,10 +116,7 @@ export class FunctionValue {
     public defaultValues: Map<number, ESTree.Expression> = new Map(), // Default values for parameters by index
     public homeClass: ClassValue | null = null, // Class this method belongs to (for super binding)
     public homeIsStatic: boolean = false, // Whether the method is static
-    public destructuredParams: Map<
-      number,
-      ESTree.ObjectPattern | ESTree.ArrayPattern
-    > = new Map(), // Destructuring patterns by param index
+    public destructuredParams: Map<number, ESTree.ObjectPattern | ESTree.ArrayPattern> = new Map(), // Destructuring patterns by param index
   ) {}
 }
 
@@ -201,11 +179,7 @@ interface ConstructorExecutionResult {
 /**
  * Shared state type for generators.
  */
-type GeneratorState =
-  | "suspended-start"
-  | "suspended-yield"
-  | "executing"
-  | "completed";
+type GeneratorState = "suspended-start" | "suspended-yield" | "executing" | "completed";
 
 /**
  * Base class for generator instances (sync + async) that share yield bookkeeping.
@@ -410,9 +384,7 @@ class GeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a statement in generator context, yielding any yields recursively.
    */
-  private *executeStatement(
-    statement: ESTree.Statement,
-  ): Generator<any, any, any> {
+  private *executeStatement(statement: ESTree.Statement): Generator<any, any, any> {
     if (statement.type === "ForStatement") {
       if (!this.featureEnabled("ForStatement")) {
         throw new InterpreterError("ForStatement is not enabled");
@@ -423,33 +395,25 @@ class GeneratorValue extends BaseGeneratorValue {
       if (!this.featureEnabled("WhileStatement")) {
         throw new InterpreterError("WhileStatement is not enabled");
       }
-      return yield* this.executeWhileStatement(
-        statement as ESTree.WhileStatement,
-      );
+      return yield* this.executeWhileStatement(statement as ESTree.WhileStatement);
     }
     if (statement.type === "DoWhileStatement") {
       if (!this.featureEnabled("DoWhileStatement")) {
         throw new InterpreterError("DoWhileStatement is not enabled");
       }
-      return yield* this.executeDoWhileStatement(
-        statement as ESTree.DoWhileStatement,
-      );
+      return yield* this.executeDoWhileStatement(statement as ESTree.DoWhileStatement);
     }
     if (statement.type === "ForOfStatement") {
       if (!this.featureEnabled("ForOfStatement")) {
         throw new InterpreterError("ForOfStatement is not enabled");
       }
-      return yield* this.executeForOfStatement(
-        statement as ESTree.ForOfStatement,
-      );
+      return yield* this.executeForOfStatement(statement as ESTree.ForOfStatement);
     }
     if (statement.type === "ForInStatement") {
       if (!this.featureEnabled("ForInStatement")) {
         throw new InterpreterError("ForInStatement is not enabled");
       }
-      return yield* this.executeForInStatement(
-        statement as ESTree.ForInStatement,
-      );
+      return yield* this.executeForInStatement(statement as ESTree.ForInStatement);
     }
     if (statement.type === "TryStatement") {
       if (!this.featureEnabled("TryCatchStatement")) {
@@ -561,11 +525,7 @@ class GeneratorValue extends BaseGeneratorValue {
    */
   private *executeBlockBody(
     statements: ESTree.Statement[],
-  ): Generator<
-    any,
-    { shouldBreak: boolean; shouldReturn: any; shouldContinue: boolean },
-    any
-  > {
+  ): Generator<any, { shouldBreak: boolean; shouldReturn: any; shouldContinue: boolean }, any> {
     for (const statement of statements) {
       const result = this.interpreter.evaluateNode(statement);
       const processed = processGeneratorResult(result);
@@ -646,9 +606,7 @@ class GeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a for loop in generator context.
    */
-  private *executeForStatement(
-    node: ESTree.ForStatement,
-  ): Generator<any, any, any> {
+  private *executeForStatement(node: ESTree.ForStatement): Generator<any, any, any> {
     const previousEnv = this.interpreter.environment;
     this.interpreter.environment = new Environment(previousEnv);
 
@@ -667,9 +625,7 @@ class GeneratorValue extends BaseGeneratorValue {
             shouldBreak,
             shouldReturn,
             shouldContinue: _shouldContinue,
-          } = yield* this.executeBlockBody(
-            (node.body as ESTree.BlockStatement).body,
-          );
+          } = yield* this.executeBlockBody((node.body as ESTree.BlockStatement).body);
           if (shouldReturn) return shouldReturn;
           if (shouldBreak) break;
           // shouldContinue falls through to update
@@ -677,8 +633,7 @@ class GeneratorValue extends BaseGeneratorValue {
           const result = this.interpreter.evaluateNode(node.body);
           const processed = processGeneratorResult(result);
           if (processed.yielded) {
-            if (processed.delegate)
-              yield* this.delegateYield(processed.yieldValue);
+            if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
             else yield processed.yieldValue;
           } else if (processed.returned) return processed.returned;
           else if (processed.shouldBreak) break;
@@ -697,9 +652,7 @@ class GeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a while loop in generator context.
    */
-  private *executeWhileStatement(
-    node: ESTree.WhileStatement,
-  ): Generator<any, any, any> {
+  private *executeWhileStatement(node: ESTree.WhileStatement): Generator<any, any, any> {
     while (this.interpreter.evaluateNode(node.test)) {
       if (node.body.type === "BlockStatement") {
         const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
@@ -711,8 +664,7 @@ class GeneratorValue extends BaseGeneratorValue {
         const result = this.interpreter.evaluateNode(node.body);
         const processed = processGeneratorResult(result);
         if (processed.yielded) {
-          if (processed.delegate)
-            yield* this.delegateYield(processed.yieldValue);
+          if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
           else yield processed.yieldValue;
         } else if (processed.returned) return processed.returned;
         else if (processed.shouldBreak) break;
@@ -724,9 +676,7 @@ class GeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a do-while loop in generator context.
    */
-  private *executeDoWhileStatement(
-    node: ESTree.DoWhileStatement,
-  ): Generator<any, any, any> {
+  private *executeDoWhileStatement(node: ESTree.DoWhileStatement): Generator<any, any, any> {
     do {
       if (node.body.type === "BlockStatement") {
         const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
@@ -738,8 +688,7 @@ class GeneratorValue extends BaseGeneratorValue {
         const result = this.interpreter.evaluateNode(node.body);
         const processed = processGeneratorResult(result);
         if (processed.yielded) {
-          if (processed.delegate)
-            yield* this.delegateYield(processed.yieldValue);
+          if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
           else yield processed.yieldValue;
         } else if (processed.returned) return processed.returned;
         else if (processed.shouldBreak) break;
@@ -751,9 +700,7 @@ class GeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a for...of loop in generator context.
    */
-  private *executeForOfStatement(
-    node: ESTree.ForOfStatement,
-  ): Generator<any, any, any> {
+  private *executeForOfStatement(node: ESTree.ForOfStatement): Generator<any, any, any> {
     const previousEnv = this.interpreter.environment;
     this.interpreter.environment = new Environment(previousEnv);
 
@@ -766,8 +713,9 @@ class GeneratorValue extends BaseGeneratorValue {
         "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
       );
 
-      const { variableName, pattern, isDeclaration, variableKind } =
-        extractForOfVariable(node.left);
+      const { variableName, pattern, isDeclaration, variableKind } = extractForOfVariable(
+        node.left,
+      );
 
       while (true) {
         const iterResult = iterator.next();
@@ -782,18 +730,9 @@ class GeneratorValue extends BaseGeneratorValue {
           this.interpreter.environment = new Environment(iterEnv);
 
           if (pattern) {
-            this.interpreter.destructurePattern(
-              pattern,
-              currentValue,
-              true,
-              variableKind,
-            );
+            this.interpreter.destructurePattern(pattern, currentValue, true, variableKind);
           } else {
-            this.interpreter.environment.declare(
-              variableName!,
-              currentValue,
-              variableKind!,
-            );
+            this.interpreter.environment.declare(variableName!, currentValue, variableKind!);
           }
 
           if (node.body.type === "BlockStatement") {
@@ -812,8 +751,7 @@ class GeneratorValue extends BaseGeneratorValue {
             const result = this.interpreter.evaluateNode(node.body);
             const processed = processGeneratorResult(result);
             if (processed.yielded) {
-              if (processed.delegate)
-                yield* this.delegateYield(processed.yieldValue);
+              if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
               else yield processed.yieldValue;
             } else if (processed.returned) {
               this.interpreter.environment = iterEnv;
@@ -842,8 +780,7 @@ class GeneratorValue extends BaseGeneratorValue {
             const result = this.interpreter.evaluateNode(node.body);
             const processed = processGeneratorResult(result);
             if (processed.yielded) {
-              if (processed.delegate)
-                yield* this.delegateYield(processed.yieldValue);
+              if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
               else yield processed.yieldValue;
             } else if (processed.returned) return processed.returned;
             else if (processed.shouldBreak) break;
@@ -859,9 +796,7 @@ class GeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a for...in loop in generator context.
    */
-  private *executeForInStatement(
-    node: ESTree.ForInStatement,
-  ): Generator<any, any, any> {
+  private *executeForInStatement(node: ESTree.ForInStatement): Generator<any, any, any> {
     const previousEnv = this.interpreter.environment;
     this.interpreter.environment = new Environment(previousEnv);
 
@@ -870,18 +805,13 @@ class GeneratorValue extends BaseGeneratorValue {
       const obj = this.interpreter.evaluateNode(node.right);
 
       if (obj === null || obj === undefined) {
-        throw new InterpreterError(
-          "for...in requires an object or array, got null/undefined",
-        );
+        throw new InterpreterError("for...in requires an object or array, got null/undefined");
       }
       if (typeof obj !== "object") {
-        throw new InterpreterError(
-          `for...in requires an object or array, got ${typeof obj}`,
-        );
+        throw new InterpreterError(`for...in requires an object or array, got ${typeof obj}`);
       }
 
-      const { variableName, isDeclaration, variableKind } =
-        extractForInVariable(node.left);
+      const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
       // Iterate over object keys
       const keys = Object.keys(obj);
@@ -890,11 +820,7 @@ class GeneratorValue extends BaseGeneratorValue {
         if (isDeclaration) {
           const iterEnv = this.interpreter.environment;
           this.interpreter.environment = new Environment(iterEnv);
-          this.interpreter.environment.declare(
-            variableName,
-            key,
-            variableKind!,
-          );
+          this.interpreter.environment.declare(variableName, key, variableKind!);
 
           if (node.body.type === "BlockStatement") {
             const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
@@ -912,8 +838,7 @@ class GeneratorValue extends BaseGeneratorValue {
             const result = this.interpreter.evaluateNode(node.body);
             const processed = processGeneratorResult(result);
             if (processed.yielded) {
-              if (processed.delegate)
-                yield* this.delegateYield(processed.yieldValue);
+              if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
               else yield processed.yieldValue;
             } else if (processed.returned) {
               this.interpreter.environment = iterEnv;
@@ -938,8 +863,7 @@ class GeneratorValue extends BaseGeneratorValue {
             const result = this.interpreter.evaluateNode(node.body);
             const processed = processGeneratorResult(result);
             if (processed.yielded) {
-              if (processed.delegate)
-                yield* this.delegateYield(processed.yieldValue);
+              if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
               else yield processed.yieldValue;
             } else if (processed.returned) return processed.returned;
             else if (processed.shouldBreak) break;
@@ -957,9 +881,7 @@ class GeneratorValue extends BaseGeneratorValue {
    * This properly handles yields inside try blocks, ensuring finally
    * blocks run at the right time (on completion or return()).
    */
-  private *executeTryStatement(
-    node: ESTree.TryStatement,
-  ): Generator<any, any, any> {
+  private *executeTryStatement(node: ESTree.TryStatement): Generator<any, any, any> {
     let tryResult: any = undefined;
     let caughtError: any = null;
 
@@ -982,18 +904,12 @@ class GeneratorValue extends BaseGeneratorValue {
         try {
           // Bind error to catch parameter if provided
           if (node.handler.param && node.handler.param.type === "Identifier") {
-            this.interpreter.environment.declare(
-              node.handler.param.name,
-              error,
-              "let",
-            );
+            this.interpreter.environment.declare(node.handler.param.name, error, "let");
           }
 
           // Execute catch block
           if (node.handler.body.type === "BlockStatement") {
-            const { shouldReturn } = yield* this.executeBlockBody(
-              node.handler.body.body,
-            );
+            const { shouldReturn } = yield* this.executeBlockBody(node.handler.body.body);
             if (shouldReturn) {
               tryResult = shouldReturn;
             }
@@ -1007,9 +923,7 @@ class GeneratorValue extends BaseGeneratorValue {
       // Always execute finally block if present
       if (node.finalizer) {
         if (node.finalizer.type === "BlockStatement") {
-          const { shouldReturn } = yield* this.executeBlockBody(
-            node.finalizer.body,
-          );
+          const { shouldReturn } = yield* this.executeBlockBody(node.finalizer.body);
           // If finally block has a return, it overrides try/catch result
           if (shouldReturn) {
             // eslint-disable-next-line no-unsafe-finally
@@ -1048,13 +962,8 @@ class GeneratorValue extends BaseGeneratorValue {
         if (isControlFlowKind(result, "return")) {
           return result.value;
         }
-        if (
-          isControlFlowKind(result, "break") ||
-          isControlFlowKind(result, "continue")
-        ) {
-          throw new InterpreterError(
-            "Break/continue outside of loop in generator",
-          );
+        if (isControlFlowKind(result, "break") || isControlFlowKind(result, "continue")) {
+          throw new InterpreterError("Break/continue outside of loop in generator");
         }
       }
       return undefined;
@@ -1141,9 +1050,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a statement in async generator context, yielding any yields recursively.
    */
-  private async *executeStatement(
-    statement: ESTree.Statement,
-  ): AsyncGenerator<any, any, any> {
+  private async *executeStatement(statement: ESTree.Statement): AsyncGenerator<any, any, any> {
     if (statement.type === "ForStatement") {
       if (!this.featureEnabled("ForStatement")) {
         throw new InterpreterError("ForStatement is not enabled");
@@ -1154,33 +1061,25 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
       if (!this.featureEnabled("WhileStatement")) {
         throw new InterpreterError("WhileStatement is not enabled");
       }
-      return yield* this.executeWhileStatement(
-        statement as ESTree.WhileStatement,
-      );
+      return yield* this.executeWhileStatement(statement as ESTree.WhileStatement);
     }
     if (statement.type === "DoWhileStatement") {
       if (!this.featureEnabled("DoWhileStatement")) {
         throw new InterpreterError("DoWhileStatement is not enabled");
       }
-      return yield* this.executeDoWhileStatement(
-        statement as ESTree.DoWhileStatement,
-      );
+      return yield* this.executeDoWhileStatement(statement as ESTree.DoWhileStatement);
     }
     if (statement.type === "ForOfStatement") {
       if (!this.featureEnabled("ForOfStatement")) {
         throw new InterpreterError("ForOfStatement is not enabled");
       }
-      return yield* this.executeForOfStatement(
-        statement as ESTree.ForOfStatement,
-      );
+      return yield* this.executeForOfStatement(statement as ESTree.ForOfStatement);
     }
     if (statement.type === "ForInStatement") {
       if (!this.featureEnabled("ForInStatement")) {
         throw new InterpreterError("ForInStatement is not enabled");
       }
-      return yield* this.executeForInStatement(
-        statement as ESTree.ForInStatement,
-      );
+      return yield* this.executeForInStatement(statement as ESTree.ForInStatement);
     }
     if (statement.type === "TryStatement") {
       if (!this.featureEnabled("TryCatchStatement")) {
@@ -1314,8 +1213,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
         // Store received value and re-evaluate
         this.setPendingYield(received);
 
-        const resumeResult =
-          await this.interpreter.evaluateNodeAsync(statement);
+        const resumeResult = await this.interpreter.evaluateNodeAsync(statement);
         this.clearResumingFromYield();
         const resumeProcessed = processGeneratorResult(resumeResult);
 
@@ -1373,9 +1271,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a for loop in async generator context.
    */
-  private async *executeForStatement(
-    node: ESTree.ForStatement,
-  ): AsyncGenerator<any, any, any> {
+  private async *executeForStatement(node: ESTree.ForStatement): AsyncGenerator<any, any, any> {
     const previousEnv = this.interpreter.environment;
     this.interpreter.environment = new Environment(previousEnv);
 
@@ -1385,10 +1281,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
       }
 
       while (true) {
-        if (
-          node.test &&
-          !(await this.interpreter.evaluateNodeAsync(node.test))
-        ) {
+        if (node.test && !(await this.interpreter.evaluateNodeAsync(node.test))) {
           break;
         }
 
@@ -1397,9 +1290,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
             shouldBreak,
             shouldReturn,
             shouldContinue: _shouldContinue,
-          } = yield* this.executeBlockBody(
-            (node.body as ESTree.BlockStatement).body,
-          );
+          } = yield* this.executeBlockBody((node.body as ESTree.BlockStatement).body);
           if (shouldReturn) return shouldReturn;
           if (shouldBreak) break;
           // shouldContinue falls through to update
@@ -1407,8 +1298,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
           const result = await this.interpreter.evaluateNodeAsync(node.body);
           const processed = processGeneratorResult(result);
           if (processed.yielded) {
-            if (processed.delegate)
-              yield* this.delegateYield(processed.yieldValue);
+            if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
             else yield processed.yieldValue;
           } else if (processed.returned) return processed.returned;
           else if (processed.shouldBreak) break;
@@ -1427,9 +1317,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a while loop in async generator context.
    */
-  private async *executeWhileStatement(
-    node: ESTree.WhileStatement,
-  ): AsyncGenerator<any, any, any> {
+  private async *executeWhileStatement(node: ESTree.WhileStatement): AsyncGenerator<any, any, any> {
     while (await this.interpreter.evaluateNodeAsync(node.test)) {
       if (node.body.type === "BlockStatement") {
         const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
@@ -1441,8 +1329,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
         const result = await this.interpreter.evaluateNodeAsync(node.body);
         const processed = processGeneratorResult(result);
         if (processed.yielded) {
-          if (processed.delegate)
-            yield* this.delegateYield(processed.yieldValue);
+          if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
           else yield processed.yieldValue;
         } else if (processed.returned) return processed.returned;
         else if (processed.shouldBreak) break;
@@ -1468,8 +1355,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
         const result = await this.interpreter.evaluateNodeAsync(node.body);
         const processed = processGeneratorResult(result);
         if (processed.yielded) {
-          if (processed.delegate)
-            yield* this.delegateYield(processed.yieldValue);
+          if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
           else yield processed.yieldValue;
         } else if (processed.returned) return processed.returned;
         else if (processed.shouldBreak) break;
@@ -1481,25 +1367,22 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a for...of loop in async generator context.
    */
-  private async *executeForOfStatement(
-    node: ESTree.ForOfStatement,
-  ): AsyncGenerator<any, any, any> {
+  private async *executeForOfStatement(node: ESTree.ForOfStatement): AsyncGenerator<any, any, any> {
     const previousEnv = this.interpreter.environment;
     this.interpreter.environment = new Environment(previousEnv);
 
     try {
       // Evaluate the iterable
-      const iterableValue = await this.interpreter.evaluateNodeAsync(
-        node.right,
-      );
+      const iterableValue = await this.interpreter.evaluateNodeAsync(node.right);
 
       const { iterator, isAsync } = getAsyncIterator(
         iterableValue,
         "for...of requires an iterable (array, generator, or object with [Symbol.iterator])",
       );
 
-      const { variableName, pattern, isDeclaration, variableKind } =
-        extractForOfVariable(node.left);
+      const { variableName, pattern, isDeclaration, variableKind } = extractForOfVariable(
+        node.left,
+      );
 
       while (true) {
         const iterResult = isAsync
@@ -1523,11 +1406,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
               variableKind,
             );
           } else {
-            this.interpreter.environment.declare(
-              variableName!,
-              currentValue,
-              variableKind!,
-            );
+            this.interpreter.environment.declare(variableName!, currentValue, variableKind!);
           }
 
           if (node.body.type === "BlockStatement") {
@@ -1546,8 +1425,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
             const result = await this.interpreter.evaluateNodeAsync(node.body);
             const processed = processGeneratorResult(result);
             if (processed.yielded) {
-              if (processed.delegate)
-                yield* this.delegateYield(processed.yieldValue);
+              if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
               else yield processed.yieldValue;
             } else if (processed.returned) {
               this.interpreter.environment = iterEnv;
@@ -1561,11 +1439,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
           this.interpreter.environment = iterEnv;
         } else {
           if (pattern) {
-            await this.interpreter.destructurePatternAsync(
-              pattern,
-              currentValue,
-              false,
-            );
+            await this.interpreter.destructurePatternAsync(pattern, currentValue, false);
           } else {
             this.interpreter.environment.set(variableName!, currentValue);
           }
@@ -1580,8 +1454,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
             const result = await this.interpreter.evaluateNodeAsync(node.body);
             const processed = processGeneratorResult(result);
             if (processed.yielded) {
-              if (processed.delegate)
-                yield* this.delegateYield(processed.yieldValue);
+              if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
               else yield processed.yieldValue;
             } else if (processed.returned) return processed.returned;
             else if (processed.shouldBreak) break;
@@ -1597,9 +1470,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
   /**
    * Execute a for...in loop in async generator context.
    */
-  private async *executeForInStatement(
-    node: ESTree.ForInStatement,
-  ): AsyncGenerator<any, any, any> {
+  private async *executeForInStatement(node: ESTree.ForInStatement): AsyncGenerator<any, any, any> {
     const previousEnv = this.interpreter.environment;
     this.interpreter.environment = new Environment(previousEnv);
 
@@ -1608,18 +1479,13 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
       const obj = await this.interpreter.evaluateNodeAsync(node.right);
 
       if (obj === null || obj === undefined) {
-        throw new InterpreterError(
-          "for...in requires an object or array, got null/undefined",
-        );
+        throw new InterpreterError("for...in requires an object or array, got null/undefined");
       }
       if (typeof obj !== "object") {
-        throw new InterpreterError(
-          `for...in requires an object or array, got ${typeof obj}`,
-        );
+        throw new InterpreterError(`for...in requires an object or array, got ${typeof obj}`);
       }
 
-      const { variableName, isDeclaration, variableKind } =
-        extractForInVariable(node.left);
+      const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
       // Iterate over object keys
       const keys = Object.keys(obj);
@@ -1628,11 +1494,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
         if (isDeclaration) {
           const iterEnv = this.interpreter.environment;
           this.interpreter.environment = new Environment(iterEnv);
-          this.interpreter.environment.declare(
-            variableName,
-            key,
-            variableKind!,
-          );
+          this.interpreter.environment.declare(variableName, key, variableKind!);
 
           if (node.body.type === "BlockStatement") {
             const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
@@ -1650,8 +1512,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
             const result = await this.interpreter.evaluateNodeAsync(node.body);
             const processed = processGeneratorResult(result);
             if (processed.yielded) {
-              if (processed.delegate)
-                yield* this.delegateYield(processed.yieldValue);
+              if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
               else yield processed.yieldValue;
             } else if (processed.returned) {
               this.interpreter.environment = iterEnv;
@@ -1676,8 +1537,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
             const result = await this.interpreter.evaluateNodeAsync(node.body);
             const processed = processGeneratorResult(result);
             if (processed.yielded) {
-              if (processed.delegate)
-                yield* this.delegateYield(processed.yieldValue);
+              if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
               else yield processed.yieldValue;
             } else if (processed.returned) return processed.returned;
             else if (processed.shouldBreak) break;
@@ -1695,9 +1555,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
    * This properly handles yields inside try blocks, ensuring finally
    * blocks run at the right time (on completion or return()).
    */
-  private async *executeTryStatement(
-    node: ESTree.TryStatement,
-  ): AsyncGenerator<any, any, any> {
+  private async *executeTryStatement(node: ESTree.TryStatement): AsyncGenerator<any, any, any> {
     let tryResult: any = undefined;
     let caughtError: any = null;
     let finallyHasReturn = false;
@@ -1722,18 +1580,12 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
         try {
           // Bind error to catch parameter if provided
           if (node.handler.param && node.handler.param.type === "Identifier") {
-            this.interpreter.environment.declare(
-              node.handler.param.name,
-              error,
-              "let",
-            );
+            this.interpreter.environment.declare(node.handler.param.name, error, "let");
           }
 
           // Execute catch block
           if (node.handler.body.type === "BlockStatement") {
-            const { shouldReturn } = yield* this.executeBlockBody(
-              node.handler.body.body,
-            );
+            const { shouldReturn } = yield* this.executeBlockBody(node.handler.body.body);
             if (shouldReturn) {
               tryResult = shouldReturn;
             }
@@ -1747,9 +1599,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
       // Always execute finally block if present
       if (node.finalizer) {
         if (node.finalizer.type === "BlockStatement") {
-          const { shouldReturn } = yield* this.executeBlockBody(
-            node.finalizer.body,
-          );
+          const { shouldReturn } = yield* this.executeBlockBody(node.finalizer.body);
           // If finally block has a return, it overrides try/catch result
           // Unwrap return signal since we're returning directly from the generator
           if (shouldReturn) {
@@ -1793,13 +1643,8 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
         if (isControlFlowKind(result, "return")) {
           return result.value;
         }
-        if (
-          isControlFlowKind(result, "break") ||
-          isControlFlowKind(result, "continue")
-        ) {
-          throw new InterpreterError(
-            "Break/continue outside of loop in generator",
-          );
+        if (isControlFlowKind(result, "break") || isControlFlowKind(result, "continue")) {
+          throw new InterpreterError("Break/continue outside of loop in generator");
         }
       }
       return undefined;
@@ -1930,11 +1775,7 @@ export class HostFunctionValue {
             );
           }
           // Wrap non-function values through ReadOnlyProxy for security
-          return ReadOnlyProxy.wrap(
-            val,
-            `${target.name}.${String(prop)}`,
-            target.securityOptions,
-          );
+          return ReadOnlyProxy.wrap(val, `${target.name}.${String(prop)}`, target.securityOptions);
         }
 
         // Block all other property access for security
@@ -2047,9 +1888,7 @@ class Environment {
           return;
         } else {
           // Cannot redeclare let/const as var
-          throw new InterpreterError(
-            `Identifier '${name}' has already been declared`,
-          );
+          throw new InterpreterError(`Identifier '${name}' has already been declared`);
         }
       }
 
@@ -2060,9 +1899,7 @@ class Environment {
 
     // let and const are block-scoped - check current scope only
     if (this.variables.has(name)) {
-      throw new InterpreterError(
-        `Variable '${name}' has already been declared`,
-      );
+      throw new InterpreterError(`Variable '${name}' has already been declared`);
     }
     this.variables.set(name, { value, kind, isGlobal });
   }
@@ -2117,9 +1954,7 @@ class Environment {
       const nextVar = env.variables.get(name);
       if (nextVar) {
         if (nextVar.kind === "const") {
-          throw new InterpreterError(
-            `Cannot assign to const variable '${name}'`,
-          );
+          throw new InterpreterError(`Cannot assign to const variable '${name}'`);
         }
         nextVar.value = value;
         return;
@@ -2566,16 +2401,11 @@ export class Interpreter {
   // Track super binding context during class method execution
   private currentSuperBinding: SuperBinding | null = null;
   private instanceClassMap: WeakMap<object, ClassValue> = new WeakMap();
-  private arrayMethodCache: WeakMap<any[], Map<string, HostFunctionValue>> =
+  private arrayMethodCache: WeakMap<any[], Map<string, HostFunctionValue>> = new WeakMap();
+  private generatorMethodCache: WeakMap<GeneratorValue, Map<string, HostFunctionValue>> =
     new WeakMap();
-  private generatorMethodCache: WeakMap<
-    GeneratorValue,
-    Map<string, HostFunctionValue>
-  > = new WeakMap();
-  private asyncGeneratorMethodCache: WeakMap<
-    AsyncGeneratorValue,
-    Map<string, HostFunctionValue>
-  > = new WeakMap();
+  private asyncGeneratorMethodCache: WeakMap<AsyncGeneratorValue, Map<string, HostFunctionValue>> =
+    new WeakMap();
   private thisInitStack: boolean[] = [];
   private constructorStack: ClassValue[] = [];
 
@@ -2762,26 +2592,11 @@ export class Interpreter {
     this.environment.declare("NaN", NaN, "const", true);
     this.environment.declare("Infinity", Infinity, "const", true);
     // Symbol is a fundamental primitive type constructor - wrap in HostFunctionValue
-    this.environment.declare(
-      "Symbol",
-      this.createHostFunction(Symbol, "Symbol"),
-      "const",
-      true,
-    );
+    this.environment.declare("Symbol", this.createHostFunction(Symbol, "Symbol"), "const", true);
     // Promise is needed for async/await support - wrap in HostFunctionValue
-    this.environment.declare(
-      "Promise",
-      this.createHostFunction(Promise, "Promise"),
-      "const",
-      true,
-    );
+    this.environment.declare("Promise", this.createHostFunction(Promise, "Promise"), "const", true);
     // globalThis and global provide access to the sandbox's global scope
-    this.environment.declare(
-      "globalThis",
-      new GlobalThisSentinel(),
-      "const",
-      true,
-    );
+    this.environment.declare("globalThis", new GlobalThisSentinel(), "const", true);
     this.environment.declare("global", new GlobalThisSentinel(), "const", true);
   }
 
@@ -2803,9 +2618,7 @@ export class Interpreter {
     for (const [key, value] of Object.entries(globals)) {
       // Reject high-risk host objects/functions regardless of allowOverride.
       if (this.isForbiddenGlobal(key, value)) {
-        throw new InterpreterError(
-          `Global '${key}' is not allowed for security reasons`,
-        );
+        throw new InterpreterError(`Global '${key}' is not allowed for security reasons`);
       }
 
       // Wrap ALL values with ReadOnlyProxy for security and consistency
@@ -2821,10 +2634,7 @@ export class Interpreter {
           // Save the original value if it's a constructor global being overridden
           // This allows us to restore it later when per-call globals are cleaned up
           if (trackKeys && key in this.constructorGlobals) {
-            this.overriddenConstructorGlobals.set(
-              key,
-              this.environment.get(key),
-            );
+            this.overriddenConstructorGlobals.set(key, this.environment.get(key));
           }
           // Try to force update the global (only works for injected globals, not user variables)
           const wasUpdated = this.environment.forceSet(key, wrappedValue, true);
@@ -2848,12 +2658,7 @@ export class Interpreter {
     if (isForbiddenGlobalName(name)) {
       return true;
     }
-    return (
-      value === Function ||
-      value === eval ||
-      value === Proxy ||
-      value === Reflect
-    );
+    return value === Function || value === eval || value === Proxy || value === Reflect;
   }
 
   /**
@@ -3019,14 +2824,10 @@ export class Interpreter {
   }
 
   private beginEvaluation(options?: EvaluateOptions): void {
-    if (
-      this.integratedResourceTracking &&
-      this.integratedExhaustedLimit !== null
-    ) {
+    if (this.integratedResourceTracking && this.integratedExhaustedLimit !== null) {
       throw new ResourceExhaustedError(
         this.integratedExhaustedLimit,
-        this.getResourceStats().limitStatus[this.integratedExhaustedLimit]
-          ?.used ?? 0,
+        this.getResourceStats().limitStatus[this.integratedExhaustedLimit]?.used ?? 0,
         this.integratedLimits[this.integratedExhaustedLimit] ?? 0,
       );
     }
@@ -3093,9 +2894,7 @@ export class Interpreter {
         this.integratedLargestEvaluationMemory = currentMemoryUsage;
       }
 
-      if (
-        this.statsLoopIterations > this.integratedLargestEvaluationIterations
-      ) {
+      if (this.statsLoopIterations > this.integratedLargestEvaluationIterations) {
         this.integratedLargestEvaluationIterations = this.statsLoopIterations;
       }
 
@@ -3163,11 +2962,7 @@ export class Interpreter {
       if (node.type === "AwaitExpression" && !inAsync) {
         throw new InterpreterError("Unexpected token: await");
       }
-      if (
-        node.type === "ForOfStatement" &&
-        (node as ESTree.ForOfStatement).await &&
-        !inAsync
-      ) {
+      if (node.type === "ForOfStatement" && (node as ESTree.ForOfStatement).await && !inAsync) {
         throw new InterpreterError("Unexpected token: await");
       }
 
@@ -3259,10 +3054,7 @@ export class Interpreter {
     }
   }
 
-  async evaluateAsync(
-    input: string | ESTree.Program,
-    options?: EvaluateOptions,
-  ): Promise<any> {
+  async evaluateAsync(input: string | ESTree.Program, options?: EvaluateOptions): Promise<any> {
     const releaseMutex = await this.acquireEvaluationMutex();
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
     this.currentSourceCode = sourceCode;
@@ -3363,9 +3155,7 @@ export class Interpreter {
     if (options?.validator) {
       const isValid = options.validator(ast);
       if (!isValid) {
-        throw new InterpreterError(
-          "AST validation failed: code is not allowed",
-        );
+        throw new InterpreterError("AST validation failed: code is not allowed");
       }
     }
 
@@ -3408,9 +3198,7 @@ export class Interpreter {
   private checkIntegratedLimits(): void {
     const stats = this.getResourceStats();
 
-    for (const key of Object.keys(
-      stats.limitStatus,
-    ) as (keyof ResourceLimits)[]) {
+    for (const key of Object.keys(stats.limitStatus) as (keyof ResourceLimits)[]) {
       const status = stats.limitStatus[key];
       if (status && status.used >= status.limit) {
         this.integratedExhaustedLimit = key;
@@ -3444,9 +3232,7 @@ export class Interpreter {
 
     const limitStatus: ResourceStats["limitStatus"] = {};
 
-    for (const key of Object.keys(
-      this.integratedLimits,
-    ) as (keyof ResourceLimits)[]) {
+    for (const key of Object.keys(this.integratedLimits) as (keyof ResourceLimits)[]) {
       const limit = this.integratedLimits[key];
       if (limit === undefined) continue;
 
@@ -3816,10 +3602,7 @@ export class Interpreter {
    * @param path - The module path (for resolver)
    * @returns The module's exported values
    */
-  async evaluateModuleAstAsync(
-    ast: ESTree.Program,
-    path: string,
-  ): Promise<Record<string, any>> {
+  async evaluateModuleAstAsync(ast: ESTree.Program, path: string): Promise<Record<string, any>> {
     if (!this.moduleSystem) {
       throw new InterpreterError("Module system is not enabled");
     }
@@ -3835,25 +3618,11 @@ export class Interpreter {
         if (statement.type === "ImportDeclaration") {
           await this.evaluateImportDeclaration(statement, moduleEnv, path);
         } else if (statement.type === "ExportNamedDeclaration") {
-          await this.evaluateExportNamedDeclaration(
-            statement,
-            moduleEnv,
-            exports,
-            path,
-          );
+          await this.evaluateExportNamedDeclaration(statement, moduleEnv, exports, path);
         } else if (statement.type === "ExportDefaultDeclaration") {
-          await this.evaluateExportDefaultDeclaration(
-            statement,
-            moduleEnv,
-            exports,
-          );
+          await this.evaluateExportDefaultDeclaration(statement, moduleEnv, exports);
         } else if (statement.type === "ExportAllDeclaration") {
-          await this.evaluateExportAllDeclaration(
-            statement,
-            moduleEnv,
-            exports,
-            path,
-          );
+          await this.evaluateExportAllDeclaration(statement, moduleEnv, exports, path);
         } else {
           const prevEnv = this.environment;
           this.environment = moduleEnv;
@@ -3865,11 +3634,7 @@ export class Interpreter {
         }
       }
 
-      return ReadOnlyProxy.wrap(
-        exports,
-        "module.exports",
-        this.securityOptions,
-      );
+      return ReadOnlyProxy.wrap(exports, "module.exports", this.securityOptions);
     } finally {
       // Always pop from evaluation stack, even on error
       this.moduleSystem.popEvaluation();
@@ -3887,10 +3652,7 @@ export class Interpreter {
       throw new InterpreterError("Module system is not enabled");
     }
 
-    const moduleRecord = await this.moduleSystem.resolveModule(
-      specifier,
-      importerPath,
-    );
+    const moduleRecord = await this.moduleSystem.resolveModule(specifier, importerPath);
     if (!moduleRecord) {
       throw new InterpreterError(`Cannot find module '${specifier}'`);
     }
@@ -3922,52 +3684,33 @@ export class Interpreter {
     importerPath: string,
   ): Promise<void> {
     const specifier = (node.source as ESTree.Literal).value as string;
-    const importedExports = await this.resolveModuleExports(
-      specifier,
-      importerPath,
-    );
+    const importedExports = await this.resolveModuleExports(specifier, importerPath);
 
     for (const spec of node.specifiers) {
       if (spec.type === "ImportNamespaceSpecifier") {
         moduleEnv.declare(
           spec.local.name,
-          ReadOnlyProxy.wrap(
-            importedExports,
-            spec.local.name,
-            this.securityOptions,
-          ),
+          ReadOnlyProxy.wrap(importedExports, spec.local.name, this.securityOptions),
           "const",
         );
       } else if (spec.type === "ImportDefaultSpecifier") {
         if (!("default" in importedExports)) {
-          throw new InterpreterError(
-            `Module '${specifier}' does not have a default export`,
-          );
+          throw new InterpreterError(`Module '${specifier}' does not have a default export`);
         }
         moduleEnv.declare(
           spec.local.name,
-          ReadOnlyProxy.wrap(
-            importedExports.default,
-            spec.local.name,
-            this.securityOptions,
-          ),
+          ReadOnlyProxy.wrap(importedExports.default, spec.local.name, this.securityOptions),
           "const",
         );
       } else {
         // Named import - check that the export exists
         const importedName = spec.imported.name;
         if (!(importedName in importedExports)) {
-          throw new InterpreterError(
-            `Module '${specifier}' does not export '${importedName}'`,
-          );
+          throw new InterpreterError(`Module '${specifier}' does not export '${importedName}'`);
         }
         moduleEnv.declare(
           spec.local.name,
-          ReadOnlyProxy.wrap(
-            importedExports[importedName],
-            spec.local.name,
-            this.securityOptions,
-          ),
+          ReadOnlyProxy.wrap(importedExports[importedName], spec.local.name, this.securityOptions),
           "const",
         );
       }
@@ -3994,23 +3737,13 @@ export class Interpreter {
           }
         } else if (node.declaration.type === "FunctionDeclaration") {
           this.evaluateFunctionDeclaration(node.declaration);
-          if (
-            node.declaration.id &&
-            node.declaration.id.type === "Identifier"
-          ) {
-            exports[node.declaration.id.name] = moduleEnv.get(
-              node.declaration.id.name,
-            );
+          if (node.declaration.id && node.declaration.id.type === "Identifier") {
+            exports[node.declaration.id.name] = moduleEnv.get(node.declaration.id.name);
           }
         } else if (node.declaration.type === "ClassDeclaration") {
           await this.evaluateClassDeclarationAsync(node.declaration);
-          if (
-            node.declaration.id &&
-            node.declaration.id.type === "Identifier"
-          ) {
-            exports[node.declaration.id.name] = moduleEnv.get(
-              node.declaration.id.name,
-            );
+          if (node.declaration.id && node.declaration.id.type === "Identifier") {
+            exports[node.declaration.id.name] = moduleEnv.get(node.declaration.id.name);
           }
         }
       } finally {
@@ -4022,10 +3755,7 @@ export class Interpreter {
       // Handle re-exports: export { foo } from "module"
       if (node.source) {
         const specifier = (node.source as ESTree.Literal).value as string;
-        const sourceExports = await this.resolveModuleExports(
-          specifier,
-          currentPath,
-        );
+        const sourceExports = await this.resolveModuleExports(specifier, currentPath);
 
         for (const spec of node.specifiers) {
           if (spec.type === "ExportSpecifier") {
@@ -4111,8 +3841,9 @@ export class Interpreter {
       throw new InterpreterError("Function must have a body");
     }
 
-    const { params, restParamIndex, defaultValues, destructuredParams } =
-      this.parseFunctionParams(node.params);
+    const { params, restParamIndex, defaultValues, destructuredParams } = this.parseFunctionParams(
+      node.params,
+    );
 
     if (node.body.type !== "BlockStatement") {
       throw new InterpreterError("Function body must be a block statement");
@@ -4133,9 +3864,7 @@ export class Interpreter {
   }
 
   // Helper to create a ClassValue without declaring it (for export default)
-  private async createClassValue(
-    node: ESTree.ClassDeclaration,
-  ): Promise<ClassValue> {
+  private async createClassValue(node: ESTree.ClassDeclaration): Promise<ClassValue> {
     return await this.buildClassValueAsync(node);
   }
 
@@ -4146,10 +3875,7 @@ export class Interpreter {
     currentPath: string,
   ): Promise<void> {
     const specifier = (node.source as ESTree.Literal).value as string;
-    const sourceExports = await this.resolveModuleExports(
-      specifier,
-      currentPath,
-    );
+    const sourceExports = await this.resolveModuleExports(specifier, currentPath);
 
     // Handle "export * as namespace from 'module'"
     if (node.exported) {
@@ -4224,9 +3950,7 @@ export class Interpreter {
    * const utilsExports = interpreter.getModuleExportsBySpecifier("./utils.js");
    * ```
    */
-  getModuleExportsBySpecifier(
-    specifier: string,
-  ): Record<string, any> | undefined {
+  getModuleExportsBySpecifier(specifier: string): Record<string, any> | undefined {
     return this.moduleSystem?.getModuleExportsBySpecifier(specifier);
   }
 
@@ -4351,12 +4075,8 @@ export class Interpreter {
         async: (node) => this.evaluateProgramAsync(node as ESTree.Program),
       },
       ExpressionStatement: {
-        sync: (node) =>
-          this.evaluateNode((node as ESTree.ExpressionStatement).expression),
-        async: (node) =>
-          this.evaluateNodeAsync(
-            (node as ESTree.ExpressionStatement).expression,
-          ),
+        sync: (node) => this.evaluateNode((node as ESTree.ExpressionStatement).expression),
+        async: (node) => this.evaluateNodeAsync((node as ESTree.ExpressionStatement).expression),
       },
       EmptyStatement: same(() => undefined),
       Literal: same((node) => this.evaluateLiteral(node as ESTree.Literal)),
@@ -4367,103 +4087,67 @@ export class Interpreter {
           return value instanceof Promise ? new RawValue(value) : value;
         },
       },
-      ThisExpression: same((node) =>
-        this.evaluateThisExpression(node as ESTree.ThisExpression),
-      ),
+      ThisExpression: same((node) => this.evaluateThisExpression(node as ESTree.ThisExpression)),
       BinaryExpression: {
-        sync: (node) =>
-          this.evaluateBinaryExpression(node as ESTree.BinaryExpression),
-        async: (node) =>
-          this.evaluateBinaryExpressionAsync(node as ESTree.BinaryExpression),
+        sync: (node) => this.evaluateBinaryExpression(node as ESTree.BinaryExpression),
+        async: (node) => this.evaluateBinaryExpressionAsync(node as ESTree.BinaryExpression),
       },
       UnaryExpression: {
-        sync: (node) =>
-          this.evaluateUnaryExpression(node as ESTree.UnaryExpression),
-        async: (node) =>
-          this.evaluateUnaryExpressionAsync(node as ESTree.UnaryExpression),
+        sync: (node) => this.evaluateUnaryExpression(node as ESTree.UnaryExpression),
+        async: (node) => this.evaluateUnaryExpressionAsync(node as ESTree.UnaryExpression),
       },
       UpdateExpression: same((node) =>
         this.evaluateUpdateExpression(node as ESTree.UpdateExpression),
       ),
       LogicalExpression: {
-        sync: (node) =>
-          this.evaluateLogicalExpression(node as ESTree.LogicalExpression),
-        async: (node) =>
-          this.evaluateLogicalExpressionAsync(node as ESTree.LogicalExpression),
+        sync: (node) => this.evaluateLogicalExpression(node as ESTree.LogicalExpression),
+        async: (node) => this.evaluateLogicalExpressionAsync(node as ESTree.LogicalExpression),
       },
       ConditionalExpression: {
-        sync: (node) =>
-          this.evaluateConditionalExpression(
-            node as ESTree.ConditionalExpression,
-          ),
+        sync: (node) => this.evaluateConditionalExpression(node as ESTree.ConditionalExpression),
         async: (node) =>
-          this.evaluateConditionalExpressionAsync(
-            node as ESTree.ConditionalExpression,
-          ),
+          this.evaluateConditionalExpressionAsync(node as ESTree.ConditionalExpression),
       },
       AssignmentExpression: {
-        sync: (node) =>
-          this.evaluateAssignmentExpression(
-            node as ESTree.AssignmentExpression,
-          ),
+        sync: (node) => this.evaluateAssignmentExpression(node as ESTree.AssignmentExpression),
         async: (node) =>
-          this.evaluateAssignmentExpressionAsync(
-            node as ESTree.AssignmentExpression,
-          ),
+          this.evaluateAssignmentExpressionAsync(node as ESTree.AssignmentExpression),
       },
       VariableDeclaration: {
-        sync: (node) =>
-          this.evaluateVariableDeclaration(node as ESTree.VariableDeclaration),
-        async: (node) =>
-          this.evaluateVariableDeclarationAsync(
-            node as ESTree.VariableDeclaration,
-          ),
+        sync: (node) => this.evaluateVariableDeclaration(node as ESTree.VariableDeclaration),
+        async: (node) => this.evaluateVariableDeclarationAsync(node as ESTree.VariableDeclaration),
       },
       BlockStatement: {
-        sync: (node) =>
-          this.evaluateBlockStatement(node as ESTree.BlockStatement),
-        async: (node) =>
-          this.evaluateBlockStatementAsync(node as ESTree.BlockStatement),
+        sync: (node) => this.evaluateBlockStatement(node as ESTree.BlockStatement),
+        async: (node) => this.evaluateBlockStatementAsync(node as ESTree.BlockStatement),
       },
       IfStatement: {
         sync: (node) => this.evaluateIfStatement(node as ESTree.IfStatement),
-        async: (node) =>
-          this.evaluateIfStatementAsync(node as ESTree.IfStatement),
+        async: (node) => this.evaluateIfStatementAsync(node as ESTree.IfStatement),
       },
       WhileStatement: {
-        sync: (node) =>
-          this.evaluateWhileStatement(node as ESTree.WhileStatement),
-        async: (node) =>
-          this.evaluateWhileStatementAsync(node as ESTree.WhileStatement),
+        sync: (node) => this.evaluateWhileStatement(node as ESTree.WhileStatement),
+        async: (node) => this.evaluateWhileStatementAsync(node as ESTree.WhileStatement),
       },
       DoWhileStatement: {
-        sync: (node) =>
-          this.evaluateDoWhileStatement(node as ESTree.DoWhileStatement),
-        async: (node) =>
-          this.evaluateDoWhileStatementAsync(node as ESTree.DoWhileStatement),
+        sync: (node) => this.evaluateDoWhileStatement(node as ESTree.DoWhileStatement),
+        async: (node) => this.evaluateDoWhileStatementAsync(node as ESTree.DoWhileStatement),
       },
       ForStatement: {
         sync: (node) => this.evaluateForStatement(node as ESTree.ForStatement),
-        async: (node) =>
-          this.evaluateForStatementAsync(node as ESTree.ForStatement),
+        async: (node) => this.evaluateForStatementAsync(node as ESTree.ForStatement),
       },
       ForOfStatement: {
-        sync: (node) =>
-          this.evaluateForOfStatement(node as ESTree.ForOfStatement),
-        async: (node) =>
-          this.evaluateForOfStatementAsync(node as ESTree.ForOfStatement),
+        sync: (node) => this.evaluateForOfStatement(node as ESTree.ForOfStatement),
+        async: (node) => this.evaluateForOfStatementAsync(node as ESTree.ForOfStatement),
       },
       ForInStatement: {
-        sync: (node) =>
-          this.evaluateForInStatement(node as ESTree.ForInStatement),
-        async: (node) =>
-          this.evaluateForInStatementAsync(node as ESTree.ForInStatement),
+        sync: (node) => this.evaluateForInStatement(node as ESTree.ForInStatement),
+        async: (node) => this.evaluateForInStatementAsync(node as ESTree.ForInStatement),
       },
       SwitchStatement: {
-        sync: (node) =>
-          this.evaluateSwitchStatement(node as ESTree.SwitchStatement),
-        async: (node) =>
-          this.evaluateSwitchStatementAsync(node as ESTree.SwitchStatement),
+        sync: (node) => this.evaluateSwitchStatement(node as ESTree.SwitchStatement),
+        async: (node) => this.evaluateSwitchStatementAsync(node as ESTree.SwitchStatement),
       },
       FunctionDeclaration: same((node) =>
         this.evaluateFunctionDeclaration(node as ESTree.FunctionDeclaration),
@@ -4472,15 +4156,11 @@ export class Interpreter {
         this.evaluateFunctionExpression(node as ESTree.FunctionExpression),
       ),
       ArrowFunctionExpression: same((node) =>
-        this.evaluateArrowFunctionExpression(
-          node as ESTree.ArrowFunctionExpression,
-        ),
+        this.evaluateArrowFunctionExpression(node as ESTree.ArrowFunctionExpression),
       ),
       ReturnStatement: {
-        sync: (node) =>
-          this.evaluateReturnStatement(node as ESTree.ReturnStatement),
-        async: (node) =>
-          this.evaluateReturnStatementAsync(node as ESTree.ReturnStatement),
+        sync: (node) => this.evaluateReturnStatement(node as ESTree.ReturnStatement),
+        async: (node) => this.evaluateReturnStatementAsync(node as ESTree.ReturnStatement),
       },
       AwaitExpression: {
         sync: () => {
@@ -4488,109 +4168,73 @@ export class Interpreter {
             "Cannot use await in synchronous evaluate(). Use evaluateAsync() instead.",
           );
         },
-        async: (node) =>
-          this.evaluateAwaitExpressionAsync(node as ESTree.AwaitExpression),
+        async: (node) => this.evaluateAwaitExpressionAsync(node as ESTree.AwaitExpression),
       },
       YieldExpression: {
-        sync: (node) =>
-          this.evaluateYieldExpression(node as ESTree.YieldExpression),
-        async: (node) =>
-          this.evaluateYieldExpressionAsync(node as ESTree.YieldExpression),
+        sync: (node) => this.evaluateYieldExpression(node as ESTree.YieldExpression),
+        async: (node) => this.evaluateYieldExpressionAsync(node as ESTree.YieldExpression),
       },
-      BreakStatement: same((node) =>
-        this.evaluateBreakStatement(node as ESTree.BreakStatement),
-      ),
+      BreakStatement: same((node) => this.evaluateBreakStatement(node as ESTree.BreakStatement)),
       ContinueStatement: same((node) =>
         this.evaluateContinueStatement(node as ESTree.ContinueStatement),
       ),
       LabeledStatement: {
-        sync: (node) =>
-          this.evaluateLabeledStatement(node as ESTree.LabeledStatement),
-        async: (node) =>
-          this.evaluateLabeledStatementAsync(node as ESTree.LabeledStatement),
+        sync: (node) => this.evaluateLabeledStatement(node as ESTree.LabeledStatement),
+        async: (node) => this.evaluateLabeledStatementAsync(node as ESTree.LabeledStatement),
       },
       ThrowStatement: {
-        sync: (node) =>
-          this.evaluateThrowStatement(node as ESTree.ThrowStatement),
-        async: (node) =>
-          this.evaluateThrowStatementAsync(node as ESTree.ThrowStatement),
+        sync: (node) => this.evaluateThrowStatement(node as ESTree.ThrowStatement),
+        async: (node) => this.evaluateThrowStatementAsync(node as ESTree.ThrowStatement),
       },
       TryStatement: {
         sync: (node) => this.evaluateTryStatement(node as ESTree.TryStatement),
-        async: (node) =>
-          this.evaluateTryStatementAsync(node as ESTree.TryStatement),
+        async: (node) => this.evaluateTryStatementAsync(node as ESTree.TryStatement),
       },
       CallExpression: {
-        sync: (node) =>
-          this.evaluateCallExpression(node as ESTree.CallExpression),
-        async: (node) =>
-          this.evaluateCallExpressionAsync(node as ESTree.CallExpression),
+        sync: (node) => this.evaluateCallExpression(node as ESTree.CallExpression),
+        async: (node) => this.evaluateCallExpressionAsync(node as ESTree.CallExpression),
       },
       NewExpression: {
-        sync: (node) =>
-          this.evaluateNewExpression(node as ESTree.NewExpression),
-        async: (node) =>
-          this.evaluateNewExpressionAsync(node as ESTree.NewExpression),
+        sync: (node) => this.evaluateNewExpression(node as ESTree.NewExpression),
+        async: (node) => this.evaluateNewExpressionAsync(node as ESTree.NewExpression),
       },
       MemberExpression: {
-        sync: (node) =>
-          this.evaluateMemberExpression(node as ESTree.MemberExpression),
-        async: (node) =>
-          this.evaluateMemberExpressionAsync(node as ESTree.MemberExpression),
+        sync: (node) => this.evaluateMemberExpression(node as ESTree.MemberExpression),
+        async: (node) => this.evaluateMemberExpressionAsync(node as ESTree.MemberExpression),
       },
       ArrayExpression: {
-        sync: (node) =>
-          this.evaluateArrayExpression(node as ESTree.ArrayExpression),
-        async: (node) =>
-          this.evaluateArrayExpressionAsync(node as ESTree.ArrayExpression),
+        sync: (node) => this.evaluateArrayExpression(node as ESTree.ArrayExpression),
+        async: (node) => this.evaluateArrayExpressionAsync(node as ESTree.ArrayExpression),
       },
       ObjectExpression: {
-        sync: (node) =>
-          this.evaluateObjectExpression(node as ESTree.ObjectExpression),
-        async: (node) =>
-          this.evaluateObjectExpressionAsync(node as ESTree.ObjectExpression),
+        sync: (node) => this.evaluateObjectExpression(node as ESTree.ObjectExpression),
+        async: (node) => this.evaluateObjectExpressionAsync(node as ESTree.ObjectExpression),
       },
       TemplateLiteral: {
-        sync: (node) =>
-          this.evaluateTemplateLiteral(node as ESTree.TemplateLiteral),
-        async: (node) =>
-          this.evaluateTemplateLiteralAsync(node as ESTree.TemplateLiteral),
+        sync: (node) => this.evaluateTemplateLiteral(node as ESTree.TemplateLiteral),
+        async: (node) => this.evaluateTemplateLiteralAsync(node as ESTree.TemplateLiteral),
       },
       TaggedTemplateExpression: {
         sync: (node) =>
-          this.evaluateTaggedTemplateExpression(
-            node as ESTree.TaggedTemplateExpression,
-          ),
+          this.evaluateTaggedTemplateExpression(node as ESTree.TaggedTemplateExpression),
         async: (node) =>
-          this.evaluateTaggedTemplateExpressionAsync(
-            node as ESTree.TaggedTemplateExpression,
-          ),
+          this.evaluateTaggedTemplateExpressionAsync(node as ESTree.TaggedTemplateExpression),
       },
       SequenceExpression: {
-        sync: (node) =>
-          this.evaluateSequenceExpression(node as ESTree.SequenceExpression),
-        async: (node) =>
-          this.evaluateSequenceExpressionAsync(
-            node as ESTree.SequenceExpression,
-          ),
+        sync: (node) => this.evaluateSequenceExpression(node as ESTree.SequenceExpression),
+        async: (node) => this.evaluateSequenceExpressionAsync(node as ESTree.SequenceExpression),
       },
       ChainExpression: {
-        sync: (node) =>
-          this.evaluateChainExpression(node as ESTree.ChainExpression),
-        async: (node) =>
-          this.evaluateChainExpressionAsync(node as ESTree.ChainExpression),
+        sync: (node) => this.evaluateChainExpression(node as ESTree.ChainExpression),
+        async: (node) => this.evaluateChainExpressionAsync(node as ESTree.ChainExpression),
       },
       ClassDeclaration: {
-        sync: (node) =>
-          this.evaluateClassDeclaration(node as ESTree.ClassDeclaration),
-        async: (node) =>
-          this.evaluateClassDeclarationAsync(node as ESTree.ClassDeclaration),
+        sync: (node) => this.evaluateClassDeclaration(node as ESTree.ClassDeclaration),
+        async: (node) => this.evaluateClassDeclarationAsync(node as ESTree.ClassDeclaration),
       },
       ClassExpression: {
-        sync: (node) =>
-          this.evaluateClassExpression(node as ESTree.ClassExpression),
-        async: (node) =>
-          this.evaluateClassExpressionAsync(node as ESTree.ClassExpression),
+        sync: (node) => this.evaluateClassExpression(node as ESTree.ClassExpression),
+        async: (node) => this.evaluateClassExpressionAsync(node as ESTree.ClassExpression),
       },
       Super: same(() => this.evaluateSuper()),
     };
@@ -4623,9 +4267,7 @@ export class Interpreter {
   }
 
   private evaluateProgram(node: ESTree.Program): any {
-    return this.evaluateNodeList(node.body, (statement) =>
-      this.evaluateNode(statement),
-    );
+    return this.evaluateNodeList(node.body, (statement) => this.evaluateNode(statement));
   }
 
   private evaluateLiteral(node: ESTree.Literal): any {
@@ -4646,8 +4288,7 @@ export class Interpreter {
     }
 
     if (this.thisInitStack.length > 0) {
-      const isInitialized =
-        this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+      const isInitialized = this.thisInitStack[this.thisInitStack.length - 1] ?? true;
       if (!isInitialized) {
         throw new InterpreterError(
           "Must call super constructor in derived class before accessing 'this'",
@@ -4756,9 +4397,7 @@ export class Interpreter {
         if (typeof right === "function") {
           return target instanceof right;
         }
-        throw new InterpreterError(
-          "Right-hand side of 'instanceof' is not callable",
-        );
+        throw new InterpreterError("Right-hand side of 'instanceof' is not callable");
       }
 
       default:
@@ -4816,9 +4455,7 @@ export class Interpreter {
     isPrefix: boolean,
   ): [number, number] {
     if (typeof currentValue !== "number") {
-      throw new InterpreterError(
-        "Update expression can only be used with numbers",
-      );
+      throw new InterpreterError("Update expression can only be used with numbers");
     }
 
     let newValue: number;
@@ -4842,10 +4479,7 @@ export class Interpreter {
    * Evaluate nodes sequentially and return the last result.
    * Used by Program, SequenceExpression, and other list-like nodes.
    */
-  private evaluateNodeList<T extends ESTree.Node>(
-    nodes: T[],
-    evalFn: (node: T) => any,
-  ): any {
+  private evaluateNodeList<T extends ESTree.Node>(nodes: T[], evalFn: (node: T) => any): any {
     if (nodes.length === 0) {
       return undefined;
     }
@@ -4874,10 +4508,7 @@ export class Interpreter {
     return result;
   }
 
-  private collectNodeValues<T extends ESTree.Node>(
-    nodes: T[],
-    evalFn: (node: T) => any,
-  ): any[] {
+  private collectNodeValues<T extends ESTree.Node>(nodes: T[], evalFn: (node: T) => any): any[] {
     if (nodes.length === 0) {
       return [];
     }
@@ -4949,8 +4580,7 @@ export class Interpreter {
    */
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
   public bindFunctionParameters(fn: FunctionValue, args: any[]): void {
-    const regularParamCount =
-      fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
+    const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
 
     // Bind regular parameters (with default value support)
     for (let i = 0; i < regularParamCount; i++) {
@@ -4983,12 +4613,8 @@ export class Interpreter {
    * Async version of bindFunctionParameters that can evaluate async default values.
    */
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
-  public async bindFunctionParametersAsync(
-    fn: FunctionValue,
-    args: any[],
-  ): Promise<void> {
-    const regularParamCount =
-      fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
+  public async bindFunctionParametersAsync(fn: FunctionValue, args: any[]): Promise<void> {
+    const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
 
     // Bind regular parameters (with default value support)
     for (let i = 0; i < regularParamCount; i++) {
@@ -5023,8 +4649,7 @@ export class Interpreter {
    * This core logic is shared between sync and async function calls.
    */
   private validateFunctionArguments(fn: FunctionValue, args: any[]): void {
-    const regularParamCount =
-      fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
+    const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
 
     // Count required parameters (those without default values)
     let requiredParamCount = 0;
@@ -5086,11 +4711,7 @@ export class Interpreter {
     if (typeof value === "string") {
       return value;
     }
-    if (
-      typeof value === "number" ||
-      typeof value === "boolean" ||
-      typeof value === "bigint"
-    ) {
+    if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
       return String(value);
     }
     if (typeof value === "symbol") {
@@ -5127,9 +4748,7 @@ export class Interpreter {
    */
   private validateVariableDeclarationKind(kind: string): void {
     if (kind !== "let" && kind !== "const" && kind !== "var") {
-      throw new InterpreterError(
-        `Unsupported variable declaration kind: ${kind}`,
-      );
+      throw new InterpreterError(`Unsupported variable declaration kind: ${kind}`);
     }
   }
 
@@ -5137,10 +4756,7 @@ export class Interpreter {
    * Validates const declaration has an initializer.
    * This core logic is shared between sync and async variable declaration evaluation.
    */
-  private validateConstInitializer(
-    declarator: ESTree.VariableDeclarator,
-    kind: string,
-  ): void {
+  private validateConstInitializer(declarator: ESTree.VariableDeclarator, kind: string): void {
     if (kind === "const" && declarator.init === null) {
       throw new InterpreterError("Missing initializer in const declaration");
     }
@@ -5251,11 +4867,7 @@ export class Interpreter {
    * Throws an error if the value is not a valid object.
    */
   private validateObjectSpread(spreadValue: any): void {
-    if (
-      typeof spreadValue !== "object" ||
-      spreadValue === null ||
-      Array.isArray(spreadValue)
-    ) {
+    if (typeof spreadValue !== "object" || spreadValue === null || Array.isArray(spreadValue)) {
       throw new InterpreterError("Spread syntax in objects requires an object");
     }
   }
@@ -5273,10 +4885,7 @@ export class Interpreter {
     const params: string[] = [];
     let restParamIndex: number | null = null;
     const defaultValues = new Map<number, ESTree.Expression>();
-    const destructuredParams = new Map<
-      number,
-      ESTree.ObjectPattern | ESTree.ArrayPattern
-    >();
+    const destructuredParams = new Map<number, ESTree.ObjectPattern | ESTree.ArrayPattern>();
 
     for (let i = 0; i < nodeParams.length; i++) {
       const param = nodeParams[i];
@@ -5300,10 +4909,7 @@ export class Interpreter {
         params.push((restElement.argument as ESTree.Identifier).name);
       } else if (param.type === "Identifier") {
         params.push((param as ESTree.Identifier).name);
-      } else if (
-        param.type === "ObjectPattern" ||
-        param.type === "ArrayPattern"
-      ) {
+      } else if (param.type === "ObjectPattern" || param.type === "ArrayPattern") {
         // Destructuring parameter: ({ a, b }) => ... or ([a, b]) => ...
         if (!this.isFeatureEnabled("Destructuring")) {
           throw new InterpreterError("Destructuring is not enabled");
@@ -5334,9 +4940,7 @@ export class Interpreter {
           defaultValues.set(i, assignmentPattern.right);
         }
       } else {
-        throw new InterpreterError(
-          `Unsupported parameter type: ${(param as ESTree.Node).type}`,
-        );
+        throw new InterpreterError(`Unsupported parameter type: ${(param as ESTree.Node).type}`);
       }
     }
 
@@ -5358,9 +4962,7 @@ export class Interpreter {
    * Sets up the catch parameter binding for a try-catch statement.
    * Returns the parameter name if present, null otherwise.
    */
-  private getCatchParameterName(
-    handler: ESTree.CatchClause | null | undefined,
-  ): string | null {
+  private getCatchParameterName(handler: ESTree.CatchClause | null | undefined): string | null {
     if (handler?.param && handler.param.type === "Identifier") {
       return (handler.param as ESTree.Identifier).name;
     }
@@ -5394,10 +4996,7 @@ export class Interpreter {
     }
   }
 
-  private ensureNoPrototypeAccessForSymbol(
-    object: any,
-    property: symbol,
-  ): void {
+  private ensureNoPrototypeAccessForSymbol(object: any, property: symbol): void {
     // Mirror inherited-property checks for symbol keys to prevent prototype probing.
     if (this.isReadOnlyProxyObject(object)) {
       return;
@@ -5412,10 +5011,7 @@ export class Interpreter {
     if (property === Symbol.iterator) {
       return;
     }
-    if (
-      property in object &&
-      !Object.prototype.hasOwnProperty.call(object, property)
-    ) {
+    if (property in object && !Object.prototype.hasOwnProperty.call(object, property)) {
       throw new InterpreterError(
         `Access to inherited property '${String(property)}' is not allowed`,
       );
@@ -5427,10 +5023,7 @@ export class Interpreter {
     if (object instanceof FunctionValue) {
       throw new InterpreterError("Cannot access properties on functions");
     }
-    if (
-      object instanceof GeneratorValue ||
-      object instanceof AsyncGeneratorValue
-    ) {
+    if (object instanceof GeneratorValue || object instanceof AsyncGeneratorValue) {
       throw new InterpreterError("Cannot access internal generator properties");
     }
     if (isControlFlowSignal(object) || object instanceof Environment) {
@@ -5443,16 +5036,11 @@ export class Interpreter {
     if (object instanceof FunctionValue) {
       throw new InterpreterError("Cannot assign properties on functions");
     }
-    if (
-      object instanceof GeneratorValue ||
-      object instanceof AsyncGeneratorValue
-    ) {
+    if (object instanceof GeneratorValue || object instanceof AsyncGeneratorValue) {
       throw new InterpreterError("Cannot assign properties on generators");
     }
     if (isControlFlowSignal(object) || object instanceof Environment) {
-      throw new InterpreterError(
-        "Cannot assign properties on internal objects",
-      );
+      throw new InterpreterError("Cannot assign properties on internal objects");
     }
   }
 
@@ -5472,13 +5060,8 @@ export class Interpreter {
     if (propName === "then" || propName === "catch" || propName === "finally") {
       return;
     }
-    if (
-      propName in object &&
-      !Object.prototype.hasOwnProperty.call(object, propName)
-    ) {
-      throw new InterpreterError(
-        `Access to inherited property '${propName}' is not allowed`,
-      );
+    if (propName in object && !Object.prototype.hasOwnProperty.call(object, propName)) {
+      throw new InterpreterError(`Access to inherited property '${propName}' is not allowed`);
     }
   }
 
@@ -5496,22 +5079,14 @@ export class Interpreter {
   }
 
   private shouldForcePropertyValidation(property: string): boolean {
-    return (
-      property === "__proto__" ||
-      property === "constructor" ||
-      property === "prototype"
-    );
+    return property === "__proto__" || property === "constructor" || property === "prototype";
   }
 
   private isReadOnlyProxyObject(value: any): boolean {
     if (value instanceof HostFunctionValue) {
       return false;
     }
-    return (
-      value !== null &&
-      typeof value === "object" &&
-      Boolean((value as any)[PROXY_TARGET])
-    );
+    return value !== null && typeof value === "object" && Boolean((value as any)[PROXY_TARGET]);
   }
 
   private isPrimitiveValue(value: any): boolean {
@@ -5605,10 +5180,7 @@ export class Interpreter {
       return this.resolveSymbolPropertyAccess(obj, property);
     }
     const propName = typeof property === "string" ? property : String(property);
-    if (
-      !this.shouldSkipPropertyValidation(obj) ||
-      this.shouldForcePropertyValidation(propName)
-    ) {
+    if (!this.shouldSkipPropertyValidation(obj) || this.shouldForcePropertyValidation(propName)) {
       validatePropertyName(propName); // Security: prevent prototype pollution
     }
     return this.resolveStringPropertyAccess(obj, propName);
@@ -5705,13 +5277,9 @@ export class Interpreter {
           throw new InterpreterError("SpreadOperator is not enabled");
         }
 
-        const spreadValue = this.evaluateNode(
-          (arg as ESTree.SpreadElement).argument,
-        );
+        const spreadValue = this.evaluateNode((arg as ESTree.SpreadElement).argument);
         if (!Array.isArray(spreadValue)) {
-          throw new InterpreterError(
-            "Spread syntax in function calls requires an array",
-          );
+          throw new InterpreterError("Spread syntax in function calls requires an array");
         }
         // Avoid push(...spreadValue) to sidestep argument count limits on large arrays.
         this.appendSpreadArgs(evaluatedArgs, spreadValue);
@@ -5726,9 +5294,7 @@ export class Interpreter {
    * Evaluates function/constructor arguments asynchronously, handling spread elements.
    * Shared logic between evaluateCallExpressionAsync and evaluateNewExpressionAsync.
    */
-  private async evaluateArgumentsAsync(
-    args: ESTree.CallExpression["arguments"],
-  ): Promise<any[]> {
+  private async evaluateArgumentsAsync(args: ESTree.CallExpression["arguments"]): Promise<any[]> {
     const count = args.length;
     if (count === 0) {
       return [];
@@ -5758,13 +5324,9 @@ export class Interpreter {
           throw new InterpreterError("SpreadOperator is not enabled");
         }
 
-        const spreadValue = await this.evaluateNodeAsync(
-          (arg as ESTree.SpreadElement).argument,
-        );
+        const spreadValue = await this.evaluateNodeAsync((arg as ESTree.SpreadElement).argument);
         if (!Array.isArray(spreadValue)) {
-          throw new InterpreterError(
-            "Spread syntax in function calls requires an array",
-          );
+          throw new InterpreterError("Spread syntax in function calls requires an array");
         }
         // Avoid push(...spreadValue) to sidestep argument count limits on large arrays.
         this.appendSpreadArgs(evaluatedArgs, spreadValue);
@@ -5817,11 +5379,7 @@ export class Interpreter {
         // Wrap sandbox function as a callable native function
         if (isAsync || arg.isAsync) {
           wrappedArgs[i] = async (...hostArgs: any[]) => {
-            return await this.executeSandboxFunctionAsync(
-              arg,
-              hostArgs,
-              undefined,
-            );
+            return await this.executeSandboxFunctionAsync(arg, hostArgs, undefined);
           };
         } else {
           wrappedArgs[i] = (...hostArgs: any[]) => {
@@ -5881,13 +5439,8 @@ export class Interpreter {
    * Executes a sandbox function (synchronous version).
    * Sets up environment, binds parameters, executes body, and unwraps return value.
    */
-  private executeSandboxFunction(
-    fn: FunctionValue,
-    args: any[],
-    thisValue: any,
-  ): any {
-    const { previousEnvironment, previousSuperBinding } =
-      this.enterFunctionContext(fn, thisValue);
+  private executeSandboxFunction(fn: FunctionValue, args: any[], thisValue: any): any {
+    const { previousEnvironment, previousSuperBinding } = this.enterFunctionContext(fn, thisValue);
     try {
       // Bind parameters to arguments
       this.bindFunctionParameters(fn, args);
@@ -5910,8 +5463,7 @@ export class Interpreter {
     args: any[],
     thisValue: any,
   ): Promise<any> {
-    const { previousEnvironment, previousSuperBinding } =
-      this.enterFunctionContext(fn, thisValue);
+    const { previousEnvironment, previousSuperBinding } = this.enterFunctionContext(fn, thisValue);
     try {
       // Bind parameters to arguments (use async version to handle async default values)
       await this.bindFunctionParametersAsync(fn, args);
@@ -5956,19 +5508,13 @@ export class Interpreter {
   /**
    * Executes a host function constructor (synchronous).
    */
-  private executeHostConstructor(
-    constructor: HostFunctionValue,
-    args: any[],
-  ): any {
+  private executeHostConstructor(constructor: HostFunctionValue, args: any[]): any {
     try {
       const result = Reflect.construct(constructor.hostFunc, args);
       return ReadOnlyProxy.wrap(result, constructor.name, this.securityOptions);
     } catch (error: any) {
       throw new InterpreterError(
-        this.formatHostError(
-          `Constructor '${constructor.name}' threw error`,
-          error,
-        ),
+        this.formatHostError(`Constructor '${constructor.name}' threw error`, error),
       );
     }
   }
@@ -5999,18 +5545,11 @@ export class Interpreter {
         return obj[propertyValue];
       }
       const propName = String(propertyValue);
-      if (
-        !this.shouldSkipPropertyValidation(obj) ||
-        this.shouldForcePropertyValidation(propName)
-      ) {
+      if (!this.shouldSkipPropertyValidation(obj) || this.shouldForcePropertyValidation(propName)) {
         validatePropertyName(propName);
       }
       if (instanceClass) {
-        return this.getInstanceProperty(
-          obj as Record<string, any>,
-          instanceClass,
-          propName,
-        );
+        return this.getInstanceProperty(obj as Record<string, any>, instanceClass, propName);
       }
       if (typeof obj === "object" && obj !== null) {
         this.ensureNoInternalObjectAccess(obj);
@@ -6024,11 +5563,7 @@ export class Interpreter {
       const property = (memberExpr.property as ESTree.Identifier).name;
       if (instanceClass) {
         validatePropertyName(property);
-        return this.getInstanceProperty(
-          obj as Record<string, any>,
-          instanceClass,
-          property,
-        );
+        return this.getInstanceProperty(obj as Record<string, any>, instanceClass, property);
       }
       if (typeof obj === "object" && obj !== null) {
         if (
@@ -6084,10 +5619,7 @@ export class Interpreter {
       const value = this.evaluateNode(argument);
       return this.getTypeofValue(value);
     } catch (error) {
-      if (
-        error instanceof InterpreterError &&
-        error.message.includes("Undefined variable")
-      ) {
+      if (error instanceof InterpreterError && error.message.includes("Undefined variable")) {
         return "undefined";
       }
       throw error;
@@ -6197,15 +5729,11 @@ export class Interpreter {
         return this.evaluateNode(node.right);
 
       default:
-        throw new InterpreterError(
-          `Unsupported logical operator: ${node.operator}`,
-        );
+        throw new InterpreterError(`Unsupported logical operator: ${node.operator}`);
     }
   }
 
-  private evaluateConditionalExpression(
-    node: ESTree.ConditionalExpression,
-  ): any {
+  private evaluateConditionalExpression(node: ESTree.ConditionalExpression): any {
     if (!this.isFeatureEnabled("ConditionalExpression")) {
       throw new InterpreterError("ConditionalExpression is not enabled");
     }
@@ -6224,11 +5752,7 @@ export class Interpreter {
 
   private evaluateAssignmentExpression(node: ESTree.AssignmentExpression): any {
     // Handle logical assignment operators (||=, &&=, ??=) with short-circuit evaluation
-    if (
-      node.operator === "||=" ||
-      node.operator === "&&=" ||
-      node.operator === "??="
-    ) {
+    if (node.operator === "||=" || node.operator === "&&=" || node.operator === "??=") {
       if (!this.isFeatureEnabled("LogicalAssignment")) {
         throw new InterpreterError("LogicalAssignment is not enabled");
       }
@@ -6243,10 +5767,7 @@ export class Interpreter {
     const value = this.evaluateNode(node.right);
 
     // Handle destructuring assignments
-    if (
-      node.left.type === "ArrayPattern" ||
-      node.left.type === "ObjectPattern"
-    ) {
+    if (node.left.type === "ArrayPattern" || node.left.type === "ObjectPattern") {
       this.destructurePattern(node.left, value, false);
       return value;
     }
@@ -6263,9 +5784,7 @@ export class Interpreter {
 
       // Block property assignment on host functions
       if (object instanceof HostFunctionValue) {
-        throw new InterpreterError(
-          "Cannot assign properties on host functions",
-        );
+        throw new InterpreterError("Cannot assign properties on host functions");
       }
       this.ensureNoInternalObjectMutation(object);
 
@@ -6294,16 +5813,13 @@ export class Interpreter {
             object[property] = value;
             return value;
           }
-          throw new InterpreterError(
-            "Assignment target is not an array or object",
-          );
+          throw new InterpreterError("Assignment target is not an array or object");
         }
 
         if (Array.isArray(object)) {
           // Array element assignment: arr[i] = value
           // Convert string to number if it's a numeric string (needed because for...in gives string indices)
-          const index =
-            typeof property === "string" ? Number(property) : property;
+          const index = typeof property === "string" ? Number(property) : property;
 
           if (typeof index !== "number" || isNaN(index)) {
             throw new InterpreterError("Array index must be a number");
@@ -6329,9 +5845,7 @@ export class Interpreter {
           object[propName] = value;
           return value;
         } else {
-          throw new InterpreterError(
-            "Assignment target is not an array or object",
-          );
+          throw new InterpreterError("Assignment target is not an array or object");
         }
       } else {
         // Dot notation: obj.prop = value
@@ -6356,11 +5870,7 @@ export class Interpreter {
           );
         }
 
-        if (
-          typeof object === "object" &&
-          object !== null &&
-          !Array.isArray(object)
-        ) {
+        if (typeof object === "object" && object !== null && !Array.isArray(object)) {
           object[property] = value;
           return value;
         } else {
@@ -6390,9 +5900,7 @@ export class Interpreter {
     let currentValue: any;
 
     if (node.left.type === "Identifier") {
-      currentValue = this.environment.get(
-        (node.left as ESTree.Identifier).name,
-      );
+      currentValue = this.environment.get((node.left as ESTree.Identifier).name);
     } else if (node.left.type === "MemberExpression") {
       const memberExpr = node.left as ESTree.MemberExpression;
       const object =
@@ -6442,9 +5950,7 @@ export class Interpreter {
           }
         } else {
           if (object instanceof HostFunctionValue) {
-            throw new InterpreterError(
-              "Cannot access properties on host functions",
-            );
+            throw new InterpreterError("Cannot access properties on host functions");
           }
           this.ensureNoInternalObjectAccess(object);
 
@@ -6513,9 +6019,7 @@ export class Interpreter {
         shouldAssign = currentValue === null || currentValue === undefined;
         break;
       default:
-        throw new InterpreterError(
-          `Unsupported logical assignment operator: ${node.operator}`,
-        );
+        throw new InterpreterError(`Unsupported logical assignment operator: ${node.operator}`);
     }
 
     // Short-circuit: if we shouldn't assign, return the current value without evaluating right
@@ -6537,9 +6041,7 @@ export class Interpreter {
       const object = this.evaluateNode(memberExpr.object);
 
       if (object instanceof HostFunctionValue) {
-        throw new InterpreterError(
-          "Cannot assign properties on host functions",
-        );
+        throw new InterpreterError("Cannot assign properties on host functions");
       }
       this.ensureNoInternalObjectMutation(object);
 
@@ -6571,8 +6073,7 @@ export class Interpreter {
           return newValue;
         }
         if (Array.isArray(object)) {
-          const index =
-            typeof property === "string" ? Number(property) : property;
+          const index = typeof property === "string" ? Number(property) : property;
           if (typeof index !== "number" || isNaN(index)) {
             throw new InterpreterError("Array index must be a number");
           }
@@ -6654,9 +6155,7 @@ export class Interpreter {
         case "^=":
           return currentValue ^ rightValue;
         default:
-          throw new InterpreterError(
-            `Unsupported assignment operator: ${node.operator}`,
-          );
+          throw new InterpreterError(`Unsupported assignment operator: ${node.operator}`);
       }
     };
 
@@ -6683,9 +6182,7 @@ export class Interpreter {
       const object = this.evaluateNode(memberExpr.object);
 
       if (object instanceof HostFunctionValue) {
-        throw new InterpreterError(
-          "Cannot assign properties on host functions",
-        );
+        throw new InterpreterError("Cannot assign properties on host functions");
       }
       this.ensureNoInternalObjectMutation(object);
 
@@ -6694,8 +6191,7 @@ export class Interpreter {
         if (!this.isFeatureEnabled("PrivateFields")) {
           throw new InterpreterError("PrivateFields is not enabled");
         }
-        const fieldName = (memberExpr.property as ESTree.PrivateIdentifier)
-          .name;
+        const fieldName = (memberExpr.property as ESTree.PrivateIdentifier).name;
         const currentValue = this.accessPrivateField(object, fieldName);
         const newValue = computeNewValue(currentValue);
         return this.assignPrivateField(object, fieldName, newValue);
@@ -6720,8 +6216,7 @@ export class Interpreter {
         }
 
         if (Array.isArray(object)) {
-          const index =
-            typeof property === "string" ? Number(property) : property;
+          const index = typeof property === "string" ? Number(property) : property;
           if (typeof index !== "number" || isNaN(index)) {
             throw new InterpreterError("Array index must be a number");
           }
@@ -6807,10 +6302,7 @@ export class Interpreter {
     const kind = node.kind as "let" | "const" | "var";
 
     // Check feature enablement based on declaration kind
-    if (
-      (kind === "let" || kind === "const") &&
-      !this.isFeatureEnabled("LetConst")
-    ) {
+    if ((kind === "let" || kind === "const") && !this.isFeatureEnabled("LetConst")) {
       throw new InterpreterError("LetConst is not enabled");
     }
     if (!this.isFeatureEnabled("VariableDeclarations")) {
@@ -6823,15 +6315,10 @@ export class Interpreter {
 
     for (const declarator of node.declarations) {
       // Handle destructuring patterns
-      if (
-        declarator.id.type === "ArrayPattern" ||
-        declarator.id.type === "ObjectPattern"
-      ) {
+      if (declarator.id.type === "ArrayPattern" || declarator.id.type === "ObjectPattern") {
         // Destructuring declaration
         if (declarator.init === null) {
-          throw new InterpreterError(
-            "Destructuring declaration must have an initializer",
-          );
+          throw new InterpreterError("Destructuring declaration must have an initializer");
         }
 
         const value = this.evaluateNode(declarator.init);
@@ -6842,9 +6329,7 @@ export class Interpreter {
 
       // Handle simple identifier
       if (declarator.id.type !== "Identifier") {
-        throw new InterpreterError(
-          `Unsupported declaration pattern: ${declarator.id.type}`,
-        );
+        throw new InterpreterError(`Unsupported declaration pattern: ${declarator.id.type}`);
       }
 
       const name = (declarator.id as ESTree.Identifier).name;
@@ -6855,18 +6340,14 @@ export class Interpreter {
         // The variable was already declared in the first evaluation pass.
         // The yield expression already returned the received value which was assigned.
         // Just evaluate the init (which will return the received value) but don't redeclare.
-        const value = declarator.init
-          ? this.evaluateNode(declarator.init)
-          : undefined;
+        const value = declarator.init ? this.evaluateNode(declarator.init) : undefined;
         // Use forceSet to update even const variables during yield resumption
         this.environment.forceSet(name, value);
         lastValue = value;
         continue;
       }
 
-      const value = declarator.init
-        ? this.evaluateNode(declarator.init)
-        : undefined;
+      const value = declarator.init ? this.evaluateNode(declarator.init) : undefined;
 
       this.validateConstInitializer(declarator, kind);
 
@@ -7097,8 +6578,9 @@ export class Interpreter {
       );
 
       // Extract variable information
-      const { variableName, pattern, isDeclaration, variableKind } =
-        extractForOfVariable(node.left);
+      const { variableName, pattern, isDeclaration, variableKind } = extractForOfVariable(
+        node.left,
+      );
 
       let result: any = undefined;
       let iterations = 0;
@@ -7129,11 +6611,7 @@ export class Interpreter {
           if (pattern) {
             this.destructurePattern(pattern, currentValue, true, variableKind);
           } else {
-            this.environment.declare(
-              variableName!,
-              currentValue,
-              variableKind!,
-            );
+            this.environment.declare(variableName!, currentValue, variableKind!);
           }
 
           // Execute loop body
@@ -7217,20 +6695,15 @@ export class Interpreter {
 
       // Check if obj is an object or array
       if (obj === null || obj === undefined) {
-        throw new InterpreterError(
-          "for...in requires an object or array, got null/undefined",
-        );
+        throw new InterpreterError("for...in requires an object or array, got null/undefined");
       }
 
       if (typeof obj !== "object") {
-        throw new InterpreterError(
-          `for...in requires an object or array, got ${typeof obj}`,
-        );
+        throw new InterpreterError(`for...in requires an object or array, got ${typeof obj}`);
       }
 
       // Extract variable information
-      const { variableName, isDeclaration, variableKind } =
-        extractForInVariable(node.left);
+      const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
       let result: any = undefined;
       let iterations = 0;
@@ -7373,8 +6846,9 @@ export class Interpreter {
     }
 
     const name = node.id.name;
-    const { params, restParamIndex, defaultValues, destructuredParams } =
-      this.parseFunctionParams(node.params);
+    const { params, restParamIndex, defaultValues, destructuredParams } = this.parseFunctionParams(
+      node.params,
+    );
 
     if (node.body.type !== "BlockStatement") {
       throw new InterpreterError("Function body must be a block statement");
@@ -7422,8 +6896,9 @@ export class Interpreter {
       throw new InterpreterError("Function must have a body");
     }
 
-    const { params, restParamIndex, defaultValues, destructuredParams } =
-      this.parseFunctionParams(node.params);
+    const { params, restParamIndex, defaultValues, destructuredParams } = this.parseFunctionParams(
+      node.params,
+    );
 
     if (node.body.type !== "BlockStatement") {
       throw new InterpreterError("Function body must be a block statement");
@@ -7445,9 +6920,7 @@ export class Interpreter {
     );
   }
 
-  private evaluateArrowFunctionExpression(
-    node: ESTree.ArrowFunctionExpression,
-  ): any {
+  private evaluateArrowFunctionExpression(node: ESTree.ArrowFunctionExpression): any {
     if (!this.isFeatureEnabled("ArrowFunctions")) {
       throw new InterpreterError("ArrowFunctions is not enabled");
     }
@@ -7459,8 +6932,9 @@ export class Interpreter {
       throw new InterpreterError("Arrow functions cannot be generators");
     }
 
-    const { params, restParamIndex, defaultValues, destructuredParams } =
-      this.parseFunctionParams(node.params);
+    const { params, restParamIndex, defaultValues, destructuredParams } = this.parseFunctionParams(
+      node.params,
+    );
 
     // Arrow functions can have expression body or block body
     let body: ESTree.BlockStatement;
@@ -7525,9 +6999,7 @@ export class Interpreter {
     return result;
   }
 
-  private async evaluateLabeledStatementAsync(
-    node: ESTree.LabeledStatement,
-  ): Promise<any> {
+  private async evaluateLabeledStatementAsync(node: ESTree.LabeledStatement): Promise<any> {
     const labelName = node.label.name;
     const body = node.body;
 
@@ -7568,10 +7040,7 @@ export class Interpreter {
     }
   }
 
-  private async evaluateLabeledLoopAsync(
-    label: string,
-    body: ESTree.Statement,
-  ): Promise<any> {
+  private async evaluateLabeledLoopAsync(label: string, body: ESTree.Statement): Promise<any> {
     const previousLabel = this.currentLoopLabel;
     this.currentLoopLabel = label;
     try {
@@ -7598,11 +7067,7 @@ export class Interpreter {
       throw new InterpreterError("ContinueStatement is not enabled");
     }
 
-    return new ControlFlowSignal(
-      "continue",
-      undefined,
-      node.label?.name ?? null,
-    );
+    return new ControlFlowSignal("continue", undefined, node.label?.name ?? null);
   }
 
   /**
@@ -7749,16 +7214,8 @@ export class Interpreter {
 
       if (element.type === "Identifier") {
         // Simple identifier: a
-        this.bindDestructuredIdentifier(
-          element.name,
-          elementValue,
-          declare,
-          kind,
-        );
-      } else if (
-        element.type === "ArrayPattern" ||
-        element.type === "ObjectPattern"
-      ) {
+        this.bindDestructuredIdentifier(element.name, elementValue, declare, kind);
+      } else if (element.type === "ArrayPattern" || element.type === "ObjectPattern") {
         // Nested destructuring: [a, [b, c]] or [a, {x, y}]
         // Recursively destructure the nested pattern
         this.destructurePattern(element, elementValue, declare, kind);
@@ -7767,12 +7224,7 @@ export class Interpreter {
         const restName = this.getRestElementName(element);
         // Collect all remaining elements from current position
         const remainingValues = value.slice(i);
-        this.bindDestructuredIdentifier(
-          restName,
-          remainingValues,
-          declare,
-          kind,
-        );
+        this.bindDestructuredIdentifier(restName, remainingValues, declare, kind);
 
         // Rest must be last element, so we break
         break;
@@ -7841,32 +7293,20 @@ export class Interpreter {
           // Simple: {x} or {x: newName}
           // In {x}, both key and target are "x"
           // In {x: newName}, key is "x" but target is "newName"
-          this.bindDestructuredIdentifier(
-            target.name,
-            propValue,
-            declare,
-            kind,
-          );
+          this.bindDestructuredIdentifier(target.name, propValue, declare, kind);
         } else if (target.type === "AssignmentPattern") {
           // Default value: {x = 5} - use 5 if propValue is undefined
           this.handleAssignmentPattern(target, propValue, declare, kind);
-        } else if (
-          target.type === "ArrayPattern" ||
-          target.type === "ObjectPattern"
-        ) {
+        } else if (target.type === "ArrayPattern" || target.type === "ObjectPattern") {
           // Nested destructuring: {a: {b}} or {a: [x, y]}
           // Recursively destructure the nested pattern
           this.destructurePattern(target, propValue, declare, kind);
         } else {
-          throw new InterpreterError(
-            `Unsupported object pattern value: ${target.type}`,
-          );
+          throw new InterpreterError(`Unsupported object pattern value: ${target.type}`);
         }
       } else {
         const propertyType = (property as ESTree.Node).type;
-        throw new InterpreterError(
-          `Unsupported object pattern property: ${propertyType}`,
-        );
+        throw new InterpreterError(`Unsupported object pattern property: ${propertyType}`);
       }
     }
 
@@ -7906,12 +7346,9 @@ export class Interpreter {
     // Important: only undefined triggers default, not other falsy values like null, 0, ""
     const defaultExpr = pattern.right;
     if (!defaultExpr) {
-      throw new InterpreterError(
-        "Assignment pattern must have a default value",
-      );
+      throw new InterpreterError("Assignment pattern must have a default value");
     }
-    const finalValue =
-      value === undefined ? this.evaluateNode(defaultExpr) : value;
+    const finalValue = value === undefined ? this.evaluateNode(defaultExpr) : value;
 
     const left = pattern.left;
 
@@ -7951,21 +7388,15 @@ export class Interpreter {
     // Handle super() constructor call
     if (node.callee.type === "Super") {
       if (!this.currentSuperBinding) {
-        throw new InterpreterError(
-          "'super' keyword is only valid inside a class",
-        );
+        throw new InterpreterError("'super' keyword is only valid inside a class");
       }
       if (this.currentSuperBinding.isStatic) {
         throw new InterpreterError(
           "'super' constructor call is only valid inside a derived class constructor",
         );
       }
-      const currentConstructor =
-        this.constructorStack[this.constructorStack.length - 1] ?? null;
-      if (
-        !currentConstructor ||
-        currentConstructor !== this.currentSuperBinding.currentClass
-      ) {
+      const currentConstructor = this.constructorStack[this.constructorStack.length - 1] ?? null;
+      if (!currentConstructor || currentConstructor !== this.currentSuperBinding.currentClass) {
         throw new InterpreterError(
           "'super' constructor call is only valid inside a derived class constructor",
         );
@@ -8036,9 +7467,7 @@ export class Interpreter {
 
       // Evaluate all arguments, handling spread
       const args = this.evaluateArguments(node.arguments);
-      const wrappedArgs = callee.skipArgWrapping
-        ? args
-        : this.wrapArgsForHost(args, false);
+      const wrappedArgs = callee.skipArgWrapping ? args : this.wrapArgsForHost(args, false);
 
       // Call the host function
       try {
@@ -8050,10 +7479,7 @@ export class Interpreter {
           throw error;
         }
         throw new InterpreterError(
-          this.formatHostError(
-            `Host function '${callee.name}' threw error`,
-            error,
-          ),
+          this.formatHostError(`Host function '${callee.name}' threw error`, error),
         );
       }
     }
@@ -8061,15 +7487,11 @@ export class Interpreter {
     // Handle native JavaScript functions (e.g., bound class methods)
     if (typeof callee === "function") {
       const args = this.evaluateArguments(node.arguments);
-      return thisValue !== undefined
-        ? callee.call(thisValue, ...args)
-        : callee(...args);
+      return thisValue !== undefined ? callee.call(thisValue, ...args) : callee(...args);
     }
 
     if (callee instanceof ClassValue) {
-      throw new InterpreterError(
-        "Class constructor cannot be invoked without 'new'",
-      );
+      throw new InterpreterError("Class constructor cannot be invoked without 'new'");
     }
 
     // Handle sandbox functions
@@ -8103,13 +7525,7 @@ export class Interpreter {
       if (!this.isFeatureEnabled("Generators")) {
         throw new InterpreterError("Generators is not enabled");
       }
-      return new GeneratorValue(
-        callee,
-        args,
-        this,
-        thisValue,
-        this.isFeatureEnabled.bind(this),
-      );
+      return new GeneratorValue(callee, args, this, thisValue, this.isFeatureEnabled.bind(this));
     }
 
     // Execute the sandbox function
@@ -8129,10 +7545,7 @@ export class Interpreter {
 
     // 3. Handle ClassValue - use instantiateClass
     if (constructor instanceof ClassValue) {
-      return this.instantiateClass(
-        constructor,
-        node.arguments as ESTree.Expression[],
-      );
+      return this.instantiateClass(constructor, node.arguments as ESTree.Expression[]);
     }
 
     // 4. Create new instance object
@@ -8177,10 +7590,7 @@ export class Interpreter {
     return this.resolveMemberExpressionValue(node, object);
   }
 
-  private resolveMemberExpressionValue(
-    node: ESTree.MemberExpression,
-    object: any,
-  ): any {
+  private resolveMemberExpressionValue(node: ESTree.MemberExpression, object: any): any {
     // Preserve optional chaining short-circuit semantics.
     if (isControlFlowKind(object, "optional-chain")) {
       return object;
@@ -8197,10 +7607,7 @@ export class Interpreter {
       if (!this.isFeatureEnabled("PrivateFields")) {
         throw new InterpreterError("PrivateFields is not enabled");
       }
-      return this.accessPrivateField(
-        object,
-        (node.property as ESTree.PrivateIdentifier).name,
-      );
+      return this.accessPrivateField(object, (node.property as ESTree.PrivateIdentifier).name);
     }
 
     // Handle static member access on classes
@@ -8218,11 +7625,7 @@ export class Interpreter {
         }
         const propName = String(property);
         validatePropertyName(propName);
-        return this.getInstanceProperty(
-          object as Record<string, any>,
-          instanceClass,
-          propName,
-        );
+        return this.getInstanceProperty(object as Record<string, any>, instanceClass, propName);
       }
 
       if (node.property.type !== "Identifier") {
@@ -8235,11 +7638,7 @@ export class Interpreter {
       ) {
         validatePropertyName(property);
       }
-      return this.getInstanceProperty(
-        object as Record<string, any>,
-        instanceClass,
-        property,
-      );
+      return this.getInstanceProperty(object as Record<string, any>, instanceClass, property);
     }
 
     if (node.computed) {
@@ -8256,9 +7655,7 @@ export class Interpreter {
       }
 
       if (object === null || object === undefined) {
-        throw new InterpreterError(
-          "Computed property access requires an array or object",
-        );
+        throw new InterpreterError("Computed property access requires an array or object");
       }
 
       const propName = String(property);
@@ -8309,10 +7706,7 @@ export class Interpreter {
     );
   }
 
-  private getArrayMethod(
-    arr: any[],
-    methodName: string,
-  ): HostFunctionValue | null {
+  private getArrayMethod(arr: any[], methodName: string): HostFunctionValue | null {
     // Cache per array instance to avoid re-allocating HostFunctionValue wrappers.
     let cache = this.arrayMethodCache.get(arr);
     if (!cache) {
@@ -8360,25 +7754,12 @@ export class Interpreter {
   ): HostFunctionValue | null {
     switch (methodName) {
       case "next":
-        return this.createHostFunction(
-          generator.next.bind(generator),
-          "next",
-          false,
-        );
+        return this.createHostFunction(generator.next.bind(generator), "next", false);
       case "return":
-        return this.createHostFunction(
-          generator.return.bind(generator),
-          "return",
-          false,
-        );
+        return this.createHostFunction(generator.return.bind(generator), "return", false);
       case "throw":
         // rethrowErrors: true - errors from throw() should propagate directly
-        return this.createHostFunction(
-          generator.throw.bind(generator),
-          "throw",
-          false,
-          true,
-        );
+        return this.createHostFunction(generator.throw.bind(generator), "throw", false, true);
       default:
         return null;
     }
@@ -8412,34 +7793,18 @@ export class Interpreter {
   ): HostFunctionValue | null {
     switch (methodName) {
       case "next":
-        return this.createHostFunction(
-          generator.next.bind(generator),
-          "next",
-          true,
-        );
+        return this.createHostFunction(generator.next.bind(generator), "next", true);
       case "return":
-        return this.createHostFunction(
-          generator.return.bind(generator),
-          "return",
-          true,
-        );
+        return this.createHostFunction(generator.return.bind(generator), "return", true);
       case "throw":
         // rethrowErrors: true - errors from throw() should propagate directly
-        return this.createHostFunction(
-          generator.throw.bind(generator),
-          "throw",
-          true,
-          true,
-        );
+        return this.createHostFunction(generator.throw.bind(generator), "throw", true, true);
       default:
         return null;
     }
   }
 
-  private buildArrayMethod(
-    arr: any[],
-    methodName: string,
-  ): HostFunctionValue | null {
+  private buildArrayMethod(arr: any[], methodName: string): HostFunctionValue | null {
     switch (methodName) {
       // Mutation methods
       case "push":
@@ -8477,34 +7842,24 @@ export class Interpreter {
         );
 
       case "concat":
-        return this.createHostFunction(
-          (...items: any[]) => arr.concat(...items),
-          "concat",
-          false,
-        );
+        return this.createHostFunction((...items: any[]) => arr.concat(...items), "concat", false);
 
       case "indexOf":
         return this.createHostFunction(
-          (searchElement: any, fromIndex?: number) =>
-            arr.indexOf(searchElement, fromIndex),
+          (searchElement: any, fromIndex?: number) => arr.indexOf(searchElement, fromIndex),
           "indexOf",
           false,
         );
 
       case "includes":
         return this.createHostFunction(
-          (searchElement: any, fromIndex?: number) =>
-            arr.includes(searchElement, fromIndex),
+          (searchElement: any, fromIndex?: number) => arr.includes(searchElement, fromIndex),
           "includes",
           false,
         );
 
       case "join":
-        return this.createHostFunction(
-          (separator?: string) => arr.join(separator),
-          "join",
-          false,
-        );
+        return this.createHostFunction((separator?: string) => arr.join(separator), "join", false);
 
       case "reverse":
         return this.createHostFunction(() => arr.reverse(), "reverse", false);
@@ -8516,11 +7871,7 @@ export class Interpreter {
             const result: any[] = [];
             for (let i = 0; i < arr.length; i++) {
               // Call the callback with (element, index, array)
-              const value = this.callCallback(callback, undefined, [
-                arr[i],
-                i,
-                arr,
-              ]);
+              const value = this.callCallback(callback, undefined, [arr[i], i, arr]);
               result.push(value);
             }
             return result;
@@ -8536,11 +7887,7 @@ export class Interpreter {
           (callback: FunctionValue | Function) => {
             const result: any[] = [];
             for (let i = 0; i < arr.length; i++) {
-              const shouldInclude = this.callCallback(callback, undefined, [
-                arr[i],
-                i,
-                arr,
-              ]);
+              const shouldInclude = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (shouldInclude) {
                 result.push(arr[i]);
               }
@@ -8562,21 +7909,14 @@ export class Interpreter {
             // If no initial value, use first element as accumulator
             if (initialValue === undefined) {
               if (arr.length === 0) {
-                throw new InterpreterError(
-                  "Reduce of empty array with no initial value",
-                );
+                throw new InterpreterError("Reduce of empty array with no initial value");
               }
               accumulator = arr[0];
               startIndex = 1;
             }
 
             for (let i = startIndex; i < arr.length; i++) {
-              accumulator = this.callCallback(callback, undefined, [
-                accumulator,
-                arr[i],
-                i,
-                arr,
-              ]);
+              accumulator = this.callCallback(callback, undefined, [accumulator, arr[i], i, arr]);
             }
             return accumulator;
           },
@@ -8590,11 +7930,7 @@ export class Interpreter {
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = 0; i < arr.length; i++) {
-              const matches = this.callCallback(callback, undefined, [
-                arr[i],
-                i,
-                arr,
-              ]);
+              const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (matches) {
                 return arr[i];
               }
@@ -8611,11 +7947,7 @@ export class Interpreter {
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = 0; i < arr.length; i++) {
-              const matches = this.callCallback(callback, undefined, [
-                arr[i],
-                i,
-                arr,
-              ]);
+              const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (matches) {
                 return i;
               }
@@ -8632,11 +7964,7 @@ export class Interpreter {
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = 0; i < arr.length; i++) {
-              const result = this.callCallback(callback, undefined, [
-                arr[i],
-                i,
-                arr,
-              ]);
+              const result = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (!result) {
                 return false;
               }
@@ -8653,11 +7981,7 @@ export class Interpreter {
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = 0; i < arr.length; i++) {
-              const result = this.callCallback(callback, undefined, [
-                arr[i],
-                i,
-                arr,
-              ]);
+              const result = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (result) {
                 return true;
               }
@@ -8688,9 +8012,7 @@ export class Interpreter {
         return this.createHostFunction(
           (compareFn?: FunctionValue | Function) => {
             if (compareFn) {
-              arr.sort((a: any, b: any) =>
-                this.callCallback(compareFn, undefined, [a, b]),
-              );
+              arr.sort((a: any, b: any) => this.callCallback(compareFn, undefined, [a, b]));
             } else {
               // eslint-disable-next-line @typescript-eslint/require-array-sort-compare -- intentional: match JS default sort behavior
               arr.sort();
@@ -8704,22 +8026,14 @@ export class Interpreter {
         );
 
       case "flat":
-        return this.createHostFunction(
-          (depth?: number) => arr.flat(depth),
-          "flat",
-          false,
-        );
+        return this.createHostFunction((depth?: number) => arr.flat(depth), "flat", false);
 
       case "flatMap":
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             const result: any[] = [];
             for (let i = 0; i < arr.length; i++) {
-              const mapped = this.callCallback(callback, undefined, [
-                arr[i],
-                i,
-                arr,
-              ]);
+              const mapped = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (Array.isArray(mapped)) {
                 result.push(...mapped);
               } else {
@@ -8735,21 +8049,13 @@ export class Interpreter {
         );
 
       case "at":
-        return this.createHostFunction(
-          (index: number) => arr.at(index),
-          "at",
-          false,
-        );
+        return this.createHostFunction((index: number) => arr.at(index), "at", false);
 
       case "findLast":
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = arr.length - 1; i >= 0; i--) {
-              const matches = this.callCallback(callback, undefined, [
-                arr[i],
-                i,
-                arr,
-              ]);
+              const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (matches) {
                 return arr[i];
               }
@@ -8766,11 +8072,7 @@ export class Interpreter {
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = arr.length - 1; i >= 0; i--) {
-              const matches = this.callCallback(callback, undefined, [
-                arr[i],
-                i,
-                arr,
-              ]);
+              const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (matches) {
                 return i;
               }
@@ -8791,21 +8093,14 @@ export class Interpreter {
 
             if (initialValue === undefined) {
               if (arr.length === 0) {
-                throw new InterpreterError(
-                  "Reduce of empty array with no initial value",
-                );
+                throw new InterpreterError("Reduce of empty array with no initial value");
               }
               accumulator = arr[arr.length - 1];
               startIndex = arr.length - 2;
             }
 
             for (let i = startIndex; i >= 0; i--) {
-              accumulator = this.callCallback(callback, undefined, [
-                accumulator,
-                arr[i],
-                i,
-                arr,
-              ]);
+              accumulator = this.callCallback(callback, undefined, [accumulator, arr[i], i, arr]);
             }
             return accumulator;
           },
@@ -8856,10 +8151,7 @@ export class Interpreter {
    * Get a string method as a HostFunctionValue
    * Returns null if the method is not supported
    */
-  private getStringMethod(
-    str: string,
-    methodName: string,
-  ): HostFunctionValue | null {
+  private getStringMethod(str: string, methodName: string): HostFunctionValue | null {
     switch (methodName) {
       // Extraction methods
       case "substring":
@@ -9066,9 +8358,7 @@ export class Interpreter {
       this.ensureNoPrototypeAccessForSymbol(object, property);
       return (object as any)[property];
     }
-    throw new InterpreterError(
-      "Computed property access requires an array or object",
-    );
+    throw new InterpreterError("Computed property access requires an array or object");
   }
 
   private resolveStringPropertyAccess(object: any, property: string): any {
@@ -9100,9 +8390,7 @@ export class Interpreter {
         property === "name" ||
         property === "length"
       ) {
-        throw new InterpreterError(
-          "Cannot access properties on host functions",
-        );
+        throw new InterpreterError("Cannot access properties on host functions");
       }
       return (object as any)[property];
     }
@@ -9119,9 +8407,7 @@ export class Interpreter {
       if (method) {
         return method;
       }
-      throw new InterpreterError(
-        `Generator method '${property}' not supported`,
-      );
+      throw new InterpreterError(`Generator method '${property}' not supported`);
     }
 
     // Handle async generator methods
@@ -9130,9 +8416,7 @@ export class Interpreter {
       if (method) {
         return method;
       }
-      throw new InterpreterError(
-        `Async generator method '${property}' not supported`,
-      );
+      throw new InterpreterError(`Async generator method '${property}' not supported`);
     }
 
     // Handle array method overrides
@@ -9168,11 +8452,7 @@ export class Interpreter {
     throw new InterpreterError(`Property '${property}' not supported`);
   }
 
-  private callCallback(
-    callback: FunctionValue | Function,
-    thisValue: any,
-    args: any[],
-  ): any {
+  private callCallback(callback: FunctionValue | Function, thisValue: any, args: any[]): any {
     if (callback instanceof FunctionValue) {
       return this.callSandboxFunction(callback, thisValue, args);
     }
@@ -9185,11 +8465,7 @@ export class Interpreter {
   /**
    * Helper to call a sandbox function (used by array methods)
    */
-  private callSandboxFunction(
-    func: FunctionValue,
-    thisValue: any,
-    args: any[],
-  ): any {
+  private callSandboxFunction(func: FunctionValue, thisValue: any, args: any[]): any {
     // Save and restore environment
     const previousEnvironment = this.environment;
     this.environment = new Environment(func.closure, thisValue, true);
@@ -9236,9 +8512,7 @@ export class Interpreter {
           throw new InterpreterError("SpreadOperator is not enabled");
         }
 
-        const spreadValue = this.evaluateNode(
-          (element as ESTree.SpreadElement).argument,
-        );
+        const spreadValue = this.evaluateNode((element as ESTree.SpreadElement).argument);
         const spreadArray = this.validateArraySpread(spreadValue);
         elements.push(...spreadArray);
       } else {
@@ -9266,9 +8540,7 @@ export class Interpreter {
           throw new InterpreterError("SpreadOperator is not enabled");
         }
 
-        const spreadValue = this.evaluateNode(
-          (property as ESTree.SpreadElement).argument,
-        );
+        const spreadValue = this.evaluateNode((property as ESTree.SpreadElement).argument);
         this.validateObjectSpread(spreadValue);
 
         // Merge properties from spread object
@@ -9278,9 +8550,7 @@ export class Interpreter {
         }
       } else if (property.type === "Property") {
         // Get the property key - evaluate expression for computed properties
-        const computedKey = property.computed
-          ? this.evaluateNode(property.key)
-          : null;
+        const computedKey = property.computed ? this.evaluateNode(property.key) : null;
         const key =
           computedKey !== null
             ? typeof computedKey === "symbol"
@@ -9301,11 +8571,9 @@ export class Interpreter {
             enumerable: true,
           };
           if (property.kind === "get") {
-            descriptor.get = () =>
-              this.executeSandboxFunction(funcValue, [], obj);
+            descriptor.get = () => this.executeSandboxFunction(funcValue, [], obj);
           } else {
-            descriptor.set = (v: any) =>
-              this.executeSandboxFunction(funcValue, [v], obj);
+            descriptor.set = (v: any) => this.executeSandboxFunction(funcValue, [v], obj);
           }
           Object.defineProperty(obj, key, descriptor);
         } else {
@@ -9315,9 +8583,7 @@ export class Interpreter {
         }
       } else {
         const propertyType = (property as ESTree.Node).type;
-        throw new InterpreterError(
-          `Unsupported object property type: ${propertyType}`,
-        );
+        throw new InterpreterError(`Unsupported object property type: ${propertyType}`);
       }
     }
 
@@ -9345,23 +8611,18 @@ export class Interpreter {
     }
 
     // Evaluate all expressions
-    const expressionValues = this.collectNodeValues(
-      node.expressions,
-      (expr) => {
-        if (!expr) {
-          throw new InterpreterError("Template literal missing expression");
-        }
-        return this.evaluateNode(expr);
-      },
-    );
+    const expressionValues = this.collectNodeValues(node.expressions, (expr) => {
+      if (!expr) {
+        throw new InterpreterError("Template literal missing expression");
+      }
+      return this.evaluateNode(expr);
+    });
 
     // Build the final string using shared logic
     return this.buildTemplateLiteralString(node.quasis, expressionValues);
   }
 
-  private evaluateTaggedTemplateExpression(
-    node: ESTree.TaggedTemplateExpression,
-  ): any {
+  private evaluateTaggedTemplateExpression(node: ESTree.TaggedTemplateExpression): any {
     if (!this.isFeatureEnabled("TemplateLiterals")) {
       throw new InterpreterError("TemplateLiterals is not enabled");
     }
@@ -9376,9 +8637,7 @@ export class Interpreter {
   }
 
   private evaluateSequenceExpression(node: ESTree.SequenceExpression): any {
-    return this.evaluateNodeList(node.expressions, (expr) =>
-      this.evaluateNode(expr),
-    );
+    return this.evaluateNodeList(node.expressions, (expr) => this.evaluateNode(expr));
   }
 
   /**
@@ -9405,9 +8664,7 @@ export class Interpreter {
     );
   }
 
-  private async evaluateBinaryExpressionAsync(
-    node: ESTree.BinaryExpression,
-  ): Promise<any> {
+  private async evaluateBinaryExpressionAsync(node: ESTree.BinaryExpression): Promise<any> {
     if (!this.isFeatureEnabled("BinaryOperators")) {
       throw new InterpreterError("BinaryOperators is not enabled");
     }
@@ -9419,9 +8676,7 @@ export class Interpreter {
     return this.applyBinaryOperator(node.operator, left, right);
   }
 
-  private async evaluateUnaryExpressionAsync(
-    node: ESTree.UnaryExpression,
-  ): Promise<any> {
+  private async evaluateUnaryExpressionAsync(node: ESTree.UnaryExpression): Promise<any> {
     if (!this.isFeatureEnabled("UnaryOperators")) {
       throw new InterpreterError("UnaryOperators is not enabled");
     }
@@ -9445,26 +8700,19 @@ export class Interpreter {
    * Evaluate typeof operator, handling undefined variables gracefully.
    * Shared between sync and async paths via handleTypeof helper.
    */
-  private async evaluateTypeofAsync(
-    argument: ESTree.Expression,
-  ): Promise<string> {
+  private async evaluateTypeofAsync(argument: ESTree.Expression): Promise<string> {
     try {
       const value = await this.evaluateNodeAsync(argument);
       return this.getTypeofValue(value);
     } catch (error) {
-      if (
-        error instanceof InterpreterError &&
-        error.message.includes("Undefined variable")
-      ) {
+      if (error instanceof InterpreterError && error.message.includes("Undefined variable")) {
         return "undefined";
       }
       throw error;
     }
   }
 
-  private async evaluateLogicalExpressionAsync(
-    node: ESTree.LogicalExpression,
-  ): Promise<any> {
+  private async evaluateLogicalExpressionAsync(node: ESTree.LogicalExpression): Promise<any> {
     if (!this.isFeatureEnabled("LogicalOperators")) {
       throw new InterpreterError("LogicalOperators is not enabled");
     }
@@ -9484,9 +8732,7 @@ export class Interpreter {
         if (left !== null && left !== undefined) return left;
         return await this.evaluateNodeAsync(node.right);
       default:
-        throw new InterpreterError(
-          `Unsupported logical operator: ${node.operator}`,
-        );
+        throw new InterpreterError(`Unsupported logical operator: ${node.operator}`);
     }
   }
 
@@ -9509,9 +8755,7 @@ export class Interpreter {
     }
   }
 
-  private async evaluateCallExpressionAsync(
-    node: ESTree.CallExpression,
-  ): Promise<any> {
+  private async evaluateCallExpressionAsync(node: ESTree.CallExpression): Promise<any> {
     if (!this.isFeatureEnabled("CallExpression")) {
       throw new InterpreterError("CallExpression is not enabled");
     }
@@ -9519,21 +8763,15 @@ export class Interpreter {
     // Handle super() constructor call
     if (node.callee.type === "Super") {
       if (!this.currentSuperBinding) {
-        throw new InterpreterError(
-          "'super' keyword is only valid inside a class",
-        );
+        throw new InterpreterError("'super' keyword is only valid inside a class");
       }
       if (this.currentSuperBinding.isStatic) {
         throw new InterpreterError(
           "'super' constructor call is only valid inside a derived class constructor",
         );
       }
-      const currentConstructor =
-        this.constructorStack[this.constructorStack.length - 1] ?? null;
-      if (
-        !currentConstructor ||
-        currentConstructor !== this.currentSuperBinding.currentClass
-      ) {
+      const currentConstructor = this.constructorStack[this.constructorStack.length - 1] ?? null;
+      if (!currentConstructor || currentConstructor !== this.currentSuperBinding.currentClass) {
         throw new InterpreterError(
           "'super' constructor call is only valid inside a derived class constructor",
         );
@@ -9579,10 +8817,7 @@ export class Interpreter {
 
       // Resolve the member value using the already-evaluated object to avoid double evaluation.
       if (memberExpr.object.type !== "Super") {
-        callee = await this.resolveMemberExpressionValueAsync(
-          memberExpr,
-          thisValue,
-        );
+        callee = await this.resolveMemberExpressionValueAsync(memberExpr, thisValue);
       }
     } else {
       callee = await this.evaluateNodeAsync(node.callee);
@@ -9611,26 +8846,16 @@ export class Interpreter {
     // Handle host functions (sync and async)
     if (callee instanceof HostFunctionValue) {
       const args = await this.evaluateArgumentsAsync(node.arguments);
-      const wrappedArgs = callee.skipArgWrapping
-        ? args
-        : this.wrapArgsForHost(args, true);
+      const wrappedArgs = callee.skipArgWrapping ? args : this.wrapArgsForHost(args, true);
 
       try {
         const result = callee.hostFunc(...wrappedArgs);
         // If async host function, await the promise
         if (callee.isAsync) {
           const resolved = await result;
-          return ReadOnlyProxy.wrap(
-            resolved,
-            callee.name,
-            this.securityOptions,
-          );
+          return ReadOnlyProxy.wrap(resolved, callee.name, this.securityOptions);
         }
-        const wrapped = ReadOnlyProxy.wrap(
-          result,
-          callee.name,
-          this.securityOptions,
-        );
+        const wrapped = ReadOnlyProxy.wrap(result, callee.name, this.securityOptions);
         // Wrap Promise results in RawValue to prevent auto-awaiting by async/await
         // This preserves Promise identity for chaining (e.g., Promise.resolve(1).then(...))
         if (wrapped instanceof Promise) {
@@ -9643,10 +8868,7 @@ export class Interpreter {
           throw error;
         }
         throw new InterpreterError(
-          this.formatHostError(
-            `Host function '${callee.name}' threw error`,
-            error,
-          ),
+          this.formatHostError(`Host function '${callee.name}' threw error`, error),
         );
       }
     }
@@ -9656,9 +8878,7 @@ export class Interpreter {
       const args = await this.evaluateArgumentsAsync(node.arguments);
       const wrappedArgs = this.wrapArgsForHost(args, true);
       const result =
-        thisValue !== undefined
-          ? callee.call(thisValue, ...wrappedArgs)
-          : callee(...wrappedArgs);
+        thisValue !== undefined ? callee.call(thisValue, ...wrappedArgs) : callee(...wrappedArgs);
       // Wrap Promise results in RawValue to prevent auto-awaiting
       if (result instanceof Promise) {
         return new RawValue(result);
@@ -9667,9 +8887,7 @@ export class Interpreter {
     }
 
     if (callee instanceof ClassValue) {
-      throw new InterpreterError(
-        "Class constructor cannot be invoked without 'new'",
-      );
+      throw new InterpreterError("Class constructor cannot be invoked without 'new'");
     }
 
     // Handle sandbox functions
@@ -9699,22 +8917,14 @@ export class Interpreter {
       if (!this.isFeatureEnabled("Generators")) {
         throw new InterpreterError("Generators is not enabled");
       }
-      return new GeneratorValue(
-        callee,
-        args,
-        this,
-        thisValue,
-        this.isFeatureEnabled.bind(this),
-      );
+      return new GeneratorValue(callee, args, this, thisValue, this.isFeatureEnabled.bind(this));
     }
 
     // Execute the sandbox function (handles both sync and async functions)
     return await this.executeSandboxFunctionAsync(callee, args, thisValue);
   }
 
-  private async evaluateNewExpressionAsync(
-    node: ESTree.NewExpression,
-  ): Promise<any> {
+  private async evaluateNewExpressionAsync(node: ESTree.NewExpression): Promise<any> {
     if (!this.isFeatureEnabled("NewExpression")) {
       throw new InterpreterError("NewExpression is not enabled");
     }
@@ -9727,10 +8937,7 @@ export class Interpreter {
 
     // 3. Handle ClassValue - use instantiateClassAsync
     if (constructor instanceof ClassValue) {
-      return await this.instantiateClassAsync(
-        constructor,
-        node.arguments as ESTree.Expression[],
-      );
+      return await this.instantiateClassAsync(constructor, node.arguments as ESTree.Expression[]);
     }
 
     // 4. Create new instance object
@@ -9767,15 +8974,9 @@ export class Interpreter {
     return finalResult;
   }
 
-  private async evaluateAssignmentExpressionAsync(
-    node: ESTree.AssignmentExpression,
-  ): Promise<any> {
+  private async evaluateAssignmentExpressionAsync(node: ESTree.AssignmentExpression): Promise<any> {
     // Handle logical assignment operators (||=, &&=, ??=) with short-circuit evaluation
-    if (
-      node.operator === "||=" ||
-      node.operator === "&&=" ||
-      node.operator === "??="
-    ) {
+    if (node.operator === "||=" || node.operator === "&&=" || node.operator === "??=") {
       if (!this.isFeatureEnabled("LogicalAssignment")) {
         throw new InterpreterError("LogicalAssignment is not enabled");
       }
@@ -9794,10 +8995,7 @@ export class Interpreter {
     }
 
     // Handle destructuring assignments
-    if (
-      node.left.type === "ArrayPattern" ||
-      node.left.type === "ObjectPattern"
-    ) {
+    if (node.left.type === "ArrayPattern" || node.left.type === "ObjectPattern") {
       await this.destructurePatternAsync(node.left, value, false);
       return value;
     }
@@ -9811,9 +9009,7 @@ export class Interpreter {
       const object = await this.evaluateNodeAsync(memberExpr.object);
 
       if (object instanceof HostFunctionValue) {
-        throw new InterpreterError(
-          "Cannot assign properties on host functions",
-        );
+        throw new InterpreterError("Cannot assign properties on host functions");
       }
       this.ensureNoInternalObjectMutation(object);
 
@@ -9840,15 +9036,12 @@ export class Interpreter {
             object[property] = value;
             return value;
           }
-          throw new InterpreterError(
-            "Assignment target is not an array or object",
-          );
+          throw new InterpreterError("Assignment target is not an array or object");
         }
 
         if (Array.isArray(object)) {
           // Convert string to number if it's a numeric string (for...in gives string indices)
-          const index =
-            typeof property === "string" ? Number(property) : property;
+          const index = typeof property === "string" ? Number(property) : property;
 
           if (typeof index !== "number" || isNaN(index)) {
             throw new InterpreterError("Array index must be a number");
@@ -9857,11 +9050,7 @@ export class Interpreter {
           return value;
         } else if (object instanceof ClassValue) {
           const propName = String(property);
-          return await this.assignClassStaticMemberAsync(
-            object,
-            propName,
-            value,
-          );
+          return await this.assignClassStaticMemberAsync(object, propName, value);
         } else if (instanceClass) {
           const propName = String(property);
           validatePropertyName(propName);
@@ -9877,9 +9066,7 @@ export class Interpreter {
           object[propName] = value;
           return value;
         } else {
-          throw new InterpreterError(
-            "Assignment target is not an array or object",
-          );
+          throw new InterpreterError("Assignment target is not an array or object");
         }
       } else {
         if (memberExpr.property.type !== "Identifier") {
@@ -9890,11 +9077,7 @@ export class Interpreter {
         validatePropertyName(property);
 
         if (object instanceof ClassValue) {
-          return await this.assignClassStaticMemberAsync(
-            object,
-            property,
-            value,
-          );
+          return await this.assignClassStaticMemberAsync(object, property, value);
         }
 
         const instanceClass = this.getInstanceClass(object);
@@ -9907,11 +9090,7 @@ export class Interpreter {
           );
         }
 
-        if (
-          typeof object === "object" &&
-          object !== null &&
-          !Array.isArray(object)
-        ) {
+        if (typeof object === "object" && object !== null && !Array.isArray(object)) {
           object[property] = value;
           return value;
         } else {
@@ -9931,16 +9110,12 @@ export class Interpreter {
   /**
    * Async version of evaluateLogicalAssignment for ||=, &&=, ??=
    */
-  private async evaluateLogicalAssignmentAsync(
-    node: ESTree.AssignmentExpression,
-  ): Promise<any> {
+  private async evaluateLogicalAssignmentAsync(node: ESTree.AssignmentExpression): Promise<any> {
     // Get the current value of the left-hand side
     let currentValue: any;
 
     if (node.left.type === "Identifier") {
-      currentValue = this.environment.get(
-        (node.left as ESTree.Identifier).name,
-      );
+      currentValue = this.environment.get((node.left as ESTree.Identifier).name);
     } else if (node.left.type === "MemberExpression") {
       const memberExpr = node.left as ESTree.MemberExpression;
       const object =
@@ -9959,10 +9134,7 @@ export class Interpreter {
           (memberExpr.property as ESTree.PrivateIdentifier).name,
         );
       } else if (object instanceof ClassValue) {
-        currentValue = await this.accessClassStaticMemberAsync(
-          object,
-          memberExpr,
-        );
+        currentValue = await this.accessClassStaticMemberAsync(object, memberExpr);
       } else {
         const instanceClass = this.getInstanceClass(object);
         if (instanceClass) {
@@ -9993,9 +9165,7 @@ export class Interpreter {
           }
         } else {
           if (object instanceof HostFunctionValue) {
-            throw new InterpreterError(
-              "Cannot access properties on host functions",
-            );
+            throw new InterpreterError("Cannot access properties on host functions");
           }
           this.ensureNoInternalObjectAccess(object);
 
@@ -10061,9 +9231,7 @@ export class Interpreter {
         shouldAssign = currentValue === null || currentValue === undefined;
         break;
       default:
-        throw new InterpreterError(
-          `Unsupported logical assignment operator: ${node.operator}`,
-        );
+        throw new InterpreterError(`Unsupported logical assignment operator: ${node.operator}`);
     }
 
     // Short-circuit: if we shouldn't assign, return the current value without evaluating right
@@ -10085,9 +9253,7 @@ export class Interpreter {
       const object = await this.evaluateNodeAsync(memberExpr.object);
 
       if (object instanceof HostFunctionValue) {
-        throw new InterpreterError(
-          "Cannot assign properties on host functions",
-        );
+        throw new InterpreterError("Cannot assign properties on host functions");
       }
       this.ensureNoInternalObjectMutation(object);
 
@@ -10119,19 +9285,14 @@ export class Interpreter {
           return newValue;
         }
         if (Array.isArray(object)) {
-          const index =
-            typeof property === "string" ? Number(property) : property;
+          const index = typeof property === "string" ? Number(property) : property;
           if (typeof index !== "number" || isNaN(index)) {
             throw new InterpreterError("Array index must be a number");
           }
           object[index] = newValue;
         } else if (object instanceof ClassValue) {
           const propName = String(property);
-          return await this.assignClassStaticMemberAsync(
-            object,
-            propName,
-            newValue,
-          );
+          return await this.assignClassStaticMemberAsync(object, propName, newValue);
         } else {
           const instanceClass = this.getInstanceClass(object);
           if (instanceClass) {
@@ -10153,11 +9314,7 @@ export class Interpreter {
         const property = (memberExpr.property as ESTree.Identifier).name;
         validatePropertyName(property);
         if (object instanceof ClassValue) {
-          return await this.assignClassStaticMemberAsync(
-            object,
-            property,
-            newValue,
-          );
+          return await this.assignClassStaticMemberAsync(object, property, newValue);
         }
         const instanceClass = this.getInstanceClass(object);
         if (instanceClass) {
@@ -10179,9 +9336,7 @@ export class Interpreter {
    * Async version of evaluateCompoundAssignment.
    * Evaluates compound assignment operators: +=, -=, *=, /=, %=, **=, <<=, >>=, >>>=, &=, |=, ^=
    */
-  private async evaluateCompoundAssignmentAsync(
-    node: ESTree.AssignmentExpression,
-  ): Promise<any> {
+  private async evaluateCompoundAssignmentAsync(node: ESTree.AssignmentExpression): Promise<any> {
     const rightValue = await this.evaluateNodeAsync(node.right);
 
     // Get the current value and compute the new value
@@ -10212,9 +9367,7 @@ export class Interpreter {
         case "^=":
           return currentValue ^ rightValue;
         default:
-          throw new InterpreterError(
-            `Unsupported assignment operator: ${node.operator}`,
-          );
+          throw new InterpreterError(`Unsupported assignment operator: ${node.operator}`);
       }
     };
 
@@ -10241,9 +9394,7 @@ export class Interpreter {
       const object = await this.evaluateNodeAsync(memberExpr.object);
 
       if (object instanceof HostFunctionValue) {
-        throw new InterpreterError(
-          "Cannot assign properties on host functions",
-        );
+        throw new InterpreterError("Cannot assign properties on host functions");
       }
       this.ensureNoInternalObjectMutation(object);
 
@@ -10252,8 +9403,7 @@ export class Interpreter {
         if (!this.isFeatureEnabled("PrivateFields")) {
           throw new InterpreterError("PrivateFields is not enabled");
         }
-        const fieldName = (memberExpr.property as ESTree.PrivateIdentifier)
-          .name;
+        const fieldName = (memberExpr.property as ESTree.PrivateIdentifier).name;
         const currentValue = this.accessPrivateField(object, fieldName);
         const newValue = computeNewValue(currentValue);
         return this.assignPrivateField(object, fieldName, newValue);
@@ -10278,8 +9428,7 @@ export class Interpreter {
         }
 
         if (Array.isArray(object)) {
-          const index =
-            typeof property === "string" ? Number(property) : property;
+          const index = typeof property === "string" ? Number(property) : property;
           if (typeof index !== "number" || isNaN(index)) {
             throw new InterpreterError("Array index must be a number");
           }
@@ -10291,16 +9440,9 @@ export class Interpreter {
 
         if (object instanceof ClassValue) {
           const propName = String(property);
-          const currentValue = await this.accessClassStaticMemberAsync(
-            object,
-            memberExpr,
-          );
+          const currentValue = await this.accessClassStaticMemberAsync(object, memberExpr);
           const newValue = computeNewValue(currentValue);
-          return await this.assignClassStaticMemberAsync(
-            object,
-            propName,
-            newValue,
-          );
+          return await this.assignClassStaticMemberAsync(object, propName, newValue);
         }
 
         const instanceClass = this.getInstanceClass(object);
@@ -10337,16 +9479,9 @@ export class Interpreter {
         validatePropertyName(property);
 
         if (object instanceof ClassValue) {
-          const currentValue = await this.accessClassStaticMemberAsync(
-            object,
-            memberExpr,
-          );
+          const currentValue = await this.accessClassStaticMemberAsync(object, memberExpr);
           const newValue = computeNewValue(currentValue);
-          return await this.assignClassStaticMemberAsync(
-            object,
-            property,
-            newValue,
-          );
+          return await this.assignClassStaticMemberAsync(object, property, newValue);
         }
 
         const instanceClass = this.getInstanceClass(object);
@@ -10375,9 +9510,7 @@ export class Interpreter {
     throw new InterpreterError("Invalid compound assignment target");
   }
 
-  private async evaluateVariableDeclarationAsync(
-    node: ESTree.VariableDeclaration,
-  ): Promise<any> {
+  private async evaluateVariableDeclarationAsync(node: ESTree.VariableDeclaration): Promise<any> {
     const kind = node.kind as "let" | "const" | "var";
     this.validateVariableDeclarationKind(kind);
 
@@ -10385,15 +9518,10 @@ export class Interpreter {
 
     for (const declarator of node.declarations) {
       // Handle destructuring patterns
-      if (
-        declarator.id.type === "ArrayPattern" ||
-        declarator.id.type === "ObjectPattern"
-      ) {
+      if (declarator.id.type === "ArrayPattern" || declarator.id.type === "ObjectPattern") {
         // Destructuring declaration
         if (declarator.init === null) {
-          throw new InterpreterError(
-            "Destructuring declaration must have an initializer",
-          );
+          throw new InterpreterError("Destructuring declaration must have an initializer");
         }
 
         const value = await this.evaluateNodeAsync(declarator.init);
@@ -10404,9 +9532,7 @@ export class Interpreter {
 
       // Handle simple identifier
       if (declarator.id.type !== "Identifier") {
-        throw new InterpreterError(
-          `Unsupported declaration pattern: ${declarator.id.type}`,
-        );
+        throw new InterpreterError(`Unsupported declaration pattern: ${declarator.id.type}`);
       }
 
       const name = (declarator.id as ESTree.Identifier).name;
@@ -10416,18 +9542,14 @@ export class Interpreter {
       if (this.isResumingFromYield && this.environment.has(name)) {
         // The variable was already declared in the first evaluation pass.
         // Just evaluate the init (which will return the received value) but don't redeclare.
-        const value = declarator.init
-          ? await this.evaluateNodeAsync(declarator.init)
-          : undefined;
+        const value = declarator.init ? await this.evaluateNodeAsync(declarator.init) : undefined;
         // Use forceSet to update even const variables during yield resumption
         this.environment.forceSet(name, value);
         lastValue = value;
         continue;
       }
 
-      let value = declarator.init
-        ? await this.evaluateNodeAsync(declarator.init)
-        : undefined;
+      let value = declarator.init ? await this.evaluateNodeAsync(declarator.init) : undefined;
       // Unwrap RawValue (used to prevent Promise auto-awaiting from NewExpression)
       if (value instanceof RawValue) {
         value = value.value;
@@ -10442,9 +9564,7 @@ export class Interpreter {
     return lastValue;
   }
 
-  private async evaluateBlockStatementAsync(
-    node: ESTree.BlockStatement,
-  ): Promise<any> {
+  private async evaluateBlockStatementAsync(node: ESTree.BlockStatement): Promise<any> {
     const previousEnvironment = this.environment;
     this.environment = new Environment(previousEnvironment);
 
@@ -10464,9 +9584,7 @@ export class Interpreter {
     return result;
   }
 
-  private async evaluateIfStatementAsync(
-    node: ESTree.IfStatement,
-  ): Promise<any> {
+  private async evaluateIfStatementAsync(node: ESTree.IfStatement): Promise<any> {
     if (!this.isFeatureEnabled("IfStatement")) {
       throw new InterpreterError("IfStatement is not enabled");
     }
@@ -10482,9 +9600,7 @@ export class Interpreter {
     return undefined;
   }
 
-  private async evaluateWhileStatementAsync(
-    node: ESTree.WhileStatement,
-  ): Promise<any> {
+  private async evaluateWhileStatementAsync(node: ESTree.WhileStatement): Promise<any> {
     if (!this.isFeatureEnabled("WhileStatement")) {
       throw new InterpreterError("WhileStatement is not enabled");
     }
@@ -10514,9 +9630,7 @@ export class Interpreter {
     return result;
   }
 
-  private async evaluateDoWhileStatementAsync(
-    node: ESTree.DoWhileStatement,
-  ): Promise<any> {
+  private async evaluateDoWhileStatementAsync(node: ESTree.DoWhileStatement): Promise<any> {
     if (!this.isFeatureEnabled("DoWhileStatement")) {
       throw new InterpreterError("DoWhileStatement is not enabled");
     }
@@ -10546,9 +9660,7 @@ export class Interpreter {
     return result;
   }
 
-  private async evaluateForStatementAsync(
-    node: ESTree.ForStatement,
-  ): Promise<any> {
+  private async evaluateForStatementAsync(node: ESTree.ForStatement): Promise<any> {
     if (!this.isFeatureEnabled("ForStatement")) {
       throw new InterpreterError("ForStatement is not enabled");
     }
@@ -10617,9 +9729,7 @@ export class Interpreter {
     }
   }
 
-  private async evaluateForOfStatementAsync(
-    node: ESTree.ForOfStatement,
-  ): Promise<any> {
+  private async evaluateForOfStatementAsync(node: ESTree.ForOfStatement): Promise<any> {
     if (!this.isFeatureEnabled("ForOfStatement")) {
       throw new InterpreterError("ForOfStatement is not enabled");
     }
@@ -10643,8 +9753,9 @@ export class Interpreter {
       const shouldAwait = isAsync || node.await;
 
       // Extract variable information
-      const { variableName, pattern, isDeclaration, variableKind } =
-        extractForOfVariable(node.left);
+      const { variableName, pattern, isDeclaration, variableKind } = extractForOfVariable(
+        node.left,
+      );
 
       let result: any = undefined;
       let iterations = 0;
@@ -10670,18 +9781,9 @@ export class Interpreter {
 
           // Declare the variable(s) with the current element
           if (pattern) {
-            await this.destructurePatternAsync(
-              pattern,
-              currentValue,
-              true,
-              variableKind,
-            );
+            await this.destructurePatternAsync(pattern, currentValue, true, variableKind);
           } else {
-            this.environment.declare(
-              variableName!,
-              currentValue,
-              variableKind!,
-            );
+            this.environment.declare(variableName!, currentValue, variableKind!);
           }
 
           // Execute loop body
@@ -10753,9 +9855,7 @@ export class Interpreter {
     }
   }
 
-  private async evaluateForInStatementAsync(
-    node: ESTree.ForInStatement,
-  ): Promise<any> {
+  private async evaluateForInStatementAsync(node: ESTree.ForInStatement): Promise<any> {
     if (!this.isFeatureEnabled("ForInStatement")) {
       throw new InterpreterError("ForInStatement is not enabled");
     }
@@ -10773,20 +9873,15 @@ export class Interpreter {
 
       // Check if obj is an object or array
       if (obj === null || obj === undefined) {
-        throw new InterpreterError(
-          "for...in requires an object or array, got null/undefined",
-        );
+        throw new InterpreterError("for...in requires an object or array, got null/undefined");
       }
 
       if (typeof obj !== "object") {
-        throw new InterpreterError(
-          `for...in requires an object or array, got ${typeof obj}`,
-        );
+        throw new InterpreterError(`for...in requires an object or array, got ${typeof obj}`);
       }
 
       // Extract variable information
-      const { variableName, isDeclaration, variableKind } =
-        extractForInVariable(node.left);
+      const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
       let result: any = undefined;
       let iterations = 0;
@@ -10834,9 +9929,7 @@ export class Interpreter {
     }
   }
 
-  private async evaluateSwitchStatementAsync(
-    node: ESTree.SwitchStatement,
-  ): Promise<any> {
+  private async evaluateSwitchStatementAsync(node: ESTree.SwitchStatement): Promise<any> {
     if (!this.isFeatureEnabled("SwitchStatement")) {
       throw new InterpreterError("SwitchStatement is not enabled");
     }
@@ -10885,12 +9978,8 @@ export class Interpreter {
     return result;
   }
 
-  private async evaluateReturnStatementAsync(
-    node: ESTree.ReturnStatement,
-  ): Promise<any> {
-    let value = node.argument
-      ? await this.evaluateNodeAsync(node.argument)
-      : undefined;
+  private async evaluateReturnStatementAsync(node: ESTree.ReturnStatement): Promise<any> {
+    let value = node.argument ? await this.evaluateNodeAsync(node.argument) : undefined;
     // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)
     if (value instanceof RawValue) {
       value = value.value;
@@ -10898,9 +9987,7 @@ export class Interpreter {
     return new ControlFlowSignal("return", value);
   }
 
-  private async evaluateAwaitExpressionAsync(
-    node: ESTree.AwaitExpression,
-  ): Promise<any> {
+  private async evaluateAwaitExpressionAsync(node: ESTree.AwaitExpression): Promise<any> {
     if (!this.isFeatureEnabled("AsyncAwait")) {
       throw new InterpreterError("AsyncAwait is not enabled");
     }
@@ -10916,9 +10003,7 @@ export class Interpreter {
     // Security: Block awaiting host functions directly
     // This prevents exposing the raw host function to the host via the HostFunctionValue wrapper
     if (value instanceof HostFunctionValue) {
-      throw new InterpreterError(
-        "Cannot await a host function. Did you mean to call it with ()?",
-      );
+      throw new InterpreterError("Cannot await a host function. Did you mean to call it with ()?");
     }
 
     // Note: We don't block awaiting FunctionValue (sandbox functions) because:
@@ -10938,10 +10023,7 @@ export class Interpreter {
     if (!this.isFeatureEnabled("YieldExpression")) {
       throw new InterpreterError("YieldExpression is not enabled");
     }
-    if (
-      !this.isFeatureEnabled("Generators") &&
-      !this.isFeatureEnabled("AsyncGenerators")
-    ) {
+    if (!this.isFeatureEnabled("Generators") && !this.isFeatureEnabled("AsyncGenerators")) {
       throw new InterpreterError(
         "YieldExpression requires Generators or AsyncGenerators to be enabled",
       );
@@ -10959,10 +10041,7 @@ export class Interpreter {
       }
 
       // If this is the yield we're resuming at, return the received value
-      if (
-        currentYieldIndex === this.yieldResumeIndex &&
-        this.pendingYieldReceivedValue?.hasValue
-      ) {
+      if (currentYieldIndex === this.yieldResumeIndex && this.pendingYieldReceivedValue?.hasValue) {
         const receivedValue = this.pendingYieldReceivedValue.value;
         this.pendingYieldReceivedValue = undefined;
         // Store the received value for future re-evaluations
@@ -10982,16 +10061,11 @@ export class Interpreter {
    * Evaluate yield expression (async): yield value or yield* iterable
    * Returns a yield signal that will be caught by the async generator executor
    */
-  private async evaluateYieldExpressionAsync(
-    node: ESTree.YieldExpression,
-  ): Promise<any> {
+  private async evaluateYieldExpressionAsync(node: ESTree.YieldExpression): Promise<any> {
     if (!this.isFeatureEnabled("YieldExpression")) {
       throw new InterpreterError("YieldExpression is not enabled");
     }
-    if (
-      !this.isFeatureEnabled("Generators") &&
-      !this.isFeatureEnabled("AsyncGenerators")
-    ) {
+    if (!this.isFeatureEnabled("Generators") && !this.isFeatureEnabled("AsyncGenerators")) {
       throw new InterpreterError(
         "YieldExpression requires Generators or AsyncGenerators to be enabled",
       );
@@ -11009,10 +10083,7 @@ export class Interpreter {
       }
 
       // If this is the yield we're resuming at, return the received value
-      if (
-        currentYieldIndex === this.yieldResumeIndex &&
-        this.pendingYieldReceivedValue?.hasValue
-      ) {
+      if (currentYieldIndex === this.yieldResumeIndex && this.pendingYieldReceivedValue?.hasValue) {
         const receivedValue = this.pendingYieldReceivedValue.value;
         this.pendingYieldReceivedValue = undefined;
         // Store the received value for future re-evaluations
@@ -11022,9 +10093,7 @@ export class Interpreter {
       }
     }
 
-    const value = node.argument
-      ? await this.evaluateNodeAsync(node.argument)
-      : undefined;
+    const value = node.argument ? await this.evaluateNodeAsync(node.argument) : undefined;
     const delegate = node.delegate || false;
 
     return new ControlFlowSignal("yield", value, null, delegate);
@@ -11034,9 +10103,7 @@ export class Interpreter {
    * Evaluate throw statement (async): throw expression
    * Throws an InterpreterError with the evaluated expression
    */
-  private async evaluateThrowStatementAsync(
-    node: ESTree.ThrowStatement,
-  ): Promise<any> {
+  private async evaluateThrowStatementAsync(node: ESTree.ThrowStatement): Promise<any> {
     if (!this.isFeatureEnabled("ThrowStatement")) {
       throw new InterpreterError("ThrowStatement is not enabled");
     }
@@ -11051,9 +10118,7 @@ export class Interpreter {
    * Evaluate try/catch/finally statement (async)
    * Handles exception flow with proper cleanup
    */
-  private async evaluateTryStatementAsync(
-    node: ESTree.TryStatement,
-  ): Promise<any> {
+  private async evaluateTryStatementAsync(node: ESTree.TryStatement): Promise<any> {
     if (!this.isFeatureEnabled("TryCatchStatement")) {
       throw new InterpreterError("TryCatchStatement is not enabled");
     }
@@ -11089,12 +10154,7 @@ export class Interpreter {
                 error instanceof InterpreterError && "thrownValue" in error
                   ? error.thrownValue
                   : error;
-              await this.destructurePatternAsync(
-                node.handler.param,
-                value,
-                true,
-                "let",
-              );
+              await this.destructurePatternAsync(node.handler.param, value, true, "let");
             }
           }
 
@@ -11109,9 +10169,7 @@ export class Interpreter {
     } finally {
       // Always execute finally block if present
       if (node.finalizer) {
-        const finallyResult = await this.evaluateBlockStatementAsync(
-          node.finalizer,
-        );
+        const finallyResult = await this.evaluateBlockStatementAsync(node.finalizer);
 
         // If finally block has control flow (return/break/continue), it overrides try/catch
         if (this.shouldFinallyOverride(finallyResult)) {
@@ -11174,34 +10232,16 @@ export class Interpreter {
 
       if (element.type === "Identifier") {
         // Simple identifier: a
-        this.bindDestructuredIdentifier(
-          element.name,
-          elementValue,
-          declare,
-          kind,
-        );
-      } else if (
-        element.type === "ArrayPattern" ||
-        element.type === "ObjectPattern"
-      ) {
+        this.bindDestructuredIdentifier(element.name, elementValue, declare, kind);
+      } else if (element.type === "ArrayPattern" || element.type === "ObjectPattern") {
         // Nested destructuring: [a, [b, c]]
-        await this.destructurePatternAsync(
-          element,
-          elementValue,
-          declare,
-          kind,
-        );
+        await this.destructurePatternAsync(element, elementValue, declare, kind);
       } else if (element.type === "RestElement") {
         // Rest element: [...rest] - collect remaining array elements
         const restName = this.getRestElementName(element);
         // Collect all remaining elements from current position
         const remainingValues = value.slice(i);
-        this.bindDestructuredIdentifier(
-          restName,
-          remainingValues,
-          declare,
-          kind,
-        );
+        this.bindDestructuredIdentifier(restName, remainingValues, declare, kind);
 
         // Rest must be last element, so we break
         break;
@@ -11265,36 +10305,19 @@ export class Interpreter {
 
         if (target.type === "Identifier") {
           // Simple: {x} or {x: newName}
-          this.bindDestructuredIdentifier(
-            target.name,
-            propValue,
-            declare,
-            kind,
-          );
+          this.bindDestructuredIdentifier(target.name, propValue, declare, kind);
         } else if (target.type === "AssignmentPattern") {
           // Default value: {x = 5}
-          await this.handleAssignmentPatternAsync(
-            target,
-            propValue,
-            declare,
-            kind,
-          );
-        } else if (
-          target.type === "ArrayPattern" ||
-          target.type === "ObjectPattern"
-        ) {
+          await this.handleAssignmentPatternAsync(target, propValue, declare, kind);
+        } else if (target.type === "ArrayPattern" || target.type === "ObjectPattern") {
           // Nested destructuring: {a: {b}}
           await this.destructurePatternAsync(target, propValue, declare, kind);
         } else {
-          throw new InterpreterError(
-            `Unsupported object pattern value: ${target.type}`,
-          );
+          throw new InterpreterError(`Unsupported object pattern value: ${target.type}`);
         }
       } else {
         const propertyType = (property as ESTree.Node).type;
-        throw new InterpreterError(
-          `Unsupported object pattern property: ${propertyType}`,
-        );
+        throw new InterpreterError(`Unsupported object pattern property: ${propertyType}`);
       }
     }
 
@@ -11327,12 +10350,9 @@ export class Interpreter {
     // Use default if value is undefined
     const defaultExpr = pattern.right;
     if (!defaultExpr) {
-      throw new InterpreterError(
-        "Assignment pattern must have a default value",
-      );
+      throw new InterpreterError("Assignment pattern must have a default value");
     }
-    const finalValue =
-      value === undefined ? await this.evaluateNodeAsync(defaultExpr) : value;
+    const finalValue = value === undefined ? await this.evaluateNodeAsync(defaultExpr) : value;
 
     const left = pattern.left;
 
@@ -11351,9 +10371,7 @@ export class Interpreter {
     // Any other type would be a parser error, not a runtime case
   }
 
-  private async evaluateMemberExpressionAsync(
-    node: ESTree.MemberExpression,
-  ): Promise<any> {
+  private async evaluateMemberExpressionAsync(node: ESTree.MemberExpression): Promise<any> {
     if (!this.isFeatureEnabled("MemberExpression")) {
       throw new InterpreterError("MemberExpression is not enabled");
     }
@@ -11390,10 +10408,7 @@ export class Interpreter {
       if (!this.isFeatureEnabled("PrivateFields")) {
         throw new InterpreterError("PrivateFields is not enabled");
       }
-      return this.accessPrivateField(
-        object,
-        (node.property as ESTree.PrivateIdentifier).name,
-      );
+      return this.accessPrivateField(object, (node.property as ESTree.PrivateIdentifier).name);
     }
 
     // Handle static member access on classes
@@ -11411,11 +10426,7 @@ export class Interpreter {
         }
         const propName = String(property);
         validatePropertyName(propName);
-        return this.getInstanceProperty(
-          object as Record<string, any>,
-          instanceClass,
-          propName,
-        );
+        return this.getInstanceProperty(object as Record<string, any>, instanceClass, propName);
       }
 
       if (node.property.type !== "Identifier") {
@@ -11428,11 +10439,7 @@ export class Interpreter {
       ) {
         validatePropertyName(property);
       }
-      return this.getInstanceProperty(
-        object as Record<string, any>,
-        instanceClass,
-        property,
-      );
+      return this.getInstanceProperty(object as Record<string, any>, instanceClass, property);
     }
 
     if (node.computed) {
@@ -11448,9 +10455,7 @@ export class Interpreter {
       }
 
       if (object === null || object === undefined) {
-        throw new InterpreterError(
-          "Computed property access requires an array or object",
-        );
+        throw new InterpreterError("Computed property access requires an array or object");
       }
 
       const propName = String(property);
@@ -11481,9 +10486,7 @@ export class Interpreter {
     }
   }
 
-  private async evaluateArrayExpressionAsync(
-    node: ESTree.ArrayExpression,
-  ): Promise<any> {
+  private async evaluateArrayExpressionAsync(node: ESTree.ArrayExpression): Promise<any> {
     if (!this.isFeatureEnabled("ArrayLiterals")) {
       throw new InterpreterError("ArrayLiterals is not enabled");
     }
@@ -11516,9 +10519,7 @@ export class Interpreter {
     return elements;
   }
 
-  private async evaluateObjectExpressionAsync(
-    node: ESTree.ObjectExpression,
-  ): Promise<any> {
+  private async evaluateObjectExpressionAsync(node: ESTree.ObjectExpression): Promise<any> {
     if (!this.isFeatureEnabled("ObjectLiterals")) {
       throw new InterpreterError("ObjectLiterals is not enabled");
     }
@@ -11540,9 +10541,7 @@ export class Interpreter {
         }
       } else if (property.type === "Property") {
         // Evaluate expression for computed properties
-        const computedKey = property.computed
-          ? await this.evaluateNodeAsync(property.key)
-          : null;
+        const computedKey = property.computed ? await this.evaluateNodeAsync(property.key) : null;
         const key =
           computedKey !== null
             ? typeof computedKey === "symbol"
@@ -11557,19 +10556,15 @@ export class Interpreter {
 
         if (property.kind === "get" || property.kind === "set") {
           // Getter/setter property
-          const funcValue = (await this.evaluateNodeAsync(
-            property.value,
-          )) as FunctionValue;
+          const funcValue = (await this.evaluateNodeAsync(property.value)) as FunctionValue;
           const descriptor = Object.getOwnPropertyDescriptor(obj, key) || {
             configurable: true,
             enumerable: true,
           };
           if (property.kind === "get") {
-            descriptor.get = () =>
-              this.executeSandboxFunction(funcValue, [], obj);
+            descriptor.get = () => this.executeSandboxFunction(funcValue, [], obj);
           } else {
-            descriptor.set = (v: any) =>
-              this.executeSandboxFunction(funcValue, [v], obj);
+            descriptor.set = (v: any) => this.executeSandboxFunction(funcValue, [v], obj);
           }
           Object.defineProperty(obj, key, descriptor);
         } else {
@@ -11579,9 +10574,7 @@ export class Interpreter {
         }
       } else {
         const propertyType = (property as ESTree.Node).type;
-        throw new InterpreterError(
-          `Unsupported object property type: ${propertyType}`,
-        );
+        throw new InterpreterError(`Unsupported object property type: ${propertyType}`);
       }
     }
 
@@ -11595,23 +10588,18 @@ export class Interpreter {
   /**
    * Evaluate template literal (async): `hello ${name}`
    */
-  private async evaluateTemplateLiteralAsync(
-    node: ESTree.TemplateLiteral,
-  ): Promise<string> {
+  private async evaluateTemplateLiteralAsync(node: ESTree.TemplateLiteral): Promise<string> {
     if (!this.isFeatureEnabled("TemplateLiterals")) {
       throw new InterpreterError("TemplateLiterals is not enabled");
     }
 
     // Evaluate all expressions asynchronously
-    const expressionValues = await this.collectNodeValuesAsync(
-      node.expressions,
-      async (expr) => {
-        if (!expr) {
-          throw new InterpreterError("Template literal missing expression");
-        }
-        return await this.evaluateNodeAsync(expr);
-      },
-    );
+    const expressionValues = await this.collectNodeValuesAsync(node.expressions, async (expr) => {
+      if (!expr) {
+        throw new InterpreterError("Template literal missing expression");
+      }
+      return await this.evaluateNodeAsync(expr);
+    });
 
     // Build the final string using shared logic
     return this.buildTemplateLiteralString(node.quasis, expressionValues);
@@ -11626,17 +10614,14 @@ export class Interpreter {
 
     const tag = await this.evaluateNodeAsync(node.tag);
     const strings = this.buildTaggedTemplateStrings(node.quasi);
-    const values = await this.collectNodeValuesAsync(
-      node.quasi.expressions,
-      (expr) => this.evaluateNodeAsync(expr),
+    const values = await this.collectNodeValuesAsync(node.quasi.expressions, (expr) =>
+      this.evaluateNodeAsync(expr),
     );
     const args = [strings, ...values];
     return await this.callTagFunction(tag, args, true);
   }
 
-  private async evaluateSequenceExpressionAsync(
-    node: ESTree.SequenceExpression,
-  ): Promise<any> {
+  private async evaluateSequenceExpressionAsync(node: ESTree.SequenceExpression): Promise<any> {
     return await this.evaluateNodeListAsync(node.expressions, (expr) =>
       this.evaluateNodeAsync(expr),
     );
@@ -11645,9 +10630,7 @@ export class Interpreter {
   /**
    * Async version of evaluateChainExpression for optional chaining
    */
-  private async evaluateChainExpressionAsync(
-    node: ESTree.ChainExpression,
-  ): Promise<any> {
+  private async evaluateChainExpressionAsync(node: ESTree.ChainExpression): Promise<any> {
     if (!this.isFeatureEnabled("OptionalChaining")) {
       throw new InterpreterError("OptionalChaining is not enabled");
     }
@@ -11682,9 +10665,7 @@ export class Interpreter {
   /**
    * Async version of evaluateClassDeclaration
    */
-  private async evaluateClassDeclarationAsync(
-    node: ESTree.ClassDeclaration,
-  ): Promise<undefined> {
+  private async evaluateClassDeclarationAsync(node: ESTree.ClassDeclaration): Promise<undefined> {
     if (!this.isFeatureEnabled("Classes")) {
       throw new InterpreterError("Classes is not enabled");
     }
@@ -11713,9 +10694,7 @@ export class Interpreter {
   /**
    * Async version of evaluateClassExpression
    */
-  private async evaluateClassExpressionAsync(
-    node: ESTree.ClassExpression,
-  ): Promise<ClassValue> {
+  private async evaluateClassExpressionAsync(node: ESTree.ClassExpression): Promise<ClassValue> {
     if (!this.isFeatureEnabled("Classes")) {
       throw new InterpreterError("Classes is not enabled");
     }
@@ -11729,9 +10708,7 @@ export class Interpreter {
    */
   private evaluateSuper(): SuperBinding {
     if (!this.currentSuperBinding) {
-      throw new InterpreterError(
-        "'super' keyword is only valid inside a class",
-      );
+      throw new InterpreterError("'super' keyword is only valid inside a class");
     }
 
     return this.currentSuperBinding;
@@ -11740,17 +10717,13 @@ export class Interpreter {
   /**
    * Build a ClassValue from a class declaration or expression AST node.
    */
-  private buildClassValue(
-    node: ESTree.ClassDeclaration | ESTree.ClassExpression,
-  ): ClassValue {
+  private buildClassValue(node: ESTree.ClassDeclaration | ESTree.ClassExpression): ClassValue {
     // Evaluate superclass if present
     let parentClass: ClassValue | null = null;
     if (node.superClass) {
       const superValue = this.evaluateNode(node.superClass);
       if (!(superValue instanceof ClassValue)) {
-        throw new InterpreterError(
-          "Class extends clause requires a class constructor",
-        );
+        throw new InterpreterError("Class extends clause requires a class constructor");
       }
       parentClass = superValue;
     }
@@ -11768,9 +10741,7 @@ export class Interpreter {
     if (node.superClass) {
       const superValue = await this.evaluateNodeAsync(node.superClass);
       if (!(superValue instanceof ClassValue)) {
-        throw new InterpreterError(
-          "Class extends clause requires a class constructor",
-        );
+        throw new InterpreterError("Class extends clause requires a class constructor");
       }
       parentClass = superValue;
     }
@@ -12024,8 +10995,7 @@ export class Interpreter {
               privateInstanceMethods.set(methodName, funcValue);
             }
           } else {
-            const methodName =
-              await this.extractClassMethodNameAsync(methodDef);
+            const methodName = await this.extractClassMethodNameAsync(methodDef);
 
             if (methodDef.kind !== "constructor") {
               validatePropertyName(methodName);
@@ -12078,10 +11048,7 @@ export class Interpreter {
 
             if (propDef.static) {
               const value = propDef.value
-                ? await this.evaluateStaticFieldInitializerAsync(
-                    classValue,
-                    propDef.value,
-                  )
+                ? await this.evaluateStaticFieldInitializerAsync(classValue, propDef.value)
                 : undefined;
               privateStaticFields.set(fieldName, value);
             } else {
@@ -12098,17 +11065,13 @@ export class Interpreter {
               throw new InterpreterError("ClassFields is not enabled");
             }
 
-            const fieldName =
-              await this.extractPropertyDefinitionNameAsync(propDef);
+            const fieldName = await this.extractPropertyDefinitionNameAsync(propDef);
 
             validatePropertyName(fieldName);
 
             if (propDef.static) {
               const value = propDef.value
-                ? await this.evaluateStaticFieldInitializerAsync(
-                    classValue,
-                    propDef.value,
-                  )
+                ? await this.evaluateStaticFieldInitializerAsync(classValue, propDef.value)
                 : undefined;
               staticFields.set(fieldName, value);
             } else {
@@ -12125,10 +11088,7 @@ export class Interpreter {
           if (!this.isFeatureEnabled("StaticBlocks")) {
             throw new InterpreterError("StaticBlocks is not enabled");
           }
-          await this.executeStaticBlockAsync(
-            element as ESTree.StaticBlock,
-            classValue,
-          );
+          await this.executeStaticBlockAsync(element as ESTree.StaticBlock, classValue);
         }
       }
     } finally {
@@ -12145,10 +11105,7 @@ export class Interpreter {
    * Execute a static initialization block in the context of the class.
    * Static blocks have access to the class via 'this' and can access private static members.
    */
-  private executeStaticBlock(
-    block: ESTree.StaticBlock,
-    classValue: ClassValue,
-  ): void {
+  private executeStaticBlock(block: ESTree.StaticBlock, classValue: ClassValue): void {
     const previousEnvironment = this.environment;
     const previousSuperBinding = this.currentSuperBinding;
 
@@ -12281,9 +11238,7 @@ export class Interpreter {
   /**
    * Async version of extractClassMethodName.
    */
-  private async extractClassMethodNameAsync(
-    methodDef: ESTree.MethodDefinition,
-  ): Promise<string> {
+  private async extractClassMethodNameAsync(methodDef: ESTree.MethodDefinition): Promise<string> {
     if (methodDef.key === null) {
       throw new InterpreterError("Method key is null");
     }
@@ -12301,9 +11256,7 @@ export class Interpreter {
   /**
    * Extract field name from a PropertyDefinition, handling computed properties.
    */
-  private extractPropertyDefinitionName(
-    propDef: ESTree.PropertyDefinition,
-  ): string {
+  private extractPropertyDefinitionName(propDef: ESTree.PropertyDefinition): string {
     if (propDef.key === null) {
       throw new InterpreterError("Property definition key is null");
     }
@@ -12329,9 +11282,7 @@ export class Interpreter {
       throw new InterpreterError("Property definition key is null");
     }
     if (propDef.computed) {
-      const keyValue = await this.evaluateNodeAsync(
-        propDef.key as ESTree.Expression,
-      );
+      const keyValue = await this.evaluateNodeAsync(propDef.key as ESTree.Expression);
       return String(keyValue);
     } else if (propDef.key.type === "Identifier") {
       return (propDef.key as ESTree.Identifier).name;
@@ -12345,8 +11296,9 @@ export class Interpreter {
    * Create a FunctionValue from a method's FunctionExpression.
    */
   private createMethodFunction(func: ESTree.FunctionExpression): FunctionValue {
-    const { params, restParamIndex, defaultValues, destructuredParams } =
-      this.parseFunctionParams(func.params);
+    const { params, restParamIndex, defaultValues, destructuredParams } = this.parseFunctionParams(
+      func.params,
+    );
 
     // Make sure the body is a BlockStatement (methods should always have one)
     if (!func.body || func.body.type !== "BlockStatement") {
@@ -12379,11 +11331,7 @@ export class Interpreter {
     this.tagClassMethodMap(classValue.staticMethods, classValue, true);
     this.tagClassMethodMap(classValue.staticGetters, classValue, true);
     this.tagClassMethodMap(classValue.staticSetters, classValue, true);
-    this.tagClassMethodMap(
-      classValue.privateInstanceMethods,
-      classValue,
-      false,
-    );
+    this.tagClassMethodMap(classValue.privateInstanceMethods, classValue, false);
     this.tagClassMethodMap(classValue.privateStaticMethods, classValue, true);
   }
 
@@ -12401,10 +11349,7 @@ export class Interpreter {
   /**
    * Instantiate a class by creating an instance and running the constructor.
    */
-  private instantiateClass(
-    classValue: ClassValue,
-    argNodes: ESTree.Expression[],
-  ): any {
+  private instantiateClass(classValue: ClassValue, argNodes: ESTree.Expression[]): any {
     // Create instance object
     let instance: Record<string, any> = Object.create(null);
     this.instanceClassMap.set(instance, classValue);
@@ -12413,8 +11358,7 @@ export class Interpreter {
     const args = this.evaluateArguments(argNodes);
 
     // Find the constructor to call (could be inherited)
-    const { constructor, definingClass } =
-      this.findClassConstructor(classValue);
+    const { constructor, definingClass } = this.findClassConstructor(classValue);
 
     // Execute constructor if there is one
     if (constructor) {
@@ -12433,8 +11377,7 @@ export class Interpreter {
       this.thisInitStack.push(false);
       try {
         instance = this.executeSuperConstructorCall(args, instance, classValue);
-        const isInitialized =
-          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        const isInitialized = this.thisInitStack[this.thisInitStack.length - 1] ?? true;
         if (!isInitialized) {
           throw new InterpreterError(
             "Derived class constructor must call super() before returning",
@@ -12462,8 +11405,7 @@ export class Interpreter {
 
     const args = await this.evaluateArgumentsAsync(argNodes);
 
-    const { constructor, definingClass } =
-      this.findClassConstructor(classValue);
+    const { constructor, definingClass } = this.findClassConstructor(classValue);
 
     if (constructor) {
       const { result, thisValue } = await this.executeClassConstructorBodyAsync(
@@ -12480,13 +11422,8 @@ export class Interpreter {
     } else if (classValue.parentClass) {
       this.thisInitStack.push(false);
       try {
-        instance = await this.executeSuperConstructorCallAsync(
-          args,
-          instance,
-          classValue,
-        );
-        const isInitialized =
-          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        instance = await this.executeSuperConstructorCallAsync(args, instance, classValue);
+        const isInitialized = this.thisInitStack[this.thisInitStack.length - 1] ?? true;
         if (!isInitialized) {
           throw new InterpreterError(
             "Derived class constructor must call super() before returning",
@@ -12527,10 +11464,7 @@ export class Interpreter {
    * Set up instance methods, getters, and setters on an instance object.
    * Walks the inheritance chain (parent first) so child methods override parent methods.
    */
-  private setupInstanceMethods(
-    instance: Record<string, any>,
-    classValue: ClassValue,
-  ): void {
+  private setupInstanceMethods(instance: Record<string, any>, classValue: ClassValue): void {
     // Build inheritance chain (root first)
     const classChain: ClassValue[] = [];
     let current: ClassValue | null = classValue;
@@ -12555,8 +11489,7 @@ export class Interpreter {
         Object.defineProperty(instance, name, {
           get: () => this.executeClassMethod(getter, instance, cls, []),
           set: setter
-            ? (value: any) =>
-                this.executeClassMethod(setter, instance, cls, [value])
+            ? (value: any) => this.executeClassMethod(setter, instance, cls, [value])
             : undefined,
           enumerable: true,
           configurable: true,
@@ -12568,8 +11501,7 @@ export class Interpreter {
         if (!processedProps.has(name)) {
           Object.defineProperty(instance, name, {
             get: undefined,
-            set: (value: any) =>
-              this.executeClassMethod(setter, instance, cls, [value]),
+            set: (value: any) => this.executeClassMethod(setter, instance, cls, [value]),
             enumerable: true,
             configurable: true,
           });
@@ -12582,10 +11514,7 @@ export class Interpreter {
    * Initialize instance fields on an instance object.
    * Walks the inheritance chain (parent first) so child fields can override parent fields.
    */
-  private initializeInstanceFields(
-    instance: Record<string, any>,
-    classValue: ClassValue,
-  ): void {
+  private initializeInstanceFields(instance: Record<string, any>, classValue: ClassValue): void {
     // Build inheritance chain (root first)
     const classChain: ClassValue[] = [];
     let current: ClassValue | null = classValue;
@@ -12616,9 +11545,7 @@ export class Interpreter {
 
     try {
       for (const field of classValue.instanceFields) {
-        const value = field.initializer
-          ? this.evaluateNode(field.initializer)
-          : undefined;
+        const value = field.initializer ? this.evaluateNode(field.initializer) : undefined;
 
         if (field.isPrivate) {
           let privateFields = classValue.privateFieldStorage.get(instance);
@@ -12630,9 +11557,7 @@ export class Interpreter {
         } else {
           let fieldName = field.name;
           if (field.computed && field.keyNode) {
-            fieldName = String(
-              this.evaluateNode(field.keyNode as ESTree.Expression),
-            );
+            fieldName = String(this.evaluateNode(field.keyNode as ESTree.Expression));
           }
           instance[fieldName] = value;
         }
@@ -12694,9 +11619,7 @@ export class Interpreter {
         } else {
           let fieldName = field.name;
           if (field.computed && field.keyNode) {
-            fieldName = String(
-              await this.evaluateNodeAsync(field.keyNode as ESTree.Expression),
-            );
+            fieldName = String(await this.evaluateNodeAsync(field.keyNode as ESTree.Expression));
           }
           instance[fieldName] = value;
         }
@@ -12758,24 +11681,17 @@ export class Interpreter {
   /**
    * Execute super() constructor call.
    */
-  private executeSuperConstructorCall(
-    args: any[],
-    instance: any,
-    currentClass: ClassValue,
-  ): any {
+  private executeSuperConstructorCall(args: any[], instance: any, currentClass: ClassValue): any {
     const parentClass = currentClass.parentClass;
     if (!parentClass) {
-      throw new InterpreterError(
-        "'super' constructor call requires a parent class",
-      );
+      throw new InterpreterError("'super' constructor call requires a parent class");
     }
 
     // Note: Instance methods are already set up in instantiateClass
     // We only need to execute the parent constructor here
 
     if (this.thisInitStack.length > 0) {
-      const isInitialized =
-        this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+      const isInitialized = this.thisInitStack[this.thisInitStack.length - 1] ?? true;
       if (isInitialized) {
         throw new InterpreterError("super() has already been called");
       }
@@ -12795,21 +11711,13 @@ export class Interpreter {
       );
       currentInstance = thisValue ?? instance;
       if (isControlFlowKind(result, "return")) {
-        currentInstance = this.resolveConstructorReturn(
-          result.value,
-          currentInstance,
-        );
+        currentInstance = this.resolveConstructorReturn(result.value, currentInstance);
       }
     } else if (parentClass.parentClass) {
       this.thisInitStack.push(false);
       try {
-        currentInstance = this.executeSuperConstructorCall(
-          args,
-          instance,
-          parentClass,
-        );
-        const isInitialized =
-          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        currentInstance = this.executeSuperConstructorCall(args, instance, parentClass);
+        const isInitialized = this.thisInitStack[this.thisInitStack.length - 1] ?? true;
         if (!isInitialized) {
           throw new InterpreterError(
             "Derived class constructor must call super() before returning",
@@ -12840,17 +11748,14 @@ export class Interpreter {
   ): Promise<any> {
     const parentClass = currentClass.parentClass;
     if (!parentClass) {
-      throw new InterpreterError(
-        "'super' constructor call requires a parent class",
-      );
+      throw new InterpreterError("'super' constructor call requires a parent class");
     }
 
     // Note: Instance methods are already set up in instantiateClassAsync
     // We only need to execute the parent constructor here
 
     if (this.thisInitStack.length > 0) {
-      const isInitialized =
-        this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+      const isInitialized = this.thisInitStack[this.thisInitStack.length - 1] ?? true;
       if (isInitialized) {
         throw new InterpreterError("super() has already been called");
       }
@@ -12870,21 +11775,13 @@ export class Interpreter {
       );
       currentInstance = thisValue ?? instance;
       if (isControlFlowKind(result, "return")) {
-        currentInstance = this.resolveConstructorReturn(
-          result.value,
-          currentInstance,
-        );
+        currentInstance = this.resolveConstructorReturn(result.value, currentInstance);
       }
     } else if (parentClass.parentClass) {
       this.thisInitStack.push(false);
       try {
-        currentInstance = await this.executeSuperConstructorCallAsync(
-          args,
-          instance,
-          parentClass,
-        );
-        const isInitialized =
-          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        currentInstance = await this.executeSuperConstructorCallAsync(args, instance, parentClass);
+        const isInitialized = this.thisInitStack[this.thisInitStack.length - 1] ?? true;
         if (!isInitialized) {
           throw new InterpreterError(
             "Derived class constructor must call super() before returning",
@@ -12894,20 +11791,14 @@ export class Interpreter {
         this.thisInitStack.pop();
       }
     } else {
-      await this.initializeInstanceFieldsForClassAsync(
-        currentInstance,
-        parentClass,
-      );
+      await this.initializeInstanceFieldsForClassAsync(currentInstance, parentClass);
     }
 
     if (this.thisInitStack.length > 0) {
       this.thisInitStack[this.thisInitStack.length - 1] = true;
     }
 
-    await this.initializeInstanceFieldsForClassAsync(
-      currentInstance,
-      currentClass,
-    );
+    await this.initializeInstanceFieldsForClassAsync(currentInstance, currentClass);
     return currentInstance;
   }
 
@@ -12938,8 +11829,7 @@ export class Interpreter {
       }
       const result = this.evaluateNode(constructor.body);
       if (isDerived) {
-        const isInitialized =
-          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        const isInitialized = this.thisInitStack[this.thisInitStack.length - 1] ?? true;
         if (!isInitialized) {
           throw new InterpreterError(
             "Derived class constructor must call super() before returning",
@@ -12978,15 +11868,11 @@ export class Interpreter {
     try {
       await this.bindFunctionParametersAsync(constructor, args);
       if (!isDerived) {
-        await this.initializeInstanceFieldsForClassAsync(
-          instance,
-          definingClass,
-        );
+        await this.initializeInstanceFieldsForClassAsync(instance, definingClass);
       }
       const result = await this.evaluateNodeAsync(constructor.body);
       if (isDerived) {
-        const isInitialized =
-          this.thisInitStack[this.thisInitStack.length - 1] ?? true;
+        const isInitialized = this.thisInitStack[this.thisInitStack.length - 1] ?? true;
         if (!isInitialized) {
           throw new InterpreterError(
             "Derived class constructor must call super() before returning",
@@ -13157,12 +12043,7 @@ export class Interpreter {
 
     const getterResult = this.lookupInstanceGetter(classValue, propertyName);
     if (getterResult) {
-      return this.executeClassMethod(
-        getterResult.getter,
-        instance,
-        getterResult.definingClass,
-        [],
-      );
+      return this.executeClassMethod(getterResult.getter, instance, getterResult.definingClass, []);
     }
 
     const methodResult = this.lookupInstanceMethod(classValue, propertyName);
@@ -13181,12 +12062,7 @@ export class Interpreter {
   ): any {
     const setterResult = this.lookupInstanceSetter(classValue, propertyName);
     if (setterResult) {
-      this.executeClassMethod(
-        setterResult.setter,
-        instance,
-        setterResult.definingClass,
-        [value],
-      );
+      this.executeClassMethod(setterResult.setter, instance, setterResult.definingClass, [value]);
       return value;
     }
 
@@ -13197,10 +12073,7 @@ export class Interpreter {
   /**
    * Access a static member (method, getter, or setter) on a class.
    */
-  private accessClassStaticMember(
-    classValue: ClassValue,
-    node: ESTree.MemberExpression,
-  ): any {
+  private accessClassStaticMember(classValue: ClassValue, node: ESTree.MemberExpression): any {
     const propertyName = node.computed
       ? String(this.evaluateNode(node.property))
       : (node.property as ESTree.Identifier).name;
@@ -13261,11 +12134,7 @@ export class Interpreter {
   /**
    * Assign a value to a static class member.
    */
-  private assignClassStaticMember(
-    classValue: ClassValue,
-    propertyName: string,
-    value: any,
-  ): any {
+  private assignClassStaticMember(classValue: ClassValue, propertyName: string, value: any): any {
     validatePropertyName(propertyName);
 
     const setter = classValue.staticSetters.get(propertyName);
@@ -13303,15 +12172,11 @@ export class Interpreter {
    */
   private assignSuperMember(node: ESTree.MemberExpression, value: any): any {
     if (!this.currentSuperBinding) {
-      throw new InterpreterError(
-        "'super' keyword is only valid inside a class",
-      );
+      throw new InterpreterError("'super' keyword is only valid inside a class");
     }
 
     if (!this.currentSuperBinding.parentClass) {
-      throw new InterpreterError(
-        "'super' member assignment requires a parent class",
-      );
+      throw new InterpreterError("'super' member assignment requires a parent class");
     }
 
     if (node.property.type === "PrivateIdentifier") {
@@ -13325,19 +12190,11 @@ export class Interpreter {
     validatePropertyName(propertyName);
 
     if (this.currentSuperBinding.isStatic) {
-      const setterResult = this.lookupSuperStaticSetter(
-        this.currentSuperBinding,
-        propertyName,
-      );
+      const setterResult = this.lookupSuperStaticSetter(this.currentSuperBinding, propertyName);
 
       if (setterResult) {
         const { setter, definingClass } = setterResult;
-        this.executeClassMethod(
-          setter,
-          this.currentSuperBinding.thisValue,
-          definingClass,
-          [value],
-        );
+        this.executeClassMethod(setter, this.currentSuperBinding.thisValue, definingClass, [value]);
         return value;
       }
 
@@ -13346,19 +12203,11 @@ export class Interpreter {
         return this.assignClassStaticMember(receiver, propertyName, value);
       }
     } else {
-      const setterResult = this.lookupSuperSetter(
-        this.currentSuperBinding,
-        propertyName,
-      );
+      const setterResult = this.lookupSuperSetter(this.currentSuperBinding, propertyName);
 
       if (setterResult) {
         const { setter, definingClass } = setterResult;
-        this.executeClassMethod(
-          setter,
-          this.currentSuperBinding.thisValue,
-          definingClass,
-          [value],
-        );
+        this.executeClassMethod(setter, this.currentSuperBinding.thisValue, definingClass, [value]);
         return value;
       }
 
@@ -13375,20 +12224,13 @@ export class Interpreter {
   /**
    * Async version of assignSuperMember.
    */
-  private async assignSuperMemberAsync(
-    node: ESTree.MemberExpression,
-    value: any,
-  ): Promise<any> {
+  private async assignSuperMemberAsync(node: ESTree.MemberExpression, value: any): Promise<any> {
     if (!this.currentSuperBinding) {
-      throw new InterpreterError(
-        "'super' keyword is only valid inside a class",
-      );
+      throw new InterpreterError("'super' keyword is only valid inside a class");
     }
 
     if (!this.currentSuperBinding.parentClass) {
-      throw new InterpreterError(
-        "'super' member assignment requires a parent class",
-      );
+      throw new InterpreterError("'super' member assignment requires a parent class");
     }
 
     if (node.property.type === "PrivateIdentifier") {
@@ -13402,44 +12244,24 @@ export class Interpreter {
     validatePropertyName(propertyName);
 
     if (this.currentSuperBinding.isStatic) {
-      const setterResult = this.lookupSuperStaticSetter(
-        this.currentSuperBinding,
-        propertyName,
-      );
+      const setterResult = this.lookupSuperStaticSetter(this.currentSuperBinding, propertyName);
 
       if (setterResult) {
         const { setter, definingClass } = setterResult;
-        this.executeClassMethod(
-          setter,
-          this.currentSuperBinding.thisValue,
-          definingClass,
-          [value],
-        );
+        this.executeClassMethod(setter, this.currentSuperBinding.thisValue, definingClass, [value]);
         return value;
       }
 
       const receiver = this.currentSuperBinding.thisValue;
       if (receiver instanceof ClassValue) {
-        return await this.assignClassStaticMemberAsync(
-          receiver,
-          propertyName,
-          value,
-        );
+        return await this.assignClassStaticMemberAsync(receiver, propertyName, value);
       }
     } else {
-      const setterResult = this.lookupSuperSetter(
-        this.currentSuperBinding,
-        propertyName,
-      );
+      const setterResult = this.lookupSuperSetter(this.currentSuperBinding, propertyName);
 
       if (setterResult) {
         const { setter, definingClass } = setterResult;
-        this.executeClassMethod(
-          setter,
-          this.currentSuperBinding.thisValue,
-          definingClass,
-          [value],
-        );
+        this.executeClassMethod(setter, this.currentSuperBinding.thisValue, definingClass, [value]);
         return value;
       }
 
@@ -13460,17 +12282,13 @@ export class Interpreter {
    */
   private accessPrivateField(object: any, fieldName: string): any {
     if (typeof object !== "object" || object === null) {
-      throw new InterpreterError(
-        `Cannot access private field #${fieldName} on non-object`,
-      );
+      throw new InterpreterError(`Cannot access private field #${fieldName} on non-object`);
     }
 
     // We need to know which class context we're in to access private fields
     // The currentSuperBinding tells us which class we're executing in
     if (!this.currentSuperBinding) {
-      throw new InterpreterError(
-        `Cannot access private field #${fieldName} outside of class`,
-      );
+      throw new InterpreterError(`Cannot access private field #${fieldName} outside of class`);
     }
 
     const currentClass = this.currentSuperBinding.currentClass;
@@ -13483,8 +12301,7 @@ export class Interpreter {
       }
 
       // Check private static methods
-      const privateStaticMethod =
-        currentClass.privateStaticMethods.get(fieldName);
+      const privateStaticMethod = currentClass.privateStaticMethods.get(fieldName);
       if (privateStaticMethod) {
         return privateStaticMethod;
       }
@@ -13513,15 +12330,11 @@ export class Interpreter {
    */
   private assignPrivateField(object: any, fieldName: string, value: any): any {
     if (typeof object !== "object" || object === null) {
-      throw new InterpreterError(
-        `Cannot assign to private field #${fieldName} on non-object`,
-      );
+      throw new InterpreterError(`Cannot assign to private field #${fieldName} on non-object`);
     }
 
     if (!this.currentSuperBinding) {
-      throw new InterpreterError(
-        `Cannot assign to private field #${fieldName} outside of class`,
-      );
+      throw new InterpreterError(`Cannot assign to private field #${fieldName} outside of class`);
     }
 
     const currentClass = this.currentSuperBinding.currentClass;
@@ -13548,15 +12361,11 @@ export class Interpreter {
    */
   private evaluateSuperMemberAccess(node: ESTree.MemberExpression): any {
     if (!this.currentSuperBinding) {
-      throw new InterpreterError(
-        "'super' keyword is only valid inside a class",
-      );
+      throw new InterpreterError("'super' keyword is only valid inside a class");
     }
 
     if (!this.currentSuperBinding.parentClass) {
-      throw new InterpreterError(
-        "'super' member access requires a parent class",
-      );
+      throw new InterpreterError("'super' member access requires a parent class");
     }
 
     // Get the property name
@@ -13568,18 +12377,12 @@ export class Interpreter {
 
     // First check for a method
     if (this.currentSuperBinding.isStatic) {
-      const methodResult = this.lookupSuperStaticMethod(
-        this.currentSuperBinding,
-        propertyName,
-      );
+      const methodResult = this.lookupSuperStaticMethod(this.currentSuperBinding, propertyName);
       if (methodResult) {
         return methodResult.method;
       }
 
-      const getterResult = this.lookupSuperStaticGetter(
-        this.currentSuperBinding,
-        propertyName,
-      );
+      const getterResult = this.lookupSuperStaticGetter(this.currentSuperBinding, propertyName);
       if (getterResult) {
         const { getter, definingClass } = getterResult;
         return this.executeClassMethod(
@@ -13598,18 +12401,12 @@ export class Interpreter {
         current = current.parentClass;
       }
     } else {
-      const methodResult = this.lookupSuperMethod(
-        this.currentSuperBinding,
-        propertyName,
-      );
+      const methodResult = this.lookupSuperMethod(this.currentSuperBinding, propertyName);
       if (methodResult) {
         return methodResult.method;
       }
 
-      const getterResult = this.lookupSuperGetter(
-        this.currentSuperBinding,
-        propertyName,
-      );
+      const getterResult = this.lookupSuperGetter(this.currentSuperBinding, propertyName);
       if (getterResult) {
         const { getter, definingClass } = getterResult;
         return this.executeClassMethod(

@@ -1292,9 +1292,7 @@ describe("Classes", () => {
               }
               new Derived();
             `);
-        }).toThrow(
-          "Must call super constructor in derived class before accessing 'this'",
-        );
+        }).toThrow("Must call super constructor in derived class before accessing 'this'");
       });
 
       it("should resolve super in static methods", () => {

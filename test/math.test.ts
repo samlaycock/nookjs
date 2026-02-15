@@ -309,9 +309,7 @@ describe("Math", () => {
     describe("Math.fround", () => {
       it("should round to 32-bit float precision", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("Math.fround(1.337)")).toBe(
-          Math.fround(1.337),
-        );
+        expect(interpreter.evaluate("Math.fround(1.337)")).toBe(Math.fround(1.337));
       });
     });
   });

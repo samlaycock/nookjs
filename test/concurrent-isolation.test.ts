@@ -16,12 +16,9 @@ describe("Concurrent Run Policy Isolation", () => {
         },
       );
 
-      const overlappingRun = sb.run(
-        "async function b(){ await sleep(1); return 1; } b()",
-        {
-          globals: { sleep },
-        },
-      );
+      const overlappingRun = sb.run("async function b(){ await sleep(1); return 1; } b()", {
+        globals: { sleep },
+      });
 
       // Await the restricted run first since serialized execution means it
       // completes before the overlapping run starts.
@@ -49,21 +46,15 @@ describe("Concurrent Run Policy Isolation", () => {
         return true;
       };
 
-      const restrictedRun = sb.run(
-        "async function a(){ await sleep(20); return 1; } a()",
-        {
-          globals: { sleep },
-          validator: restrictedValidator,
-        },
-      );
+      const restrictedRun = sb.run("async function a(){ await sleep(20); return 1; } a()", {
+        globals: { sleep },
+        validator: restrictedValidator,
+      });
 
-      const normalRun = sb.run(
-        "async function b(){ await sleep(1); return 2; } b()",
-        {
-          globals: { sleep },
-          validator: normalValidator,
-        },
-      );
+      const normalRun = sb.run("async function b(){ await sleep(1); return 2; } b()", {
+        globals: { sleep },
+        validator: normalValidator,
+      });
 
       await Promise.all([restrictedRun, normalRun]);
 

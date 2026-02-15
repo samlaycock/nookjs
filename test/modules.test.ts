@@ -32,9 +32,7 @@ describe("Module System", () => {
 
   describe("Basic Import/Export", () => {
     test("should export named constant", async () => {
-      const files = new Map<string, string>([
-        ["math.js", "export const add = (a, b) => a + b;"],
-      ]);
+      const files = new Map<string, string>([["math.js", "export const add = (a, b) => a + b;"]]);
 
       const resolver: ModuleResolver = {
         resolve(specifier) {
@@ -114,9 +112,7 @@ describe("Module System", () => {
     });
 
     test("should handle renamed imports", async () => {
-      const files = new Map<string, string>([
-        ["module.js", "export const original = 42;"],
-      ]);
+      const files = new Map<string, string>([["module.js", "export const original = 42;"]]);
 
       const resolver: ModuleResolver = {
         resolve(specifier) {
@@ -140,9 +136,7 @@ describe("Module System", () => {
     });
 
     test("should handle namespace imports", async () => {
-      const files = new Map<string, string>([
-        ["module.js", "export const value = 100;"],
-      ]);
+      const files = new Map<string, string>([["module.js", "export const value = 100;"]]);
 
       const resolver: ModuleResolver = {
         resolve(specifier) {
@@ -166,9 +160,7 @@ describe("Module System", () => {
     });
 
     test("should handle default import", async () => {
-      const files = new Map<string, string>([
-        ["module.js", "export default 42;"],
-      ]);
+      const files = new Map<string, string>([["module.js", "export default 42;"]]);
 
       const resolver: ModuleResolver = {
         resolve(specifier) {
@@ -208,12 +200,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export const value = 123;`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export const value = 123;`, {
+        path: "main.js",
+      });
 
       expect(result.value).toBe(123);
     });
@@ -256,12 +245,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export default 42;`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export default 42;`, {
+        path: "main.js",
+      });
 
       expect(result.default).toBe(42);
     });
@@ -280,12 +266,9 @@ describe("Module System", () => {
       });
 
       expect(
-        interpreter.evaluateModuleAsync(
-          `import { foo } from "nonexistent.js";`,
-          {
-            path: "main.js",
-          },
-        ),
+        interpreter.evaluateModuleAsync(`import { foo } from "nonexistent.js";`, {
+          path: "main.js",
+        }),
       ).rejects.toThrow("Cannot find module");
     });
 
@@ -308,12 +291,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        files.get("main.js")!,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(files.get("main.js")!, {
+        path: "main.js",
+      });
 
       expect(result).toBeDefined();
     });
@@ -397,23 +377,17 @@ describe("Module System", () => {
         modules: { enabled: true, resolver, cache: true },
       });
 
-      await interpreter.evaluateModuleAsync(
-        `import { value } from "module.js";`,
-        {
-          path: "main.js",
-        },
-      );
+      await interpreter.evaluateModuleAsync(`import { value } from "module.js";`, {
+        path: "main.js",
+      });
 
       expect(resolveCount).toBe(1);
 
       interpreter.clearModuleCache();
 
-      await interpreter.evaluateModuleAsync(
-        `import { value } from "module.js";`,
-        {
-          path: "main.js",
-        },
-      );
+      await interpreter.evaluateModuleAsync(`import { value } from "module.js";`, {
+        path: "main.js",
+      });
 
       expect(resolveCount).toBe(2);
     });
@@ -433,12 +407,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      await interpreter.evaluateModuleAsync(
-        `import { value } from "module.js";`,
-        {
-          path: "main.js",
-        },
-      );
+      await interpreter.evaluateModuleAsync(`import { value } from "module.js";`, {
+        path: "main.js",
+      });
 
       const exports = interpreter.getModuleExports("module.js");
       expect(exports?.value).toBe(42);
@@ -519,12 +490,9 @@ describe("Module System", () => {
       });
 
       // Test onLoad hook
-      await interpreter.evaluateModuleAsync(
-        `import { x } from "good.js"; export const y = x;`,
-        {
-          path: "main.js",
-        },
-      );
+      await interpreter.evaluateModuleAsync(`import { x } from "good.js"; export const y = x;`, {
+        path: "main.js",
+      });
       expect(loadedModules).toContain("good.js");
 
       // Test onError hook - syntax error in module
@@ -576,12 +544,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      await interpreter.evaluateModuleAsync(
-        `import { a } from "a.js"; export const result = a;`,
-        {
-          path: "main.js",
-        },
-      );
+      await interpreter.evaluateModuleAsync(`import { a } from "a.js"; export const result = a;`, {
+        path: "main.js",
+      });
 
       // When resolving c.js, the importer chain should include main.js, a.js, b.js
       const cChain = importerChains.get("c.js");
@@ -625,12 +590,9 @@ describe("Module System", () => {
       });
 
       expect(
-        interpreter.evaluateModuleAsync(
-          `import { value } from "./forbidden.js";`,
-          {
-            path: "main.js",
-          },
-        ),
+        interpreter.evaluateModuleAsync(`import { value } from "./forbidden.js";`, {
+          path: "main.js",
+        }),
       ).rejects.toThrow("Cannot find module");
     });
   });
@@ -710,12 +672,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export * from "index.js";`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export * from "index.js";`, {
+        path: "main.js",
+      });
 
       expect(result.foo).toBe(1);
       expect(result.default).toBeUndefined();
@@ -738,12 +697,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export * as utils from "utils.js";`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export * as utils from "utils.js";`, {
+        path: "main.js",
+      });
 
       expect(result.utils).toBeDefined();
       expect(result.utils.foo).toBe(1);
@@ -767,12 +723,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export { foo } from "utils.js";`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export { foo } from "utils.js";`, {
+        path: "main.js",
+      });
 
       expect(result.foo).toBe(1);
       expect(result.bar).toBeUndefined();
@@ -788,12 +741,9 @@ describe("Module System", () => {
         },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export default 42;`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export default 42;`, {
+        path: "main.js",
+      });
 
       expect(result.default).toBe(42);
     });
@@ -806,12 +756,9 @@ describe("Module System", () => {
         },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export default { foo: 1, bar: 2 };`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export default { foo: 1, bar: 2 };`, {
+        path: "main.js",
+      });
 
       expect(result.default.foo).toBe(1);
       expect(result.default.bar).toBe(2);
@@ -825,12 +772,9 @@ describe("Module System", () => {
         },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export default [1, 2, 3];`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export default [1, 2, 3];`, {
+        path: "main.js",
+      });
 
       expect(result.default).toEqual([1, 2, 3]);
     });
@@ -843,12 +787,9 @@ describe("Module System", () => {
         },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export default 1 + 2 + 3;`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export default 1 + 2 + 3;`, {
+        path: "main.js",
+      });
 
       expect(result.default).toBe(6);
     });
@@ -861,12 +802,9 @@ describe("Module System", () => {
         },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export default (a, b) => a + b;`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export default (a, b) => a + b;`, {
+        path: "main.js",
+      });
 
       expect(result.default).toBeDefined();
     });
@@ -908,12 +846,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `import { value } from "module.js";`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`import { value } from "module.js";`, {
+        path: "main.js",
+      });
 
       expect(result).toBeDefined();
     });
@@ -948,10 +883,7 @@ describe("Module System", () => {
 
       test("should import multiple named exports", async () => {
         const files = new Map([
-          [
-            "mod.js",
-            "export const a = 1; export const b = 2; export const c = 3;",
-          ],
+          ["mod.js", "export const a = 1; export const b = 2; export const c = 3;"],
         ]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
@@ -979,10 +911,7 @@ describe("Module System", () => {
 
       test("should import multiple with mixed aliases", async () => {
         const files = new Map([
-          [
-            "mod.js",
-            "export const a = 1; export const b = 2; export const c = 3;",
-          ],
+          ["mod.js", "export const a = 1; export const b = 2; export const c = 3;"],
         ]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
@@ -996,9 +925,7 @@ describe("Module System", () => {
       });
 
       test("should handle trailing comma in import list", async () => {
-        const files = new Map([
-          ["mod.js", "export const a = 1; export const b = 2;"],
-        ]);
+        const files = new Map([["mod.js", "export const a = 1; export const b = 2;"]]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
@@ -1026,9 +953,7 @@ describe("Module System", () => {
       });
 
       test("should import default function", async () => {
-        const files = new Map([
-          ["mod.js", "export default function() { return 'hello'; }"],
-        ]);
+        const files = new Map([["mod.js", "export default function() { return 'hello'; }"]]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
@@ -1071,9 +996,7 @@ describe("Module System", () => {
 
     describe("Namespace Imports", () => {
       test("should import entire module as namespace", async () => {
-        const files = new Map([
-          ["mod.js", "export const a = 1; export const b = 2;"],
-        ]);
+        const files = new Map([["mod.js", "export const a = 1; export const b = 2;"]]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
@@ -1087,10 +1010,7 @@ describe("Module System", () => {
 
       test("should include default in namespace", async () => {
         const files = new Map([
-          [
-            "mod.js",
-            "export default 'defaultVal'; export const named = 'namedVal';",
-          ],
+          ["mod.js", "export default 'defaultVal'; export const named = 'namedVal';"],
         ]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
@@ -1105,9 +1025,7 @@ describe("Module System", () => {
       });
 
       test("should access namespace properties dynamically", async () => {
-        const files = new Map([
-          ["mod.js", "export const foo = 1; export const bar = 2;"],
-        ]);
+        const files = new Map([["mod.js", "export const foo = 1; export const bar = 2;"]]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
@@ -1125,10 +1043,7 @@ describe("Module System", () => {
     describe("Mixed Import Styles", () => {
       test("should combine default and named imports", async () => {
         const files = new Map([
-          [
-            "mod.js",
-            "export default 100; export const a = 1; export const b = 2;",
-          ],
+          ["mod.js", "export default 100; export const a = 1; export const b = 2;"],
         ]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
@@ -1142,9 +1057,7 @@ describe("Module System", () => {
       });
 
       test("should combine default with aliased named imports", async () => {
-        const files = new Map([
-          ["mod.js", "export default 10; export const x = 5;"],
-        ]);
+        const files = new Map([["mod.js", "export default 10; export const x = 5;"]]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
@@ -1177,9 +1090,7 @@ describe("Module System", () => {
       });
 
       test("should import same module multiple times with different styles", async () => {
-        const files = new Map([
-          ["mod.js", "export default 100; export const x = 10;"],
-        ]);
+        const files = new Map([["mod.js", "export default 100; export const x = 10;"]]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
@@ -1207,12 +1118,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export const x = 42;`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export const x = 42;`, {
+          path: "main.js",
+        });
         expect(result.x).toBe(42);
       });
 
@@ -1221,12 +1129,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export let x = 42;`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export let x = 42;`, {
+          path: "main.js",
+        });
         expect(result.x).toBe(42);
       });
 
@@ -1235,12 +1140,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export var x = 42;`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export var x = 42;`, {
+          path: "main.js",
+        });
         expect(result.x).toBe(42);
       });
 
@@ -1249,12 +1151,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export const a = 1, b = 2, c = 3;`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export const a = 1, b = 2, c = 3;`, {
+          path: "main.js",
+        });
         expect(result.a).toBe(1);
         expect(result.b).toBe(2);
         expect(result.c).toBe(3);
@@ -1372,12 +1271,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export default 42;`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export default 42;`, {
+          path: "main.js",
+        });
         expect(result.default).toBe(42);
       });
 
@@ -1386,12 +1282,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export default "hello";`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export default "hello";`, {
+          path: "main.js",
+        });
         expect(result.default).toBe("hello");
       });
 
@@ -1400,12 +1293,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export default true;`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export default true;`, {
+          path: "main.js",
+        });
         expect(result.default).toBe(true);
       });
 
@@ -1414,12 +1304,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export default null;`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export default null;`, {
+          path: "main.js",
+        });
         expect(result.default).toBe(null);
       });
 
@@ -1442,12 +1329,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export default [1, 2, 3];`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export default [1, 2, 3];`, {
+          path: "main.js",
+        });
         expect(result.default).toEqual([1, 2, 3]);
       });
 
@@ -1456,12 +1340,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export default 1 + 2 * 3;`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export default 1 + 2 * 3;`, {
+          path: "main.js",
+        });
         expect(result.default).toBe(7);
       });
 
@@ -1470,12 +1351,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export default (x) => x * 2;`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export default (x) => x * 2;`, {
+          path: "main.js",
+        });
         expect(result.default).toBeDefined();
       });
 
@@ -1508,12 +1386,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export default class MyClass { }`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export default class MyClass { }`, {
+          path: "main.js",
+        });
         expect(result.default).toBeDefined();
       });
 
@@ -1522,12 +1397,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: { resolve: () => null } },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export default class { }`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export default class { }`, {
+          path: "main.js",
+        });
         expect(result.default).toBeDefined();
       });
 
@@ -1620,40 +1492,29 @@ describe("Module System", () => {
     describe("export * from", () => {
       test("should re-export all named exports", async () => {
         const files = new Map([
-          [
-            "source.js",
-            "export const a = 1; export const b = 2; export const c = 3;",
-          ],
+          ["source.js", "export const a = 1; export const b = 2; export const c = 3;"],
         ]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export * from "source.js";`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export * from "source.js";`, {
+          path: "main.js",
+        });
         expect(result.a).toBe(1);
         expect(result.b).toBe(2);
         expect(result.c).toBe(3);
       });
 
       test("should not re-export default with export *", async () => {
-        const files = new Map([
-          ["source.js", "export default 'defVal'; export const named = 1;"],
-        ]);
+        const files = new Map([["source.js", "export default 'defVal'; export const named = 1;"]]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export * from "source.js";`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export * from "source.js";`, {
+          path: "main.js",
+        });
         expect(result.named).toBe(1);
         expect(result.default).toBeUndefined();
       });
@@ -1667,12 +1528,9 @@ describe("Module System", () => {
           modules: { enabled: true, resolver: createResolver(files) },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export * from "b.js";`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export * from "b.js";`, {
+          path: "main.js",
+        });
         expect(result.fromA).toBe("A");
         expect(result.fromB).toBe("B");
       });
@@ -1695,38 +1553,28 @@ describe("Module System", () => {
 
     describe("export * as namespace from", () => {
       test("should re-export all as namespace object", async () => {
-        const files = new Map([
-          ["source.js", "export const a = 1; export const b = 2;"],
-        ]);
+        const files = new Map([["source.js", "export const a = 1; export const b = 2;"]]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export * as ns from "source.js";`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export * as ns from "source.js";`, {
+          path: "main.js",
+        });
         expect(result.ns).toBeDefined();
         expect(result.ns.a).toBe(1);
         expect(result.ns.b).toBe(2);
       });
 
       test("should include default in namespace", async () => {
-        const files = new Map([
-          ["source.js", "export default 'def'; export const named = 1;"],
-        ]);
+        const files = new Map([["source.js", "export default 'def'; export const named = 1;"]]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export * as ns from "source.js";`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export * as ns from "source.js";`, {
+          path: "main.js",
+        });
         expect(result.ns.default).toBe("def");
         expect(result.ns.named).toBe(1);
       });
@@ -1750,21 +1598,15 @@ describe("Module System", () => {
     describe("export { } from", () => {
       test("should re-export specific named exports", async () => {
         const files = new Map([
-          [
-            "source.js",
-            "export const a = 1; export const b = 2; export const c = 3;",
-          ],
+          ["source.js", "export const a = 1; export const b = 2; export const c = 3;"],
         ]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
         });
 
-        const result = await interpreter.evaluateModuleAsync(
-          `export { a, c } from "source.js";`,
-          {
-            path: "main.js",
-          },
-        );
+        const result = await interpreter.evaluateModuleAsync(`export { a, c } from "source.js";`, {
+          path: "main.js",
+        });
         expect(result.a).toBe(1);
         expect(result.c).toBe(3);
         expect(result.b).toBeUndefined();
@@ -1824,10 +1666,7 @@ describe("Module System", () => {
             "export const add = (a, b) => a + b; export const sub = (a, b) => a - b;",
           ],
           ["utils/string.js", "export const upper = (s) => s.toUpperCase();"],
-          [
-            "utils/index.js",
-            "export * from 'utils/math.js'; export * from 'utils/string.js';",
-          ],
+          ["utils/index.js", "export * from 'utils/math.js'; export * from 'utils/string.js';"],
         ]);
         const interpreter = new Interpreter({
           modules: { enabled: true, resolver: createResolver(files) },
@@ -1849,10 +1688,7 @@ describe("Module System", () => {
         const files = new Map([
           ["base.js", "export const BASE = 'base';"],
           ["left.js", "export * from 'base.js'; export const LEFT = 'left';"],
-          [
-            "right.js",
-            "export * from 'base.js'; export const RIGHT = 'right';",
-          ],
+          ["right.js", "export * from 'base.js'; export const RIGHT = 'right';"],
           ["top.js", "export * from 'left.js'; export * from 'right.js';"],
         ]);
         const interpreter = new Interpreter({
@@ -1891,12 +1727,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      await interpreter.evaluateModuleAsync(
-        `import { val } from "dep.js"; export const x = val;`,
-        {
-          path: "main.js",
-        },
-      );
+      await interpreter.evaluateModuleAsync(`import { val } from "dep.js"; export const x = val;`, {
+        path: "main.js",
+      });
 
       expect(evalOrder).toContain("resolve:dep.js");
     });
@@ -2138,19 +1971,14 @@ describe("Module System", () => {
     });
 
     test("should handle module with only comments", async () => {
-      const files = new Map([
-        ["comments.js", "// just a comment\n/* block comment */"],
-      ]);
+      const files = new Map([["comments.js", "// just a comment\n/* block comment */"]]);
       const interpreter = new Interpreter({
         modules: { enabled: true, resolver: createResolver(files) },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export const x = 1;`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export const x = 1;`, {
+        path: "main.js",
+      });
       expect(result.x).toBe(1);
     });
 
@@ -2160,12 +1988,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver: createResolver(files) },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export * from "noexport.js";`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export * from "noexport.js";`, {
+        path: "main.js",
+      });
       expect(Object.keys(result).length).toBe(0);
     });
 
@@ -2175,12 +2000,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver: { resolve: () => null } },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export const ${longName} = 42;`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export const ${longName} = 42;`, {
+        path: "main.js",
+      });
       expect(result[longName]).toBe(42);
     });
 
@@ -2231,10 +2053,7 @@ describe("Module System", () => {
     test("should handle module that exports imported value", async () => {
       const files = new Map([
         ["source.js", "export const original = 42;"],
-        [
-          "passthrough.js",
-          "import { original } from 'source.js'; export { original };",
-        ],
+        ["passthrough.js", "import { original } from 'source.js'; export { original };"],
       ]);
       const interpreter = new Interpreter({
         modules: { enabled: true, resolver: createResolver(files) },
@@ -2707,12 +2526,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `export const topLevelThis = this;`,
-        {
-          path: "main.js",
-        },
-      );
+      const result = await interpreter.evaluateModuleAsync(`export const topLevelThis = this;`, {
+        path: "main.js",
+      });
       expect(result.topLevelThis).toBeUndefined();
     });
 
@@ -2782,10 +2598,7 @@ describe("Module System", () => {
     test("should allow local export to override re-exported name", async () => {
       const files = new Map([
         ["source.js", "export const value = 'from-source';"],
-        [
-          "barrel.js",
-          "export * from 'source.js'; export const value = 'local';",
-        ],
+        ["barrel.js", "export * from 'source.js'; export const value = 'local';"],
       ]);
 
       const resolver: ModuleResolver = {
@@ -2827,9 +2640,7 @@ describe("Module System", () => {
 
       expect(interpreter.getModuleMetadata("nonexistent.js")).toBeUndefined();
       expect(interpreter.getModuleExports("nonexistent.js")).toBeUndefined();
-      expect(
-        interpreter.getModuleExportsBySpecifier("nonexistent.js"),
-      ).toBeUndefined();
+      expect(interpreter.getModuleExportsBySpecifier("nonexistent.js")).toBeUndefined();
     });
 
     test("should track failed module in metadata", async () => {
@@ -2914,12 +2725,9 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      await interpreter.evaluateModuleAsync(
-        `import { x } from "mod.js"; export const y = x;`,
-        {
-          path: "main.js",
-        },
-      );
+      await interpreter.evaluateModuleAsync(`import { x } from "mod.js"; export const y = x;`, {
+        path: "main.js",
+      });
 
       expect(interpreter.isModuleCached("mod.js")).toBe(true);
       expect(interpreter.getModuleCacheSize()).toBeGreaterThan(0);
@@ -2991,12 +2799,9 @@ describe("Module System", () => {
       });
 
       try {
-        await interpreter.evaluateModuleAsync(
-          `import { x } from "missing.js";`,
-          {
-            path: "main.js",
-          },
-        );
+        await interpreter.evaluateModuleAsync(`import { x } from "missing.js";`, {
+          path: "main.js",
+        });
       } catch {
         // Expected
       }
@@ -3714,12 +3519,8 @@ describe("Module System", () => {
       });
 
       expect(resolveCalls.length).toBeGreaterThan(1);
-      expect(resolveCalls.some((c) => c.importer === "importer1.js")).toBe(
-        true,
-      );
-      expect(resolveCalls.some((c) => c.importer === "importer2.js")).toBe(
-        true,
-      );
+      expect(resolveCalls.some((c) => c.importer === "importer1.js")).toBe(true);
+      expect(resolveCalls.some((c) => c.importer === "importer2.js")).toBe(true);
     });
   });
 });

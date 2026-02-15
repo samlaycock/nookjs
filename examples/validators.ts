@@ -4,10 +4,7 @@ import { createSandbox, ts } from "../src/index";
 
 const noLoopsValidator = (ast: ESTree.Program): boolean => {
   const serializedAst = JSON.stringify(ast);
-  return (
-    !serializedAst.includes('"WhileStatement"') &&
-    !serializedAst.includes('"ForStatement"')
-  );
+  return !serializedAst.includes('"WhileStatement"') && !serializedAst.includes('"ForStatement"');
 };
 
 const readOnlyValidator = (ast: ESTree.Program): boolean => {
