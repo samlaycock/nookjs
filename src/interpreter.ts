@@ -2463,7 +2463,7 @@ export class Interpreter {
     this.nodeHandlers = this.createNodeHandlers();
   }
 
-  private getCurrentContext(): EvaluationContext {
+  private getCurrentContext(): EvaluationContext | undefined {
     return this.evaluationContextStack[this.evaluationContextStack.length - 1];
   }
 
@@ -5358,7 +5358,10 @@ export class Interpreter {
   private enterFunctionContext(
     fn: FunctionValue,
     thisValue: any,
-  ): { previousEnvironment: Environment; previousSuperBinding: SuperBinding | null } {
+  ): {
+    previousEnvironment: Environment;
+    previousSuperBinding: SuperBinding | null;
+  } {
     this.enterCallStack();
 
     const previousEnvironment = this.environment;
