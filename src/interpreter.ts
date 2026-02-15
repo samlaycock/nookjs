@@ -24,6 +24,10 @@ import { ModuleSystem } from "./modules";
 import { ReadOnlyProxy, PROXY_TARGET, sanitizeErrorStack, unwrapForNative } from "./readonly-proxy";
 import { ResourceExhaustedError } from "./resource-tracker";
 
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+const GeneratorFunction = Object.getPrototypeOf(function* () {}).constructor;
+const AsyncGeneratorFunction = Object.getPrototypeOf(async function* () {}).constructor;
+
 type ASTNode = ESTree.Node;
 
 function getNodeLocation(node: ESTree.Node): Location | undefined {
@@ -2661,15 +2665,7 @@ export class Interpreter {
     if (value === Function || value === eval || value === Proxy || value === Reflect) {
       return true;
     }
-    // Block async/generator constructor identities to prevent aliasing
-    // Use typeof checks for compatibility with environments where these may not be available
-    if (typeof value === "function" && value.name === "AsyncFunction") {
-      return true;
-    }
-    if (typeof value === "function" && value.name === "GeneratorFunction") {
-      return true;
-    }
-    if (typeof value === "function" && value.name === "AsyncGeneratorFunction") {
+    if (value === AsyncFunction || value === GeneratorFunction || value === AsyncGeneratorFunction) {
       return true;
     }
     return false;
