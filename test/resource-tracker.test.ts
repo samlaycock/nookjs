@@ -27,7 +27,9 @@ describe("Resource Tracking", () => {
             resourceTracking: true,
           });
 
-          interpreter.evaluate("const obj = {}; for (let i = 0; i < 100; i++) obj['key' + i] = i;");
+          interpreter.evaluate(
+            "const obj = {}; for (let i = 0; i < 100; i++) obj['key' + i] = i;",
+          );
 
           const stats = interpreter.getResourceStats();
           expect(stats.evaluations).toBe(1);
@@ -39,8 +41,12 @@ describe("Resource Tracking", () => {
             resourceTracking: true,
           });
 
-          interpreter.evaluate("let sum = 0; for (let i = 0; i < 100; i++) { sum += i; }");
-          interpreter.evaluate("let sum2 = 0; for (let i = 0; i < 50; i++) { sum2 += i; }");
+          interpreter.evaluate(
+            "let sum = 0; for (let i = 0; i < 100; i++) { sum += i; }",
+          );
+          interpreter.evaluate(
+            "let sum2 = 0; for (let i = 0; i < 50; i++) { sum2 += i; }",
+          );
 
           const stats = interpreter.getResourceStats();
           expect(stats.iterations).toBeGreaterThanOrEqual(150);
@@ -93,7 +99,9 @@ describe("Resource Tracking", () => {
           );
 
           const stats = interpreter.getResourceStats();
-          expect(stats.largestEvaluation.iterations).toBeGreaterThanOrEqual(1000);
+          expect(stats.largestEvaluation.iterations).toBeGreaterThanOrEqual(
+            1000,
+          );
         });
       });
 
@@ -105,12 +113,18 @@ describe("Resource Tracking", () => {
           });
           interpreter.setResourceLimit("maxTotalIterations", 10);
 
-          interpreter.evaluate("let sum = 0; for (let i = 0; i < 5; i++) { sum += i; }");
+          interpreter.evaluate(
+            "let sum = 0; for (let i = 0; i < 5; i++) { sum += i; }",
+          );
 
-          interpreter.evaluate("let sum2 = 0; for (let i = 0; i < 5; i++) { sum2 += i; }");
+          interpreter.evaluate(
+            "let sum2 = 0; for (let i = 0; i < 5; i++) { sum2 += i; }",
+          );
 
           expect(() => {
-            interpreter.evaluate("let sum3 = 0; for (let i = 0; i < 5; i++) { sum3 += i; }");
+            interpreter.evaluate(
+              "let sum3 = 0; for (let i = 0; i < 5; i++) { sum3 += i; }",
+            );
           }).toThrow(ResourceExhaustedError);
         });
 
@@ -193,7 +207,9 @@ describe("Resource Tracking", () => {
             resourceTracking: true,
           });
 
-          interpreter.evaluate("const obj = {}; for (let i = 0; i < 100; i++) obj['key' + i] = i;");
+          interpreter.evaluate(
+            "const obj = {}; for (let i = 0; i < 100; i++) obj['key' + i] = i;",
+          );
           interpreter.evaluate("for (let i = 0; i < 100; i++) {}");
 
           interpreter.resetResourceStats();
@@ -275,7 +291,9 @@ describe("Resource Tracking", () => {
 
           expect(interpreter.getResourceLimit("maxTotalMemory")).toBe(1024);
           expect(interpreter.getResourceLimit("maxEvaluations")).toBe(10);
-          expect(interpreter.getResourceLimit("maxTotalIterations")).toBeUndefined();
+          expect(
+            interpreter.getResourceLimit("maxTotalIterations"),
+          ).toBeUndefined();
         });
 
         test("should set individual limit", () => {
@@ -323,9 +341,9 @@ describe("Resource Tracking", () => {
 
           expect(interpreter.getResourceStats().evaluations).toBe(2);
 
-          expect(interpreter.evaluateAsync("Promise.resolve(3 + 3)")).rejects.toThrow(
-            ResourceExhaustedError,
-          );
+          expect(
+            interpreter.evaluateAsync("Promise.resolve(3 + 3)"),
+          ).rejects.toThrow(ResourceExhaustedError);
         });
 
         test("should track resources across multiple evaluations", () => {
@@ -345,7 +363,11 @@ describe("Resource Tracking", () => {
 
       describe("ResourceExhaustedError", () => {
         test("should have correct properties", () => {
-          const error = new ResourceExhaustedError("maxTotalMemory", 2048, 1024);
+          const error = new ResourceExhaustedError(
+            "maxTotalMemory",
+            2048,
+            1024,
+          );
           expect(error.resourceType).toBe("maxTotalMemory");
           expect(error.used).toBe(2048);
           expect(error.limit).toBe(1024);

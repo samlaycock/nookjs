@@ -270,7 +270,9 @@ const resolver: ModuleResolver = {
 ```typescript
 const resolver: ModuleResolver = {
   async resolve(specifier) {
-    const response = await fetch(`https://api.example.com/modules/${specifier}`);
+    const response = await fetch(
+      `https://api.example.com/modules/${specifier}`,
+    );
     if (!response.ok) return null;
 
     const code = await response.text();

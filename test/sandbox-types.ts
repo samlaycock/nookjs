@@ -1,7 +1,9 @@
 import { createSandbox, type RunResult, run } from "../src/sandbox";
 
 type Equal<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false;
 type Expect<T extends true> = T;
 
 const sandbox = createSandbox({ env: "es2022" });

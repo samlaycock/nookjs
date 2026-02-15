@@ -1,5 +1,10 @@
 import { isDangerousProperty } from "./constants";
-import { InterpreterError, HostFunctionValue, FunctionValue, ClassValue } from "./interpreter";
+import {
+  InterpreterError,
+  HostFunctionValue,
+  FunctionValue,
+  ClassValue,
+} from "./interpreter";
 
 /**
  * Symbol used to retrieve the underlying target from a ReadOnlyProxy.
@@ -115,7 +120,10 @@ function isTimerObject(value: unknown): boolean {
   // Use Object.prototype.hasOwnProperty to safely check for constructor
   // without triggering the proxy's dangerous property blocking
   try {
-    const hasConstructor = Object.prototype.hasOwnProperty.call(value, "constructor");
+    const hasConstructor = Object.prototype.hasOwnProperty.call(
+      value,
+      "constructor",
+    );
     const constructor = hasConstructor ? (value as any).constructor : undefined;
     if (constructor && typeof constructor === "function") {
       return constructor.name === "Timeout";
@@ -239,7 +247,11 @@ export class ReadOnlyProxy {
             return async (value?: any) => {
               const result = await (target as AsyncIterator<any>).next(value);
               if (result && typeof result === "object" && "value" in result) {
-                result.value = ReadOnlyProxy.wrap(result.value, `${name}[]`, securityOptions);
+                result.value = ReadOnlyProxy.wrap(
+                  result.value,
+                  `${name}[]`,
+                  securityOptions,
+                );
               }
               return result;
             };
@@ -247,7 +259,11 @@ export class ReadOnlyProxy {
           return (value?: any) => {
             const result = (target as Iterator<any>).next(value);
             if (result && typeof result === "object" && "value" in result) {
-              result.value = ReadOnlyProxy.wrap(result.value, `${name}[]`, securityOptions);
+              result.value = ReadOnlyProxy.wrap(
+                result.value,
+                `${name}[]`,
+                securityOptions,
+              );
             }
             return result;
           };
@@ -265,7 +281,11 @@ export class ReadOnlyProxy {
    * @param securityOptions - Security options for this specific wrapping instance
    * @returns Proxied value that's safe to use in sandbox
    */
-  static wrap(value: any, name: string, securityOptions?: SecurityOptions): any {
+  static wrap(
+    value: any,
+    name: string,
+    securityOptions?: SecurityOptions,
+  ): any {
     // Use provided options, fall back to global for backwards compatibility
     const effectiveOptions = securityOptions ?? globalSecurityOptions;
 
@@ -304,7 +324,14 @@ export class ReadOnlyProxy {
     if (typeof value === "function") {
       const isAsync = value.constructor.name === "AsyncFunction";
       // Preserve constructability for native classes/functions (e.g., Error, Response).
-      return new HostFunctionValue(value, name, isAsync, false, false, securityOptions);
+      return new HostFunctionValue(
+        value,
+        name,
+        isAsync,
+        false,
+        false,
+        securityOptions,
+      );
     }
 
     // Check if this is an Error instance - needs special handling for stack sanitization
@@ -345,7 +372,11 @@ export class ReadOnlyProxy {
         if (prop === "valueOf") {
           return () => {
             // For primitive wrapper objects (Number, String, Boolean), return the primitive
-            if (target instanceof Number || target instanceof String || target instanceof Boolean) {
+            if (
+              target instanceof Number ||
+              target instanceof String ||
+              target instanceof Boolean
+            ) {
               // These are safe to call - they just return the wrapped primitive
               return target.valueOf();
             }
@@ -370,7 +401,9 @@ export class ReadOnlyProxy {
 
         // Block dangerous properties that could break out of sandbox
         if (isDangerousProperty(prop)) {
-          throw new InterpreterError(`Cannot access ${String(prop)} on global '${name}'`);
+          throw new InterpreterError(
+            `Cannot access ${String(prop)} on global '${name}'`,
+          );
         }
 
         // Get the actual value
@@ -397,7 +430,11 @@ export class ReadOnlyProxy {
 
         // If it's an object (including arrays), recursively wrap it
         if (typeof val === "object" && val !== null) {
-          return ReadOnlyProxy.wrap(val, `${name}.${String(prop)}`, securityOptions);
+          return ReadOnlyProxy.wrap(
+            val,
+            `${name}.${String(prop)}`,
+            securityOptions,
+          );
         }
 
         // Primitives and undefined pass through
@@ -410,7 +447,11 @@ export class ReadOnlyProxy {
         if (isTypedArray(target)) {
           // Allow numeric index writes (element mutation)
           const index = typeof prop === "string" ? Number(prop) : prop;
-          if (typeof index === "number" && Number.isInteger(index) && index >= 0) {
+          if (
+            typeof index === "number" &&
+            Number.isInteger(index) &&
+            index >= 0
+          ) {
             (target as any)[prop] = value;
             return true;
           }
@@ -438,7 +479,9 @@ export class ReadOnlyProxy {
 
       // Block setPrototypeOf to prevent prototype chain manipulation
       setPrototypeOf(_target) {
-        throw new InterpreterError(`Cannot set prototype of global '${name}' (read-only)`);
+        throw new InterpreterError(
+          `Cannot set prototype of global '${name}' (read-only)`,
+        );
       },
 
       // Block getPrototypeOf to prevent accessing the underlying object's prototype

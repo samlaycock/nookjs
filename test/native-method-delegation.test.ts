@@ -92,7 +92,9 @@ describe("Native Method Delegation", () => {
         const interpreter = new Interpreter();
         expect(() => interpreter.evaluate(`(1n)["toString"]()`)).toThrow();
         expect(() => interpreter.evaluate(`(true)["valueOf"]()`)).toThrow();
-        expect(() => interpreter.evaluate(`(Symbol("x"))["toString"]()`)).toThrow();
+        expect(() =>
+          interpreter.evaluate(`(Symbol("x"))["toString"]()`),
+        ).toThrow();
       });
     });
 
@@ -182,12 +184,16 @@ describe("Native Method Delegation", () => {
       it("should block dangerous symbol properties on injected instances", () => {
         const date = new Date("2020-01-01T00:00:00.000Z");
         const interpreter = new Interpreter({ globals: { date } });
-        expect(() => interpreter.evaluate(`date[Symbol.toStringTag]`)).toThrow();
+        expect(() =>
+          interpreter.evaluate(`date[Symbol.toStringTag]`),
+        ).toThrow();
       });
 
       it("should block dangerous symbol properties on primitives", () => {
         const interpreter = new Interpreter();
-        expect(() => interpreter.evaluate(`(Symbol("x"))[Symbol.toStringTag]`)).toThrow();
+        expect(() =>
+          interpreter.evaluate(`(Symbol("x"))[Symbol.toStringTag]`),
+        ).toThrow();
       });
 
       it("should block dangerous properties on strings", () => {
@@ -215,23 +221,32 @@ describe("Native Method Delegation", () => {
       it("should still use explicit string methods", () => {
         const interpreter = new Interpreter();
         expect(interpreter.evaluate(`"hello".toUpperCase()`)).toBe("HELLO");
-        expect(interpreter.evaluate(`"hello world".split(" ")`)).toEqual(["hello", "world"]);
+        expect(interpreter.evaluate(`"hello world".split(" ")`)).toEqual([
+          "hello",
+          "world",
+        ]);
         expect(interpreter.evaluate(`"  hello  ".trim()`)).toBe("hello");
       });
 
       it("should still use explicit array methods with callbacks", () => {
         const interpreter = new Interpreter();
-        expect(interpreter.evaluate(`[1,2,3].map(x => x * 2)`)).toEqual([2, 4, 6]);
-        expect(interpreter.evaluate(`[1,2,3].filter(x => x > 1)`)).toEqual([2, 3]);
-        expect(interpreter.evaluate(`[1,2,3].reduce((a, b) => a + b, 0)`)).toBe(6);
+        expect(interpreter.evaluate(`[1,2,3].map(x => x * 2)`)).toEqual([
+          2, 4, 6,
+        ]);
+        expect(interpreter.evaluate(`[1,2,3].filter(x => x > 1)`)).toEqual([
+          2, 3,
+        ]);
+        expect(interpreter.evaluate(`[1,2,3].reduce((a, b) => a + b, 0)`)).toBe(
+          6,
+        );
       });
 
       it("should still use explicit methods via computed access", () => {
         const interpreter = new Interpreter();
         expect(interpreter.evaluate(`"hi"["split"]("i")`)).toEqual(["h", ""]);
-        expect(() => interpreter.evaluate(`[1,2,3]["map"](x => x * 2)`)).toThrow(
-          "Array index must be a number",
-        );
+        expect(() =>
+          interpreter.evaluate(`[1,2,3]["map"](x => x * 2)`),
+        ).toThrow("Array index must be a number");
       });
     });
 

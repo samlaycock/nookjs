@@ -18,8 +18,12 @@ describe("Interpreter", () => {
         interpreter.clearGlobals();
 
         // Variables are cleared
-        expect(() => interpreter.evaluate("x")).toThrow("Undefined variable 'x'");
-        expect(() => interpreter.evaluate("y")).toThrow("Undefined variable 'y'");
+        expect(() => interpreter.evaluate("x")).toThrow(
+          "Undefined variable 'x'",
+        );
+        expect(() => interpreter.evaluate("y")).toThrow(
+          "Undefined variable 'y'",
+        );
       });
 
       it("should preserve built-in globals", () => {
@@ -45,7 +49,9 @@ describe("Interpreter", () => {
         expect(interpreter.evaluate("myValue")).toBe(42);
 
         // User variable cleared
-        expect(() => interpreter.evaluate("x")).toThrow("Undefined variable 'x'");
+        expect(() => interpreter.evaluate("x")).toThrow(
+          "Undefined variable 'x'",
+        );
       });
 
       it("should allow new declarations after clearing", () => {
@@ -69,8 +75,12 @@ describe("Interpreter", () => {
 
         interpreter.clearGlobals();
 
-        expect(() => interpreter.evaluate("add(1, 2)")).toThrow("Undefined variable 'add'");
-        expect(() => interpreter.evaluate("new Foo()")).toThrow("Undefined variable 'Foo'");
+        expect(() => interpreter.evaluate("add(1, 2)")).toThrow(
+          "Undefined variable 'add'",
+        );
+        expect(() => interpreter.evaluate("new Foo()")).toThrow(
+          "Undefined variable 'Foo'",
+        );
       });
     });
 
