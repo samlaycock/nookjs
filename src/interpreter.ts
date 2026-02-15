@@ -2658,7 +2658,21 @@ export class Interpreter {
     if (isForbiddenGlobalName(name)) {
       return true;
     }
-    return value === Function || value === eval || value === Proxy || value === Reflect;
+    if (value === Function || value === eval || value === Proxy || value === Reflect) {
+      return true;
+    }
+    // Block async/generator constructor identities to prevent aliasing
+    // Use typeof checks for compatibility with environments where these may not be available
+    if (typeof value === "function" && value.name === "AsyncFunction") {
+      return true;
+    }
+    if (typeof value === "function" && value.name === "GeneratorFunction") {
+      return true;
+    }
+    if (typeof value === "function" && value.name === "AsyncGeneratorFunction") {
+      return true;
+    }
+    return false;
   }
 
   /**
