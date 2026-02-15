@@ -332,7 +332,7 @@ describe("Module System", () => {
   });
 
   describe("Module Cache", () => {
-    test("should cache resolved modules", async () => {
+    test("should cache resolved modules by path after authorization", async () => {
       let resolveCount = 0;
 
       const resolver: ModuleResolver = {
@@ -356,7 +356,7 @@ describe("Module System", () => {
         { path: "main.js" },
       );
 
-      expect(resolveCount).toBe(1);
+      expect(resolveCount).toBe(2);
     });
 
     test("should clear module cache", async () => {
@@ -1760,8 +1760,7 @@ describe("Module System", () => {
         { path: "main.js" },
       );
 
-      // Module should only be resolved once due to caching
-      expect(evalCount).toBe(1);
+      expect(evalCount).toBe(2);
     });
 
     test("should maintain module state across imports", async () => {
@@ -3359,6 +3358,164 @@ describe("Module System", () => {
 
       expect(result.debug).toBe(true);
       expect(result.version).toBe("1.0.0");
+    });
+  });
+
+  describe("Security - Authorization Cache Bypass Regression (P0)", () => {
+    test("should deny importer B when resolver rejects same specifier after importer A was allowed", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier, importer) {
+          if (specifier === "./secret") {
+            if (importer === "allowed.js") {
+              return {
+                type: "source",
+                code: 'export const token = "TOPSECRET";',
+                path: "/tenantA/secret.js",
+              };
+            }
+            if (importer === "attacker.js") {
+              return null;
+            }
+          }
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      const allowed = await interpreter.evaluateModuleAsync(
+        'import { token } from "./secret"; export const out = token;',
+        { path: "allowed.js" },
+      );
+      expect(allowed.out).toBe("TOPSECRET");
+
+      await expect(
+        interpreter.evaluateModuleAsync(
+          'import { token } from "./secret"; export const out = token;',
+          { path: "attacker.js" },
+        ),
+      ).rejects.toThrow("Cannot find module");
+    });
+
+    test("should deny importer B when resolver rejects same specifier - cache disabled", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier, importer) {
+          if (specifier === "./secret") {
+            if (importer === "allowed.js") {
+              return {
+                type: "source",
+                code: 'export const token = "TOPSECRET";',
+                path: "/tenantA/secret.js",
+              };
+            }
+            if (importer === "attacker.js") {
+              return null;
+            }
+          }
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: false },
+      });
+
+      const allowed = await interpreter.evaluateModuleAsync(
+        'import { token } from "./secret"; export const out = token;',
+        { path: "allowed.js" },
+      );
+      expect(allowed.out).toBe("TOPSECRET");
+
+      await expect(
+        interpreter.evaluateModuleAsync(
+          'import { token } from "./secret"; export const out = token;',
+          { path: "attacker.js" },
+        ),
+      ).rejects.toThrow("Cannot find module");
+    });
+
+    test("should allow same importer to re-import same specifier (cache works for same context)", async () => {
+      let resolveCount = 0;
+      const resolver: ModuleResolver = {
+        resolve(specifier, importer) {
+          if (specifier === "./shared") {
+            resolveCount++;
+            return {
+              type: "source",
+              code: 'export const value = "shared";',
+              path: "/shared.js",
+            };
+          }
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      await interpreter.evaluateModuleAsync(
+        'import { value } from "./shared"; import { value as v2 } from "./shared"; export const out = value + v2;',
+        { path: "main.js" },
+      );
+
+      expect(resolveCount).toBe(2);
+    });
+
+    test("should handle path aliasing correctly for allowed imports", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier, importer) {
+          if (specifier === "./utils" || specifier === "./helpers") {
+            return {
+              type: "source",
+              code: 'export const helper = "helper";',
+              path: "/shared/utils.js",
+            };
+          }
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        'import { helper as h1 } from "./utils"; import { helper as h2 } from "./helpers"; export const out = h1 + h2;',
+        { path: "main.js" },
+      );
+
+      expect(result.out).toBe("helperhelper");
+    });
+
+    test("should call resolver for each import even with cache enabled", async () => {
+      const resolveCalls: Array<{ specifier: string; importer: string | null }> = [];
+      const resolver: ModuleResolver = {
+        resolve(specifier, importer) {
+          resolveCalls.push({ specifier, importer });
+          return {
+            type: "source",
+            code: 'export const x = 1;',
+            path: specifier,
+          };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      await interpreter.evaluateModuleAsync(
+        'import { x } from "./mod"; import { x as x2 } from "./mod";',
+        { path: "importer1.js" },
+      );
+      await interpreter.evaluateModuleAsync('import { x } from "./mod";', { path: "importer2.js" });
+
+      expect(resolveCalls.length).toBeGreaterThan(1);
+      expect(resolveCalls.some((c) => c.importer === "importer1.js")).toBe(true);
+      expect(resolveCalls.some((c) => c.importer === "importer2.js")).toBe(true);
     });
   });
 });
