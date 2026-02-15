@@ -308,7 +308,9 @@ Expose stats for monitoring:
 function createMonitoredSandbox() {
   const sandbox = createSandbox({
     env: "es2022",
-    limits: { total: { memoryBytes: 500 * 1024 * 1024, iterations: 10_000_000 } },
+    limits: {
+      total: { memoryBytes: 500 * 1024 * 1024, iterations: 10_000_000 },
+    },
   });
 
   return {

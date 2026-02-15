@@ -213,21 +213,6 @@ export class ModuleSystem {
       throw new Error("Module system is not enabled");
     }
 
-    // Check cache by specifier first (for already resolved modules)
-    if (this.options.cache) {
-      const cachedPath = this.specifierToPath.get(specifier);
-      if (cachedPath) {
-        const cached = this.cacheByPath.get(cachedPath);
-        if (cached && cached.status === "initialized") {
-          return cached;
-        }
-        // If initializing, return it to handle circular deps
-        if (cached && cached.status === "initializing") {
-          return cached;
-        }
-      }
-    }
-
     // Check depth limit
     if (
       this.options.maxDepth !== undefined &&
@@ -241,7 +226,10 @@ export class ModuleSystem {
     }
 
     try {
-      // Build resolver context
+      // Build resolver context - resolver is ALWAYS called first to enforce
+      // importer-aware authorization policy before any cache access.
+      // This prevents cache-based authorization bypass where one importer's
+      // allowed access could be reused by another importer with different permissions.
       const context: ModuleResolverContext = {
         specifier,
         importer,
@@ -251,6 +239,23 @@ export class ModuleSystem {
       const source = await this.options.resolver.resolve(specifier, importer, context);
       if (source === null) {
         return null;
+      }
+
+      // After resolver authorizes, check cache by resolved path.
+      // Cache key is the resolved path (source.path), not the specifier,
+      // to ensure cache entries are tied to the specific resolved module.
+      if (this.options.cache) {
+        const existingByPath = this.cacheByPath.get(source.path);
+        if (existingByPath) {
+          // If already initialized, return cached exports
+          if (existingByPath.status === "initialized") {
+            return existingByPath;
+          }
+          // If still initializing, return it to handle circular deps
+          if (existingByPath.status === "initializing") {
+            return existingByPath;
+          }
+        }
       }
 
       const record: ModuleRecord = {

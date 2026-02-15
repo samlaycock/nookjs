@@ -1041,7 +1041,11 @@ describe("Operators", () => {
 
       describe("Primitives", () => {
         test("number is not instanceof Number", () => {
-          expect(interpreter.evaluate("5 instanceof Number", { globals: { Number } })).toBe(false);
+          expect(
+            interpreter.evaluate("5 instanceof Number", {
+              globals: { Number },
+            }),
+          ).toBe(false);
         });
 
         test("string is not instanceof String", () => {

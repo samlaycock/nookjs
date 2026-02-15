@@ -416,7 +416,9 @@ describe("Async", () => {
 
         it("should clean up per-call globals after async execution", async () => {
           const interpreter = new Interpreter();
-          await interpreter.evaluateAsync("let result = x", { globals: { x: 10 } });
+          await interpreter.evaluateAsync("let result = x", {
+            globals: { x: 10 },
+          });
           return expect(interpreter.evaluateAsync("x")).rejects.toThrow("Undefined variable 'x'");
         });
       });

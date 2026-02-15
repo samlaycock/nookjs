@@ -2318,6 +2318,23 @@ export type ExecutionStep = {
 };
 
 /**
+ * EvaluationContext - holds per-call state for each evaluation.
+ * Used to ensure policy controls (feature toggles, validators, abort signals)
+ * are isolated between concurrent/overlapping runs on the same interpreter.
+ */
+class EvaluationContext {
+  validator?: ASTValidator;
+  featureControl?: FeatureControl;
+  featureSet?: Set<LanguageFeature>;
+  abortSignal?: AbortSignal;
+  maxCallStackDepth?: number;
+  maxLoopIterations?: number;
+  maxMemory?: number;
+  memoryUsage = 0;
+  callStackDepth = 0;
+}
+
+/**
  * Main Interpreter class
  *
  * Evaluates JavaScript code by parsing it into an AST and walking the AST nodes.
@@ -2343,30 +2360,18 @@ export class Interpreter {
 
   private constructorGlobals: Record<string, any>; // Globals that persist across all evaluate() calls
   private constructorValidator?: ASTValidator; // AST validator that applies to all evaluate() calls
-  private currentValidator?: ASTValidator; // Per-call validator (applies to module imports)
   private constructorFeatureControl?: FeatureControl; // Feature control that applies to all evaluate() calls
   private constructorFeatureSet?: Set<LanguageFeature>; // Cached feature set for faster lookup
   private securityOptions: SecurityOptions; // Security options for sandbox
   private perCallGlobalKeys: Set<string> = new Set(); // Track per-call globals for cleanup
   private overriddenConstructorGlobals: Map<string, any> = new Map(); // Track original values when per-call globals override
-  private currentFeatureControl?: FeatureControl; // Active feature control (per-call overrides constructor)
-  private currentFeatureSet?: Set<LanguageFeature>; // Cached per-call feature set
 
   // Execution control (async-only abort signal)
-  private abortSignal?: AbortSignal; // Signal for async cancellation
   private executionCheckCounter = 0;
   private static readonly EXECUTION_CHECK_MASK = 0xff; // check every 256 nodes
 
-  // Call stack depth limiting
-  private maxCallStackDepth?: number;
-  private currentCallStackDepth = 0;
-
-  // Loop iteration limiting
-  private maxLoopIterations?: number;
-
-  // Memory tracking (best-effort)
-  private maxMemory?: number;
-  private currentMemoryUsage = 0;
+  // Evaluation context stack for concurrent run isolation
+  private evaluationContextStack: EvaluationContext[] = [];
 
   // Label for the currently executing loop (set by LabeledStatement)
   private currentLoopLabel: string | null = null;
@@ -2466,15 +2471,88 @@ export class Interpreter {
     this.nodeHandlers = this.createNodeHandlers();
   }
 
+  private getCurrentContext(): EvaluationContext | undefined {
+    return this.evaluationContextStack[this.evaluationContextStack.length - 1];
+  }
+
+  private getCurrentValidator(): ASTValidator | undefined {
+    const context = this.getCurrentContext();
+    return context?.validator ?? this.constructorValidator;
+  }
+
+  private getCurrentFeatureControl(): FeatureControl | undefined {
+    const context = this.getCurrentContext();
+    return context?.featureControl ?? this.constructorFeatureControl;
+  }
+
+  private getCurrentFeatureSet(): Set<LanguageFeature> | undefined {
+    const context = this.getCurrentContext();
+    if (context?.featureSet) {
+      return context.featureSet;
+    }
+    return this.constructorFeatureSet;
+  }
+
+  private getCurrentAbortSignal(): AbortSignal | undefined {
+    const context = this.getCurrentContext();
+    return context?.abortSignal;
+  }
+
+  private setCurrentAbortSignal(signal: AbortSignal | undefined): void {
+    const context = this.getCurrentContext();
+    if (context) {
+      context.abortSignal = signal;
+    }
+  }
+
+  private getCurrentMaxCallStackDepth(): number | undefined {
+    const context = this.getCurrentContext();
+    return context?.maxCallStackDepth;
+  }
+
+  private getCurrentCallStackDepth(): number {
+    const context = this.getCurrentContext();
+    return context?.callStackDepth ?? 0;
+  }
+
+  private setCurrentCallStackDepth(depth: number): void {
+    const context = this.getCurrentContext();
+    if (context) {
+      context.callStackDepth = depth;
+    }
+  }
+
+  private getCurrentMaxLoopIterations(): number | undefined {
+    const context = this.getCurrentContext();
+    return context?.maxLoopIterations;
+  }
+
+  private getCurrentMaxMemory(): number | undefined {
+    const context = this.getCurrentContext();
+    return context?.maxMemory;
+  }
+
+  private getCurrentMemoryUsage(): number {
+    const context = this.getCurrentContext();
+    return context?.memoryUsage ?? 0;
+  }
+
+  private setCurrentMemoryUsage(usage: number): void {
+    const context = this.getCurrentContext();
+    if (context) {
+      context.memoryUsage = usage;
+    }
+  }
+
   /**
    * Acquire the evaluation mutex. Returns a promise that resolves when it's this evaluation's turn.
    * This ensures evaluations are serialized to prevent cross-request data leakage.
-   * 
+   *
    * @returns A function to call when evaluation is complete, releasing the mutex
-    */
+   */
   private async acquireEvaluationMutex(): Promise<() => void> {
     const previousQueue = this.evaluationMutexQueue;
-    
+
     let releaseFn: () => void;
     const isNext = new Promise<void>((resolve) => {
       releaseFn = resolve;
@@ -2637,9 +2715,9 @@ export class Interpreter {
    * interp.isFeatureEnabled("AsyncAwait"); // false
    */
   private isFeatureEnabled(feature: LanguageFeature): boolean {
-    // Use currentFeatureControl if set (per-call), otherwise fall back to constructor-level
-    const featureControl = this.currentFeatureControl || this.constructorFeatureControl;
-    const featureSet = this.currentFeatureSet || this.constructorFeatureSet;
+    // Use current context feature control if set (per-call), otherwise fall back to constructor-level
+    const featureControl = this.getCurrentFeatureControl();
+    const featureSet = this.getCurrentFeatureSet();
 
     // If no feature control is configured, all features are enabled
     if (!featureControl) {
@@ -2663,7 +2741,8 @@ export class Interpreter {
    * Only effective during async evaluation where the event loop can process signal changes.
    */
   private checkExecutionLimits(): void {
-    if (!this.abortSignal) {
+    const abortSignal = this.getCurrentAbortSignal();
+    if (!abortSignal) {
       return;
     }
     // Reduce overhead by checking only every N nodes.
@@ -2672,7 +2751,7 @@ export class Interpreter {
     if (this.executionCheckCounter !== 0) {
       return;
     }
-    if (this.abortSignal.aborted) {
+    if (abortSignal.aborted) {
       throw new InterpreterError("Execution aborted");
     }
   }
@@ -2682,12 +2761,16 @@ export class Interpreter {
    * Call this before entering a function/method call.
    */
   private enterCallStack(): void {
-    if (this.maxCallStackDepth !== undefined) {
-      if (this.currentCallStackDepth >= this.maxCallStackDepth) {
+    const maxCallStackDepth = this.getCurrentMaxCallStackDepth();
+    if (maxCallStackDepth !== undefined) {
+      const currentCallStackDepth = this.getCurrentCallStackDepth();
+      if (currentCallStackDepth >= maxCallStackDepth) {
         throw new InterpreterError("Maximum call stack depth exceeded");
       }
+      this.setCurrentCallStackDepth(currentCallStackDepth + 1);
+    } else {
+      this.setCurrentCallStackDepth(this.getCurrentCallStackDepth() + 1);
     }
-    this.currentCallStackDepth++;
     // Track function call statistics
     this.statsFunctionCalls++;
   }
@@ -2697,7 +2780,7 @@ export class Interpreter {
    * Call this after returning from a function/method call.
    */
   private exitCallStack(): void {
-    this.currentCallStackDepth--;
+    this.setCurrentCallStackDepth(this.getCurrentCallStackDepth() - 1);
   }
 
   /**
@@ -2722,7 +2805,8 @@ export class Interpreter {
     // Track loop iteration statistics
     this.statsLoopIterations++;
 
-    if (this.maxLoopIterations !== undefined && iterations >= this.maxLoopIterations) {
+    const maxLoopIterations = this.getCurrentMaxLoopIterations();
+    if (maxLoopIterations !== undefined && iterations >= maxLoopIterations) {
       throw new InterpreterError("Maximum loop iterations exceeded");
     }
   }
@@ -2732,11 +2816,13 @@ export class Interpreter {
    * @param bytes Estimated bytes being allocated
    */
   private trackMemory(bytes: number): void {
-    if (this.maxMemory === undefined) {
+    const maxMemory = this.getCurrentMaxMemory();
+    if (maxMemory === undefined) {
       return;
     }
-    this.currentMemoryUsage += bytes;
-    if (this.currentMemoryUsage > this.maxMemory) {
+    const currentMemoryUsage = this.getCurrentMemoryUsage() + bytes;
+    this.setCurrentMemoryUsage(currentMemoryUsage);
+    if (currentMemoryUsage > maxMemory) {
       throw new InterpreterError("Maximum memory limit exceeded");
     }
   }
@@ -2750,7 +2836,8 @@ export class Interpreter {
       );
     }
 
-    this.currentValidator = options?.validator;
+    const context = new EvaluationContext();
+    context.validator = options?.validator;
 
     // Inject per-call globals if provided (with override capability).
     if (options?.globals) {
@@ -2759,24 +2846,27 @@ export class Interpreter {
 
     // Set per-call feature control if provided.
     if (options?.featureControl) {
-      this.currentFeatureControl = options.featureControl;
-      this.currentFeatureSet = new Set(options.featureControl.features);
+      context.featureControl = options.featureControl;
+      context.featureSet = new Set(options.featureControl.features);
     }
 
     // Signal is set separately by evaluateAsync(); not used in sync evaluate().
-    this.abortSignal = undefined;
+    context.abortSignal = undefined;
     this.executionCheckCounter = Interpreter.EXECUTION_CHECK_MASK;
 
     // Initialize call stack limiting.
-    this.maxCallStackDepth = options?.maxCallStackDepth;
-    this.currentCallStackDepth = 0;
+    context.maxCallStackDepth = options?.maxCallStackDepth;
+    context.callStackDepth = 0;
 
     // Initialize loop iteration limiting.
-    this.maxLoopIterations = options?.maxLoopIterations;
+    context.maxLoopIterations = options?.maxLoopIterations;
 
     // Initialize memory tracking.
-    this.maxMemory = options?.maxMemory;
-    this.currentMemoryUsage = 0;
+    context.maxMemory = options?.maxMemory;
+    context.memoryUsage = 0;
+
+    // Push context onto stack for this evaluation
+    this.evaluationContextStack.push(context);
 
     // Reset line tracking.
     this.currentLine = 0;
@@ -2794,23 +2884,25 @@ export class Interpreter {
     // Record end time for statistics.
     this.statsEndTime = performance.now();
 
+    const currentMemoryUsage = this.getCurrentMemoryUsage();
+
     if (this.integratedResourceTracking) {
       const cpuTimeMs = this.statsEndTime - this.evaluationStartTime;
       this.integratedEvaluationNumber++;
 
-      if (this.currentMemoryUsage > this.integratedPeakMemory) {
-        this.integratedPeakMemory = this.currentMemoryUsage;
+      if (currentMemoryUsage > this.integratedPeakMemory) {
+        this.integratedPeakMemory = currentMemoryUsage;
       }
 
-      if (this.currentMemoryUsage > this.integratedLargestEvaluationMemory) {
-        this.integratedLargestEvaluationMemory = this.currentMemoryUsage;
+      if (currentMemoryUsage > this.integratedLargestEvaluationMemory) {
+        this.integratedLargestEvaluationMemory = currentMemoryUsage;
       }
 
       if (this.statsLoopIterations > this.integratedLargestEvaluationIterations) {
         this.integratedLargestEvaluationIterations = this.statsLoopIterations;
       }
 
-      this.integratedCumulativeMemory += this.currentMemoryUsage;
+      this.integratedCumulativeMemory += currentMemoryUsage;
       this.integratedCumulativeIterations += this.statsLoopIterations;
       this.integratedCumulativeFunctionCalls += this.statsFunctionCalls;
       this.integratedCumulativeCpuTime += cpuTimeMs;
@@ -2818,7 +2910,7 @@ export class Interpreter {
       if (this.integratedHistorySize > 0) {
         this.integratedHistory.push({
           timestamp: new Date(),
-          memoryBytes: this.currentMemoryUsage,
+          memoryBytes: currentMemoryUsage,
           iterations: this.statsLoopIterations,
           functionCalls: this.statsFunctionCalls,
           evaluationNumber: this.integratedEvaluationNumber,
@@ -2836,29 +2928,16 @@ export class Interpreter {
     if (options?.globals) {
       this.removePerCallGlobals();
     }
-    // Clear per-call feature control.
-    if (options?.featureControl) {
-      this.currentFeatureControl = undefined;
-      this.currentFeatureSet = undefined;
-    }
-    this.currentValidator = undefined;
+
+    // Pop context from stack to isolate per-run state
+    this.evaluationContextStack.pop();
+
     // Clear execution control.
-    this.abortSignal = undefined;
-
-    // Clear call stack limiting.
-    this.maxCallStackDepth = undefined;
-    this.currentCallStackDepth = 0;
-
-    // Clear loop iteration limiting.
-    this.maxLoopIterations = undefined;
-
-    // Clear memory tracking.
-    this.maxMemory = undefined;
-    this.currentMemoryUsage = 0;
+    this.executionCheckCounter = 0;
   }
 
   private validateAst(ast: ESTree.Program, options?: EvaluateOptions): void {
-    const validator = options?.validator ?? this.currentValidator ?? this.constructorValidator;
+    const validator = options?.validator ?? this.getCurrentValidator();
     if (!validator) {
       return;
     }
@@ -2981,16 +3060,18 @@ export class Interpreter {
 
   async evaluateAsync(input: string | ESTree.Program, options?: EvaluateOptions): Promise<any> {
     const releaseMutex = await this.acquireEvaluationMutex();
+    const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
+    this.currentSourceCode = sourceCode;
+    this.callStack = [];
+    this.beginEvaluation(options);
+    this.setCurrentAbortSignal(options?.signal);
+    const abortSignal = this.getCurrentAbortSignal();
+    if (abortSignal?.aborted) {
+      this.endEvaluation(options);
+      releaseMutex();
+      throw new InterpreterError("Execution aborted");
+    }
     try {
-      const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
-      this.currentSourceCode = sourceCode;
-      this.callStack = [];
-      this.beginEvaluation(options);
-      this.abortSignal = options?.signal;
-      if (this.abortSignal?.aborted) {
-        this.endEvaluation(options);
-        throw new InterpreterError("Execution aborted");
-      }
       try {
         const ast = this.parseAndValidate(input, options);
         const needsFreshScope = typeof input !== "string";
@@ -3484,22 +3565,25 @@ export class Interpreter {
     options: ModuleEvaluateOptions,
   ): Promise<Record<string, any>> {
     const releaseMutex = await this.acquireEvaluationMutex();
+    if (!this.moduleSystem) {
+      releaseMutex();
+      throw new InterpreterError(
+        "Module system is not enabled. Create Interpreter with { modules: { enabled: true, resolver: ... } }.",
+      );
+    }
+
+    this.currentSourceCode = code;
+    this.callStack = [];
+    this.beginEvaluation(options);
+    this.setCurrentAbortSignal(options.signal);
+    const abortSignal = this.getCurrentAbortSignal();
+    if (abortSignal?.aborted) {
+      this.endEvaluation(options);
+      releaseMutex();
+      throw new InterpreterError("Execution aborted");
+    }
+
     try {
-      if (!this.moduleSystem) {
-        throw new InterpreterError(
-          "Module system is not enabled. Create Interpreter with { modules: { enabled: true, resolver: ... } }.",
-        );
-      }
-
-      this.currentSourceCode = code;
-      this.callStack = [];
-      this.beginEvaluation(options);
-      this.abortSignal = options.signal;
-      if (this.abortSignal?.aborted) {
-        this.endEvaluation(options);
-        throw new InterpreterError("Execution aborted");
-      }
-
       try {
         const ast = this.parseModuleAndValidate(code, options);
         return await this.evaluateModuleAstAsync(ast, options.path);
@@ -5317,7 +5401,10 @@ export class Interpreter {
   private enterFunctionContext(
     fn: FunctionValue,
     thisValue: any,
-  ): { previousEnvironment: Environment; previousSuperBinding: SuperBinding | null } {
+  ): {
+    previousEnvironment: Environment;
+    previousSuperBinding: SuperBinding | null;
+  } {
     this.enterCallStack();
 
     const previousEnvironment = this.environment;

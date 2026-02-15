@@ -444,14 +444,12 @@ describe("Simplified API", () => {
       const sandbox = createSandbox({ env: "es2022" });
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-      const runA = sandbox.run(
-        "async function f(){ await sleep(20); return secret; } f()",
-        { globals: { secret: "A", sleep } },
-      );
-      const runB = sandbox.run(
-        "async function g(){ await sleep(1); return secret; } g()",
-        { globals: { secret: "B", sleep } },
-      );
+      const runA = sandbox.run("async function f(){ await sleep(20); return secret; } f()", {
+        globals: { secret: "A", sleep },
+      });
+      const runB = sandbox.run("async function g(){ await sleep(1); return secret; } g()", {
+        globals: { secret: "B", sleep },
+      });
 
       const [a, b] = await Promise.all([runA, runB]);
       expect(a).toBe("A");
@@ -525,10 +523,17 @@ describe("Simplified API", () => {
       });
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-      const runWithArrows = sandbox.run("(() => 1)()", { features: { enable: ["ArrowFunctions"] } });
-      const runWithoutArrows = sandbox.run("function f() { return 1; } f()", { globals: { sleep } });
+      const runWithArrows = sandbox.run("(() => 1)()", {
+        features: { enable: ["ArrowFunctions"] },
+      });
+      const runWithoutArrows = sandbox.run("function f() { return 1; } f()", {
+        globals: { sleep },
+      });
 
-      const [arrowResult, normalResult] = await Promise.all([runWithArrows.catch((e) => e.message), runWithoutArrows]);
+      const [arrowResult, normalResult] = await Promise.all([
+        runWithArrows.catch((e) => e.message),
+        runWithoutArrows,
+      ]);
       expect(arrowResult).toBe(1);
       expect(normalResult).toBe(1);
     });

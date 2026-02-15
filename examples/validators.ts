@@ -39,7 +39,10 @@ try {
 }
 
 const sizeValidator = (ast: ESTree.Program): boolean => ast.body.length <= 3;
-const sizeLimitedSandbox = createSandbox({ env: "es2022", validator: sizeValidator });
+const sizeLimitedSandbox = createSandbox({
+  env: "es2022",
+  validator: sizeValidator,
+});
 
 let blockedLargeProgram = false;
 try {
@@ -48,4 +51,10 @@ try {
   blockedLargeProgram = true;
 }
 
-console.log({ safeValue, readOnlyValue, blockedLoop, blockedWrite, blockedLargeProgram });
+console.log({
+  safeValue,
+  readOnlyValue,
+  blockedLoop,
+  blockedWrite,
+  blockedLargeProgram,
+});

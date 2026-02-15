@@ -101,7 +101,9 @@ describe("Presets", () => {
 
         it("should preserve featureControl when preset has no featureControl", () => {
           const result = preset(
-            { featureControl: { mode: "whitelist", features: ["IfStatement"] } },
+            {
+              featureControl: { mode: "whitelist", features: ["IfStatement"] },
+            },
             { globals: { x: 1 } },
           );
 
