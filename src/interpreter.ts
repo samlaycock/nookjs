@@ -1722,6 +1722,7 @@ export class HostFunctionValue {
     public isAsync: boolean = false,
     public rethrowErrors: boolean = false,
     public skipArgWrapping: boolean = false, // When true, FunctionValue args are passed through without wrapping
+    public securityOptions?: SecurityOptions,
   ) {
     // Return a Proxy that blocks dangerous property access on host functions
     // while allowing access to static methods (e.g., Promise.resolve, Array.isArray)
@@ -1767,10 +1768,14 @@ export class HostFunctionValue {
           // so that `Promise.resolve()` has correct `this` binding
           if (typeof val === "function") {
             const bound = val.bind(target.hostFunc);
-            return ReadOnlyProxy.wrap(bound, `${target.name}.${String(prop)}`);
+            return ReadOnlyProxy.wrap(
+              bound,
+              `${target.name}.${String(prop)}`,
+              target.securityOptions,
+            );
           }
           // Wrap non-function values through ReadOnlyProxy for security
-          return ReadOnlyProxy.wrap(val, `${target.name}.${String(prop)}`);
+          return ReadOnlyProxy.wrap(val, `${target.name}.${String(prop)}`, target.securityOptions);
         }
 
         // Block all other property access for security
@@ -2587,9 +2592,9 @@ export class Interpreter {
     this.environment.declare("NaN", NaN, "const", true);
     this.environment.declare("Infinity", Infinity, "const", true);
     // Symbol is a fundamental primitive type constructor - wrap in HostFunctionValue
-    this.environment.declare("Symbol", new HostFunctionValue(Symbol, "Symbol"), "const", true);
+    this.environment.declare("Symbol", this.createHostFunction(Symbol, "Symbol"), "const", true);
     // Promise is needed for async/await support - wrap in HostFunctionValue
-    this.environment.declare("Promise", new HostFunctionValue(Promise, "Promise"), "const", true);
+    this.environment.declare("Promise", this.createHostFunction(Promise, "Promise"), "const", true);
     // globalThis and global provide access to the sandbox's global scope
     this.environment.declare("globalThis", new GlobalThisSentinel(), "const", true);
     this.environment.declare("global", new GlobalThisSentinel(), "const", true);
@@ -7684,6 +7689,23 @@ export class Interpreter {
    * Get an array method as a HostFunctionValue
    * Returns null if the method is not supported
    */
+  private createHostFunction(
+    hostFunc: Function,
+    name: string,
+    isAsync: boolean = false,
+    rethrowErrors: boolean = false,
+    skipArgWrapping: boolean = false,
+  ): HostFunctionValue {
+    return new HostFunctionValue(
+      hostFunc,
+      name,
+      isAsync,
+      rethrowErrors,
+      skipArgWrapping,
+      this.securityOptions,
+    );
+  }
+
   private getArrayMethod(arr: any[], methodName: string): HostFunctionValue | null {
     // Cache per array instance to avoid re-allocating HostFunctionValue wrappers.
     let cache = this.arrayMethodCache.get(arr);
@@ -7732,12 +7754,12 @@ export class Interpreter {
   ): HostFunctionValue | null {
     switch (methodName) {
       case "next":
-        return new HostFunctionValue(generator.next.bind(generator), "next", false);
+        return this.createHostFunction(generator.next.bind(generator), "next", false);
       case "return":
-        return new HostFunctionValue(generator.return.bind(generator), "return", false);
+        return this.createHostFunction(generator.return.bind(generator), "return", false);
       case "throw":
         // rethrowErrors: true - errors from throw() should propagate directly
-        return new HostFunctionValue(generator.throw.bind(generator), "throw", false, true);
+        return this.createHostFunction(generator.throw.bind(generator), "throw", false, true);
       default:
         return null;
     }
@@ -7771,12 +7793,12 @@ export class Interpreter {
   ): HostFunctionValue | null {
     switch (methodName) {
       case "next":
-        return new HostFunctionValue(generator.next.bind(generator), "next", true);
+        return this.createHostFunction(generator.next.bind(generator), "next", true);
       case "return":
-        return new HostFunctionValue(generator.return.bind(generator), "return", true);
+        return this.createHostFunction(generator.return.bind(generator), "return", true);
       case "throw":
         // rethrowErrors: true - errors from throw() should propagate directly
-        return new HostFunctionValue(generator.throw.bind(generator), "throw", true, true);
+        return this.createHostFunction(generator.throw.bind(generator), "throw", true, true);
       default:
         return null;
     }
@@ -7786,7 +7808,7 @@ export class Interpreter {
     switch (methodName) {
       // Mutation methods
       case "push":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (...items: any[]) => {
             arr.push(...items);
             return arr.length;
@@ -7796,13 +7818,13 @@ export class Interpreter {
         );
 
       case "pop":
-        return new HostFunctionValue(() => arr.pop(), "pop", false);
+        return this.createHostFunction(() => arr.pop(), "pop", false);
 
       case "shift":
-        return new HostFunctionValue(() => arr.shift(), "shift", false);
+        return this.createHostFunction(() => arr.shift(), "shift", false);
 
       case "unshift":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (...items: any[]) => {
             arr.unshift(...items);
             return arr.length;
@@ -7813,38 +7835,38 @@ export class Interpreter {
 
       // Non-mutation methods
       case "slice":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (start?: number, end?: number) => arr.slice(start, end),
           "slice",
           false,
         );
 
       case "concat":
-        return new HostFunctionValue((...items: any[]) => arr.concat(...items), "concat", false);
+        return this.createHostFunction((...items: any[]) => arr.concat(...items), "concat", false);
 
       case "indexOf":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (searchElement: any, fromIndex?: number) => arr.indexOf(searchElement, fromIndex),
           "indexOf",
           false,
         );
 
       case "includes":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (searchElement: any, fromIndex?: number) => arr.includes(searchElement, fromIndex),
           "includes",
           false,
         );
 
       case "join":
-        return new HostFunctionValue((separator?: string) => arr.join(separator), "join", false);
+        return this.createHostFunction((separator?: string) => arr.join(separator), "join", false);
 
       case "reverse":
-        return new HostFunctionValue(() => arr.reverse(), "reverse", false);
+        return this.createHostFunction(() => arr.reverse(), "reverse", false);
 
       // Higher-order methods - these need special handling to evaluate sandbox functions
       case "map":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             const result: any[] = [];
             for (let i = 0; i < arr.length; i++) {
@@ -7861,7 +7883,7 @@ export class Interpreter {
         );
 
       case "filter":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             const result: any[] = [];
             for (let i = 0; i < arr.length; i++) {
@@ -7879,7 +7901,7 @@ export class Interpreter {
         );
 
       case "reduce":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function, initialValue?: any) => {
             let accumulator = initialValue;
             let startIndex = 0;
@@ -7905,7 +7927,7 @@ export class Interpreter {
         );
 
       case "find":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = 0; i < arr.length; i++) {
               const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
@@ -7922,7 +7944,7 @@ export class Interpreter {
         );
 
       case "findIndex":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = 0; i < arr.length; i++) {
               const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
@@ -7939,7 +7961,7 @@ export class Interpreter {
         );
 
       case "every":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = 0; i < arr.length; i++) {
               const result = this.callCallback(callback, undefined, [arr[i], i, arr]);
@@ -7956,7 +7978,7 @@ export class Interpreter {
         );
 
       case "some":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = 0; i < arr.length; i++) {
               const result = this.callCallback(callback, undefined, [arr[i], i, arr]);
@@ -7973,7 +7995,7 @@ export class Interpreter {
         );
 
       case "forEach":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = 0; i < arr.length; i++) {
               this.callCallback(callback, undefined, [arr[i], i, arr]);
@@ -7987,7 +8009,7 @@ export class Interpreter {
         );
 
       case "sort":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (compareFn?: FunctionValue | Function) => {
             if (compareFn) {
               arr.sort((a: any, b: any) => this.callCallback(compareFn, undefined, [a, b]));
@@ -8004,10 +8026,10 @@ export class Interpreter {
         );
 
       case "flat":
-        return new HostFunctionValue((depth?: number) => arr.flat(depth), "flat", false);
+        return this.createHostFunction((depth?: number) => arr.flat(depth), "flat", false);
 
       case "flatMap":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             const result: any[] = [];
             for (let i = 0; i < arr.length; i++) {
@@ -8027,10 +8049,10 @@ export class Interpreter {
         );
 
       case "at":
-        return new HostFunctionValue((index: number) => arr.at(index), "at", false);
+        return this.createHostFunction((index: number) => arr.at(index), "at", false);
 
       case "findLast":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = arr.length - 1; i >= 0; i--) {
               const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
@@ -8047,7 +8069,7 @@ export class Interpreter {
         );
 
       case "findLastIndex":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function) => {
             for (let i = arr.length - 1; i >= 0; i--) {
               const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
@@ -8064,7 +8086,7 @@ export class Interpreter {
         );
 
       case "reduceRight":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (callback: FunctionValue | Function, initialValue?: any) => {
             let accumulator = initialValue;
             let startIndex = arr.length - 1;
@@ -8089,7 +8111,7 @@ export class Interpreter {
         );
 
       case "splice":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (start: number, deleteCount?: number, ...items: any[]) => {
             if (deleteCount === undefined) {
               return arr.splice(start);
@@ -8101,7 +8123,7 @@ export class Interpreter {
         );
 
       case "fill":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (value: any, start?: number, end?: number) => {
             arr.fill(value, start, end);
             return arr;
@@ -8111,7 +8133,7 @@ export class Interpreter {
         );
 
       case "lastIndexOf":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (searchElement: any, fromIndex?: number) =>
             fromIndex !== undefined
               ? arr.lastIndexOf(searchElement, fromIndex)
@@ -8133,7 +8155,7 @@ export class Interpreter {
     switch (methodName) {
       // Extraction methods
       case "substring":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (start: number, end?: number) => {
             return str.substring(start, end);
           },
@@ -8142,7 +8164,7 @@ export class Interpreter {
         );
 
       case "slice":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (start: number, end?: number) => {
             return str.slice(start, end);
           },
@@ -8151,7 +8173,7 @@ export class Interpreter {
         );
 
       case "charAt":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (index: number) => {
             return str.charAt(index);
           },
@@ -8161,7 +8183,7 @@ export class Interpreter {
 
       // Search methods
       case "indexOf":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (searchString: string, position?: number) => {
             return str.indexOf(searchString, position);
           },
@@ -8170,7 +8192,7 @@ export class Interpreter {
         );
 
       case "lastIndexOf":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (searchString: string, position?: number) => {
             return str.lastIndexOf(searchString, position);
           },
@@ -8179,7 +8201,7 @@ export class Interpreter {
         );
 
       case "includes":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (searchString: string, position?: number) => {
             return str.includes(searchString, position);
           },
@@ -8189,7 +8211,7 @@ export class Interpreter {
 
       // Matching methods
       case "startsWith":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (searchString: string, position?: number) => {
             return str.startsWith(searchString, position);
           },
@@ -8198,7 +8220,7 @@ export class Interpreter {
         );
 
       case "endsWith":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (searchString: string, length?: number) => {
             return str.endsWith(searchString, length);
           },
@@ -8208,7 +8230,7 @@ export class Interpreter {
 
       // Case methods
       case "toUpperCase":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           () => {
             return str.toUpperCase();
           },
@@ -8217,7 +8239,7 @@ export class Interpreter {
         );
 
       case "toLowerCase":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           () => {
             return str.toLowerCase();
           },
@@ -8227,7 +8249,7 @@ export class Interpreter {
 
       // Trimming methods
       case "trim":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           () => {
             return str.trim();
           },
@@ -8237,7 +8259,7 @@ export class Interpreter {
 
       case "trimStart":
       case "trimLeft":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           () => {
             return str.trimStart();
           },
@@ -8247,7 +8269,7 @@ export class Interpreter {
 
       case "trimEnd":
       case "trimRight":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           () => {
             return str.trimEnd();
           },
@@ -8257,7 +8279,7 @@ export class Interpreter {
 
       // Transformation methods
       case "split":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (separator?: string | null, limit?: number) => {
             if (separator === null || separator === undefined) {
               return [str];
@@ -8269,7 +8291,7 @@ export class Interpreter {
         );
 
       case "replace":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (searchValue: string, replaceValue: string) => {
             return str.replace(searchValue, replaceValue);
           },
@@ -8278,7 +8300,7 @@ export class Interpreter {
         );
 
       case "repeat":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (count: number) => {
             return str.repeat(count);
           },
@@ -8288,7 +8310,7 @@ export class Interpreter {
 
       // Padding methods
       case "padStart":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (targetLength: number, padString?: string) => {
             return str.padStart(targetLength, padString);
           },
@@ -8297,7 +8319,7 @@ export class Interpreter {
         );
 
       case "padEnd":
-        return new HostFunctionValue(
+        return this.createHostFunction(
           (targetLength: number, padString?: string) => {
             return str.padEnd(targetLength, padString);
           },
@@ -8317,7 +8339,11 @@ export class Interpreter {
   private getNativePropertyValue(object: any, property: string): any {
     const value = (object as any)[property];
     if (typeof value === "function") {
-      return new HostFunctionValue((...args: any[]) => value.apply(object, args), property, false);
+      return this.createHostFunction(
+        (...args: any[]) => value.apply(object, args),
+        property,
+        false,
+      );
     }
     return value;
   }

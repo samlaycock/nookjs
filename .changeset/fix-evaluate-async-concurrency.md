@@ -1,5 +1,5 @@
 ---
-'nookjs': patch
+"nookjs": patch
 ---
 
 Fix concurrent cross-request data leak by serializing evaluateAsync calls
