@@ -8,31 +8,23 @@ describe("Global Utilities", () => {
     describe("encodeURI", () => {
       it("should encode URI components", () => {
         const interpreter = new Interpreter(ES5);
-        expect(interpreter.evaluate('encodeURI("hello world")')).toBe(
-          "hello%20world",
-        );
+        expect(interpreter.evaluate('encodeURI("hello world")')).toBe("hello%20world");
       });
 
       it("should preserve URI structure characters", () => {
         const interpreter = new Interpreter(ES5);
-        expect(
-          interpreter.evaluate('encodeURI("https://example.com")'),
-        ).toContain("https://");
+        expect(interpreter.evaluate('encodeURI("https://example.com")')).toContain("https://");
       });
 
       it("should preserve query string delimiters", () => {
         const interpreter = new Interpreter(ES5);
-        const result = interpreter.evaluate(
-          'encodeURI("https://example.com?a=1&b=2")',
-        );
+        const result = interpreter.evaluate('encodeURI("https://example.com?a=1&b=2")');
         expect(result).toContain("?a=1&b=2");
       });
 
       it("should preserve fragment identifiers", () => {
         const interpreter = new Interpreter(ES5);
-        const result = interpreter.evaluate(
-          'encodeURI("https://example.com#section")',
-        );
+        const result = interpreter.evaluate('encodeURI("https://example.com#section")');
         expect(result).toContain("#section");
       });
 
@@ -43,9 +35,7 @@ describe("Global Utilities", () => {
 
       it("should round-trip through decodeURI", () => {
         const interpreter = new Interpreter(ES5);
-        const result = interpreter.evaluate(
-          'decodeURI(encodeURI("https://example.com/a b"))',
-        );
+        const result = interpreter.evaluate('decodeURI(encodeURI("https://example.com/a b"))');
         expect(result).toBe("https://example.com/a b");
       });
     });
@@ -53,9 +43,7 @@ describe("Global Utilities", () => {
     describe("decodeURI", () => {
       it("should decode URI components", () => {
         const interpreter = new Interpreter(ES5);
-        expect(interpreter.evaluate('decodeURI("hello%20world")')).toBe(
-          "hello world",
-        );
+        expect(interpreter.evaluate('decodeURI("hello%20world")')).toBe("hello world");
       });
 
       it("should decode spaces", () => {
@@ -65,9 +53,7 @@ describe("Global Utilities", () => {
 
       it("should leave encoded fragment identifiers intact", () => {
         const interpreter = new Interpreter(ES5);
-        const result = interpreter.evaluate(
-          'decodeURI("https://example.com%23section")',
-        );
+        const result = interpreter.evaluate('decodeURI("https://example.com%23section")');
         expect(result).toBe("https://example.com%23section");
       });
 
@@ -80,16 +66,12 @@ describe("Global Utilities", () => {
     describe("encodeURIComponent", () => {
       it("should encode all special characters", () => {
         const interpreter = new Interpreter(ES5);
-        expect(interpreter.evaluate('encodeURIComponent("a:b/c")')).toBe(
-          "a%3Ab%2Fc",
-        );
+        expect(interpreter.evaluate('encodeURIComponent("a:b/c")')).toBe("a%3Ab%2Fc");
       });
 
       it("should encode unicode characters", () => {
         const interpreter = new Interpreter(ES5);
-        expect(interpreter.evaluate('encodeURIComponent("✓")')).toBe(
-          "%E2%9C%93",
-        );
+        expect(interpreter.evaluate('encodeURIComponent("✓")')).toBe("%E2%9C%93");
       });
 
       it("should encode spaces as %20", () => {
@@ -109,18 +91,14 @@ describe("Global Utilities", () => {
 
       it("should encode query delimiters", () => {
         const interpreter = new Interpreter(ES5);
-        expect(interpreter.evaluate('encodeURIComponent("a=b&c")')).toBe(
-          "a%3Db%26c",
-        );
+        expect(interpreter.evaluate('encodeURIComponent("a=b&c")')).toBe("a%3Db%26c");
       });
     });
 
     describe("decodeURIComponent", () => {
       it("should decode URI component", () => {
         const interpreter = new Interpreter(ES5);
-        expect(interpreter.evaluate('decodeURIComponent("a%3Ab%2Fc")')).toBe(
-          "a:b/c",
-        );
+        expect(interpreter.evaluate('decodeURIComponent("a%3Ab%2Fc")')).toBe("a:b/c");
       });
 
       it("should decode plus sign", () => {
@@ -135,18 +113,14 @@ describe("Global Utilities", () => {
 
       it("should round-trip through encodeURIComponent", () => {
         const interpreter = new Interpreter(ES5);
-        expect(
-          interpreter.evaluate(
-            'decodeURIComponent(encodeURIComponent("a+b=c"))',
-          ),
-        ).toBe("a+b=c");
+        expect(interpreter.evaluate('decodeURIComponent(encodeURIComponent("a+b=c"))')).toBe(
+          "a+b=c",
+        );
       });
 
       it("should decode encoded query delimiters", () => {
         const interpreter = new Interpreter(ES5);
-        expect(interpreter.evaluate('decodeURIComponent("a%3Db%26c")')).toBe(
-          "a=b&c",
-        );
+        expect(interpreter.evaluate('decodeURIComponent("a%3Db%26c")')).toBe("a=b&c");
       });
     });
   });

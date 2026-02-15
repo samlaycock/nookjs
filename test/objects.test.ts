@@ -837,10 +837,7 @@ describe("Objects", () => {
 
       describe("Object.keys", () => {
         it("should return array of property keys", () => {
-          expect(interpreter.evaluate("Object.keys({ a: 1, b: 2 })")).toEqual([
-            "a",
-            "b",
-          ]);
+          expect(interpreter.evaluate("Object.keys({ a: 1, b: 2 })")).toEqual(["a", "b"]);
         });
 
         it("should return empty array for empty object", () => {
@@ -861,9 +858,7 @@ describe("Objects", () => {
         });
 
         it("should include keys with undefined values", () => {
-          const result = interpreter.evaluate(
-            `Object.keys({ a: undefined, b: 1 })`,
-          );
+          const result = interpreter.evaluate(`Object.keys({ a: undefined, b: 1 })`);
           expect(result).toEqual(["a", "b"]);
         });
       });
@@ -1576,9 +1571,7 @@ describe("Objects", () => {
     describe("Object Static Methods", () => {
       describe("Object.values", () => {
         it("should return array of object values", () => {
-          expect(interpreter.evaluate("Object.values({ a: 1, b: 2 })")).toEqual(
-            [1, 2],
-          );
+          expect(interpreter.evaluate("Object.values({ a: 1, b: 2 })")).toEqual([1, 2]);
         });
 
         it("should return empty array for empty object", () => {
@@ -1594,15 +1587,14 @@ describe("Objects", () => {
         });
 
         it("should work with arrays", () => {
-          expect(interpreter.evaluate("Object.values([1, 2, 3])")).toEqual([
-            1, 2, 3,
-          ]);
+          expect(interpreter.evaluate("Object.values([1, 2, 3])")).toEqual([1, 2, 3]);
         });
 
         it("should include undefined values", () => {
-          expect(
-            interpreter.evaluate("Object.values({ a: undefined, b: 1 })"),
-          ).toEqual([undefined, 1]);
+          expect(interpreter.evaluate("Object.values({ a: undefined, b: 1 })")).toEqual([
+            undefined,
+            1,
+          ]);
         });
 
         it("should skip symbol keys", () => {
@@ -1651,9 +1643,7 @@ describe("Objects", () => {
         });
 
         it("should include undefined values", () => {
-          const result = interpreter.evaluate(
-            "Object.entries({ a: undefined, b: 1 })",
-          );
+          const result = interpreter.evaluate("Object.entries({ a: undefined, b: 1 })");
           expect(result).toEqual([
             ["a", undefined],
             ["b", 1],
@@ -1733,9 +1723,7 @@ describe("Objects", () => {
     describe("Object Static Methods", () => {
       describe("Object.fromEntries", () => {
         it("should create object from entries", () => {
-          expect(
-            interpreter.evaluate("Object.fromEntries([['a', 1], ['b', 2]])"),
-          ).toEqual({
+          expect(interpreter.evaluate("Object.fromEntries([['a', 1], ['b', 2]])")).toEqual({
             a: 1,
             b: 2,
           });

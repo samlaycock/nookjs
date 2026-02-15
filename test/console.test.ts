@@ -17,9 +17,7 @@ describe("Console", () => {
       });
 
       it("should log multiple arguments", () => {
-        expect(
-          interpreter.evaluate("console.log('a', 'b', 'c')"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("console.log('a', 'b', 'c')")).toBeUndefined();
       });
 
       it("should log numbers", () => {
@@ -33,9 +31,7 @@ describe("Console", () => {
 
     describe("console.error", () => {
       it("should log error message", () => {
-        expect(
-          interpreter.evaluate("console.error('error message')"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("console.error('error message')")).toBeUndefined();
       });
     });
 
@@ -59,15 +55,11 @@ describe("Console", () => {
 
     describe("console.assert", () => {
       it("should not log when assertion passes", () => {
-        expect(
-          interpreter.evaluate("console.assert(true, 'message')"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("console.assert(true, 'message')")).toBeUndefined();
       });
 
       it("should log when assertion fails", () => {
-        expect(
-          interpreter.evaluate("console.assert(false, 'assertion failed')"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("console.assert(false, 'assertion failed')")).toBeUndefined();
       });
     });
 
@@ -81,9 +73,7 @@ describe("Console", () => {
     describe("console.countReset", () => {
       it("should reset counter", () => {
         interpreter.evaluate("console.count('test')");
-        expect(
-          interpreter.evaluate("console.countReset('test')"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("console.countReset('test')")).toBeUndefined();
       });
     });
 
@@ -96,31 +86,23 @@ describe("Console", () => {
     describe("console.timeEnd", () => {
       it("should end timer", () => {
         interpreter.evaluate("console.time('timer')");
-        expect(
-          interpreter.evaluate("console.timeEnd('timer')"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("console.timeEnd('timer')")).toBeUndefined();
       });
     });
 
     describe("console.table", () => {
       it("should table array", () => {
-        expect(
-          interpreter.evaluate("console.table([1, 2, 3])"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("console.table([1, 2, 3])")).toBeUndefined();
       });
 
       it("should table object", () => {
-        expect(
-          interpreter.evaluate("console.table({ a: 1, b: 2 })"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("console.table({ a: 1, b: 2 })")).toBeUndefined();
       });
     });
 
     describe("console.trace", () => {
       it("should log trace", () => {
-        expect(
-          interpreter.evaluate("console.trace('trace message')"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("console.trace('trace message')")).toBeUndefined();
       });
     });
   });

@@ -5,61 +5,48 @@ import { CodeBlock } from "../../components/code-block";
 export function Features() {
   return (
     <article className="prose prose-invert max-w-none">
-      <h1 className="text-3xl font-bold text-neutral-50 mb-4">
-        Feature Control
-      </h1>
+      <h1 className="text-3xl font-bold text-neutral-50 mb-4">Feature Control</h1>
       <p className="text-xl text-neutral-300 mb-8">
-        Fine-grained control over which JavaScript language features are
-        available in the sandbox.
+        Fine-grained control over which JavaScript language features are available in the sandbox.
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Overview
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Overview</h2>
         <p className="text-neutral-300 mb-4">
-          Feature control allows you to restrict which JavaScript language
-          constructs can be used in sandbox code. This is useful for:
+          Feature control allows you to restrict which JavaScript language constructs can be used in
+          sandbox code. This is useful for:
         </p>
         <ul className="space-y-2 text-neutral-300">
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
             <span>
-              <strong className="text-neutral-100">Security</strong> - Disable
-              features that could be abused
+              <strong className="text-neutral-100">Security</strong> - Disable features that could
+              be abused
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
             <span>
-              <strong className="text-neutral-100">Simplicity</strong> - Limit
-              to a simple subset for formula evaluation
+              <strong className="text-neutral-100">Simplicity</strong> - Limit to a simple subset
+              for formula evaluation
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
             <span>
-              <strong className="text-neutral-100">Education</strong> - Teach
-              specific JavaScript concepts by enabling only relevant features
+              <strong className="text-neutral-100">Education</strong> - Teach specific JavaScript
+              concepts by enabling only relevant features
             </span>
           </li>
         </ul>
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Simplified Toggles
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Simplified Toggles</h2>
         <p className="text-neutral-300 mb-4">
-          Use{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-            features
-          </code>{" "}
-          with
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-            createSandbox()
-          </code>{" "}
-          to enable or disable specific features.
+          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">features</code> with
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">createSandbox()</code> to
+          enable or disable specific features.
         </p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
@@ -77,9 +64,7 @@ sandbox.runSync("(() => 1)()");`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Whitelist Mode
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Whitelist Mode</h2>
         <p className="text-neutral-300 mb-4">
           Only allow explicitly listed features (most restrictive):
         </p>
@@ -112,12 +97,8 @@ sandbox.runSync("() => {}");                         // ArrowFunctions not enabl
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Blacklist Mode
-        </h2>
-        <p className="text-neutral-300 mb-4">
-          Allow everything except explicitly listed features:
-        </p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Blacklist Mode</h2>
+        <p className="text-neutral-300 mb-4">Allow everything except explicitly listed features:</p>
         <CodeBlock
           code={`const sandbox = createSandbox({
   env: "es2022",
@@ -144,28 +125,15 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Available Features
-        </h2>
-        <p className="text-neutral-300 mb-4">
-          The following features can be controlled:
-        </p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Available Features</h2>
+        <p className="text-neutral-300 mb-4">The following features can be controlled:</p>
 
         <div className="space-y-6">
           <div>
-            <h3 className="text-lg font-medium text-neutral-100 mb-3">
-              Variables & Declarations
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-3">Variables & Declarations</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {[
-                "VariableDeclarations",
-                "FunctionDeclarations",
-                "ClassDeclarations",
-              ].map((f) => (
-                <code
-                  key={f}
-                  className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm"
-                >
+              {["VariableDeclarations", "FunctionDeclarations", "ClassDeclarations"].map((f) => (
+                <code key={f} className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm">
                   {f}
                 </code>
               ))}
@@ -173,9 +141,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
           </div>
 
           <div>
-            <h3 className="text-lg font-medium text-neutral-100 mb-3">
-              Operators
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-3">Operators</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {[
                 "BinaryOperators",
@@ -185,10 +151,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
                 "UpdateOperators",
                 "ConditionalExpression",
               ].map((f) => (
-                <code
-                  key={f}
-                  className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm"
-                >
+                <code key={f} className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm">
                   {f}
                 </code>
               ))}
@@ -196,9 +159,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
           </div>
 
           <div>
-            <h3 className="text-lg font-medium text-neutral-100 mb-3">
-              Control Flow
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-3">Control Flow</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {[
                 "IfStatement",
@@ -215,10 +176,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
                 "TryStatement",
                 "LabeledStatement",
               ].map((f) => (
-                <code
-                  key={f}
-                  className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm"
-                >
+                <code key={f} className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm">
                   {f}
                 </code>
               ))}
@@ -226,9 +184,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
           </div>
 
           <div>
-            <h3 className="text-lg font-medium text-neutral-100 mb-3">
-              Functions
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-3">Functions</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {[
                 "FunctionExpressions",
@@ -239,10 +195,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
                 "RestParameters",
                 "SpreadElements",
               ].map((f) => (
-                <code
-                  key={f}
-                  className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm"
-                >
+                <code key={f} className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm">
                   {f}
                 </code>
               ))}
@@ -250,9 +203,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
           </div>
 
           <div>
-            <h3 className="text-lg font-medium text-neutral-100 mb-3">
-              Objects & Arrays
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-3">Objects & Arrays</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {[
                 "ObjectExpressions",
@@ -263,10 +214,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
                 "SpreadProperties",
                 "Destructuring",
               ].map((f) => (
-                <code
-                  key={f}
-                  className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm"
-                >
+                <code key={f} className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm">
                   {f}
                 </code>
               ))}
@@ -274,9 +222,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
           </div>
 
           <div>
-            <h3 className="text-lg font-medium text-neutral-100 mb-3">
-              ES6+ Features
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-3">ES6+ Features</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {[
                 "TemplateLiterals",
@@ -291,10 +237,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
                 "AwaitExpression",
                 "YieldExpression",
               ].map((f) => (
-                <code
-                  key={f}
-                  className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm"
-                >
+                <code key={f} className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm">
                   {f}
                 </code>
               ))}
@@ -302,9 +245,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
           </div>
 
           <div>
-            <h3 className="text-lg font-medium text-neutral-100 mb-3">
-              Modern Operators
-            </h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-3">Modern Operators</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {[
                 "OptionalChaining",
@@ -312,10 +253,7 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
                 "LogicalAssignment",
                 "ExponentiationOperator",
               ].map((f) => (
-                <code
-                  key={f}
-                  className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm"
-                >
+                <code key={f} className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm">
                   {f}
                 </code>
               ))}
@@ -325,12 +263,10 @@ sandbox.runSync("while (true) {}");                  // WhileStatement is blackl
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Using with Presets
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Using with Presets</h2>
         <p className="text-neutral-300 mb-4">
-          ECMAScript presets include feature control configured for their
-          version. You can further restrict them:
+          ECMAScript presets include feature control configured for their version. You can further
+          restrict them:
         </p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
@@ -351,9 +287,7 @@ const sandbox = createSandbox({
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Example Use Cases
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Example Use Cases</h2>
 
         <div className="space-y-6">
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
@@ -445,15 +379,11 @@ sandbox.runSync("class Foo {}");   // classes not in ES5`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Error Handling
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Error Handling</h2>
         <p className="text-neutral-300 mb-4">
           When a disabled feature is used, a{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-            FeatureError
-          </code>{" "}
-          is thrown:
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">FeatureError</code> is
+          thrown:
         </p>
         <CodeBlock
           code={`import { createSandbox, FeatureError } from "nookjs";

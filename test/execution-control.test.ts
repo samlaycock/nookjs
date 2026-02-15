@@ -317,12 +317,9 @@ describe("Execution Control", () => {
 
           // Second interpreter should have fresh memory tracking
           const interpreter2 = new Interpreter();
-          const result = interpreter2.evaluate(
-            `const arr2 = [1, 2, 3, 4, 5]; arr2.length;`,
-            {
-              maxMemory: 10000,
-            },
-          );
+          const result = interpreter2.evaluate(`const arr2 = [1, 2, 3, 4, 5]; arr2.length;`, {
+            maxMemory: 10000,
+          });
           expect(result).toBe(5);
         });
 
@@ -450,8 +447,7 @@ describe("Execution Control", () => {
       });
 
       test("should abort async evaluation via delayed signal", async () => {
-        const delay = (ms: number) =>
-          new Promise((resolve) => setTimeout(resolve, ms));
+        const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
         const interpreter = new Interpreter({
           globals: { delay },
         });

@@ -484,9 +484,7 @@ describe("Arrays", () => {
               let arr = [1, 2, 3];
               arr["hello"]
             `;
-        expect(() => interpreter.evaluate(code)).toThrow(
-          "Array index must be a number",
-        );
+        expect(() => interpreter.evaluate(code)).toThrow("Array index must be a number");
       });
 
       test("assigning to non-array throws", () => {
@@ -494,9 +492,7 @@ describe("Arrays", () => {
               let x = 5;
               x[0] = 10
             `;
-        expect(() => interpreter.evaluate(code)).toThrow(
-          "Assignment target is not an array",
-        );
+        expect(() => interpreter.evaluate(code)).toThrow("Assignment target is not an array");
       });
     });
 
@@ -1532,9 +1528,7 @@ describe("Arrays", () => {
       });
 
       it("should map values with Array.from mapping function", () => {
-        const result = interpreter.evaluate(
-          "Array.from([1, 2, 3], x => x * 2)",
-        );
+        const result = interpreter.evaluate("Array.from([1, 2, 3], x => x * 2)");
         expect(result).toEqual([2, 4, 6]);
       });
 
@@ -1674,15 +1668,13 @@ describe("Arrays", () => {
 
     describe("Array.prototype.copyWithin", () => {
       it("should copy within array", () => {
-        expect(
-          interpreter.evaluate("[1, 2, 3, 4, 5].copyWithin(0, 3)"),
-        ).toEqual([4, 5, 3, 4, 5]);
+        expect(interpreter.evaluate("[1, 2, 3, 4, 5].copyWithin(0, 3)")).toEqual([4, 5, 3, 4, 5]);
       });
 
       it("should support negative target index", () => {
-        expect(
-          interpreter.evaluate("[1, 2, 3, 4, 5].copyWithin(-2, 0, 2)"),
-        ).toEqual([1, 2, 3, 1, 2]);
+        expect(interpreter.evaluate("[1, 2, 3, 4, 5].copyWithin(-2, 0, 2)")).toEqual([
+          1, 2, 3, 1, 2,
+        ]);
       });
     });
   });
@@ -1798,22 +1790,11 @@ describe("Arrays", () => {
 
     describe("Array.prototype.flat", () => {
       it("should flatten array by one level", () => {
-        expect(interpreter.evaluate("[1, [2, 3], [4, [5]]].flat()")).toEqual([
-          1,
-          2,
-          3,
-          4,
-          [5],
-        ]);
+        expect(interpreter.evaluate("[1, [2, 3], [4, [5]]].flat()")).toEqual([1, 2, 3, 4, [5]]);
       });
 
       it("should flatten nested arrays with depth", () => {
-        expect(interpreter.evaluate("[1, [2, [3, [4]]]].flat(2)")).toEqual([
-          1,
-          2,
-          3,
-          [4],
-        ]);
+        expect(interpreter.evaluate("[1, [2, [3, [4]]]].flat(2)")).toEqual([1, 2, 3, [4]]);
       });
 
       it("should handle empty array", () => {
@@ -1823,21 +1804,17 @@ describe("Arrays", () => {
 
     describe("Array.prototype.flatMap", () => {
       it("should map and flatten", () => {
-        expect(
-          interpreter.evaluate("[1, 2, 3].flatMap(x => [x, x * 2])"),
-        ).toEqual([1, 2, 2, 4, 3, 6]);
+        expect(interpreter.evaluate("[1, 2, 3].flatMap(x => [x, x * 2])")).toEqual([
+          1, 2, 2, 4, 3, 6,
+        ]);
       });
 
       it("should handle returning empty array", () => {
-        expect(
-          interpreter.evaluate("[1, 2, 3].flatMap(x => x === 2 ? [] : [x])"),
-        ).toEqual([1, 3]);
+        expect(interpreter.evaluate("[1, 2, 3].flatMap(x => x === 2 ? [] : [x])")).toEqual([1, 3]);
       });
 
       it("should handle non-array return", () => {
-        expect(interpreter.evaluate("[1, 2, 3].flatMap(x => x * 2)")).toEqual([
-          2, 4, 6,
-        ]);
+        expect(interpreter.evaluate("[1, 2, 3].flatMap(x => x * 2)")).toEqual([2, 4, 6]);
       });
     });
   });
@@ -1954,31 +1931,21 @@ describe("Arrays", () => {
 
     describe("Array.prototype.findLast", () => {
       it("should find last matching element", () => {
-        expect(
-          interpreter.evaluate("[1, 2, 3, 4, 3, 2, 1].findLast(x => x > 2)"),
-        ).toBe(3);
+        expect(interpreter.evaluate("[1, 2, 3, 4, 3, 2, 1].findLast(x => x > 2)")).toBe(3);
       });
 
       it("should return undefined when not found", () => {
-        expect(
-          interpreter.evaluate("[1, 2, 3].findLast(x => x > 10)"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("[1, 2, 3].findLast(x => x > 10)")).toBeUndefined();
       });
     });
 
     describe("Array.prototype.findLastIndex", () => {
       it("should find last matching index", () => {
-        expect(
-          interpreter.evaluate(
-            "[1, 2, 3, 4, 3, 2, 1].findLastIndex(x => x > 2)",
-          ),
-        ).toBe(4);
+        expect(interpreter.evaluate("[1, 2, 3, 4, 3, 2, 1].findLastIndex(x => x > 2)")).toBe(4);
       });
 
       it("should return -1 when not found", () => {
-        expect(
-          interpreter.evaluate("[1, 2, 3].findLastIndex(x => x > 10)"),
-        ).toBe(-1);
+        expect(interpreter.evaluate("[1, 2, 3].findLastIndex(x => x > 10)")).toBe(-1);
       });
     });
 
@@ -1994,9 +1961,7 @@ describe("Arrays", () => {
       });
 
       it("should reverse array correctly", () => {
-        expect(interpreter.evaluate("[1, 2, 3].toReversed()")).toEqual([
-          3, 2, 1,
-        ]);
+        expect(interpreter.evaluate("[1, 2, 3].toReversed()")).toEqual([3, 2, 1]);
       });
     });
 
@@ -2018,15 +1983,17 @@ describe("Arrays", () => {
 
     describe("Array.prototype.toSpliced", () => {
       it("should insert elements", () => {
-        expect(
-          interpreter.evaluate("[1, 2, 3].toSpliced(1, 0, 'a', 'b')"),
-        ).toEqual([1, "a", "b", 2, 3]);
+        expect(interpreter.evaluate("[1, 2, 3].toSpliced(1, 0, 'a', 'b')")).toEqual([
+          1,
+          "a",
+          "b",
+          2,
+          3,
+        ]);
       });
 
       it("should remove elements", () => {
-        expect(interpreter.evaluate("[1, 2, 3, 4].toSpliced(1, 2)")).toEqual([
-          1, 4,
-        ]);
+        expect(interpreter.evaluate("[1, 2, 3, 4].toSpliced(1, 2)")).toEqual([1, 4]);
       });
     });
 
@@ -2042,27 +2009,19 @@ describe("Arrays", () => {
       });
 
       it("should modify at index", () => {
-        expect(interpreter.evaluate("[1, 2, 3].with(0, 'a')")).toEqual([
-          "a",
-          2,
-          3,
-        ]);
+        expect(interpreter.evaluate("[1, 2, 3].with(0, 'a')")).toEqual(["a", 2, 3]);
       });
     });
 
     describe("findLast", () => {
       it("should find the last element matching a predicate", () => {
         const interpreter = new Interpreter(ES2023);
-        expect(
-          interpreter.evaluate("[1, 2, 3, 4, 5].findLast(x => x < 4)"),
-        ).toBe(3);
+        expect(interpreter.evaluate("[1, 2, 3, 4, 5].findLast(x => x < 4)")).toBe(3);
       });
 
       it("should return undefined if no element matches", () => {
         const interpreter = new Interpreter(ES2023);
-        expect(interpreter.evaluate("[1, 2, 3].findLast(x => x > 10)")).toBe(
-          undefined,
-        );
+        expect(interpreter.evaluate("[1, 2, 3].findLast(x => x > 10)")).toBe(undefined);
       });
 
       it("should work with objects", () => {
@@ -2078,23 +2037,17 @@ describe("Arrays", () => {
     describe("findLastIndex", () => {
       it("should find the last index matching a predicate", () => {
         const interpreter = new Interpreter(ES2023);
-        expect(
-          interpreter.evaluate("[1, 2, 3, 4, 5].findLastIndex(x => x < 4)"),
-        ).toBe(2);
+        expect(interpreter.evaluate("[1, 2, 3, 4, 5].findLastIndex(x => x < 4)")).toBe(2);
       });
 
       it("should return -1 if no element matches", () => {
         const interpreter = new Interpreter(ES2023);
-        expect(
-          interpreter.evaluate("[1, 2, 3].findLastIndex(x => x > 10)"),
-        ).toBe(-1);
+        expect(interpreter.evaluate("[1, 2, 3].findLastIndex(x => x > 10)")).toBe(-1);
       });
 
       it("should work with duplicates", () => {
         const interpreter = new Interpreter(ES2023);
-        expect(
-          interpreter.evaluate("[1, 2, 2, 2, 3].findLastIndex(x => x === 2)"),
-        ).toBe(3);
+        expect(interpreter.evaluate("[1, 2, 2, 2, 3].findLastIndex(x => x === 2)")).toBe(3);
       });
     });
 
@@ -2135,17 +2088,13 @@ describe("Arrays", () => {
 
       it("should accept a compare function", () => {
         const interpreter = new Interpreter(ES2023);
-        const result = interpreter.evaluate(
-          "[3, 1, 2].toSorted((a, b) => b - a)",
-        );
+        const result = interpreter.evaluate("[3, 1, 2].toSorted((a, b) => b - a)");
         expect(result).toEqual([3, 2, 1]);
       });
 
       it("should handle strings correctly", () => {
         const interpreter = new Interpreter(ES2023);
-        const result = interpreter.evaluate(
-          '["banana", "apple", "cherry"].toSorted()',
-        );
+        const result = interpreter.evaluate('["banana", "apple", "cherry"].toSorted()');
         expect(result).toEqual(["apple", "banana", "cherry"]);
       });
     });
@@ -2170,9 +2119,7 @@ describe("Arrays", () => {
 
       it("should work with only insertion", () => {
         const interpreter = new Interpreter(ES2023);
-        const result = interpreter.evaluate(
-          '[1, 2, 3].toSpliced(1, 0, "a", "b")',
-        );
+        const result = interpreter.evaluate('[1, 2, 3].toSpliced(1, 0, "a", "b")');
         expect(result).toEqual([1, "a", "b", 2, 3]);
       });
 

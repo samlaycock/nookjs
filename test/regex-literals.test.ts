@@ -207,9 +207,7 @@ describe("RegExp", () => {
     describe("regex with string methods", () => {
       test("String.replace with regex", () => {
         const interpreter = new Interpreter(ES5);
-        const result = interpreter.evaluate(
-          `"hello world".replace(/world/, "there")`,
-        );
+        const result = interpreter.evaluate(`"hello world".replace(/world/, "there")`);
         expect(result).toBe("hello there");
       });
 
