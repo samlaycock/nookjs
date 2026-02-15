@@ -181,15 +181,24 @@ export function sanitizeErrorStack(stack: string | undefined): string {
 
   // Remove file:// URLs with line:col numbers (with optional parens around)
   // Matches: file:///home/user/project/file.ts:123:45 or (file:///home/user/project/file.ts:123:45)
-  sanitized = sanitized.replace(/(\()?file:\/\/\/[^\n)]*?:\d+:\d+(\))?/g, "$1[native code]$2");
+  sanitized = sanitized.replace(
+    /(\()?file:\/\/\/[^\n)]*?:\d+:\d+(?![^\n)]*:\d+:\d+)(\))?/g,
+    "$1[native code]$2",
+  );
 
   // Remove absolute Unix paths with line:col numbers
   // Matches: /home/user/project/file.ts:123:45 or (/home/user/project/file.ts:123:45)
-  sanitized = sanitized.replace(/(\()\/[^\n)]*?:\d+:\d+(\))?/g, "$1[native code]$2");
+  sanitized = sanitized.replace(
+    /(\()\/[^\n)]*?:\d+:\d+(?![^\n)]*:\d+:\d+)(\))?/g,
+    "$1[native code]$2",
+  );
 
   // Remove absolute Windows paths with line:col numbers
   // Matches: C:\Users\...\file.ts:123:45 or (C:\Users\...\file.ts:123:45)
-  sanitized = sanitized.replace(/(\()?[A-Za-z]:\\[^\n)]*?:\d+:\d+(\))?/g, "$1[native code]$2");
+  sanitized = sanitized.replace(
+    /(\()?[A-Za-z]:\\[^\n)]*?:\d+:\d+(?![^\n)]*:\d+:\d+)(\))?/g,
+    "$1[native code]$2",
+  );
 
   // Remove eval-style frames (including Bun eval frames)
   // Matches: at eval (eval at <anonymous> (file:///...)) or similar nested eval patterns

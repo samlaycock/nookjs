@@ -1469,6 +1469,22 @@ describe("Security", () => {
         expect(result).toContain("evaluateAsync");
         expect(result).toContain("evaluateNode");
       });
+
+      it("should sanitize paths when directory names contain nested line:column-like segments", () => {
+        const input = `Error: test
+      at foo (/home/x:123:456/project/file.ts:789:12)
+      at bar (file:///home/x:123:456/project/file.ts:789:12)
+      at baz (C:\\Users\\dev\\x:123:456\\project\\file.ts:789:12)`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("/home/x:123:456");
+        expect(result).not.toContain("file:///home/x:123:456");
+        expect(result).not.toContain("C:\\Users\\dev\\x:123:456");
+        expect(result).toContain("at foo ([native code])");
+        expect(result).toContain("at bar ([native code])");
+        expect(result).toContain("at baz ([native code])");
+      });
     });
   });
 
