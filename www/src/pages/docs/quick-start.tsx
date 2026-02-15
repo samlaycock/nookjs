@@ -4,13 +4,20 @@ export function QuickStart() {
   return (
     <article className="prose prose-invert max-w-none">
       <h1 className="text-3xl font-bold text-neutral-50 mb-4">Quick Start</h1>
-      <p className="text-xl text-neutral-300 mb-8">Get up and running with NookJS in minutes.</p>
+      <p className="text-xl text-neutral-300 mb-8">
+        Get up and running with NookJS in minutes.
+      </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Basic Evaluation</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Basic Evaluation
+        </h2>
         <p className="text-neutral-300 mb-4">
-          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">run()</code> for quick,
-          one-off evaluations:
+          Use{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            run()
+          </code>{" "}
+          for quick, one-off evaluations:
         </p>
         <CodeBlock
           code={`import { run } from "nookjs";
@@ -35,8 +42,12 @@ console.log(result); // 10`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Presets and APIs</h2>
-        <p className="text-neutral-300 mb-4">Choose an environment preset and add optional APIs:</p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Presets and APIs
+        </h2>
+        <p className="text-neutral-300 mb-4">
+          Choose an environment preset and add optional APIs:
+        </p>
         <CodeBlock
           code={`const sandbox = createSandbox({
   env: "es2022",
@@ -50,8 +61,12 @@ await sandbox.run(
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Injecting Globals</h2>
-        <p className="text-neutral-300 mb-4">Pass host functions and data into the sandbox:</p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Injecting Globals
+        </h2>
+        <p className="text-neutral-300 mb-4">
+          Pass host functions and data into the sandbox:
+        </p>
         <CodeBlock
           code={`const sandbox = createSandbox({
   env: "es2022",
@@ -70,7 +85,9 @@ await sandbox.run(
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Async Code</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Async Code
+        </h2>
         <p className="text-neutral-300 mb-4">Use async/await with `run()`:</p>
         <CodeBlock
           code={`const sandbox = createSandbox({
@@ -89,8 +106,12 @@ console.log(name); // "John Doe"`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Error Handling</h2>
-        <p className="text-neutral-300 mb-4">Catch and handle errors from sandbox code:</p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Error Handling
+        </h2>
+        <p className="text-neutral-300 mb-4">
+          Catch and handle errors from sandbox code:
+        </p>
         <CodeBlock
           code={`import { run, ParseError, RuntimeError, SecurityError } from "nookjs";
 
@@ -111,7 +132,9 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">TypeScript Support</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          TypeScript Support
+        </h2>
         <p className="text-neutral-300 mb-4">
           Type annotations are automatically stripped at parse time:
         </p>
@@ -127,7 +150,9 @@ console.log(result); // "Alice"`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Complete Example</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Complete Example
+        </h2>
         <p className="text-neutral-300 mb-4">A typical usage pattern:</p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";

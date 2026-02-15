@@ -11,13 +11,23 @@ export function Presets() {
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Overview</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Overview
+        </h2>
         <p className="text-neutral-300 mb-4">
           Presets power the simplified API. Choose an{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">env</code> for the language
-          version and add <code className="text-amber-400 bg-neutral-800 px-1 rounded">apis</code>{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            env
+          </code>{" "}
+          for the language version and add{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            apis
+          </code>{" "}
           for extra globals. For advanced preset composition, see{" "}
-          <Link to="/docs/api/interpreter" className="text-amber-400 hover:text-amber-300">
+          <Link
+            to="/docs/api/interpreter"
+            className="text-amber-400 hover:text-amber-300"
+          >
             Internal Classes
           </Link>
           .
@@ -37,12 +47,19 @@ await sandbox.run("console.log(myHelper(3))");`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Simplified Usage</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Simplified Usage
+        </h2>
         <p className="text-neutral-300 mb-4">
           For most projects, the simplified API is easier to use. It maps
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">env</code> to ECMAScript
-          presets and <code className="text-amber-400 bg-neutral-800 px-1 rounded">apis</code> to
-          addon presets.
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            env
+          </code>{" "}
+          to ECMAScript presets and{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            apis
+          </code>{" "}
+          to addon presets.
         </p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
@@ -57,16 +74,22 @@ await sandbox.run(
 );`}
         />
         <p className="text-neutral-300 mt-4">
-          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">preset()</code> directly
-          when you need advanced merging behavior.
+          Use{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            preset()
+          </code>{" "}
+          directly when you need advanced merging behavior.
         </p>
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">ECMAScript Version Presets</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          ECMAScript Version Presets
+        </h2>
         <p className="text-neutral-300 mb-4">
-          These presets configure the sandbox for specific ECMAScript versions by whitelisting
-          appropriate language features and providing era-appropriate globals.
+          These presets configure the sandbox for specific ECMAScript versions
+          by whitelisting appropriate language features and providing
+          era-appropriate globals.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -74,7 +97,9 @@ await sandbox.run(
               <tr className="border-b border-neutral-700">
                 <th className="text-left py-2 pr-4 text-neutral-300">Preset</th>
                 <th className="text-left py-2 pr-4 text-neutral-300">Year</th>
-                <th className="text-left py-2 text-neutral-300">Key Features Added</th>
+                <th className="text-left py-2 text-neutral-300">
+                  Key Features Added
+                </th>
               </tr>
             </thead>
             <tbody className="text-neutral-400">
@@ -83,7 +108,9 @@ await sandbox.run(
                   <code className="text-amber-400">ES5</code>
                 </td>
                 <td className="py-2 pr-4">2009</td>
-                <td className="py-2">var, functions, for/while loops, objects/arrays</td>
+                <td className="py-2">
+                  var, functions, for/while loops, objects/arrays
+                </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">
@@ -92,7 +119,8 @@ await sandbox.run(
                 </td>
                 <td className="py-2 pr-4">2015</td>
                 <td className="py-2">
-                  let/const, arrow functions, classes, Promises, generators, template literals
+                  let/const, arrow functions, classes, Promises, generators,
+                  template literals
                 </td>
               </tr>
               <tr className="border-b border-neutral-800">
@@ -114,7 +142,9 @@ await sandbox.run(
                   <code className="text-amber-400">ES2018</code>
                 </td>
                 <td className="py-2 pr-4">2018</td>
-                <td className="py-2">Async generators, rest/spread properties</td>
+                <td className="py-2">
+                  Async generators, rest/spread properties
+                </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">
@@ -128,35 +158,45 @@ await sandbox.run(
                   <code className="text-amber-400">ES2020</code>
                 </td>
                 <td className="py-2 pr-4">2020</td>
-                <td className="py-2">Optional chaining (?.), nullish coalescing (??), BigInt</td>
+                <td className="py-2">
+                  Optional chaining (?.), nullish coalescing (??), BigInt
+                </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">
                   <code className="text-amber-400">ES2021</code>
                 </td>
                 <td className="py-2 pr-4">2021</td>
-                <td className="py-2">Logical assignment operators (&&=, ||=, ??=)</td>
+                <td className="py-2">
+                  Logical assignment operators (&&=, ||=, ??=)
+                </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">
                   <code className="text-amber-400">ES2022</code>
                 </td>
                 <td className="py-2 pr-4">2022</td>
-                <td className="py-2">Class fields, private fields (#), static blocks</td>
+                <td className="py-2">
+                  Class fields, private fields (#), static blocks
+                </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">
                   <code className="text-amber-400">ES2023</code>
                 </td>
                 <td className="py-2 pr-4">2023</td>
-                <td className="py-2">Array findLast, toReversed, toSorted, toSpliced</td>
+                <td className="py-2">
+                  Array findLast, toReversed, toSorted, toSpliced
+                </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">
                   <code className="text-amber-400">ES2024</code>
                 </td>
                 <td className="py-2 pr-4">2024</td>
-                <td className="py-2">Promise.withResolvers, ArrayBuffer transfer</td>
+                <td className="py-2">
+                  Promise.withResolvers, ArrayBuffer transfer
+                </td>
               </tr>
               <tr>
                 <td className="py-2 pr-4">
@@ -171,13 +211,20 @@ await sandbox.run(
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Included Globals</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Included Globals
+        </h2>
         <p className="text-neutral-300 mb-4">
-          ECMAScript presets include built-in globals appropriate for their version:
+          ECMAScript presets include built-in globals appropriate for their
+          version:
         </p>
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3">ES5+ Globals</h3>
-        <p className="text-neutral-400 text-sm mb-4">Included in all presets:</p>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3">
+          ES5+ Globals
+        </h3>
+        <p className="text-neutral-400 text-sm mb-4">
+          Included in all presets:
+        </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
           {[
             "Array",
@@ -209,19 +256,25 @@ await sandbox.run(
           ))}
         </div>
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3">ES2015+ Globals</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3">
+          ES2015+ Globals
+        </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
-          {["Promise", "Symbol", "Map", "Set", "WeakMap", "WeakSet"].map((g) => (
-            <code
-              key={g}
-              className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm text-center"
-            >
-              {g}
-            </code>
-          ))}
+          {["Promise", "Symbol", "Map", "Set", "WeakMap", "WeakSet"].map(
+            (g) => (
+              <code
+                key={g}
+                className="text-amber-400 bg-neutral-800 px-2 py-1 rounded text-sm text-center"
+              >
+                {g}
+              </code>
+            ),
+          )}
         </div>
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3">ES2020+ Globals</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3">
+          ES2020+ Globals
+        </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
           {["BigInt", "globalThis"].map((g) => (
             <code
@@ -233,7 +286,9 @@ await sandbox.run(
           ))}
         </div>
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3">ES2021+ Globals</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3">
+          ES2021+ Globals
+        </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
           {["WeakRef", "FinalizationRegistry"].map((g) => (
             <code
@@ -247,21 +302,26 @@ await sandbox.run(
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">API Addon Presets</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          API Addon Presets
+        </h2>
         <p className="text-neutral-300 mb-4">
-          Addon presets provide access to specific Web/Runtime APIs. They only add globals and don't
-          modify feature control.
+          Addon presets provide access to specific Web/Runtime APIs. They only
+          add globals and don't modify feature control.
         </p>
 
         <div className="space-y-6">
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">FetchAPI</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              FetchAPI
+            </h3>
             <p className="text-neutral-400 text-sm mb-3">
-              Provides the Fetch API for making HTTP requests. Requires async/await (ES2017+).
+              Provides the Fetch API for making HTTP requests. Requires
+              async/await (ES2017+).
             </p>
             <p className="text-neutral-500 text-xs mb-3">
-              Includes: fetch, Request, Response, Headers, AbortController, AbortSignal, URL,
-              URLSearchParams
+              Includes: fetch, Request, Response, Headers, AbortController,
+              AbortSignal, URL, URLSearchParams
             </p>
             <CodeBlock
               code={`const sandbox = createSandbox({
@@ -280,8 +340,12 @@ await sandbox.run(\`
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">ConsoleAPI</h3>
-            <p className="text-neutral-400 text-sm mb-3">Provides console methods for logging.</p>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              ConsoleAPI
+            </h3>
+            <p className="text-neutral-400 text-sm mb-3">
+              Provides console methods for logging.
+            </p>
             <p className="text-neutral-500 text-xs mb-3">Includes: console</p>
             <CodeBlock
               code={`const sandbox = createSandbox({
@@ -297,7 +361,9 @@ sandbox.runSync(\`
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">TimersAPI</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              TimersAPI
+            </h3>
             <p className="text-neutral-400 text-sm mb-3">
               Provides timer functions. Note: These are async operations.
             </p>
@@ -321,11 +387,15 @@ await sandbox.run(\`
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">TextCodecAPI</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              TextCodecAPI
+            </h3>
             <p className="text-neutral-400 text-sm mb-3">
               Provides text encoding/decoding utilities.
             </p>
-            <p className="text-neutral-500 text-xs mb-3">Includes: TextEncoder, TextDecoder</p>
+            <p className="text-neutral-500 text-xs mb-3">
+              Includes: TextEncoder, TextDecoder
+            </p>
             <CodeBlock
               code={`const sandbox = createSandbox({
   env: "es2024",
@@ -341,12 +411,16 @@ sandbox.runSync(\`
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">BufferAPI</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              BufferAPI
+            </h3>
             <p className="text-neutral-400 text-sm mb-3">
-              Provides binary data handling with ArrayBuffer, DataView, and typed arrays.
+              Provides binary data handling with ArrayBuffer, DataView, and
+              typed arrays.
             </p>
             <p className="text-neutral-500 text-xs mb-3">
-              Includes: ArrayBuffer, DataView, Int8Array, Uint8Array, Float32Array, etc.
+              Includes: ArrayBuffer, DataView, Int8Array, Uint8Array,
+              Float32Array, etc.
             </p>
             <CodeBlock
               code={`const sandbox = createSandbox({
@@ -364,7 +438,9 @@ sandbox.runSync(\`
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">RegExpAPI</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              RegExpAPI
+            </h3>
             <p className="text-neutral-400 text-sm mb-3">
               Provides regular expression functionality.
             </p>
@@ -385,12 +461,24 @@ sandbox.runSync(\`
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Composing Presets</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Composing Presets
+        </h2>
         <p className="text-neutral-300 mb-4">
-          Combine an <code className="text-amber-400 bg-neutral-800 px-1 rounded">env</code> preset
-          with one or more <code className="text-amber-400 bg-neutral-800 px-1 rounded">apis</code>,
-          then layer your own policy and globals. For internal preset merging, see{" "}
-          <Link to="/docs/api/interpreter" className="text-amber-400 hover:text-amber-300">
+          Combine an{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            env
+          </code>{" "}
+          preset with one or more{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            apis
+          </code>
+          , then layer your own policy and globals. For internal preset merging,
+          see{" "}
+          <Link
+            to="/docs/api/interpreter"
+            className="text-amber-400 hover:text-amber-300"
+          >
             Internal Classes
           </Link>
           .
@@ -408,7 +496,9 @@ await sandbox.run("console.log(myHelper(2))");`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Creating Custom Presets</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Creating Custom Presets
+        </h2>
         <p className="text-neutral-300 mb-4">
           Create your own presets by composing globals and feature toggles:
         </p>
@@ -443,7 +533,10 @@ sandbox.runSync("sum(1, 2, 3)"); // 6`}
         >
           &larr; Security Model
         </Link>
-        <Link to="/docs/globals" className="text-amber-500 hover:text-amber-400 transition-colors">
+        <Link
+          to="/docs/globals"
+          className="text-amber-500 hover:text-amber-400 transition-colors"
+        >
           Global Injection &rarr;
         </Link>
       </div>

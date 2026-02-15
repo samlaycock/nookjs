@@ -17,7 +17,9 @@ describe("TextCodec", () => {
       });
 
       it("should have encoding property", () => {
-        expect(interpreter.evaluate("new TextEncoder().encoding")).toBe("utf-8");
+        expect(interpreter.evaluate("new TextEncoder().encoding")).toBe(
+          "utf-8",
+        );
       });
 
       it("should encode string to Uint8Array", () => {
@@ -62,7 +64,9 @@ describe("TextCodec", () => {
       });
 
       it("should have encoding property", () => {
-        expect(interpreter.evaluate("new TextDecoder().encoding")).toBe("utf-8");
+        expect(interpreter.evaluate("new TextDecoder().encoding")).toBe(
+          "utf-8",
+        );
       });
 
       it("should decode Uint8Array to string", () => {
@@ -247,7 +251,9 @@ describe("BufferAPI", () => {
     });
 
     it("should slice ArrayBuffer from encoded data", () => {
-      const interpreter = new Interpreter(preset(ES2024, BufferAPI, TextCodecAPI));
+      const interpreter = new Interpreter(
+        preset(ES2024, BufferAPI, TextCodecAPI),
+      );
       const result = interpreter.evaluate(`
         const encoder = new TextEncoder();
         const encoded = encoder.encode('Hello World');

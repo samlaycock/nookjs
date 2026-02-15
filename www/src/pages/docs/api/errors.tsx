@@ -11,7 +11,9 @@ export function ErrorsAPI() {
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Error Hierarchy</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Error Hierarchy
+        </h2>
         <CodeBlock
           code={`Error
 └── InterpreterError (base class)
@@ -25,9 +27,12 @@ export function ErrorsAPI() {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">InterpreterError</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          InterpreterError
+        </h2>
         <p className="text-neutral-300 mb-4">
-          Base class for all interpreter errors. All specific error types extend this class.
+          Base class for all interpreter errors. All specific error types extend
+          this class.
         </p>
         <CodeBlock
           code={`import { createSandbox, InterpreterError } from "nookjs";
@@ -46,7 +51,9 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">ParseError</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          ParseError
+        </h2>
         <p className="text-neutral-300 mb-4">
           Thrown when the code contains syntax errors that prevent parsing.
         </p>
@@ -68,12 +75,16 @@ try {
 }`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">Properties</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">
+          Properties
+        </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-700">
-                <th className="text-left py-2 pr-4 text-neutral-300">Property</th>
+                <th className="text-left py-2 pr-4 text-neutral-300">
+                  Property
+                </th>
                 <th className="text-left py-2 pr-4 text-neutral-300">Type</th>
                 <th className="text-left py-2 text-neutral-300">Description</th>
               </tr>
@@ -113,7 +124,9 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">RuntimeError</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          RuntimeError
+        </h2>
         <p className="text-neutral-300 mb-4">
           Thrown when sandbox code throws an error during execution.
         </p>
@@ -138,12 +151,16 @@ try {
 }`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">Properties</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">
+          Properties
+        </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-700">
-                <th className="text-left py-2 pr-4 text-neutral-300">Property</th>
+                <th className="text-left py-2 pr-4 text-neutral-300">
+                  Property
+                </th>
                 <th className="text-left py-2 pr-4 text-neutral-300">Type</th>
                 <th className="text-left py-2 text-neutral-300">Description</th>
               </tr>
@@ -161,13 +178,17 @@ try {
                   <code className="text-amber-400">thrownValue</code>
                 </td>
                 <td className="py-2 pr-4">unknown</td>
-                <td className="py-2">The actual value thrown by sandbox code</td>
+                <td className="py-2">
+                  The actual value thrown by sandbox code
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">Non-Error Throws</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">
+          Non-Error Throws
+        </h3>
         <p className="text-neutral-300 mb-4">
           JavaScript allows throwing any value, not just Error objects:
         </p>
@@ -195,10 +216,12 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">SecurityError</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          SecurityError
+        </h2>
         <p className="text-neutral-300 mb-4">
-          Thrown when sandbox code attempts to access blocked properties or perform forbidden
-          operations.
+          Thrown when sandbox code attempts to access blocked properties or
+          perform forbidden operations.
         </p>
         <CodeBlock
           code={`import { createSandbox, SecurityError } from "nookjs";
@@ -220,7 +243,9 @@ try {
 }`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">Common Triggers</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">
+          Common Triggers
+        </h3>
         <ul className="space-y-2 text-neutral-300">
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
@@ -246,7 +271,9 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">FeatureError</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          FeatureError
+        </h2>
         <p className="text-neutral-300 mb-4">
           Thrown when sandbox code uses a language feature that is not enabled.
         </p>
@@ -272,12 +299,16 @@ try {
 }`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">Properties</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">
+          Properties
+        </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-700">
-                <th className="text-left py-2 pr-4 text-neutral-300">Property</th>
+                <th className="text-left py-2 pr-4 text-neutral-300">
+                  Property
+                </th>
                 <th className="text-left py-2 pr-4 text-neutral-300">Type</th>
                 <th className="text-left py-2 text-neutral-300">Description</th>
               </tr>
@@ -288,7 +319,9 @@ try {
                   <code className="text-amber-400">feature</code>
                 </td>
                 <td className="py-2 pr-4">string</td>
-                <td className="py-2">The feature that was used but not enabled</td>
+                <td className="py-2">
+                  The feature that was used but not enabled
+                </td>
               </tr>
             </tbody>
           </table>
@@ -296,7 +329,9 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">ResourceExhaustedError</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          ResourceExhaustedError
+        </h2>
         <p className="text-neutral-300 mb-4">
           Thrown when execution exceeds configured resource limits.
         </p>
@@ -323,12 +358,16 @@ try {
 }`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">Properties</h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-6">
+          Properties
+        </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-700">
-                <th className="text-left py-2 pr-4 text-neutral-300">Property</th>
+                <th className="text-left py-2 pr-4 text-neutral-300">
+                  Property
+                </th>
                 <th className="text-left py-2 pr-4 text-neutral-300">Type</th>
                 <th className="text-left py-2 text-neutral-300">Description</th>
               </tr>
@@ -339,14 +378,18 @@ try {
                   <code className="text-amber-400">resourceType</code>
                 </td>
                 <td className="py-2 pr-4">string</td>
-                <td className="py-2">Type of resource: "callStack", "loopIterations", "memory"</td>
+                <td className="py-2">
+                  Type of resource: "callStack", "loopIterations", "memory"
+                </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">
                   <code className="text-amber-400">used</code>
                 </td>
                 <td className="py-2 pr-4">number</td>
-                <td className="py-2">Amount of resource used when limit was hit</td>
+                <td className="py-2">
+                  Amount of resource used when limit was hit
+                </td>
               </tr>
               <tr>
                 <td className="py-2 pr-4">
@@ -364,7 +407,9 @@ try {
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
           Comprehensive Error Handling
         </h2>
-        <p className="text-neutral-300 mb-4">Handle all error types in your application:</p>
+        <p className="text-neutral-300 mb-4">
+          Handle all error types in your application:
+        </p>
         <CodeBlock
           code={`import {
   createSandbox,

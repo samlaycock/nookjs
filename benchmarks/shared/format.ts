@@ -52,7 +52,8 @@ export function formatTable(
     const line = `  ${"-".repeat(nameW)}  ${"-".repeat(timeW)}  ${"-".repeat(baselineW)}  ${"-".repeat(opsW)}`;
     const rows = results.map((r) => {
       const cr = r as ComparisonResult;
-      const baseline = cr.baselineTimeMs !== undefined ? formatTime(cr.baselineTimeMs) : "";
+      const baseline =
+        cr.baselineTimeMs !== undefined ? formatTime(cr.baselineTimeMs) : "";
       const nameStr = r.name.padEnd(nameW);
       const timeStr = formatTime(r.timeMs).padStart(timeW);
       const baselineStr = baseline.padStart(baselineW);
