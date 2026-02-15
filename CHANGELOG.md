@@ -1,10 +1,31 @@
 # nookjs
 
+## 0.4.1
+
+### Patch Changes
+
+- 0702a1a: Block async/generator constructor aliases to prevent sandbox escape (closes #37)
+- 064bb5c: Fix stack sanitization path leaks across runtime frame formats.
+
+  Expanded `sanitizeErrorStack()` to redact absolute host paths in additional stack formats, including bare Unix/Windows paths, `file://` URLs, and eval-style frames with multiple path fragments. Also broadened host-error stack detection so sanitization runs on stack traces with non-Node indentation styles, and updated security documentation to clarify sanitization guarantees and caveats.
+
+- 42edc61: Fix concurrent cross-request data leak by serializing evaluateAsync calls
+
+  Adds an evaluation mutex to serialize concurrent `evaluateAsync()` and `evaluateModuleAsync()` calls, ensuring proper isolation of per-call globals between concurrent requests. This fixes a security vulnerability where globals could leak between different async evaluations.
+
+- e857b4a: Fix EvaluationContext stack for run isolation - fix security vulnerability where concurrent async runs shared per-call policy state, allowing policy bypass. Added EvaluationContext class with stack-based management to isolate validators, feature controls, abort signals, and resource limits between overlapping runs.
+- 60b36c4: Fix P0 security vulnerability: module cache authorization bypass. The module cache was checked by raw specifier before resolver authorization was applied, allowing an attacker to import a module cached by a previously authorized importer. Now the resolver is always called first before cache access, and the cache key uses the resolved path instead of the specifier.
+- 58741d2: Security fix: narrow unwrap allowlist to prevent sandbox bypass via Object.defineProperty
+- 76f5cd2: Fix security option bleed between interpreter instances
+
+  Security options were stored in a module-global mutable state, causing one interpreter's settings to affect all other interpreters. This fix modifies ReadOnlyProxy.wrap() to accept an optional securityOptions parameter, and the Interpreter now passes its own securityOptions instead of relying on global state.
+
 ## 0.4.0
 
 ### Minor Changes
 
 - 9cf6162: Improve the simplified sandbox API and onboarding experience:
+
   - add safe default per-run limits for `createSandbox()` (`callDepth`, `loops`, `memoryBytes`)
   - add first-class `timeoutMs` support for async `run()` and `runModule()` (sandbox default + per-call override)
   - add typed generics for `run`, `runSync`, and `runModule` return values
@@ -19,6 +40,7 @@
 ### Minor Changes
 
 - 35fe723: Add ES module support with import/export syntax
+
   - Support all import types: named, default, namespace, side-effect only
   - Support all export types: named declarations, default, re-exports, `export * as namespace`
   - Pluggable `ModuleResolver` interface for loading modules from any source
@@ -38,6 +60,7 @@
 ### Patch Changes
 
 - b6850f7: Fix Promise support in async evaluation
+
   - Prevent auto-awaiting of Promise values returned from host functions, preserving Promise identity for `.then()` chaining
   - Allow `.catch` and `.finally` access on Promises (previously only `.then` was allowlisted)
   - Unwrap non-plain-object proxies for native method compatibility (e.g., `clearTimeout` with proxied `Timeout` objects)
