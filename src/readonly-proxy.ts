@@ -260,7 +260,7 @@ export class ReadOnlyProxy {
     if (typeof value === "function") {
       const isAsync = value.constructor.name === "AsyncFunction";
       // Preserve constructability for native classes/functions (e.g., Error, Response).
-      return new HostFunctionValue(value, name, isAsync);
+      return new HostFunctionValue(value, name, isAsync, false, false, securityOptions);
     }
 
     // Check if this is an Error instance - needs special handling for stack sanitization
@@ -345,6 +345,9 @@ export class ReadOnlyProxy {
             },
             `${name}.${String(prop)}`,
             isAsync,
+            false,
+            false,
+            securityOptions,
           );
         }
 

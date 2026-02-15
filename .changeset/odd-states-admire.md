@@ -1,5 +1,5 @@
 ---
-'nookjs': patch
+"nookjs": patch
 ---
 
 Fix security option bleed between interpreter instances

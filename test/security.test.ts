@@ -1005,6 +1005,48 @@ describe("Security", () => {
         expect(stack).toContain("interpreter.ts");
       });
 
+      it("should respect sanitizeErrors=false for static properties on host functions", () => {
+        const hostFunction = () => "ok";
+        const hostError = new Error("static property error");
+        hostError.stack =
+          "Error: static property error\n    at staticFn (/tmp/static-host.ts:12:34)";
+        (hostFunction as any).meta = { error: hostError };
+
+        const interpreter = new Interpreter({
+          globals: { hostFunction },
+          security: { sanitizeErrors: false },
+        });
+
+        const stack = interpreter.evaluate("hostFunction.meta.error.stack");
+        expect(stack).toContain("/tmp/static-host.ts");
+        expect(stack).not.toContain("[native code]");
+      });
+
+      it("should respect sanitizeErrors=false for static properties on interpreter-created host functions", () => {
+        const hostError = new Error("array method static property error");
+        hostError.stack =
+          "Error: array method static property error\n    at arrayMapStatic (/tmp/array-map-static.ts:9:21)";
+
+        const originalMeta = (Function.prototype as any).nookMeta;
+        (Function.prototype as any).nookMeta = { error: hostError };
+
+        try {
+          const interpreter = new Interpreter({
+            security: { sanitizeErrors: false },
+          });
+
+          const stack = interpreter.evaluate("[1, 2, 3].map.nookMeta.error.stack");
+          expect(stack).toContain("/tmp/array-map-static.ts");
+          expect(stack).not.toContain("[native code]");
+        } finally {
+          if (originalMeta === undefined) {
+            delete (Function.prototype as any).nookMeta;
+          } else {
+            (Function.prototype as any).nookMeta = originalMeta;
+          }
+        }
+      });
+
       it("should sanitize stacks from errors created in sandbox", async () => {
         const interpreter = new Interpreter({
           globals: { Error },
