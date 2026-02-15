@@ -575,9 +575,7 @@ describe("Host Constructors", () => {
           },
         });
 
-        const result = interpreter.evaluate(
-          "JSON.stringify({ a: 1, b: 'test' })",
-        );
+        const result = interpreter.evaluate("JSON.stringify({ a: 1, b: 'test' })");
         expect(result).toBe('{"a":1,"b":"test"}');
       });
 
@@ -588,9 +586,7 @@ describe("Host Constructors", () => {
           },
         });
 
-        const result = interpreter.evaluate(
-          'JSON.parse(\'{"a":1,"b":"test"}\')',
-        );
+        const result = interpreter.evaluate('JSON.parse(\'{"a":1,"b":"test"}\')');
         expect(result).toEqual({ a: 1, b: "test" });
       });
     });

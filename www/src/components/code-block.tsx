@@ -31,8 +31,7 @@ export function CodeBlock({ code, language = "ts" }: CodeBlockProps) {
         style={{
           backgroundColor: "transparent",
           fontSize: 14,
-          fontFamily:
-            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         }}
       />
     </div>

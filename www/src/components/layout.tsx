@@ -18,9 +18,7 @@ export function Layout() {
             <Link
               to="/"
               className={`text-sm hover:text-amber-400 transition-colors ${
-                location.pathname === "/"
-                  ? "text-amber-500"
-                  : "text-neutral-400"
+                location.pathname === "/" ? "text-amber-500" : "text-neutral-400"
               }`}
             >
               <span className="sm:hidden">Play</span>
@@ -38,22 +36,11 @@ export function Layout() {
           </nav>
         </div>
         <div className="flex flex-row items-center gap-2">
-          <a
-            href="https://www.npmjs.com/package/nookjs"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href="https://www.npmjs.com/package/nookjs" target="_blank" rel="noreferrer">
             <DiNpm size={32} className="fill-amber-500 hover:fill-amber-400" />
           </a>
-          <a
-            href="https://github.com/samlaycock/nookjs"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <DiGithubBadge
-              size={32}
-              className="fill-amber-500 hover:fill-amber-400"
-            />
+          <a href="https://github.com/samlaycock/nookjs" target="_blank" rel="noreferrer">
+            <DiGithubBadge size={32} className="fill-amber-500 hover:fill-amber-400" />
           </a>
         </div>
       </header>

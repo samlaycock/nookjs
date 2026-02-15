@@ -29,9 +29,7 @@ describe("Injected Globals", () => {
 
       it("should not allow reassigning const globals", () => {
         const interpreter = new Interpreter({ globals: { x: 10 } });
-        expect(() => interpreter.evaluate("x = 20")).toThrow(
-          "Cannot assign to const variable 'x'",
-        );
+        expect(() => interpreter.evaluate("x = 20")).toThrow("Cannot assign to const variable 'x'");
       });
 
       it("should allow using globals in expressions", () => {
@@ -116,9 +114,7 @@ describe("Injected Globals", () => {
             name: "World",
           },
         });
-        expect(interpreter.evaluate("greeting + ' ' + name")).toBe(
-          "Hello World",
-        );
+        expect(interpreter.evaluate("greeting + ' ' + name")).toBe("Hello World");
       });
 
       it("should work without any globals", () => {
@@ -135,16 +131,12 @@ describe("Injected Globals", () => {
     describe("evaluate() options globals", () => {
       it("should access per-call globals", () => {
         const interpreter = new Interpreter();
-        expect(interpreter.evaluate("a + b", { globals: { a: 5, b: 3 } })).toBe(
-          8,
-        );
+        expect(interpreter.evaluate("a + b", { globals: { a: 5, b: 3 } })).toBe(8);
       });
 
       it("should access single per-call global", () => {
         const interpreter = new Interpreter();
-        expect(
-          interpreter.evaluate("value * 2", { globals: { value: 7 } }),
-        ).toBe(14);
+        expect(interpreter.evaluate("value * 2", { globals: { value: 7 } })).toBe(14);
       });
 
       it("should use per-call globals in complex expressions", () => {
@@ -238,9 +230,7 @@ describe("Injected Globals", () => {
         const interpreter = new Interpreter();
         interpreter.evaluate("let a = x", { globals: { x: 100 } });
         // x should NOT be accessible in the next call (per-call globals are cleaned up)
-        expect(() => interpreter.evaluate("x")).toThrow(
-          "Undefined variable 'x'",
-        );
+        expect(() => interpreter.evaluate("x")).toThrow("Undefined variable 'x'");
         // But the user variable 'a' should still exist with the captured value
         expect(interpreter.evaluate("a")).toBe(100);
       });
@@ -256,9 +246,7 @@ describe("Injected Globals", () => {
         const interpreter = new Interpreter({ globals: { y: 50 } });
         interpreter.evaluate("let x = 100");
         // New globals in evaluate() shouldn't overwrite x
-        expect(interpreter.evaluate("x + y", { globals: { x: 999 } })).toBe(
-          150,
-        );
+        expect(interpreter.evaluate("x + y", { globals: { x: 999 } })).toBe(150);
       });
 
       it("should allow using globals with user-declared variables", () => {
@@ -515,9 +503,7 @@ describe("Injected Globals", () => {
       it("should use undefined in nullish coalescing", () => {
         const interpreter = new Interpreter();
         expect(interpreter.evaluate("undefined ?? 'default'")).toBe("default");
-        expect(interpreter.evaluate("null ?? undefined ?? 'final'")).toBe(
-          "final",
-        );
+        expect(interpreter.evaluate("null ?? undefined ?? 'final'")).toBe("final");
       });
 
       it("should use NaN in calculations", () => {

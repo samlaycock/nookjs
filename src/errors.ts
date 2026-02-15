@@ -232,9 +232,7 @@ export function formatError(error: InterpreterError): string {
       result += `\n${error.line} | ${sourceLine}`;
       const caretColumn = error.column > 0 ? error.column - 1 : 0;
       const caretLength =
-        error.endColumn && error.endColumn > error.column
-          ? error.endColumn - error.column
-          : 1;
+        error.endColumn && error.endColumn > error.column ? error.endColumn - error.column : 1;
       const spaces = " ".repeat(caretColumn);
       const carets = "^".repeat(caretLength);
       result += `\n  | ${spaces}${carets}`;

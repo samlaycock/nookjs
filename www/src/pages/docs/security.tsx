@@ -5,24 +5,18 @@ import { CodeBlock } from "../../components/code-block";
 export function Security() {
   return (
     <article className="prose prose-invert max-w-none">
-      <h1 className="text-3xl font-bold text-neutral-50 mb-4">
-        Security Model
-      </h1>
+      <h1 className="text-3xl font-bold text-neutral-50 mb-4">Security Model</h1>
       <p className="text-xl text-neutral-300 mb-8">
-        Understanding how NookJS sandboxes untrusted code and protects your host
-        environment.
+        Understanding how NookJS sandboxes untrusted code and protects your host environment.
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Overview
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Overview</h2>
         <p className="text-neutral-300 mb-4">
-          NookJS provides a secure sandbox for executing untrusted JavaScript
-          code. The security model is designed to{" "}
-          <strong className="text-neutral-100">completely isolate</strong>{" "}
-          sandbox code from the host environment, preventing any form of escape
-          or information leakage.
+          NookJS provides a secure sandbox for executing untrusted JavaScript code. The security
+          model is designed to <strong className="text-neutral-100">completely isolate</strong>{" "}
+          sandbox code from the host environment, preventing any form of escape or information
+          leakage.
         </p>
         <p className="text-neutral-300 mb-4">
           The security model is built around four key mechanisms:
@@ -31,58 +25,46 @@ export function Security() {
           <li className="flex gap-3">
             <span className="text-amber-500">1.</span>
             <span>
-              <strong className="text-neutral-100">ReadOnlyProxy</strong> -
-              Wraps all host values to enforce immutability and block dangerous
-              property access
+              <strong className="text-neutral-100">ReadOnlyProxy</strong> - Wraps all host values to
+              enforce immutability and block dangerous property access
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">2.</span>
             <span>
-              <strong className="text-neutral-100">
-                Dangerous Property Blocking
-              </strong>{" "}
-              - Blocks access to prototype chain manipulation and other
-              dangerous properties
+              <strong className="text-neutral-100">Dangerous Property Blocking</strong> - Blocks
+              access to prototype chain manipulation and other dangerous properties
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">3.</span>
             <span>
-              <strong className="text-neutral-100">Forbidden Globals</strong> -
-              Prevents injection of code-execution primitives
+              <strong className="text-neutral-100">Forbidden Globals</strong> - Prevents injection
+              of code-execution primitives
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">4.</span>
             <span>
-              <strong className="text-neutral-100">Error Sanitization</strong> -
-              Prevents leakage of host information through error messages and
-              stack traces
+              <strong className="text-neutral-100">Error Sanitization</strong> - Prevents leakage of
+              host information through error messages and stack traces
             </span>
           </li>
         </ul>
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          What's Blocked
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">What's Blocked</h2>
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3">
-          Dangerous Properties
-        </h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3">Dangerous Properties</h3>
         <p className="text-neutral-300 mb-4">
-          The following properties are blocked on all host objects passed into
-          the sandbox:
+          The following properties are blocked on all host objects passed into the sandbox:
         </p>
         <div className="overflow-x-auto mb-6">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-700">
-                <th className="text-left py-2 pr-4 text-neutral-300">
-                  Category
-                </th>
+                <th className="text-left py-2 pr-4 text-neutral-300">Category</th>
                 <th className="text-left py-2 text-neutral-300">Properties</th>
               </tr>
             </thead>
@@ -137,51 +119,38 @@ func.call(null, arg);
 func.bind(null);`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">
-          Forbidden Globals
-        </h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">Forbidden Globals</h3>
         <p className="text-neutral-300 mb-4">
-          The following cannot be injected as globals, as they would allow
-          arbitrary code execution:
+          The following cannot be injected as globals, as they would allow arbitrary code execution:
         </p>
         <ul className="space-y-2 text-neutral-300 mb-4">
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
             <span>
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                Function
-              </code>{" "}
-              - Would allow arbitrary code execution via{" "}
-              <code className="text-neutral-400">
-                new Function("return this")()
-              </code>
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">Function</code> - Would
+              allow arbitrary code execution via{" "}
+              <code className="text-neutral-400">new Function("return this")()</code>
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
             <span>
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                eval
-              </code>{" "}
-              - Would allow arbitrary code execution
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">eval</code> - Would allow
+              arbitrary code execution
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
             <span>
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                Proxy
-              </code>{" "}
-              - Could intercept operations and escape sandbox
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">Proxy</code> - Could
+              intercept operations and escape sandbox
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
             <span>
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                Reflect
-              </code>{" "}
-              - Could access internal operations
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">Reflect</code> - Could
+              access internal operations
             </span>
           </li>
           <li className="flex gap-3">
@@ -197,15 +166,10 @@ func.bind(null);`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Security Options
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Security Options</h2>
         <p className="text-neutral-300 mb-4">
           Configure security behavior through the{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-            security
-          </code>{" "}
-          option:
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">security</code> option:
         </p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
@@ -226,10 +190,7 @@ const sandbox = createSandbox({
         />
         <p className="text-neutral-300 mt-4 mb-4">
           The simplified API provides a shorthand via{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-            policy.errors
-          </code>
-          :
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">policy.errors</code>:
         </p>
         <CodeBlock
           code={`const sandbox = createSandbox({
@@ -242,15 +203,12 @@ const sandbox = createSandbox({
           sanitizeErrors (default: true)
         </h3>
         <p className="text-neutral-300 mb-4">
-          When enabled, error stack traces are sanitized to remove host file
-          paths. This prevents untrusted code from learning about your host
-          environment's file structure.
+          When enabled, error stack traces are sanitized to remove host file paths. This prevents
+          untrusted code from learning about your host environment's file structure.
         </p>
         <div className="grid md:grid-cols-2 gap-4 mb-6">
           <div>
-            <p className="text-sm text-neutral-400 mb-2">
-              Before sanitization:
-            </p>
+            <p className="text-sm text-neutral-400 mb-2">Before sanitization:</p>
             <CodeBlock
               code={`Error: test
   at executeHostConstructor (/Users/dev/project/src/interpreter.ts:4122:30)
@@ -271,9 +229,8 @@ const sandbox = createSandbox({
           hideHostErrorMessages (default: true)
         </h3>
         <p className="text-neutral-300 mb-4">
-          When enabled, error messages from host functions are replaced with a
-          generic message. This is useful when host functions might throw errors
-          containing sensitive information.
+          When enabled, error messages from host functions are replaced with a generic message. This
+          is useful when host functions might throw errors containing sensitive information.
         </p>
         <div className="grid md:grid-cols-2 gap-4 mb-6">
           <div>
@@ -294,9 +251,7 @@ ENOENT: no such file, open '/etc/passwd'`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Execution Limits
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Execution Limits</h2>
         <p className="text-neutral-300 mb-4">
           Protect against denial-of-service attacks with execution limits:
         </p>
@@ -317,9 +272,7 @@ const result = sandbox.runSync(untrustedCode, {
 });`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">
-          callDepth
-        </h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">callDepth</h3>
         <p className="text-neutral-300 mb-4">
           Limits the depth of function call nesting. When exceeded, throws{" "}
           <code className="text-amber-400 bg-neutral-800 px-1 rounded">
@@ -335,12 +288,10 @@ sandbox.runSync(\`
 \`, { limits: { callDepth: 50 } });`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">
-          loops
-        </h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">loops</h3>
         <p className="text-neutral-300 mb-4">
-          Limits the number of iterations <strong>per loop</strong>. Each loop
-          has its own counter that resets when the loop completes.
+          Limits the number of iterations <strong>per loop</strong>. Each loop has its own counter
+          that resets when the loop completes.
         </p>
         <CodeBlock
           code={`// This will throw
@@ -353,13 +304,10 @@ sandbox.runSync(\`
 \`, { limits: { loops: 1000 } });`}
         />
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">
-          memoryBytes
-        </h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3 mt-8">memoryBytes</h3>
         <p className="text-neutral-300 mb-4">
-          Limits estimated memory usage in bytes. This is a{" "}
-          <strong>best-effort heuristic</strong> that tracks array, object, and
-          string allocations.
+          Limits estimated memory usage in bytes. This is a <strong>best-effort heuristic</strong>{" "}
+          that tracks array, object, and string allocations.
         </p>
         <CodeBlock
           code={`// This will throw when estimated memory exceeds the limit
@@ -380,8 +328,7 @@ sandbox.runSync(\`
           Combined with AbortSignal
         </h3>
         <p className="text-neutral-300 mb-4">
-          For comprehensive protection, combine execution limits with
-          AbortSignal for timeouts:
+          For comprehensive protection, combine execution limits with AbortSignal for timeouts:
         </p>
         <CodeBlock
           code={`const sandbox = createSandbox();
@@ -408,13 +355,9 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Host Value Protection
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Host Value Protection</h2>
 
-        <h3 className="text-xl font-medium text-neutral-100 mb-3">
-          ReadOnlyProxy
-        </h3>
+        <h3 className="text-xl font-medium text-neutral-100 mb-3">ReadOnlyProxy</h3>
         <p className="text-neutral-300 mb-4">
           All host values are wrapped in a ReadOnlyProxy which:
         </p>
@@ -423,8 +366,7 @@ try {
             <span className="text-amber-500">&#9632;</span>
             <span>
               Returns <code className="text-amber-400">null</code> for{" "}
-              <code className="text-amber-400">getPrototypeOf()</code> (hides
-              prototype chain)
+              <code className="text-amber-400">getPrototypeOf()</code> (hides prototype chain)
             </span>
           </li>
           <li className="flex gap-3">
@@ -470,9 +412,7 @@ sandbox.runSync(\`
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Known Limitations
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Known Limitations</h2>
 
         <div className="space-y-8">
           <div>
@@ -481,31 +421,19 @@ sandbox.runSync(\`
             </h3>
             <p className="text-neutral-300 mb-4">
               TypedArrays (e.g.,{" "}
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                Uint8Array
-              </code>
-              ,{" "}
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                Int32Array
-              </code>
-              ) and{" "}
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                ArrayBuffer
-              </code>{" "}
-              instances have special security handling to balance usability with
-              sandbox protection.
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">Uint8Array</code>,{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">Int32Array</code>) and{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">ArrayBuffer</code>{" "}
+              instances have special security handling to balance usability with sandbox protection.
             </p>
 
             <h4 className="text-lg font-medium text-neutral-200 mb-2 mt-6">
               Element Mutation is Allowed
             </h4>
             <p className="text-neutral-300 mb-4">
-              Unlike other host objects which are fully read-only, TypedArrays
-              allow{" "}
-              <strong className="text-neutral-100">
-                element mutation via numeric indices
-              </strong>
-              . This enables common patterns like{" "}
+              Unlike other host objects which are fully read-only, TypedArrays allow{" "}
+              <strong className="text-neutral-100">element mutation via numeric indices</strong>.
+              This enables common patterns like{" "}
               <code className="text-amber-400 bg-neutral-800 px-1 rounded">
                 encoder.encodeInto()
               </code>
@@ -530,11 +458,8 @@ sandbox.runSync(\`
             </h4>
             <p className="text-neutral-300 mb-4">
               When passed to host functions, TypedArrays are{" "}
-              <strong className="text-neutral-100">
-                automatically unwrapped
-              </strong>{" "}
-              from their ReadOnlyProxy wrapper. This is necessary because native
-              methods like{" "}
+              <strong className="text-neutral-100">automatically unwrapped</strong> from their
+              ReadOnlyProxy wrapper. This is necessary because native methods like{" "}
               <code className="text-amber-400 bg-neutral-800 px-1 rounded">
                 TextDecoder.decode()
               </code>{" "}
@@ -551,45 +476,35 @@ sandbox.runSync(\`
 \`);`}
             />
             <div className="mt-4 p-4 bg-neutral-900 border border-neutral-800 rounded">
-              <h4 className="text-md font-medium text-neutral-100 mb-2">
-                Risk Assessment: Low
-              </h4>
+              <h4 className="text-md font-medium text-neutral-100 mb-2">Risk Assessment: Low</h4>
               <ul className="space-y-2 text-neutral-400 text-sm">
                 <li className="flex gap-3">
                   <span className="text-amber-500">&#9632;</span>
                   <span>
-                    <strong className="text-neutral-300">
-                      Host functions are trusted
-                    </strong>{" "}
-                    - They are provided by the embedder, not the sandbox
+                    <strong className="text-neutral-300">Host functions are trusted</strong> - They
+                    are provided by the embedder, not the sandbox
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <span className="text-amber-500">&#9632;</span>
                   <span>
-                    <strong className="text-neutral-300">
-                      TypedArrays are value containers
-                    </strong>{" "}
-                    - Unlike objects with methods, they are byte buffers with no
-                    dangerous capabilities
+                    <strong className="text-neutral-300">TypedArrays are value containers</strong> -
+                    Unlike objects with methods, they are byte buffers with no dangerous
+                    capabilities
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <span className="text-amber-500">&#9632;</span>
                   <span>
-                    <strong className="text-neutral-300">
-                      No new data exposed
-                    </strong>{" "}
-                    - The proxy wraps the same underlying ArrayBuffer;
-                    unwrapping just removes the proxy layer
+                    <strong className="text-neutral-300">No new data exposed</strong> - The proxy
+                    wraps the same underlying ArrayBuffer; unwrapping just removes the proxy layer
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <span className="text-amber-500">&#9632;</span>
                   <span>
-                    <strong className="text-neutral-300">Narrow scope</strong> -
-                    Only TypedArrays and ArrayBuffers receive this special
-                    handling
+                    <strong className="text-neutral-300">Narrow scope</strong> - Only TypedArrays
+                    and ArrayBuffers receive this special handling
                   </span>
                 </li>
               </ul>
@@ -601,22 +516,18 @@ sandbox.runSync(\`
               Promises Pass Through Unwrapped
             </h3>
             <p className="text-neutral-300 mb-4">
-              Promise objects are passed through without wrapping. This is
-              intentional because wrapping breaks the thenable protocol that{" "}
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                await
-              </code>{" "}
-              relies on. The risk is low since the Promise API doesn't provide
-              access to dangerous capabilities.
+              Promise objects are passed through without wrapping. This is intentional because
+              wrapping breaks the thenable protocol that{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">await</code> relies on.
+              The risk is low since the Promise API doesn't provide access to dangerous
+              capabilities.
             </p>
           </div>
         </div>
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Best Practices
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Best Practices</h2>
 
         <div className="space-y-6">
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
@@ -644,8 +555,8 @@ sandbox.runSync(code, {
               2. Clone sensitive data before passing
             </h3>
             <p className="text-neutral-400 text-sm mb-3">
-              While host objects are read-only in the sandbox, clone sensitive
-              data for extra safety:
+              While host objects are read-only in the sandbox, clone sensitive data for extra
+              safety:
             </p>
             <CodeBlock
               code={`const sandbox = createSandbox();
@@ -660,9 +571,7 @@ sandbox.runSync(code, {
             <h3 className="text-lg font-medium text-neutral-100 mb-2">
               3. Validate host function arguments
             </h3>
-            <p className="text-neutral-400 text-sm mb-3">
-              Never trust input from sandbox code:
-            </p>
+            <p className="text-neutral-400 text-sm mb-3">Never trust input from sandbox code:</p>
             <CodeBlock
               code={`const sandbox = createSandbox({
   env: "es2024",
@@ -732,10 +641,7 @@ function evaluateUserCode(userId: string, code: string) {
         >
           &larr; Quick Start
         </Link>
-        <Link
-          to="/docs/presets"
-          className="text-amber-500 hover:text-amber-400 transition-colors"
-        >
+        <Link to="/docs/presets" className="text-amber-500 hover:text-amber-400 transition-colors">
           Presets &rarr;
         </Link>
       </div>

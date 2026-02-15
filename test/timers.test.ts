@@ -17,9 +17,7 @@ describe("Timers", () => {
       });
 
       it("should be callable with function and delay", () => {
-        expect(interpreter.evaluate("typeof setTimeout(() => {}, 100)")).toBe(
-          "object",
-        );
+        expect(interpreter.evaluate("typeof setTimeout(() => {}, 100)")).toBe("object");
       });
     });
 
@@ -29,9 +27,7 @@ describe("Timers", () => {
       });
 
       it("should be callable with timeout ID", () => {
-        expect(
-          interpreter.evaluate("clearTimeout(setTimeout(() => {}, 100))"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("clearTimeout(setTimeout(() => {}, 100))")).toBeUndefined();
       });
     });
 
@@ -41,9 +37,7 @@ describe("Timers", () => {
       });
 
       it("should be callable with function and delay", () => {
-        expect(interpreter.evaluate("typeof setInterval(() => {}, 100)")).toBe(
-          "object",
-        );
+        expect(interpreter.evaluate("typeof setInterval(() => {}, 100)")).toBe("object");
       });
     });
 
@@ -53,9 +47,7 @@ describe("Timers", () => {
       });
 
       it("should be callable with interval ID", () => {
-        expect(
-          interpreter.evaluate("clearInterval(setInterval(() => {}, 100))"),
-        ).toBeUndefined();
+        expect(interpreter.evaluate("clearInterval(setInterval(() => {}, 100))")).toBeUndefined();
       });
     });
 

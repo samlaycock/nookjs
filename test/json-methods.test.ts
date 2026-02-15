@@ -30,9 +30,7 @@ describe("JSON", () => {
       });
 
       it("should stringify an array", () => {
-        expect(interpreter.evaluate("JSON.stringify([1, 2, 3])")).toBe(
-          "[1,2,3]",
-        );
+        expect(interpreter.evaluate("JSON.stringify([1, 2, 3])")).toBe("[1,2,3]");
       });
 
       it("should stringify sparse arrays with nulls", () => {
@@ -41,9 +39,7 @@ describe("JSON", () => {
       });
 
       it("should convert undefined in arrays to null", () => {
-        expect(interpreter.evaluate("JSON.stringify([1, undefined, 2])")).toBe(
-          "[1,null,2]",
-        );
+        expect(interpreter.evaluate("JSON.stringify([1, undefined, 2])")).toBe("[1,null,2]");
       });
 
       it("should return undefined for top-level undefined", () => {
@@ -57,9 +53,7 @@ describe("JSON", () => {
       });
 
       it("should omit undefined properties in objects", () => {
-        const result = interpreter.evaluate(
-          "JSON.stringify({ a: 1, b: undefined })",
-        );
+        const result = interpreter.evaluate("JSON.stringify({ a: 1, b: undefined })");
         expect(result).toBe('{"a":1}');
       });
 
@@ -67,29 +61,21 @@ describe("JSON", () => {
         const result = interpreter.evaluate(
           'JSON.stringify({ str: "hello", num: 42, bool: true, nullVal: null })',
         );
-        expect(result).toBe(
-          '{"str":"hello","num":42,"bool":true,"nullVal":null}',
-        );
+        expect(result).toBe('{"str":"hello","num":42,"bool":true,"nullVal":null}');
       });
 
       it("should support replacer array to select keys", () => {
-        const result = interpreter.evaluate(
-          "JSON.stringify({ a: 1, b: 2, c: 3 }, ['a', 'c'])",
-        );
+        const result = interpreter.evaluate("JSON.stringify({ a: 1, b: 2, c: 3 }, ['a', 'c'])");
         expect(result).toBe('{"a":1,"c":3}');
       });
 
       it("should preserve replacer array order", () => {
-        const result = interpreter.evaluate(
-          "JSON.stringify({ b: 2, a: 1 }, ['a', 'b'])",
-        );
+        const result = interpreter.evaluate("JSON.stringify({ b: 2, a: 1 }, ['a', 'b'])");
         expect(result).toBe('{"a":1,"b":2}');
       });
 
       it("should ignore missing keys in replacer array", () => {
-        const result = interpreter.evaluate(
-          "JSON.stringify({ a: 1 }, ['a', 'b'])",
-        );
+        const result = interpreter.evaluate("JSON.stringify({ a: 1 }, ['a', 'b'])");
         expect(result).toBe('{"a":1}');
       });
 
@@ -106,17 +92,13 @@ describe("JSON", () => {
       });
 
       it("should support pretty printing with space number", () => {
-        const result = interpreter.evaluate(
-          "JSON.stringify({ a: 1 }, null, 2)",
-        );
+        const result = interpreter.evaluate("JSON.stringify({ a: 1 }, null, 2)");
         expect(result).toContain("\n");
         expect(result).toContain('"a": 1');
       });
 
       it("should support pretty printing with space string", () => {
-        const result = interpreter.evaluate(
-          "JSON.stringify({ a: 1 }, null, '\\t')",
-        );
+        const result = interpreter.evaluate("JSON.stringify({ a: 1 }, null, '\\t')");
         expect(result).toContain("\n");
         expect(result).toContain('\t"a": 1');
       });
@@ -179,15 +161,11 @@ describe("JSON", () => {
       });
 
       it("should parse an array", () => {
-        expect(interpreter.evaluate("JSON.parse('[1, 2, 3]')")).toEqual([
-          1, 2, 3,
-        ]);
+        expect(interpreter.evaluate("JSON.parse('[1, 2, 3]')")).toEqual([1, 2, 3]);
       });
 
       it("should parse an object", () => {
-        expect(
-          interpreter.evaluate('JSON.parse(\'{"a": 1, "b": 2}\')'),
-        ).toEqual({
+        expect(interpreter.evaluate('JSON.parse(\'{"a": 1, "b": 2}\')')).toEqual({
           a: 1,
           b: 2,
         });
