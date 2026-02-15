@@ -2578,8 +2578,8 @@ export class Interpreter {
 
     let message = error.message || "Unknown error";
 
-    // If the error message contains stack-like content, sanitize it
-    if (this.securityOptions.sanitizeErrors && message.includes("\n    at ")) {
+    // If the error message contains stack-like content, sanitize it.
+    if (this.securityOptions.sanitizeErrors && /\n\s*at\s+/.test(message)) {
       message = sanitizeErrorStack(message);
     }
 

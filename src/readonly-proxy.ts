@@ -177,36 +177,20 @@ export function getSecurityOptions(): SecurityOptions {
 export function sanitizeErrorStack(stack: string | undefined): string {
   if (!stack) return "";
 
-  // Split into lines and process each
+  const stackFramePattern = /^\s*at\s+/;
+  const absolutePathPattern = /(^|[\s(,])((?:file:\/\/\/?|[A-Za-z]:\\|\/)[^\s),]+(?::\d+:\d+)?)/g;
+
+  // Split into lines and process each.
   const lines = stack.split("\n");
   const sanitizedLines: string[] = [];
 
   for (const line of lines) {
-    // Keep the first line (error message)
-    if (!line.includes("    at ")) {
+    if (!stackFramePattern.test(line)) {
       sanitizedLines.push(line);
       continue;
     }
 
-    // For stack frame lines, remove file paths
-    // Typical format: "    at functionName (file:///path/to/file.ts:123:45)"
-    // or: "    at file:///path/to/file.ts:123:45"
-    // or: "    at functionName (/path/to/file.ts:123:45)"
-
-    // Replace paths with [native code] or [sandbox] marker
-    const sanitized = line
-      // Remove file:// URLs with line numbers
-      .replace(/\(file:\/\/[^)]+\)/g, "([native code])")
-      // Remove absolute paths with line numbers (Unix)
-      .replace(/\(\/[^)]+\)/g, "([native code])")
-      // Remove absolute paths with line numbers (Windows)
-      .replace(/\([A-Za-z]:\\[^)]+\)/g, "([native code])")
-      // Remove bare file:// URLs (no parens)
-      .replace(/file:\/\/\S+/g, "[native code]")
-      // Remove bare absolute paths (Unix) at end of line
-      .replace(/\/\S+\.[jt]s:\d+:\d+$/g, "[native code]")
-      // Remove bare absolute paths (Windows) at end of line
-      .replace(/[A-Za-z]:\\\S+\.[jt]s:\d+:\d+$/g, "[native code]");
+    const sanitized = line.replace(absolutePathPattern, "$1[native code]");
 
     sanitizedLines.push(sanitized);
   }

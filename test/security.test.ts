@@ -1339,6 +1339,50 @@ describe("Security", () => {
         expect(result).toContain("[native code]");
       });
 
+      it("should redact bare Unix absolute paths with non-.ts/.js extensions", () => {
+        const input = `Error: test
+    at /Users/dev/project/node_modules/pkg/index.mjs:17:26`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("/Users/dev/project");
+        expect(result).toContain("[native code]");
+      });
+
+      it("should redact bare Windows absolute paths with non-.ts/.js extensions", () => {
+        const input = `Error: test
+    at C:\\Users\\dev\\project\\dist\\index.cjs:45:10`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("C:\\Users\\dev\\project");
+        expect(result).toContain("[native code]");
+      });
+
+      it("should redact Bun-like eval frames containing multiple absolute paths", () => {
+        const input = `Error: test
+    at eval (eval at run (/Users/dev/project/dist/entry.mjs:11:7), /Users/dev/project/dist/bootstrap.mjs:21:5)`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("/Users/dev/project/dist/entry.mjs");
+        expect(result).not.toContain("/Users/dev/project/dist/bootstrap.mjs");
+        expect(result).toContain("[native code]");
+      });
+
+      it("should preserve non-path stack text", () => {
+        const input = `Error: test
+    at foo ([native code])
+    at <anonymous>:1:1
+    note: this line should stay exactly the same`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).toContain("at foo ([native code])");
+        expect(result).toContain("at <anonymous>:1:1");
+        expect(result).toContain("note: this line should stay exactly the same");
+      });
+
       it("should preserve the error message line", () => {
         const input = `Error: my error message
       at foo (/path/to/file.ts:1:1)`;
