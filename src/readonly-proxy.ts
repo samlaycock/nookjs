@@ -194,7 +194,7 @@ export function sanitizeErrorStack(stack: string | undefined): string {
   // Remove eval-style frames (including Bun eval frames)
   // Matches: at eval (eval at <anonymous> (file:///...)) or similar nested eval patterns
   // These often contain the actual file path in the inner part
-  sanitized = sanitized.replace(/at eval[^\n]*/gi, "at eval ([native code])");
+  sanitized = sanitized.replace(/\bat eval\b[^\n]*/gi, "at eval ([native code])");
 
   // Remove any remaining bare file:// URLs anywhere in the line
   sanitized = sanitized.replace(/file:\/\/\/\S+/g, "[native code]");

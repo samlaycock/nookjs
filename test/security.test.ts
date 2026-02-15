@@ -1458,6 +1458,17 @@ describe("Security", () => {
         expect(result).toContain("at bar ([native code])");
         expect(result).toContain("at baz ([native code])");
       });
+
+      it("should preserve function names containing 'eval'", () => {
+        const input = `Error: test
+    at evaluateAsync ([native code])
+    at evaluateNode ([native code])`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).toContain("evaluateAsync");
+        expect(result).toContain("evaluateNode");
+      });
     });
   });
 
