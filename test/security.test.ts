@@ -1843,5 +1843,96 @@ describe("Security", () => {
         }).toThrow("Cannot access hasOwnProperty on global 'obj'");
       });
     });
+
+    describe("unwrapForNative security - host object immutability", () => {
+      class SecretClass {
+        value = 1;
+      }
+
+      it("should prevent Object.defineProperty from mutating wrapped host instance", () => {
+        const secret = new SecretClass();
+        const interpreter = new Interpreter({ globals: { secret } });
+
+        expect(() => {
+          interpreter.evaluate('Object.defineProperty(secret, "value", { value: 99 })');
+        }).toThrow();
+
+        expect(secret.value).toBe(1);
+      });
+
+      it("should prevent Object.defineProperty from adding new properties to wrapped host instance", () => {
+        const secret = { existing: "value" };
+        const interpreter = new Interpreter({ globals: { secret } });
+
+        expect(() => {
+          interpreter.evaluate('Object.defineProperty(secret, "newProp", { value: "hacked" })');
+        }).toThrow();
+
+        expect((secret as any).newProp).toBeUndefined();
+      });
+
+      it("should prevent Object.assign from mutating wrapped host instance", () => {
+        const target = { a: 1 };
+        const interpreter = new Interpreter({ globals: { target } });
+
+        expect(() => {
+          interpreter.evaluate('Object.assign(target, { b: 2 })');
+        }).toThrow();
+
+        expect((target as any).b).toBeUndefined();
+      });
+
+      it("should prevent Object.setPrototypeOf from mutating wrapped host instance", () => {
+        const secret = new SecretClass();
+        const interpreter = new Interpreter({ globals: { secret } });
+
+        expect(() => {
+          interpreter.evaluate("Object.setPrototypeOf(secret, null)");
+        }).toThrow();
+
+        expect(Object.getPrototypeOf(secret)).toBe(SecretClass.prototype);
+      });
+
+      it("should prevent Object.defineProperties from mutating wrapped host instance", () => {
+        const secret = { a: 1 };
+        const interpreter = new Interpreter({ globals: { secret } });
+
+        expect(() => {
+          interpreter.evaluate('Object.defineProperties(secret, { b: { value: 2 } })');
+        }).toThrow();
+
+        expect((secret as any).b).toBeUndefined();
+      });
+    });
+
+    describe("unwrapForNative compatibility - TypedArray/ArrayBuffer", () => {
+      it("should allow TextDecoder to decode Uint8Array", () => {
+        const encoder = new TextEncoder();
+        const encoded = encoder.encode("hello");
+        const decoder = new TextDecoder();
+
+        const interpreter = new Interpreter({ globals: { encoded, decoder } });
+        const result = interpreter.evaluate("decoder.decode(encoded)");
+
+        expect(result).toBe("hello");
+      });
+
+      it("should allow Uint8Array methods to work through proxy", () => {
+        const arr = new Uint8Array([1, 2, 3]);
+        const interpreter = new Interpreter({ globals: { arr } });
+
+        const result = interpreter.evaluate("arr.slice(1)");
+        expect(Array.from(result)).toEqual([2, 3]);
+      });
+
+      it("should allow ArrayBuffer to be used with typed arrays", () => {
+        const buffer = new ArrayBuffer(16);
+        const Uint8ArrayConstructor = Uint8Array;
+        const interpreter = new Interpreter({ globals: { buffer, Uint8Array: Uint8ArrayConstructor } });
+
+        const view = interpreter.evaluate("new Uint8Array(buffer)");
+        expect(view.byteLength).toBe(16);
+      });
+    });
   });
 });

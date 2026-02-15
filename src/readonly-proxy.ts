@@ -47,10 +47,18 @@ function isTypedArray(value: unknown): value is ArrayBufferView {
  *
  * Native methods like TextDecoder.decode() require actual TypedArray instances,
  * not Proxy objects. This function extracts the underlying target from
- * ReadOnlyProxy-wrapped values when necessary.
+ * ReadOnlyProxy-wrapped values ONLY for types that require raw-instance
+ * compatibility:
+ * - TypedArrays: Required for TextDecoder.decode() and similar APIs
+ * - ArrayBuffer: Required for typed array constructors
+ * - Timeout: Required for clearTimeout/clearInterval to work with timer IDs
+ *
+ * SECURITY: All other proxy types (plain objects, class instances, etc.)
+ * remain wrapped to prevent sandbox code from mutating host-owned objects
+ * through host APIs like Object.defineProperty.
  *
  * @param value - The value to potentially unwrap
- * @returns The unwrapped value if it was a proxy wrapping a TypedArray/ArrayBuffer, otherwise the original value
+ * @returns The unwrapped value if it was a proxy wrapping a permitted type, otherwise the original proxy
  */
 export function unwrapForNative(value: unknown): unknown {
   if (value === null || value === undefined) {
@@ -68,27 +76,63 @@ export function unwrapForNative(value: unknown): unknown {
     return value;
   }
 
-  // It's a proxy - check if the target needs unwrapping
-  // TypedArrays and ArrayBuffers must be unwrapped for native methods
-  if (isTypedArray(target) || target instanceof ArrayBuffer) {
+  // Unwrap TypedArrays for native method compatibility.
+  // TypedArray methods like TextDecoder.decode() require actual TypedArray instances.
+  if (isTypedArray(target)) {
     return target;
   }
 
-  // Unwrap non-plain-object proxies for native method compatibility.
-  // Host functions like clearTimeout need the original object (e.g., Timeout),
-  // not a proxy. Plain objects and arrays stay wrapped for security.
-  if (
-    typeof target === "object" &&
-    target !== null &&
-    !Array.isArray(target) &&
-    Object.getPrototypeOf(target) !== Object.prototype &&
-    Object.getPrototypeOf(target) !== null
-  ) {
+  // Unwrap ArrayBuffer for native method compatibility.
+  // ArrayBuffer is needed for compatibility with APIs that expect raw buffers.
+  if (target instanceof ArrayBuffer) {
     return target;
   }
 
-  // For plain objects, arrays, and other proxy types, return the original proxy
+  // Unwrap Timeout objects for timer API compatibility.
+  // clearTimeout/clearInterval require the actual Timeout object, not a proxy.
+  // Timeout objects are returned by setTimeout/setInterval and need to be passed
+  // back to the timer APIs for cancellation to work.
+  if (isTimerObject(target)) {
+    return target;
+  }
+
+  // For all other proxy types (plain objects, arrays, class instances, etc.),
+  // return the proxy to maintain read-only security guarantees.
   return value;
+}
+
+/**
+ * Check if a value is a Timer object (Timeout/Interval).
+ * Timer objects are returned by setTimeout/setInterval and need to be
+ * unwrapped for clearTimeout/clearInterval to work properly.
+ */
+function isTimerObject(value: unknown): boolean {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+
+  // Check constructor name - Timeout is consistent across Node.js and Bun
+  // Use Object.prototype.hasOwnProperty to safely check for constructor
+  // without triggering the proxy's dangerous property blocking
+  try {
+    const hasConstructor = Object.prototype.hasOwnProperty.call(value, "constructor");
+    const constructor = hasConstructor ? (value as any).constructor : undefined;
+    if (constructor && typeof constructor === "function") {
+      return constructor.name === "Timeout";
+    }
+    // Also check prototype chain for Timeout
+    const proto = Object.getPrototypeOf(value);
+    if (proto && typeof proto === "object") {
+      const protoConstructor = proto.constructor;
+      if (protoConstructor && typeof protoConstructor === "function") {
+        return protoConstructor.name === "Timeout";
+      }
+    }
+  } catch {
+    // If accessing constructor throws (e.g., proxy blocks it), it's not a Timeout
+  }
+
+  return false;
 }
 
 /**
