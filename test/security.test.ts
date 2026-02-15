@@ -1445,6 +1445,19 @@ describe("Security", () => {
         expect(result).not.toContain("C:\\Users\\dev\\my:secret");
         expect(result).toContain("[native code]");
       });
+
+      it("should preserve parentheses around sanitized stack frames", () => {
+        const input = `Error: test
+      at foo (/home/user/project/file.ts:123:45)
+      at bar (file:///home/user/project/file.ts:88:9)
+      at baz (C:\\Users\\dev\\project\\file.ts:10:5)`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).toContain("at foo ([native code])");
+        expect(result).toContain("at bar ([native code])");
+        expect(result).toContain("at baz ([native code])");
+      });
     });
   });
 
