@@ -3,8 +3,6 @@ This project uses Bun as the package manager. NEVER use `npm` or `yarn` to insta
 
 For rules to follow when making Git operations, see [GIT.md](conventions/GIT.md)
 
-For how to contribute to the codebase, see [CONTRIBUTING.md](conventions/CONTRIBUTING.md)
-
 For how to go about fixing bugs, see [BUG_FIXES.md](conventions/BUG_FIXES.md)
 
 For code style conventions, see [CODE_STYLE.md](conventions/CODE_STYLE.md)
