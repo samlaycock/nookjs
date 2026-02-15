@@ -2045,7 +2045,9 @@ describe("Control Flow", () => {
             i
           `;
           expect(() => interpreter.evaluate(code)).toThrow(InterpreterError);
-          expect(() => interpreter.evaluate(code)).toThrow("Undefined variable 'i'");
+          expect(() => interpreter.evaluate(code)).toThrow(
+            "Undefined variable 'i'",
+          );
         });
 
         it("should allow same variable name in sequential for loops", () => {
@@ -3058,7 +3060,9 @@ describe("Control Flow", () => {
                 // should not reach here
               }
             `);
-          }).toThrow("for...in requires an object or array, got null/undefined");
+          }).toThrow(
+            "for...in requires an object or array, got null/undefined",
+          );
         });
 
         it("should throw error for undefined", () => {
@@ -3070,7 +3074,9 @@ describe("Control Flow", () => {
                 // should not reach here
               }
             `);
-          }).toThrow("for...in requires an object or array, got null/undefined");
+          }).toThrow(
+            "for...in requires an object or array, got null/undefined",
+          );
         });
 
         it("should throw error for primitives", () => {
@@ -4205,7 +4211,12 @@ describe("Control Flow", () => {
             }
             log;
           `);
-          expect(result).toEqual(["outer try", "inner try", "inner catch", "after inner"]);
+          expect(result).toEqual([
+            "outer try",
+            "inner try",
+            "inner catch",
+            "after inner",
+          ]);
         });
 
         it("should propagate uncaught errors to outer catch", () => {
@@ -4225,7 +4236,12 @@ describe("Control Flow", () => {
             }
             log;
           `);
-          expect(result).toEqual(["outer try", "inner try", "inner finally", "outer catch"]);
+          expect(result).toEqual([
+            "outer try",
+            "inner try",
+            "inner finally",
+            "outer catch",
+          ]);
         });
       });
 

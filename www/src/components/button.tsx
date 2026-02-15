@@ -26,7 +26,10 @@ interface ButtonAsAnchorProps extends ButtonBaseProps {
   rel?: string;
 }
 
-type ButtonProps = ButtonAsButtonProps | ButtonAsLinkProps | ButtonAsAnchorProps;
+type ButtonProps =
+  | ButtonAsButtonProps
+  | ButtonAsLinkProps
+  | ButtonAsAnchorProps;
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary: "bg-amber-500 text-amber-950 hover:bg-amber-400",
@@ -37,7 +40,8 @@ const baseStyles = "px-4 py-2 font-medium cursor-pointer transition-colors";
 
 export function Button(props: ButtonProps) {
   const { variant = "primary", children, className = "" } = props;
-  const combinedClassName = `${baseStyles} ${variantStyles[variant]} ${className}`.trim();
+  const combinedClassName =
+    `${baseStyles} ${variantStyles[variant]} ${className}`.trim();
 
   if (props.as === "link") {
     return (
@@ -49,14 +53,23 @@ export function Button(props: ButtonProps) {
 
   if (props.as === "anchor") {
     return (
-      <a href={props.href} target={props.target} rel={props.rel} className={combinedClassName}>
+      <a
+        href={props.href}
+        target={props.target}
+        rel={props.rel}
+        className={combinedClassName}
+      >
         {children}
       </a>
     );
   }
 
   return (
-    <button type={props.type ?? "button"} onClick={props.onClick} className={combinedClassName}>
+    <button
+      type={props.type ?? "button"}
+      onClick={props.onClick}
+      className={combinedClassName}
+    >
       {children}
     </button>
   );

@@ -1,5 +1,10 @@
 import { isDangerousProperty } from "./constants";
-import { InterpreterError, HostFunctionValue, FunctionValue, ClassValue } from "./interpreter";
+import {
+  InterpreterError,
+  HostFunctionValue,
+  FunctionValue,
+  ClassValue,
+} from "./interpreter";
 
 /**
  * Symbol used to retrieve the underlying target from a ReadOnlyProxy.
@@ -292,7 +297,11 @@ export class ReadOnlyProxy {
         if (prop === "valueOf") {
           return () => {
             // For primitive wrapper objects (Number, String, Boolean), return the primitive
-            if (target instanceof Number || target instanceof String || target instanceof Boolean) {
+            if (
+              target instanceof Number ||
+              target instanceof String ||
+              target instanceof Boolean
+            ) {
               // These are safe to call - they just return the wrapped primitive
               return target.valueOf();
             }
@@ -317,7 +326,9 @@ export class ReadOnlyProxy {
 
         // Block dangerous properties that could break out of sandbox
         if (isDangerousProperty(prop)) {
-          throw new InterpreterError(`Cannot access ${String(prop)} on global '${name}'`);
+          throw new InterpreterError(
+            `Cannot access ${String(prop)} on global '${name}'`,
+          );
         }
 
         // Get the actual value
@@ -354,7 +365,11 @@ export class ReadOnlyProxy {
         if (isTypedArray(target)) {
           // Allow numeric index writes (element mutation)
           const index = typeof prop === "string" ? Number(prop) : prop;
-          if (typeof index === "number" && Number.isInteger(index) && index >= 0) {
+          if (
+            typeof index === "number" &&
+            Number.isInteger(index) &&
+            index >= 0
+          ) {
             (target as any)[prop] = value;
             return true;
           }
@@ -382,7 +397,9 @@ export class ReadOnlyProxy {
 
       // Block setPrototypeOf to prevent prototype chain manipulation
       setPrototypeOf(_target) {
-        throw new InterpreterError(`Cannot set prototype of global '${name}' (read-only)`);
+        throw new InterpreterError(
+          `Cannot set prototype of global '${name}' (read-only)`,
+        );
       },
 
       // Block getPrototypeOf to prevent accessing the underlying object's prototype

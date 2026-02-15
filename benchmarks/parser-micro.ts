@@ -81,7 +81,10 @@ const DEFAULT_WARMUP = 2;
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
-  const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(p * (sorted.length - 1))));
+  const idx = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.floor(p * (sorted.length - 1))),
+  );
   return sorted[idx] ?? 0;
 }
 
@@ -124,7 +127,8 @@ function formatStats(stats: RunStats): string {
 const runsArg = Number.parseInt(process.argv[2] ?? "", 10);
 const warmupArg = Number.parseInt(process.argv[3] ?? "", 10);
 const runs = Number.isFinite(runsArg) && runsArg > 0 ? runsArg : DEFAULT_RUNS;
-const warmup = Number.isFinite(warmupArg) && warmupArg >= 0 ? warmupArg : DEFAULT_WARMUP;
+const warmup =
+  Number.isFinite(warmupArg) && warmupArg >= 0 ? warmupArg : DEFAULT_WARMUP;
 
 console.log("========================================");
 console.log("PARSER MICRO-BENCHMARK (parseModule)");

@@ -49,10 +49,13 @@ describe("Host Functions", () => {
       it("should handle various argument types", () => {
         const interpreter = new Interpreter({
           globals: {
-            combine: (str: string, num: number, bool: boolean) => `${str}-${num}-${bool}`,
+            combine: (str: string, num: number, bool: boolean) =>
+              `${str}-${num}-${bool}`,
           },
         });
-        expect(interpreter.evaluate('combine("hello", 42, true)')).toBe("hello-42-true");
+        expect(interpreter.evaluate('combine("hello", 42, true)')).toBe(
+          "hello-42-true",
+        );
       });
 
       it("should return various types from host functions", () => {

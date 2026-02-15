@@ -5,28 +5,39 @@ import { CodeBlock } from "../../../components/code-block";
 export function ResourceTrackerAPI() {
   return (
     <article className="prose prose-invert max-w-none">
-      <h1 className="text-3xl font-bold text-neutral-50 mb-4">Resource Tracking</h1>
+      <h1 className="text-3xl font-bold text-neutral-50 mb-4">
+        Resource Tracking
+      </h1>
       <p className="text-xl text-neutral-300 mb-8">
         Monitor and limit cumulative resource usage across multiple evaluations.
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Overview</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Overview
+        </h2>
         <p className="text-neutral-300 mb-4">
-          NookJS provides integrated resource tracking for monitoring resource consumption across
-          multiple <code className="text-amber-400 bg-neutral-800 px-1 rounded">run()</code> calls.
-          This is essential for multi-tenant environments where you need to track and limit
-          cumulative usage.
+          NookJS provides integrated resource tracking for monitoring resource
+          consumption across multiple{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            run()
+          </code>{" "}
+          calls. This is essential for multi-tenant environments where you need
+          to track and limit cumulative usage.
         </p>
         <p className="text-neutral-300 mb-4">
           Enable tracking with{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">trackResources: true</code>{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            trackResources: true
+          </code>{" "}
           (or any total limits) when creating the sandbox:
         </p>
         <ul className="space-y-2 text-neutral-300">
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
-            <span>Tracks aggregate resource usage across the sandbox's lifetime</span>
+            <span>
+              Tracks aggregate resource usage across the sandbox's lifetime
+            </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
@@ -34,17 +45,23 @@ export function ResourceTrackerAPI() {
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
-            <span>Supports billing, rate-limiting, and fairness enforcement</span>
+            <span>
+              Supports billing, rate-limiting, and fairness enforcement
+            </span>
           </li>
         </ul>
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Simplified API</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Simplified API
+        </h2>
         <p className="text-neutral-300 mb-4">
           When using{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">createSandbox()</code>,
-          setting total limits automatically enables tracking:
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            createSandbox()
+          </code>
+          , setting total limits automatically enables tracking:
         </p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
@@ -60,7 +77,9 @@ console.log(out.resources?.evaluations);`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Quick Start</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Quick Start
+        </h2>
         <CodeBlock
           code={`import { createSandbox, ResourceExhaustedError } from "nookjs";
 
@@ -100,10 +119,15 @@ if (stats) {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Accessing Stats</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Accessing Stats
+        </h2>
         <p className="text-neutral-300 mb-4">
-          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">resources()</code> for
-          cumulative stats, or request a full result for per-run stats:
+          Use{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            resources()
+          </code>{" "}
+          for cumulative stats, or request a full result for per-run stats:
         </p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
@@ -120,7 +144,10 @@ console.log(result.resources); // cumulative resource stats`}
         />
         <p className="text-neutral-300 mt-4">
           Need history or dynamic limit updates? See{" "}
-          <Link to="/docs/api/interpreter" className="text-amber-400 hover:text-amber-300">
+          <Link
+            to="/docs/api/interpreter"
+            className="text-amber-400 hover:text-amber-300"
+          >
             Internal Classes
           </Link>{" "}
           for advanced controls.
@@ -128,7 +155,9 @@ console.log(result.resources); // cumulative resource stats`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">SandboxLimits</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          SandboxLimits
+        </h2>
         <p className="text-neutral-300 mb-4">Available limits you can set:</p>
         <CodeBlock
           code={`type SandboxLimits = {
@@ -149,10 +178,14 @@ console.log(result.resources); // cumulative resource stats`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Error Handling</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Error Handling
+        </h2>
         <p className="text-neutral-300 mb-4">
           When a limit is exceeded, a{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">ResourceExhaustedError</code>{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            ResourceExhaustedError
+          </code>{" "}
           is thrown:
         </p>
         <CodeBlock
@@ -177,11 +210,15 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Use Cases</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Use Cases
+        </h2>
 
         <div className="space-y-6">
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">Plugin Systems</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              Plugin Systems
+            </h3>
             <p className="text-neutral-400 text-sm mb-3">
               Track resource usage per plugin to enforce fair allocation:
             </p>
@@ -207,7 +244,9 @@ console.log(\`Plugin memory: \${stats?.memoryBytes} bytes\`);`}
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">Rate Limiting</h3>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              Rate Limiting
+            </h3>
             <p className="text-neutral-400 text-sm mb-3">
               Implement evaluation-count-based rate limiting:
             </p>
@@ -248,8 +287,12 @@ class RateLimitedSandbox {
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
-            <h3 className="text-lg font-medium text-neutral-100 mb-2">Monitoring Dashboard</h3>
-            <p className="text-neutral-400 text-sm mb-3">Expose stats for monitoring:</p>
+            <h3 className="text-lg font-medium text-neutral-100 mb-2">
+              Monitoring Dashboard
+            </h3>
+            <p className="text-neutral-400 text-sm mb-3">
+              Expose stats for monitoring:
+            </p>
             <CodeBlock
               code={`// API endpoint for monitoring
 app.get("/api/sandbox/:userId/stats", (req, res) => {
@@ -289,8 +332,12 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-700">
-                <th className="text-left py-2 pr-4 text-neutral-300">Feature</th>
-                <th className="text-left py-2 pr-4 text-neutral-300">Per-Run</th>
+                <th className="text-left py-2 pr-4 text-neutral-300">
+                  Feature
+                </th>
+                <th className="text-left py-2 pr-4 text-neutral-300">
+                  Per-Run
+                </th>
                 <th className="text-left py-2 text-neutral-300">Cumulative</th>
               </tr>
             </thead>
@@ -305,10 +352,14 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">Memory</td>
                 <td className="py-2 pr-4">
-                  <code className="text-amber-400">limits.perRun.memoryBytes</code>
+                  <code className="text-amber-400">
+                    limits.perRun.memoryBytes
+                  </code>
                 </td>
                 <td className="py-2">
-                  <code className="text-amber-400">limits.total.memoryBytes</code>
+                  <code className="text-amber-400">
+                    limits.total.memoryBytes
+                  </code>
                 </td>
               </tr>
               <tr className="border-b border-neutral-800">
@@ -317,14 +368,18 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
                   <code className="text-amber-400">limits.perRun.loops</code>
                 </td>
                 <td className="py-2">
-                  <code className="text-amber-400">limits.total.iterations</code>
+                  <code className="text-amber-400">
+                    limits.total.iterations
+                  </code>
                 </td>
               </tr>
               <tr className="border-b border-neutral-800">
                 <td className="py-2 pr-4">Function calls</td>
                 <td className="py-2 pr-4">Not available</td>
                 <td className="py-2">
-                  <code className="text-amber-400">limits.total.functionCalls</code>
+                  <code className="text-amber-400">
+                    limits.total.functionCalls
+                  </code>
                 </td>
               </tr>
               <tr className="border-b border-neutral-800">
@@ -347,11 +402,15 @@ app.get("/api/sandbox/:userId/stats", (req, res) => {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Standalone ResourceTracker</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Standalone ResourceTracker
+        </h2>
         <p className="text-neutral-300 mb-4">
           For advanced scenarios, NookJS also exports a standalone{" "}
-          <code className="text-amber-400 bg-neutral-800 px-1 rounded">ResourceTracker</code> class
-          that can be used independently for custom resource accounting:
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            ResourceTracker
+          </code>{" "}
+          class that can be used independently for custom resource accounting:
         </p>
         <CodeBlock
           code={`import { ResourceTracker } from "nookjs";
@@ -377,10 +436,11 @@ if (tracker.isExhausted()) {
 tracker.reset();`}
         />
         <p className="text-neutral-400 text-sm mt-4">
-          Note: The standalone ResourceTracker is not automatically integrated with the sandbox. Use{" "}
+          Note: The standalone ResourceTracker is not automatically integrated
+          with the sandbox. Use{" "}
           <code className="text-amber-400">trackResources: true</code> (or{" "}
-          <code className="text-amber-400">limits.total</code>) for automatic tracking during{" "}
-          <code className="text-amber-400">run()</code>.
+          <code className="text-amber-400">limits.total</code>) for automatic
+          tracking during <code className="text-amber-400">run()</code>.
         </p>
       </section>
 

@@ -78,7 +78,12 @@ export namespace ESTree {
     | ChainExpression
     | ClassExpression;
 
-  export type Pattern = Identifier | ObjectPattern | ArrayPattern | AssignmentPattern | RestElement;
+  export type Pattern =
+    | Identifier
+    | ObjectPattern
+    | ArrayPattern
+    | AssignmentPattern
+    | RestElement;
 
   export interface Identifier extends Node {
     readonly type: "Identifier";
@@ -478,7 +483,10 @@ export namespace ESTree {
     readonly type: "ExportNamedDeclaration";
     readonly source?: Literal;
     readonly specifiers?: ExportSpecifier[];
-    readonly declaration?: FunctionDeclaration | ClassDeclaration | VariableDeclaration;
+    readonly declaration?:
+      | FunctionDeclaration
+      | ClassDeclaration
+      | VariableDeclaration;
   }
 
   export interface ExportDefaultDeclaration extends Node {
@@ -624,7 +632,10 @@ class Tokenizer {
   currentLine = 1;
   currentColumn = 1;
 
-  constructor(input: string, profiler?: { tokens: number; tokenizeMs: number }) {
+  constructor(
+    input: string,
+    profiler?: { tokens: number; tokenizeMs: number },
+  ) {
     this.input = input;
     this.profiler = profiler;
   }
@@ -812,7 +823,9 @@ class Tokenizer {
       const code = input.charCodeAt(this.index);
       if (code === 96) {
         const tailSegment = input.slice(segmentStart, this.index);
-        const raw = rawParts ? (rawParts.push(tailSegment), rawParts.join("")) : tailSegment;
+        const raw = rawParts
+          ? (rawParts.push(tailSegment), rawParts.join(""))
+          : tailSegment;
         const cooked = cookedParts
           ? (cookedParts.push(tailSegment), cookedParts.join(""))
           : tailSegment;
@@ -821,7 +834,9 @@ class Tokenizer {
       }
       if (code === 36 && input.charCodeAt(this.index + 1) === 123) {
         const tailSegment = input.slice(segmentStart, this.index);
-        const raw = rawParts ? (rawParts.push(tailSegment), rawParts.join("")) : tailSegment;
+        const raw = rawParts
+          ? (rawParts.push(tailSegment), rawParts.join(""))
+          : tailSegment;
         const cooked = cookedParts
           ? (cookedParts.push(tailSegment), cookedParts.join(""))
           : tailSegment;
@@ -929,10 +944,15 @@ class Tokenizer {
     const code = input.charCodeAt(this.index);
 
     const isAlpha =
-      (code >= 97 && code <= 122) || (code >= 65 && code <= 90) || code === 95 || code === 36;
+      (code >= 97 && code <= 122) ||
+      (code >= 65 && code <= 90) ||
+      code === 95 ||
+      code === 36;
     if (isAlpha) {
       const ident = this.readIdentifier();
-      const type: TokenType = isKeyword(ident) ? TOKEN.Keyword : TOKEN.Identifier;
+      const type: TokenType = isKeyword(ident)
+        ? TOKEN.Keyword
+        : TOKEN.Identifier;
       this.setToken(setCurrent, type, ident, lineBreakBefore);
       this.recordToken(start);
       return;
@@ -948,7 +968,12 @@ class Tokenizer {
       if (nextIsAlpha) {
         this.index += 1;
         const name = this.readIdentifier();
-        this.setToken(setCurrent, TOKEN.PrivateIdentifier, name, lineBreakBefore);
+        this.setToken(
+          setCurrent,
+          TOKEN.PrivateIdentifier,
+          name,
+          lineBreakBefore,
+        );
         this.recordToken(start);
         return;
       }
@@ -968,7 +993,12 @@ class Tokenizer {
     }
 
     if (code === 39 || code === 34) {
-      this.setToken(setCurrent, TOKEN.String, this.readString(code), lineBreakBefore);
+      this.setToken(
+        setCurrent,
+        TOKEN.String,
+        this.readString(code),
+        lineBreakBefore,
+      );
       this.recordToken(start);
       return;
     }
@@ -1110,7 +1140,10 @@ class Tokenizer {
     while (index < length) {
       const code = input.charCodeAt(index);
       const isAlpha =
-        (code >= 97 && code <= 122) || (code >= 65 && code <= 90) || code === 95 || code === 36;
+        (code >= 97 && code <= 122) ||
+        (code >= 65 && code <= 90) ||
+        code === 95 ||
+        code === 36;
       if (!isAlpha && (code < 48 || code > 57)) {
         break;
       }
@@ -1278,7 +1311,10 @@ class Tokenizer {
 
     switch (code) {
       case 46: // .
-        if (input.charCodeAt(start + 1) === 46 && input.charCodeAt(start + 2) === 46) {
+        if (
+          input.charCodeAt(start + 1) === 46 &&
+          input.charCodeAt(start + 2) === 46
+        ) {
           this.index += 3;
           return "...";
         }
@@ -1649,7 +1685,8 @@ class Parser {
       this.skipType(STOP_TOKEN.Interface);
     }
     if (
-      (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+      (this.currentType === TOKEN.Identifier ||
+        this.currentType === TOKEN.Keyword) &&
       this.currentValue === "extends"
     ) {
       this.next();
@@ -1720,12 +1757,16 @@ class Parser {
     return { type: "DoWhileStatement", body, test };
   }
 
-  private parseForStatement(): ESTree.ForStatement | ESTree.ForOfStatement | ESTree.ForInStatement {
+  private parseForStatement():
+    | ESTree.ForStatement
+    | ESTree.ForOfStatement
+    | ESTree.ForInStatement {
     this.expectKeyword("for");
 
     // Check for `for await (...)`
     const isAwait =
-      (this.currentType === TOKEN.Keyword || this.currentType === TOKEN.Identifier) &&
+      (this.currentType === TOKEN.Keyword ||
+        this.currentType === TOKEN.Identifier) &&
       this.currentValue === "await";
     if (isAwait) {
       if (!this.inAsync && !this.allowTopLevelAwait) {
@@ -1755,7 +1796,9 @@ class Parser {
 
     if (
       this.currentType === TOKEN.Keyword &&
-      (this.currentValue === "let" || this.currentValue === "const" || this.currentValue === "var")
+      (this.currentValue === "let" ||
+        this.currentValue === "const" ||
+        this.currentValue === "var")
     ) {
       const declaration = this.parseVariableDeclaration(true);
       if (
@@ -1994,7 +2037,8 @@ class Parser {
   }
 
   private parseFunctionDeclaration(): ESTree.FunctionDeclaration {
-    const { id, params, body, asyncFlag, generator } = this.parseFunctionSignature(true);
+    const { id, params, body, asyncFlag, generator } =
+      this.parseFunctionSignature(true);
     return {
       type: "FunctionDeclaration",
       id,
@@ -2006,7 +2050,8 @@ class Parser {
   }
 
   private parseFunctionExpression(): ESTree.FunctionExpression {
-    const { id, params, body, asyncFlag, generator } = this.parseFunctionSignature(false);
+    const { id, params, body, asyncFlag, generator } =
+      this.parseFunctionSignature(false);
     return {
       type: "FunctionExpression",
       id,
@@ -2019,7 +2064,8 @@ class Parser {
 
   // For export default - returns FunctionDeclaration with optional id
   private parseExportDefaultFunction(): ESTree.FunctionDeclaration {
-    const { id, params, body, asyncFlag, generator } = this.parseFunctionSignature(false);
+    const { id, params, body, asyncFlag, generator } =
+      this.parseFunctionSignature(false);
     return {
       type: "FunctionDeclaration",
       id,
@@ -2057,7 +2103,8 @@ class Parser {
     asyncFlag: boolean;
     generator: boolean;
   } {
-    const asyncFlag = this.currentType === TOKEN.Keyword && this.currentValue === "async";
+    const asyncFlag =
+      this.currentType === TOKEN.Keyword && this.currentValue === "async";
     if (asyncFlag) {
       this.next();
     }
@@ -2071,7 +2118,10 @@ class Parser {
       : this.currentType === TOKEN.Identifier
         ? this.parseIdentifier()
         : null;
-    const { params, body } = this.parseFunctionParamsAndBody(asyncFlag, generator);
+    const { params, body } = this.parseFunctionParamsAndBody(
+      asyncFlag,
+      generator,
+    );
     return { id, params, body, asyncFlag, generator };
   }
 
@@ -2115,15 +2165,24 @@ class Parser {
       } else {
         this.consumeTypeScriptModifiers();
         const param = this.parseBindingPattern();
-        if (this.currentType === TOKEN.Punctuator && this.currentValue === "?") {
+        if (
+          this.currentType === TOKEN.Punctuator &&
+          this.currentValue === "?"
+        ) {
           this.next();
           // Optional parameter marker (TypeScript).
         }
-        if (this.currentType === TOKEN.Punctuator && this.currentValue === ":") {
+        if (
+          this.currentType === TOKEN.Punctuator &&
+          this.currentValue === ":"
+        ) {
           this.next();
           this.skipType(STOP_TOKEN.Param);
         }
-        if (this.currentType === TOKEN.Punctuator && this.currentValue === "=") {
+        if (
+          this.currentType === TOKEN.Punctuator &&
+          this.currentValue === "="
+        ) {
           this.next();
           const right = this.parseAssignmentExpression();
           params.push({ type: "AssignmentPattern", left: param, right });
@@ -2155,13 +2214,15 @@ class Parser {
     body: ESTree.ClassBody;
   } {
     this.expectKeyword("class");
-    const id = this.currentType === TOKEN.Identifier ? this.parseIdentifier() : null;
+    const id =
+      this.currentType === TOKEN.Identifier ? this.parseIdentifier() : null;
     const superClass =
       this.currentType === TOKEN.Keyword && this.currentValue === "extends"
         ? (this.next(), this.parseExpression())
         : null;
     if (
-      (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+      (this.currentType === TOKEN.Identifier ||
+        this.currentType === TOKEN.Keyword) &&
       this.currentValue === "implements"
     ) {
       this.next();
@@ -2178,14 +2239,20 @@ class Parser {
 
   private parseClassBody(): ESTree.ClassBody {
     this.expectPunctuator("{");
-    const elements: (ESTree.MethodDefinition | ESTree.PropertyDefinition | ESTree.StaticBlock)[] =
-      [];
+    const elements: (
+      | ESTree.MethodDefinition
+      | ESTree.PropertyDefinition
+      | ESTree.StaticBlock
+    )[] = [];
     while (this.currentType !== TOKEN.Punctuator || this.currentValue !== "}") {
       if (this.currentType === TOKEN.Punctuator && this.currentValue === ";") {
         this.next();
         continue;
       }
-      if (this.currentType === TOKEN.Keyword && this.currentValue === "static") {
+      if (
+        this.currentType === TOKEN.Keyword &&
+        this.currentValue === "static"
+      ) {
         const peekType = this.tokenizer.peekType();
         const peekValue = this.tokenizer.peekValue();
         if (peekType === TOKEN.Punctuator && peekValue === "{") {
@@ -2202,7 +2269,9 @@ class Parser {
     return { type: "ClassBody", body: elements };
   }
 
-  private parseClassElement(): ESTree.MethodDefinition | ESTree.PropertyDefinition {
+  private parseClassElement():
+    | ESTree.MethodDefinition
+    | ESTree.PropertyDefinition {
     let isStatic = false;
     let asyncFlag = false;
     let generator = false;
@@ -2210,7 +2279,8 @@ class Parser {
 
     while (true) {
       if (
-        (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+        (this.currentType === TOKEN.Identifier ||
+          this.currentType === TOKEN.Keyword) &&
         this.currentValue === "static"
       ) {
         const peekType = this.tokenizer.peekType();
@@ -2230,7 +2300,8 @@ class Parser {
     }
 
     if (
-      (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+      (this.currentType === TOKEN.Identifier ||
+        this.currentType === TOKEN.Keyword) &&
       (this.currentValue === "get" || this.currentValue === "set")
     ) {
       const peekType = this.tokenizer.peekType();
@@ -2247,7 +2318,10 @@ class Parser {
         this.next();
         kind = accessorKind;
       }
-    } else if (this.currentType === TOKEN.Keyword && this.currentValue === "async") {
+    } else if (
+      this.currentType === TOKEN.Keyword &&
+      this.currentValue === "async"
+    ) {
       this.next();
       asyncFlag = true;
     }
@@ -2302,8 +2376,14 @@ class Parser {
     };
   }
 
-  private parseMethodFunction(asyncFlag: boolean, generator: boolean): ESTree.FunctionExpression {
-    const { params, body } = this.parseFunctionParamsAndBody(asyncFlag, generator);
+  private parseMethodFunction(
+    asyncFlag: boolean,
+    generator: boolean,
+  ): ESTree.FunctionExpression {
+    const { params, body } = this.parseFunctionParamsAndBody(
+      asyncFlag,
+      generator,
+    );
     return {
       type: "FunctionExpression",
       id: null,
@@ -2342,7 +2422,10 @@ class Parser {
         type: "ImportDefaultSpecifier",
         local,
       };
-      if ((this.currentType as TokenType) === TOKEN.Punctuator && this.currentValue === ",") {
+      if (
+        (this.currentType as TokenType) === TOKEN.Punctuator &&
+        this.currentValue === ","
+      ) {
         return this.parseNamedImportDeclarationWithDefault(defaultSpecifier);
       }
       const source = this.parseImportSource();
@@ -2697,7 +2780,9 @@ class Parser {
     }
   }
 
-  private parseVariableDeclaration(isForInit: boolean): ESTree.VariableDeclaration {
+  private parseVariableDeclaration(
+    isForInit: boolean,
+  ): ESTree.VariableDeclaration {
     const kind = this.currentValue as "let" | "const" | "var";
     this.next();
     const declarations: ESTree.VariableDeclarator[] = [];
@@ -2723,9 +2808,14 @@ class Parser {
     return { type: "VariableDeclaration", declarations, kind };
   }
 
-  private parseExpressionStatement(): ESTree.ExpressionStatement | ESTree.LabeledStatement {
+  private parseExpressionStatement():
+    | ESTree.ExpressionStatement
+    | ESTree.LabeledStatement {
     // Check for labeled statement: identifier followed by ':'
-    if (this.currentType === TOKEN.Identifier && this.tokenizer.peekValue() === ":") {
+    if (
+      this.currentType === TOKEN.Identifier &&
+      this.tokenizer.peekValue() === ":"
+    ) {
       const label: ESTree.Identifier = {
         type: "Identifier",
         name: this.currentValue,
@@ -2749,11 +2839,16 @@ class Parser {
     this.skipType(stopTokens);
   }
 
-  private consumeTypeAssertions(expression: ESTree.Expression): ESTree.Expression {
+  private consumeTypeAssertions(
+    expression: ESTree.Expression,
+  ): ESTree.Expression {
     if (this.currentType !== TOKEN.Identifier || this.currentValue !== "as") {
       return expression;
     }
-    while (this.currentType === TOKEN.Identifier && this.currentValue === "as") {
+    while (
+      this.currentType === TOKEN.Identifier &&
+      this.currentValue === "as"
+    ) {
       this.next();
       this.skipType(STOP_TOKEN.Assertion);
       if (this.currentType !== TOKEN.Identifier) {
@@ -2813,11 +2908,19 @@ class Parser {
         case STOP_TOKEN.Rest:
           return value === "," || value === ")";
         case STOP_TOKEN.Var:
-          return value === "=" || value === "," || value === ";" || value === ")";
+          return (
+            value === "=" || value === "," || value === ";" || value === ")"
+          );
         case STOP_TOKEN.ClassField:
           return value === "=" || value === ";" || value === "}";
         case STOP_TOKEN.Assertion:
-          return value === "," || value === ";" || value === ")" || value === "]" || value === "}";
+          return (
+            value === "," ||
+            value === ";" ||
+            value === ")" ||
+            value === "]" ||
+            value === "}"
+          );
         case STOP_TOKEN.Arrow:
           return value === "=>";
         default:
@@ -2827,7 +2930,8 @@ class Parser {
 
     // Fast exit when already at a stop token.
     if (
-      (this.currentType === TOKEN.Punctuator || this.currentType === TOKEN.Keyword) &&
+      (this.currentType === TOKEN.Punctuator ||
+        this.currentType === TOKEN.Keyword) &&
       isStop(this.currentValue)
     ) {
       return;
@@ -2838,9 +2942,15 @@ class Parser {
     let angleDepth = 0;
 
     while ((this.currentType as TokenType) !== TOKEN.EOF) {
-      if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0 && angleDepth === 0) {
+      if (
+        parenDepth === 0 &&
+        braceDepth === 0 &&
+        bracketDepth === 0 &&
+        angleDepth === 0
+      ) {
         if (
-          (this.currentType === TOKEN.Punctuator || this.currentType === TOKEN.Keyword) &&
+          (this.currentType === TOKEN.Punctuator ||
+            this.currentType === TOKEN.Keyword) &&
           isStop(this.currentValue)
         ) {
           return;
@@ -2928,7 +3038,10 @@ class Parser {
     // Handle comma operator (sequence expression)
     if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
       const expressions: ESTree.Expression[] = [expr];
-      while (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
+      while (
+        this.currentType === TOKEN.Punctuator &&
+        this.currentValue === ","
+      ) {
         this.next();
         expressions.push(this.parseAssignmentExpression(allowIn));
       }
@@ -2994,7 +3107,10 @@ class Parser {
   }
 
   // Precedence-climbing for logical operators (&& > ||/??).
-  private parseLogicalPrecedence(minPrecedence: number, allowIn: boolean): ESTree.Expression {
+  private parseLogicalPrecedence(
+    minPrecedence: number,
+    allowIn: boolean,
+  ): ESTree.Expression {
     let left = this.parseBinaryExpression(allowIn);
     while (true) {
       if (this.currentType !== TOKEN.Punctuator) {
@@ -3034,7 +3150,10 @@ class Parser {
   }
 
   // Precedence-climbing for binary operators, with optional "in" suppression.
-  private parseBinaryPrecedence(minPrecedence: number, allowIn: boolean): ESTree.Expression {
+  private parseBinaryPrecedence(
+    minPrecedence: number,
+    allowIn: boolean,
+  ): ESTree.Expression {
     let left = this.parseExponentExpression();
     while (true) {
       const type = this.currentType;
@@ -3144,7 +3263,10 @@ class Parser {
         };
       }
     } else if (type === TOKEN.Keyword) {
-      if (value === "await" && (this.inAsync || (!this.inFunction && this.allowTopLevelAwait))) {
+      if (
+        value === "await" &&
+        (this.inAsync || (!this.inFunction && this.allowTopLevelAwait))
+      ) {
         this.next();
         const argument = this.parseUnaryExpression();
         return { type: "AwaitExpression", argument };
@@ -3157,9 +3279,13 @@ class Parser {
           !this.currentLineBreakBefore &&
           !(
             this.currentType === TOKEN.Punctuator &&
-            (this.currentValue === ";" || this.currentValue === ")" || this.currentValue === "}")
+            (this.currentValue === ";" ||
+              this.currentValue === ")" ||
+              this.currentValue === "}")
           );
-        const argument = shouldParseArgument ? this.parseAssignmentExpression() : null;
+        const argument = shouldParseArgument
+          ? this.parseAssignmentExpression()
+          : null;
         return { type: "YieldExpression", argument, delegate };
       }
       if (value === "typeof" || value === "delete" || value === "void") {
@@ -3232,7 +3358,10 @@ class Parser {
             usedOptional = true;
             continue;
           }
-          if (peekType === TOKEN.Identifier || peekType === TOKEN.PrivateIdentifier) {
+          if (
+            peekType === TOKEN.Identifier ||
+            peekType === TOKEN.PrivateIdentifier
+          ) {
             this.expectPunctuator("?.");
             const property = this.parseMemberProperty();
             expression = {
@@ -3390,12 +3519,16 @@ class Parser {
             return this.parseObjectExpression();
           case "/":
           case "/=": {
-            const { pattern, flags } = this.tokenizer.rescanAsRegExp(this.currentValue);
+            const { pattern, flags } = this.tokenizer.rescanAsRegExp(
+              this.currentValue,
+            );
             let value: RegExp | null;
             try {
               value = new RegExp(pattern, flags);
             } catch {
-              throw new ParseError(`Invalid regular expression: /${pattern}/${flags}`);
+              throw new ParseError(
+                `Invalid regular expression: /${pattern}/${flags}`,
+              );
             }
             const raw = `/${pattern}/${flags}`;
             // Advance to the next token after the regex.
@@ -3502,7 +3635,10 @@ class Parser {
         this.next();
         const argument = this.parseAssignmentExpression();
         properties.push({ type: "SpreadElement", argument });
-        if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
+        if (
+          this.currentType === TOKEN.Punctuator &&
+          this.currentValue === ","
+        ) {
           this.next();
         }
         continue;
@@ -3522,7 +3658,8 @@ class Parser {
 
     // Check for getter/setter: get name() { } or set name(v) { }
     if (
-      (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+      (this.currentType === TOKEN.Identifier ||
+        this.currentType === TOKEN.Keyword) &&
       (this.currentValue === "get" || this.currentValue === "set")
     ) {
       const kind = this.currentValue as "get" | "set";
@@ -3541,7 +3678,9 @@ class Parser {
         const accessorKey = keyResult.key;
         const accessorComputed = keyResult.computed;
         if (accessorKey.type === "PrivateIdentifier") {
-          throw new ParseError("Private identifiers are not valid in object literals");
+          throw new ParseError(
+            "Private identifiers are not valid in object literals",
+          );
         }
         const value = this.parseMethodFunction(false, false);
         return {
@@ -3560,7 +3699,9 @@ class Parser {
     const key = keyResult.key;
     const computed = keyResult.computed;
     if (key.type === "PrivateIdentifier") {
-      throw new ParseError("Private identifiers are not valid in object literals");
+      throw new ParseError(
+        "Private identifiers are not valid in object literals",
+      );
     }
 
     if (this.currentType === TOKEN.Punctuator && this.currentValue === "(") {
@@ -3646,7 +3787,10 @@ class Parser {
   }
 
   private parseBindingPattern(): ESTree.Pattern {
-    if (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) {
+    if (
+      this.currentType === TOKEN.Identifier ||
+      this.currentType === TOKEN.Keyword
+    ) {
       return this.parseIdentifier();
     }
     if (this.currentType === TOKEN.Punctuator) {
@@ -3713,7 +3857,10 @@ class Parser {
         this.next();
         const argument = this.parseBindingPattern();
         properties.push({ type: "RestElement", argument });
-        if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
+        if (
+          this.currentType === TOKEN.Punctuator &&
+          this.currentValue === ","
+        ) {
           this.next();
         }
         continue;
@@ -3733,7 +3880,9 @@ class Parser {
     const key = keyResult.key;
     const computed = keyResult.computed;
     if (key.type === "PrivateIdentifier") {
-      throw new ParseError("Private identifiers are not valid in object patterns");
+      throw new ParseError(
+        "Private identifiers are not valid in object patterns",
+      );
     }
 
     if (this.currentType === TOKEN.Punctuator && this.currentValue === ":") {
@@ -3780,7 +3929,9 @@ class Parser {
   }
 
   // Parses optional default values for binding patterns (e.g. `{ a = 1 }`).
-  private parseAssignmentPatternForBinding(left: ESTree.Pattern): ESTree.Pattern {
+  private parseAssignmentPatternForBinding(
+    left: ESTree.Pattern,
+  ): ESTree.Pattern {
     if (this.currentType === TOKEN.Punctuator && this.currentValue === "=") {
       this.next();
       const right = this.parseAssignmentExpression();
@@ -3936,7 +4087,10 @@ class Parser {
       return null;
     }
 
-    if (this.currentType === TOKEN.Identifier && this.currentValue !== "async") {
+    if (
+      this.currentType === TOKEN.Identifier &&
+      this.currentValue !== "async"
+    ) {
       const nextValue = this.tokenizer.peekValue();
       if (nextValue !== "=>" && nextValue !== ":") {
         return null;
@@ -4011,7 +4165,9 @@ class Parser {
     throw new ParseError("Invalid left-hand side in assignment");
   }
 
-  private convertArrayExpressionToPattern(expression: ESTree.ArrayExpression): ESTree.ArrayPattern {
+  private convertArrayExpressionToPattern(
+    expression: ESTree.ArrayExpression,
+  ): ESTree.ArrayPattern {
     const elements = expression.elements.map((element) => {
       if (!element) {
         return null;
@@ -4039,7 +4195,9 @@ class Parser {
         continue;
       }
       if (property.type === "Property") {
-        const value = this.normalizePatternElement(property.value as ESTree.Expression);
+        const value = this.normalizePatternElement(
+          property.value as ESTree.Expression,
+        );
         properties.push({
           type: "Property",
           key: property.key,
@@ -4054,7 +4212,9 @@ class Parser {
     return { type: "ObjectPattern", properties };
   }
 
-  private normalizePatternElement(element: ESTree.Expression | ESTree.Pattern): ESTree.Pattern {
+  private normalizePatternElement(
+    element: ESTree.Expression | ESTree.Pattern,
+  ): ESTree.Pattern {
     if (this.isAssignablePattern(element)) {
       return element as ESTree.Pattern;
     }
@@ -4067,7 +4227,9 @@ class Parser {
     throw new ParseError("Invalid destructuring pattern");
   }
 
-  private isAssignablePattern(node: ESTree.Expression | ESTree.Pattern): boolean {
+  private isAssignablePattern(
+    node: ESTree.Expression | ESTree.Pattern,
+  ): boolean {
     return (
       node.type === "Identifier" ||
       node.type === "ArrayPattern" ||
@@ -4178,12 +4340,18 @@ class Parser {
   }
 }
 
-export function parseModule(input: string, _options: ParseOptions = {}): ESTree.Program {
+export function parseModule(
+  input: string,
+  _options: ParseOptions = {},
+): ESTree.Program {
   const parser = new Parser(input, true);
   return parser.parseProgram();
 }
 
-export function parseScript(input: string, _options: ParseOptions = {}): ESTree.Program {
+export function parseScript(
+  input: string,
+  _options: ParseOptions = {},
+): ESTree.Program {
   const parser = new Parser(input, false);
   return parser.parseProgram();
 }

@@ -95,7 +95,12 @@ console.log(stats.memoryBytes);
 All interpreter errors extend `InterpreterError`:
 
 ```typescript
-import { InterpreterError, ParseError, RuntimeError, SecurityError } from "nookjs";
+import {
+  InterpreterError,
+  ParseError,
+  RuntimeError,
+  SecurityError,
+} from "nookjs";
 
 try {
   // ...
