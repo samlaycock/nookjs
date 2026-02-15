@@ -2333,6 +2333,14 @@ export class Interpreter {
   // to allow GeneratorValue and AsyncGeneratorValue to access them.
   // They are intended for internal use only and should not be called by external code.
   public environment: Environment;
+
+  // Concurrency guarantees:
+  // - evaluateAsync() and evaluateModuleAsync() calls are serialized via an internal mutex.
+  // - This prevents cross-request data leakage when multiple async evaluations run concurrently.
+  // - Each evaluation waits for any previous evaluation to complete before starting.
+  // - Per-call globals are properly cleaned up after each evaluation.
+  // - sync evaluate() runs immediately and is not serialized with async evaluations.
+
   private constructorGlobals: Record<string, any>; // Globals that persist across all evaluate() calls
   private constructorValidator?: ASTValidator; // AST validator that applies to all evaluate() calls
   private currentValidator?: ASTValidator; // Per-call validator (applies to module imports)
@@ -2457,6 +2465,28 @@ export class Interpreter {
     this.integratedResourceTracking = options?.resourceTracking ?? false;
     this.nodeHandlers = this.createNodeHandlers();
   }
+
+  /**
+   * Acquire the evaluation mutex. Returns a promise that resolves when it's this evaluation's turn.
+   * This ensures evaluations are serialized to prevent cross-request data leakage.
+   * 
+   * @returns A function to call when evaluation is complete, releasing the mutex
+    */
+  private async acquireEvaluationMutex(): Promise<() => void> {
+    const previousQueue = this.evaluationMutexQueue;
+    
+    let releaseFn: () => void;
+    const isNext = new Promise<void>((resolve) => {
+      releaseFn = resolve;
+    });
+
+    this.evaluationMutexQueue = previousQueue.then(() => isNext);
+
+    await previousQueue;
+    return releaseFn!;
+  }
+
+  private evaluationMutexQueue: Promise<void> = Promise.resolve();
 
   /**
    * Format a host error message respecting security options.
@@ -2950,36 +2980,41 @@ export class Interpreter {
   }
 
   async evaluateAsync(input: string | ESTree.Program, options?: EvaluateOptions): Promise<any> {
-    const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
-    this.currentSourceCode = sourceCode;
-    this.callStack = [];
-    this.beginEvaluation(options);
-    this.abortSignal = options?.signal;
-    if (this.abortSignal?.aborted) {
-      this.endEvaluation(options);
-      throw new InterpreterError("Execution aborted");
-    }
+    const releaseMutex = await this.acquireEvaluationMutex();
     try {
-      const ast = this.parseAndValidate(input, options);
-      const needsFreshScope = typeof input !== "string";
-      const previousEnv = this.environment;
-      if (needsFreshScope) {
-        this.environment = new Environment(this.environment);
+      const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
+      this.currentSourceCode = sourceCode;
+      this.callStack = [];
+      this.beginEvaluation(options);
+      this.abortSignal = options?.signal;
+      if (this.abortSignal?.aborted) {
+        this.endEvaluation(options);
+        throw new InterpreterError("Execution aborted");
       }
       try {
-        const result = await this.evaluateNodeAsync(ast);
-        return result instanceof RawValue ? result.value : result;
-      } finally {
+        const ast = this.parseAndValidate(input, options);
+        const needsFreshScope = typeof input !== "string";
+        const previousEnv = this.environment;
         if (needsFreshScope) {
-          this.environment = previousEnv;
+          this.environment = new Environment(this.environment);
         }
+        try {
+          const result = await this.evaluateNodeAsync(ast);
+          return result instanceof RawValue ? result.value : result;
+        } finally {
+          if (needsFreshScope) {
+            this.environment = previousEnv;
+          }
+        }
+      } catch (error) {
+        throw this.enhanceError(error);
+      } finally {
+        this.endEvaluation(options);
+        this.currentSourceCode = "";
+        this.callStack = [];
       }
-    } catch (error) {
-      throw this.enhanceError(error);
     } finally {
-      this.endEvaluation(options);
-      this.currentSourceCode = "";
-      this.callStack = [];
+      releaseMutex();
     }
   }
 
@@ -3448,30 +3483,35 @@ export class Interpreter {
     code: string,
     options: ModuleEvaluateOptions,
   ): Promise<Record<string, any>> {
-    if (!this.moduleSystem) {
-      throw new InterpreterError(
-        "Module system is not enabled. Create Interpreter with { modules: { enabled: true, resolver: ... } }.",
-      );
-    }
-
-    this.currentSourceCode = code;
-    this.callStack = [];
-    this.beginEvaluation(options);
-    this.abortSignal = options.signal;
-    if (this.abortSignal?.aborted) {
-      this.endEvaluation(options);
-      throw new InterpreterError("Execution aborted");
-    }
-
+    const releaseMutex = await this.acquireEvaluationMutex();
     try {
-      const ast = this.parseModuleAndValidate(code, options);
-      return await this.evaluateModuleAstAsync(ast, options.path);
-    } catch (error) {
-      throw this.enhanceError(error);
-    } finally {
-      this.endEvaluation(options);
-      this.currentSourceCode = "";
+      if (!this.moduleSystem) {
+        throw new InterpreterError(
+          "Module system is not enabled. Create Interpreter with { modules: { enabled: true, resolver: ... } }.",
+        );
+      }
+
+      this.currentSourceCode = code;
       this.callStack = [];
+      this.beginEvaluation(options);
+      this.abortSignal = options.signal;
+      if (this.abortSignal?.aborted) {
+        this.endEvaluation(options);
+        throw new InterpreterError("Execution aborted");
+      }
+
+      try {
+        const ast = this.parseModuleAndValidate(code, options);
+        return await this.evaluateModuleAstAsync(ast, options.path);
+      } catch (error) {
+        throw this.enhanceError(error);
+      } finally {
+        this.endEvaluation(options);
+        this.currentSourceCode = "";
+        this.callStack = [];
+      }
+    } finally {
+      releaseMutex();
     }
   }
 

@@ -438,4 +438,99 @@ describe("Simplified API", () => {
 
     expect(() => fullSandbox.runSync("fail()")).toThrow("boom");
   });
+
+  describe("Concurrency", () => {
+    it("should not leak globals between concurrent runs", async () => {
+      const sandbox = createSandbox({ env: "es2022" });
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+      const runA = sandbox.run(
+        "async function f(){ await sleep(20); return secret; } f()",
+        { globals: { secret: "A", sleep } },
+      );
+      const runB = sandbox.run(
+        "async function g(){ await sleep(1); return secret; } g()",
+        { globals: { secret: "B", sleep } },
+      );
+
+      const [a, b] = await Promise.all([runA, runB]);
+      expect(a).toBe("A");
+      expect(b).toBe("B");
+    });
+
+    it("should not have leftover globals after concurrent runs complete", async () => {
+      const sandbox = createSandbox({ env: "es2022" });
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+      await Promise.all([
+        sandbox.run("async function f(){ await sleep(20); return secret; } f()", {
+          globals: { secret: "A", sleep },
+        }),
+        sandbox.run("async function g(){ await sleep(1); return secret; } g()", {
+          globals: { secret: "B", sleep },
+        }),
+      ]);
+
+      await expect(sandbox.run("secret")).rejects.toThrow("Undefined variable 'secret'");
+    });
+
+    it("should handle one run failing without corrupting another run's globals", async () => {
+      const sandbox = createSandbox({ env: "es2022" });
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+      const runA = sandbox.run("throw new Error('fail');", { globals: { sleep } });
+      const runB = sandbox.run("secret;", { globals: { secret: "B" } });
+
+      const [resultA, resultB] = await Promise.all([runA.catch((e) => e.message), runB]);
+      expect(resultB).toBe("B");
+    });
+
+    it("should serialize concurrent runs deterministically", async () => {
+      const sandbox = createSandbox({ env: "es2022" });
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+      const promises = Array.from({ length: 10 }, async (_, i) => {
+        await sandbox.run(
+          `async function f${i}(){ await sleep(${10 - i}); return value; } f${i}()`,
+          { globals: { value: String(i), sleep } },
+        );
+      });
+
+      await Promise.all(promises);
+
+      await expect(sandbox.run("value")).rejects.toThrow("Undefined variable 'value'");
+    });
+
+    it("should serialize runModule() calls with run() calls", async () => {
+      const sandbox = createSandbox({
+        env: "es2022",
+        modules: { files: { "mod.js": "export const value = 42;" } },
+      });
+
+      const [scriptResult, moduleResult] = await Promise.all([
+        sandbox.run("secret", { globals: { secret: "script" } }),
+        sandbox.runModule('import { value } from "mod.js"; export const result = value;', {
+          path: "main.js",
+        }),
+      ]);
+
+      expect(scriptResult).toBe("script");
+      expect(moduleResult.result).toBe(42);
+    });
+
+    it("should not allow concurrent evaluations to interfere with feature control", async () => {
+      const sandbox = createSandbox({
+        env: "es2022",
+        features: { disable: ["ArrowFunctions"] },
+      });
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+      const runWithArrows = sandbox.run("(() => 1)()", { features: { enable: ["ArrowFunctions"] } });
+      const runWithoutArrows = sandbox.run("function f() { return 1; } f()", { globals: { sleep } });
+
+      const [arrowResult, normalResult] = await Promise.all([runWithArrows.catch((e) => e.message), runWithoutArrows]);
+      expect(arrowResult).toBe(1);
+      expect(normalResult).toBe(1);
+    });
+  });
 });
