@@ -5,6 +5,7 @@
 Fix stack sanitization to prevent host path leakage
 
 Improved `sanitizeErrorStack()` to catch all common runtime stack frame formats:
+
 - Unix absolute paths with any file extension
 - Windows absolute paths
 - file:// URLs
