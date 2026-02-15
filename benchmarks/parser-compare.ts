@@ -45,10 +45,18 @@ const samples: { name: string; code: string; iterations: number }[] = [
     code: "class Box { static count = 0; #value = 1; constructor(v) { this.#value = v; } get value() { return this.#value; } static { Box.count = Box.count + 1; } } new Box(2).value",
     iterations: 3000,
   },
-  { name: "Optional Chaining + Template", code: "obj?.value?.() + `${1 + 2}`", iterations: 8000 },
+  {
+    name: "Optional Chaining + Template",
+    code: "obj?.value?.() + `${1 + 2}`",
+    iterations: 8000,
+  },
 ];
 
-function runParseBenchmark(name: string, code: string, iterations: number): ParseBenchmarkResult {
+function runParseBenchmark(
+  name: string,
+  code: string,
+  iterations: number,
+): ParseBenchmarkResult {
   parseModule(code);
   parseMeriyah(code, { next: true });
 

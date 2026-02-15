@@ -5,16 +5,23 @@ import { CodeBlock } from "../../../components/code-block";
 export function AsyncExamples() {
   return (
     <article className="prose prose-invert max-w-none">
-      <h1 className="text-3xl font-bold text-neutral-50 mb-4">Async Operations</h1>
+      <h1 className="text-3xl font-bold text-neutral-50 mb-4">
+        Async Operations
+      </h1>
       <p className="text-xl text-neutral-300 mb-8">
         Examples of using async/await and Promises in sandbox code.
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Basic Async/Await</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Basic Async/Await
+        </h2>
         <p className="text-neutral-300 mb-4">
-          Use <code className="text-amber-400 bg-neutral-800 px-1 rounded">run()</code> to execute
-          async operations:
+          Use{" "}
+          <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+            run()
+          </code>{" "}
+          to execute async operations:
         </p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
@@ -43,8 +50,12 @@ console.log(result); // "John Doe"`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Promise Handling</h2>
-        <p className="text-neutral-300 mb-4">Sandbox code can work with Promises directly:</p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Promise Handling
+        </h2>
+        <p className="text-neutral-300 mb-4">
+          Sandbox code can work with Promises directly:
+        </p>
         <CodeBlock
           code={`const sandbox = createSandbox({
   env: "es2024",
@@ -77,8 +88,12 @@ const result2 = await sandbox.run(\`
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Parallel Execution</h2>
-        <p className="text-neutral-300 mb-4">Execute multiple async operations in parallel:</p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Parallel Execution
+        </h2>
+        <p className="text-neutral-300 mb-4">
+          Execute multiple async operations in parallel:
+        </p>
         <CodeBlock
           code={`const sandbox = createSandbox({
   env: "es2024",
@@ -122,7 +137,9 @@ console.log(result);
         <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
           Error Handling in Async Code
         </h2>
-        <p className="text-neutral-300 mb-4">Handle errors from async operations:</p>
+        <p className="text-neutral-300 mb-4">
+          Handle errors from async operations:
+        </p>
         <CodeBlock
           code={`const sandbox = createSandbox({
   env: "es2024",
@@ -174,7 +191,9 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Timeouts and Cancellation</h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Timeouts and Cancellation
+        </h2>
         <p className="text-neutral-300 mb-4">
           Use AbortSignal to cancel long-running async operations:
         </p>
@@ -218,8 +237,12 @@ try {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Async Data Pipeline</h2>
-        <p className="text-neutral-300 mb-4">Build async data processing pipelines:</p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Async Data Pipeline
+        </h2>
+        <p className="text-neutral-300 mb-4">
+          Build async data processing pipelines:
+        </p>
         <CodeBlock
           code={`const sandbox = createSandbox({
   env: "es2024",
@@ -281,8 +304,12 @@ console.log(result);
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Webhook Handler</h2>
-        <p className="text-neutral-300 mb-4">Let users define async webhook processing logic:</p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
+          Webhook Handler
+        </h2>
+        <p className="text-neutral-300 mb-4">
+          Let users define async webhook processing logic:
+        </p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
 

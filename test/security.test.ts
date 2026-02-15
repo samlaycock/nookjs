@@ -13,7 +13,9 @@ describe("Security", () => {
             let obj = {};
             obj["__proto__"]["polluted"] = "hacked";
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
 
       it("should prevent __proto__ assignment via dot notation", () => {
@@ -23,7 +25,9 @@ describe("Security", () => {
             let obj = {};
             obj.__proto__ = {};
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
 
       it("should prevent __proto__ access via computed property", () => {
@@ -33,7 +37,9 @@ describe("Security", () => {
             let obj = {};
             let proto = obj["__proto__"];
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
 
       it("should prevent __proto__ access via dot notation", () => {
@@ -43,7 +49,9 @@ describe("Security", () => {
             let obj = {};
             let proto = obj.__proto__;
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
 
       it("should prevent __proto__ in object literals", () => {
@@ -54,7 +62,9 @@ describe("Security", () => {
               "__proto__": { polluted: true }
             };
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
 
       it("should prevent __proto__ pollution through nested objects", () => {
@@ -64,7 +74,9 @@ describe("Security", () => {
             let obj = { nested: {} };
             obj.nested["__proto__"] = { evil: true };
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
     });
 
@@ -76,7 +88,9 @@ describe("Security", () => {
             let obj = {};
             obj["constructor"] = null;
           `);
-        }).toThrow("Property name 'constructor' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'constructor' is not allowed for security reasons",
+        );
       });
 
       it("should prevent constructor assignment via dot notation", () => {
@@ -86,7 +100,9 @@ describe("Security", () => {
             let obj = {};
             obj.constructor = null;
           `);
-        }).toThrow("Property name 'constructor' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'constructor' is not allowed for security reasons",
+        );
       });
 
       it("should prevent constructor access via computed property", () => {
@@ -96,7 +112,9 @@ describe("Security", () => {
             let obj = {};
             let ctor = obj["constructor"];
           `);
-        }).toThrow("Property name 'constructor' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'constructor' is not allowed for security reasons",
+        );
       });
 
       it("should prevent constructor access via dot notation", () => {
@@ -106,7 +124,9 @@ describe("Security", () => {
             let obj = {};
             let ctor = obj.constructor;
           `);
-        }).toThrow("Property name 'constructor' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'constructor' is not allowed for security reasons",
+        );
       });
 
       it("should prevent constructor in object literals", () => {
@@ -117,7 +137,9 @@ describe("Security", () => {
               constructor: null
             };
           `);
-        }).toThrow("Property name 'constructor' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'constructor' is not allowed for security reasons",
+        );
       });
     });
 
@@ -129,7 +151,9 @@ describe("Security", () => {
             let obj = {};
             obj["prototype"] = {};
           `);
-        }).toThrow("Property name 'prototype' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'prototype' is not allowed for security reasons",
+        );
       });
 
       it("should prevent prototype assignment via dot notation", () => {
@@ -139,7 +163,9 @@ describe("Security", () => {
             let obj = {};
             obj.prototype = {};
           `);
-        }).toThrow("Property name 'prototype' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'prototype' is not allowed for security reasons",
+        );
       });
 
       it("should prevent prototype access via computed property", () => {
@@ -149,7 +175,9 @@ describe("Security", () => {
             let obj = {};
             let proto = obj["prototype"];
           `);
-        }).toThrow("Property name 'prototype' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'prototype' is not allowed for security reasons",
+        );
       });
 
       it("should prevent prototype access via dot notation", () => {
@@ -159,7 +187,9 @@ describe("Security", () => {
             let obj = {};
             let proto = obj.prototype;
           `);
-        }).toThrow("Property name 'prototype' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'prototype' is not allowed for security reasons",
+        );
       });
 
       it("should prevent prototype in object literals", () => {
@@ -170,7 +200,9 @@ describe("Security", () => {
               prototype: {}
             };
           `);
-        }).toThrow("Property name 'prototype' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'prototype' is not allowed for security reasons",
+        );
       });
     });
 
@@ -190,7 +222,9 @@ describe("Security", () => {
               let obj = {};
               obj["${prop}"] = null;
             `);
-          }).toThrow(`Property name '${prop}' is not allowed for security reasons`);
+          }).toThrow(
+            `Property name '${prop}' is not allowed for security reasons`,
+          );
         });
 
         it(`should prevent ${prop} access via computed property`, () => {
@@ -200,7 +234,9 @@ describe("Security", () => {
               let obj = {};
               let val = obj["${prop}"];
             `);
-          }).toThrow(`Property name '${prop}' is not allowed for security reasons`);
+          }).toThrow(
+            `Property name '${prop}' is not allowed for security reasons`,
+          );
         });
 
         it(`should prevent ${prop} in object literals`, () => {
@@ -211,7 +247,9 @@ describe("Security", () => {
                 "${prop}": null
               };
             `);
-          }).toThrow(`Property name '${prop}' is not allowed for security reasons`);
+          }).toThrow(
+            `Property name '${prop}' is not allowed for security reasons`,
+          );
         });
       });
     });
@@ -227,7 +265,9 @@ describe("Security", () => {
             let obj = getObject();
             obj["__proto__"]["polluted"] = true;
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
 
       it("should prevent pollution through array of objects", () => {
@@ -237,7 +277,9 @@ describe("Security", () => {
             let arr = [{}];
             arr[0]["__proto__"] = { evil: true };
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
 
       it("should prevent pollution through nested property chains", () => {
@@ -247,7 +289,9 @@ describe("Security", () => {
             let obj = { a: { b: { c: {} } } };
             obj.a.b.c["__proto__"] = { bad: true };
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
 
       it("should prevent pollution through computed property with string concatenation", () => {
@@ -258,7 +302,9 @@ describe("Security", () => {
             let key = "__" + "proto" + "__";
             obj[key] = { polluted: true };
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
 
       it("should prevent constructor access through method calls", () => {
@@ -273,7 +319,9 @@ describe("Security", () => {
             let self = obj.getData();
             let ctor = self["constructor"];
           `);
-        }).toThrow("Property name 'constructor' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'constructor' is not allowed for security reasons",
+        );
       });
 
       it("should prevent prototype pollution through loops", () => {
@@ -286,7 +334,9 @@ describe("Security", () => {
               obj[props[i]] = { evil: true };
             }
           `);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
     });
 
@@ -447,7 +497,9 @@ describe("Security", () => {
             let obj = { a: 1 };
             obj.toString
           `);
-        }).toThrow("Property name 'toString' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'toString' is not allowed for security reasons",
+        );
       });
 
       it("should block inherited Array.prototype access", () => {
@@ -457,7 +509,9 @@ describe("Security", () => {
             let arr = [1, 2, 3];
             arr.toString
           `);
-        }).toThrow("Property name 'toString' is not allowed for security reasons");
+        }).toThrow(
+          "Property name 'toString' is not allowed for security reasons",
+        );
       });
 
       it("should block inherited Function.prototype access on sandbox functions", () => {
@@ -482,7 +536,9 @@ describe("Security", () => {
             const obj = { a: 1 };
             obj[sym];
           `);
-        }).toThrow("Symbol 'Symbol(Symbol.toStringTag)' is not allowed for security reasons");
+        }).toThrow(
+          "Symbol 'Symbol(Symbol.toStringTag)' is not allowed for security reasons",
+        );
       });
 
       it("should block dangerous symbol assignment on objects", () => {
@@ -495,7 +551,9 @@ describe("Security", () => {
             const obj = { a: 1 };
             obj[sym] = 1;
           `);
-        }).toThrow("Symbol 'Symbol(Symbol.toPrimitive)' is not allowed for security reasons");
+        }).toThrow(
+          "Symbol 'Symbol(Symbol.toPrimitive)' is not allowed for security reasons",
+        );
       });
     });
 
@@ -623,7 +681,9 @@ describe("Security", () => {
         });
         expect(() => {
           interpreter.evaluate(`data["__proto__"] = { evil: true }`);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
 
       it("should prevent pollution across multiple evaluate calls", () => {
@@ -632,7 +692,9 @@ describe("Security", () => {
 
         expect(() => {
           interpreter.evaluate(`obj["__proto__"] = { bad: true }`);
-        }).toThrow("Property name '__proto__' is not allowed for security reasons");
+        }).toThrow(
+          "Property name '__proto__' is not allowed for security reasons",
+        );
       });
     });
   });
@@ -1063,9 +1125,9 @@ describe("Security", () => {
           security: { hideHostErrorMessages: true },
         });
 
-        return expect(interpreter.evaluateAsync("new BadClass()")).rejects.toThrow(
-          "[error details hidden]",
-        );
+        return expect(
+          interpreter.evaluateAsync("new BadClass()"),
+        ).rejects.toThrow("[error details hidden]");
       });
 
       it("should hide async host function errors when configured", async () => {
@@ -1420,7 +1482,9 @@ describe("Security", () => {
 
         expect(() => {
           (wrapped as any).value = 100;
-        }).toThrow("Cannot modify property 'value' on global 'obj' (read-only)");
+        }).toThrow(
+          "Cannot modify property 'value' on global 'obj' (read-only)",
+        );
       });
 
       it("should block adding new properties", () => {
@@ -1429,7 +1493,9 @@ describe("Security", () => {
 
         expect(() => {
           (wrapped as any).newProp = "test";
-        }).toThrow("Cannot modify property 'newProp' on global 'obj' (read-only)");
+        }).toThrow(
+          "Cannot modify property 'newProp' on global 'obj' (read-only)",
+        );
       });
 
       it("should block deleting properties", () => {
@@ -1438,7 +1504,9 @@ describe("Security", () => {
 
         expect(() => {
           delete (wrapped as any).value;
-        }).toThrow("Cannot delete property 'value' from global 'obj' (read-only)");
+        }).toThrow(
+          "Cannot delete property 'value' from global 'obj' (read-only)",
+        );
       });
 
       it("should block Object.defineProperty", () => {
@@ -1447,7 +1515,9 @@ describe("Security", () => {
 
         expect(() => {
           Object.defineProperty(wrapped, "newProp", { value: 100 });
-        }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
+        }).toThrow(
+          "Cannot define property 'newProp' on global 'obj' (read-only)",
+        );
       });
 
       it("should block Object.setPrototypeOf", () => {
@@ -1477,7 +1547,9 @@ describe("Security", () => {
         // Cannot modify nested values
         expect(() => {
           (wrapped as any).level1.level2.value = 100;
-        }).toThrow("Cannot modify property 'value' on global 'obj.level1.level2' (read-only)");
+        }).toThrow(
+          "Cannot modify property 'value' on global 'obj.level1.level2' (read-only)",
+        );
       });
 
       it("should block __proto__ on nested objects", () => {
@@ -1591,7 +1663,9 @@ describe("Security", () => {
 
         expect(() => {
           first.secret = "HACKED";
-        }).toThrow("Cannot modify property 'secret' on global 'arr[]' (read-only)");
+        }).toThrow(
+          "Cannot modify property 'secret' on global 'arr[]' (read-only)",
+        );
       });
 
       it("should wrap values when iterating inside interpreter", () => {
@@ -1604,7 +1678,9 @@ describe("Security", () => {
             const obj = [...arr][0];
             obj.secret = "HACKED";
           `);
-        }).toThrow("Cannot modify property 'secret' on global 'arr[]' (read-only)");
+        }).toThrow(
+          "Cannot modify property 'secret' on global 'arr[]' (read-only)",
+        );
       });
 
       it("should wrap values yielded by async iterators", async () => {
@@ -1618,7 +1694,9 @@ describe("Security", () => {
 
         expect(() => {
           result.value.secret = "HACKED";
-        }).toThrow("Cannot modify property 'secret' on global 'gen[]' (read-only)");
+        }).toThrow(
+          "Cannot modify property 'secret' on global 'gen[]' (read-only)",
+        );
       });
     });
 
@@ -1629,7 +1707,9 @@ describe("Security", () => {
 
         expect(() => {
           Reflect.set(wrapped, "value", 100);
-        }).toThrow("Cannot modify property 'value' on global 'obj' (read-only)");
+        }).toThrow(
+          "Cannot modify property 'value' on global 'obj' (read-only)",
+        );
       });
 
       it("should block Reflect.get with dangerous properties", () => {
@@ -1647,7 +1727,9 @@ describe("Security", () => {
 
         expect(() => {
           Reflect.defineProperty(wrapped, "newProp", { value: 100 });
-        }).toThrow("Cannot define property 'newProp' on global 'obj' (read-only)");
+        }).toThrow(
+          "Cannot define property 'newProp' on global 'obj' (read-only)",
+        );
       });
 
       it("should block Reflect.setPrototypeOf", () => {

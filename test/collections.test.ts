@@ -13,7 +13,9 @@ describe("Collections", () => {
 
       it("should create Map with entries", () => {
         const interpreter = new Interpreter(ES2015);
-        expect(interpreter.evaluate("new Map([['a', 1], ['b', 2]]).size")).toBe(2);
+        expect(interpreter.evaluate("new Map([['a', 1], ['b', 2]]).size")).toBe(
+          2,
+        );
       });
 
       it("should set a key-value pair", () => {
