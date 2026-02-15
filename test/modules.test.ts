@@ -3391,7 +3391,7 @@ describe("Module System", () => {
       );
       expect(allowed.out).toBe("TOPSECRET");
 
-      await expect(
+      expect(
         interpreter.evaluateModuleAsync(
           'import { token } from "./secret"; export const out = token;',
           { path: "attacker.js" },
@@ -3428,7 +3428,7 @@ describe("Module System", () => {
       );
       expect(allowed.out).toBe("TOPSECRET");
 
-      await expect(
+      expect(
         interpreter.evaluateModuleAsync(
           'import { token } from "./secret"; export const out = token;',
           { path: "attacker.js" },
@@ -3439,7 +3439,7 @@ describe("Module System", () => {
     test("should allow same importer to re-import same specifier (cache works for same context)", async () => {
       let resolveCount = 0;
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           if (specifier === "./shared") {
             resolveCount++;
             return {
@@ -3466,7 +3466,7 @@ describe("Module System", () => {
 
     test("should handle path aliasing correctly for allowed imports", async () => {
       const resolver: ModuleResolver = {
-        resolve(specifier, importer) {
+        resolve(specifier) {
           if (specifier === "./utils" || specifier === "./helpers") {
             return {
               type: "source",
@@ -3491,13 +3491,16 @@ describe("Module System", () => {
     });
 
     test("should call resolver for each import even with cache enabled", async () => {
-      const resolveCalls: Array<{ specifier: string; importer: string | null }> = [];
+      const resolveCalls: Array<{
+        specifier: string;
+        importer: string | null;
+      }> = [];
       const resolver: ModuleResolver = {
         resolve(specifier, importer) {
           resolveCalls.push({ specifier, importer });
           return {
             type: "source",
-            code: 'export const x = 1;',
+            code: "export const x = 1;",
             path: specifier,
           };
         },
@@ -3511,7 +3514,9 @@ describe("Module System", () => {
         'import { x } from "./mod"; import { x as x2 } from "./mod";',
         { path: "importer1.js" },
       );
-      await interpreter.evaluateModuleAsync('import { x } from "./mod";', { path: "importer2.js" });
+      await interpreter.evaluateModuleAsync('import { x } from "./mod";', {
+        path: "importer2.js",
+      });
 
       expect(resolveCalls.length).toBeGreaterThan(1);
       expect(resolveCalls.some((c) => c.importer === "importer1.js")).toBe(true);
