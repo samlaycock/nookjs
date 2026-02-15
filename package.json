@@ -1,6 +1,6 @@
 {
   "name": "nookjs",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A fast(ish), standards-compliant JavaScript/TypeScript(ish) parser and interpreter written in TypeScript.",
   "homepage": "https://nookjs.dev",
   "license": "MIT",
