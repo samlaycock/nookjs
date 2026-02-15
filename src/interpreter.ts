@@ -2463,7 +2463,7 @@ export class Interpreter {
     this.nodeHandlers = this.createNodeHandlers();
   }
 
-  private getCurrentContext(): EvaluationContext {
+  private getCurrentContext(): EvaluationContext | undefined {
     return this.evaluationContextStack[this.evaluationContextStack.length - 1];
   }
 
