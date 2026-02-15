@@ -1329,6 +1329,18 @@ describe("Security", () => {
         expect(result).toContain("[native code]");
       });
 
+      it("should remove Windows absolute paths", () => {
+        const input = `Error: test
+      at foo (C:\\Users\\developer\\project\\file.ts:123:45)
+      at bar (D:\\projects\\app.js:10:5)`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("C:\\Users");
+        expect(result).not.toContain("D:\\projects");
+        expect(result).toContain("[native code]");
+      });
+
       it("should remove file:// URLs", () => {
         const input = `Error: test
       at foo (file:///home/user/project/file.ts:123:45)`;
@@ -1337,6 +1349,61 @@ describe("Security", () => {
 
         expect(result).not.toContain("file://");
         expect(result).toContain("[native code]");
+      });
+
+      it("should remove eval-style frames", () => {
+        const input = `Error: test
+      at eval (eval at foo (file:///home/user/project/script.js:123:45))
+      at bar (eval at <anonymous> (/Users/dev/code/app.js:10:5))`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("/home/user");
+        expect(result).not.toContain("/Users/dev");
+        expect(result).not.toContain("file://");
+        expect(result).toContain("at eval ([native code])");
+      });
+
+      it("should remove Bun-style eval frames", () => {
+        const input = `Error: test
+      at eval (eval at <anonymous> (file:///home/user/project/src/index.ts:5:10))
+      at Function.bound (native)
+      at bar (native)`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("/home/user");
+        expect(result).not.toContain("file://");
+        expect(result).toContain("at eval ([native code])");
+      });
+
+      it("should handle non-.ts/.js file extensions", () => {
+        const input = `Error: test
+      at foo (/home/user/project/file.tsx:123:45)
+      at bar (/Users/dev/code/app.jsx:10:5)
+      at baz (/path/to/script.mjs:5:5)`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("/home/user");
+        expect(result).not.toContain("/Users/dev");
+        expect(result).not.toContain("/path/to");
+        expect(result).toContain("[native code]");
+      });
+
+      it("should preserve non-path stack text", () => {
+        const input = `Error: something went wrong
+      at Object.makeErr (<anonymous>)
+      at Array.map (<anonymous>)
+      at Promise.then (<anonymous>)`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).toContain("Error: something went wrong");
+        expect(result).toContain("at Object.makeErr");
+        expect(result).toContain("at Array.map");
+        expect(result).toContain("at Promise.then");
+        expect(result).not.toContain("[native code]");
       });
 
       it("should preserve the error message line", () => {
@@ -1351,6 +1418,18 @@ describe("Security", () => {
       it("should handle empty/undefined input", () => {
         expect(sanitizeErrorStack(undefined)).toBe("");
         expect(sanitizeErrorStack("")).toBe("");
+      });
+
+      it("should handle bare paths without parentheses", () => {
+        const input = `Error: test
+    at foo /home/user/project/file.ts:123:45
+    at bar /Users/dev/code/app.js:10:5`;
+
+        const result = sanitizeErrorStack(input);
+
+        expect(result).not.toContain("/home/user");
+        expect(result).not.toContain("/Users/dev");
+        expect(result).toContain("[native code]");
       });
     });
   });

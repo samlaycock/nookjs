@@ -43,6 +43,14 @@ When using `createSandbox`, you can set `policy.errors` instead of `security` di
 
 When enabled, error stack traces are sanitized to remove host file paths. This prevents untrusted code from learning about the host environment's file structure.
 
+**What is sanitized:**
+
+- `file://` URLs with line/column numbers
+- Absolute Unix paths (e.g., `/home/user/project/file.ts:123:45`)
+- Absolute Windows paths (e.g., `C:\Users\developer\file.ts:123:45`)
+- Eval-style frames (including Bun-like formats)
+- All file extensions (not limited to `.ts`/`.js`)
+
 **Before sanitization:**
 
 ```
@@ -58,6 +66,12 @@ Error: test
     at executeHostConstructor ([native code])
     at evaluateNewExpressionAsync ([native code])
 ```
+
+**Caveats:**
+
+- The sanitizer uses pattern matching and may not catch all possible path formats
+- Non-path runtime metadata (function names, anonymous markers) is preserved for debugging
+- Some internal/runtime frames may still appear with generic `[native code]` markers
 
 ### `hideHostErrorMessages` (default: `true`)
 

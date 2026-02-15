@@ -177,41 +177,36 @@ export function getSecurityOptions(): SecurityOptions {
 export function sanitizeErrorStack(stack: string | undefined): string {
   if (!stack) return "";
 
-  // Split into lines and process each
-  const lines = stack.split("\n");
-  const sanitizedLines: string[] = [];
+  let sanitized = stack;
 
-  for (const line of lines) {
-    // Keep the first line (error message)
-    if (!line.includes("    at ")) {
-      sanitizedLines.push(line);
-      continue;
-    }
+  // Remove file:// URLs with line:col numbers (with optional parens around)
+  // Matches: file:///home/user/project/file.ts:123:45 or (file:///home/user/project/file.ts:123:45)
+  sanitized = sanitized.replace(/(\()?file:\/\/\/[^):]+:\d+:\d+(\))?/g, "[native code]");
 
-    // For stack frame lines, remove file paths
-    // Typical format: "    at functionName (file:///path/to/file.ts:123:45)"
-    // or: "    at file:///path/to/file.ts:123:45"
-    // or: "    at functionName (/path/to/file.ts:123:45)"
+  // Remove absolute Unix paths with line:col numbers
+  // Matches: /home/user/project/file.ts:123:45 or (/home/user/project/file.ts:123:45)
+  sanitized = sanitized.replace(/(\()\/[^):]+:\d+:\d+(\))?/g, "[native code]");
 
-    // Replace paths with [native code] or [sandbox] marker
-    const sanitized = line
-      // Remove file:// URLs with line numbers
-      .replace(/\(file:\/\/[^)]+\)/g, "([native code])")
-      // Remove absolute paths with line numbers (Unix)
-      .replace(/\(\/[^)]+\)/g, "([native code])")
-      // Remove absolute paths with line numbers (Windows)
-      .replace(/\([A-Za-z]:\\[^)]+\)/g, "([native code])")
-      // Remove bare file:// URLs (no parens)
-      .replace(/file:\/\/\S+/g, "[native code]")
-      // Remove bare absolute paths (Unix) at end of line
-      .replace(/\/\S+\.[jt]s:\d+:\d+$/g, "[native code]")
-      // Remove bare absolute paths (Windows) at end of line
-      .replace(/[A-Za-z]:\\\S+\.[jt]s:\d+:\d+$/g, "[native code]");
+  // Remove absolute Windows paths with line:col numbers
+  // Matches: C:\Users\...\file.ts:123:45 or (C:\Users\...\file.ts:123:45)
+  sanitized = sanitized.replace(/(\()?[A-Za-z]:\\[^):]+:\d+:\d+(\))?/g, "[native code]");
 
-    sanitizedLines.push(sanitized);
-  }
+  // Remove eval-style frames (including Bun eval frames)
+  // Matches: at eval (eval at <anonymous> (file:///...)) or similar nested eval patterns
+  // These often contain the actual file path in the inner part
+  sanitized = sanitized.replace(/at eval[^\n]*/gi, "at eval ([native code])");
 
-  return sanitizedLines.join("\n");
+  // Remove any remaining bare file:// URLs anywhere in the line
+  sanitized = sanitized.replace(/file:\/\/\/\S+/g, "[native code]");
+
+  // Remove any remaining bare absolute Unix paths (starting with /)
+  // This catches paths like /home/user/project/file.ts:123:45 at end of line
+  sanitized = sanitized.replace(/(?<!\()\/[^ )]+:\d+:\d+(?!\))/g, "[native code]");
+
+  // Clean up any double markers that might result from overlapping replacements
+  sanitized = sanitized.replace(/(\[native code\]\s*)+/g, "[native code]");
+
+  return sanitized;
 }
 
 /**
