@@ -16,10 +16,9 @@ describe("Concurrent Run Policy Isolation", () => {
         },
       );
 
-      const overlappingRun = sb.run(
-        "async function b(){ await sleep(1); return 1; } b()",
-        { globals: { sleep } },
-      );
+      const overlappingRun = sb.run("async function b(){ await sleep(1); return 1; } b()", {
+        globals: { sleep },
+      });
 
       const result2 = await overlappingRun;
       expect(result2).toBe(1);
