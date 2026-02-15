@@ -469,17 +469,19 @@ describe("Simplified API", () => {
         }),
       ]);
 
-      await expect(sandbox.run("secret")).rejects.toThrow("Undefined variable 'secret'");
+      expect(sandbox.run("secret")).rejects.toThrow("Undefined variable 'secret'");
     });
 
     it("should handle one run failing without corrupting another run's globals", async () => {
       const sandbox = createSandbox({ env: "es2022" });
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-      const runA = sandbox.run("throw new Error('fail');", { globals: { sleep } });
+      const runA = sandbox.run("throw new Error('fail');", {
+        globals: { sleep },
+      });
       const runB = sandbox.run("secret;", { globals: { secret: "B" } });
 
-      const [resultA, resultB] = await Promise.all([runA.catch((e) => e.message), runB]);
+      const [, resultB] = await Promise.all([runA.catch((e) => e.message), runB]);
       expect(resultB).toBe("B");
     });
 
@@ -496,7 +498,7 @@ describe("Simplified API", () => {
 
       await Promise.all(promises);
 
-      await expect(sandbox.run("value")).rejects.toThrow("Undefined variable 'value'");
+      expect(sandbox.run("value")).rejects.toThrow("Undefined variable 'value'");
     });
 
     it("should serialize runModule() calls with run() calls", async () => {
