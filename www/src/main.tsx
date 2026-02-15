@@ -41,7 +41,10 @@ createRoot(document.getElementById("root")!).render(
             <Route path="api/sandbox" element={<SandboxAPI />} />
             <Route path="api/interpreter" element={<InterpreterAPI />} />
             <Route path="api/errors" element={<ErrorsAPI />} />
-            <Route path="api/resource-tracker" element={<ResourceTrackerAPI />} />
+            <Route
+              path="api/resource-tracker"
+              element={<ResourceTrackerAPI />}
+            />
             <Route path="examples/basic" element={<BasicExamples />} />
             <Route path="examples/async" element={<AsyncExamples />} />
             <Route path="examples/plugins" element={<PluginsExamples />} />

@@ -313,7 +313,8 @@ const sandbox = createSandbox({
   env: "es2022",
   modules: {
     files: {
-      "math.js": "export const add = (a, b) => a + b; export const PI = 3.14159;",
+      "math.js":
+        "export const add = (a, b) => a + b; export const PI = 3.14159;",
       "utils.js": "export function double(x) { return x * 2; }",
     },
   },

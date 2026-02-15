@@ -1,7 +1,11 @@
 import CodeEditor from "@uiw/react-textarea-code-editor";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { createSandbox, InterpreterError, ParseError } from "../../../src/index";
+import {
+  createSandbox,
+  InterpreterError,
+  ParseError,
+} from "../../../src/index";
 import { Button } from "../components/button";
 
 const CODE_LOCAL_STORAGE_KEY = "nookjs-code";
@@ -182,7 +186,9 @@ const result = await sandbox.run(code);`,
             {output !== null && (
               <div className="flex flex-row gap-4 overflow-hidden">
                 <span className="text-neutral-600">Output:</span>
-                <pre className="text-neutral-50 whitespace-pre-wrap">{output}</pre>
+                <pre className="text-neutral-50 whitespace-pre-wrap">
+                  {output}
+                </pre>
               </div>
             )}
             {error !== null && (

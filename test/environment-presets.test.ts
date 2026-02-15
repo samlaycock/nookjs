@@ -39,13 +39,17 @@ describe("Presets", () => {
           const interpreter = new Interpreter(Browser);
 
           expect(interpreter.evaluate("typeof URL")).toBe("function");
-          expect(interpreter.evaluate("typeof URLSearchParams")).toBe("function");
+          expect(interpreter.evaluate("typeof URLSearchParams")).toBe(
+            "function",
+          );
         });
 
         it("should include AbortController", () => {
           const interpreter = new Interpreter(Browser);
 
-          expect(interpreter.evaluate("typeof AbortController")).toBe("function");
+          expect(interpreter.evaluate("typeof AbortController")).toBe(
+            "function",
+          );
           expect(interpreter.evaluate("typeof AbortSignal")).toBe("function");
         });
 
@@ -74,7 +78,9 @@ describe("Presets", () => {
           const interpreter = new Interpreter(Browser);
 
           expect(interpreter.evaluate("typeof performance")).toBe("object");
-          expect(interpreter.evaluate("typeof performance.now")).toBe("function");
+          expect(interpreter.evaluate("typeof performance.now")).toBe(
+            "function",
+          );
         });
 
         it("should include Event APIs", () => {
@@ -94,8 +100,12 @@ describe("Presets", () => {
         it("should include Streams API", () => {
           const interpreter = new Interpreter(Browser);
 
-          expect(interpreter.evaluate("typeof ReadableStream")).toBe("function");
-          expect(interpreter.evaluate("typeof WritableStream")).toBe("function");
+          expect(interpreter.evaluate("typeof ReadableStream")).toBe(
+            "function",
+          );
+          expect(interpreter.evaluate("typeof WritableStream")).toBe(
+            "function",
+          );
         });
       });
 
@@ -192,7 +202,9 @@ describe("Presets", () => {
         it("should include Streams API", () => {
           const interpreter = new Interpreter(NodeJS);
 
-          expect(interpreter.evaluate("typeof ReadableStream")).toBe("function");
+          expect(interpreter.evaluate("typeof ReadableStream")).toBe(
+            "function",
+          );
         });
       });
 

@@ -52,7 +52,11 @@ const samples: { name: string; code: string; iterations: number }[] = [
   },
 ];
 
-function runParseBenchmark(name: string, code: string, iterations: number): ParseBenchmarkResult {
+function runParseBenchmark(
+  name: string,
+  code: string,
+  iterations: number,
+): ParseBenchmarkResult {
   parseModule(code);
   parseMeriyah(code, { next: true });
 

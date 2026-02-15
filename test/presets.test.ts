@@ -67,7 +67,10 @@ describe("Presets", () => {
           expect(result.featureControl?.features).toContain("WhileStatement");
           expect(result.featureControl?.features).toContain("ForStatement");
           // Should deduplicate
-          expect(result.featureControl?.features.filter((f) => f === "IfStatement").length).toBe(1);
+          expect(
+            result.featureControl?.features.filter((f) => f === "IfStatement")
+              .length,
+          ).toBe(1);
         });
 
         it("should union features when both are blacklists", () => {
@@ -139,7 +142,10 @@ describe("Presets", () => {
           const validator1 = (() => true) as any;
           const validator2 = (() => true) as any;
 
-          const result = preset({ validator: validator1 }, { validator: validator2 });
+          const result = preset(
+            { validator: validator1 },
+            { validator: validator2 },
+          );
 
           expect(result.validator).toBe(validator2);
         });
@@ -475,7 +481,9 @@ describe("Presets", () => {
           }),
         );
 
-        return expect(interpreter.evaluateAsync("throwError()")).rejects.toThrow("secret");
+        return expect(
+          interpreter.evaluateAsync("throwError()"),
+        ).rejects.toThrow("secret");
       });
     });
   });

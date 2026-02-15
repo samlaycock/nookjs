@@ -41,7 +41,9 @@ describe("Simplified API", () => {
   });
 
   it("parse() should respect validators", () => {
-    expect(() => parse("const x = 1", { validator: () => false })).toThrow("AST validation failed");
+    expect(() => parse("const x = 1", { validator: () => false })).toThrow(
+      "AST validation failed",
+    );
   });
 
   it("parse() should respect sandbox validators", () => {
@@ -193,10 +195,13 @@ describe("Simplified API", () => {
   it("runModule() should use per-run globals", async () => {
     const sandbox = createSandbox({ env: "es2022", modules: {} });
 
-    const exports = await sandbox.runModule("export const value = answer + 1;", {
-      path: "main.js",
-      globals: { answer: 41 },
-    });
+    const exports = await sandbox.runModule(
+      "export const value = answer + 1;",
+      {
+        path: "main.js",
+        globals: { answer: 41 },
+      },
+    );
 
     expect(exports.value).toBe(42);
 
@@ -250,15 +255,15 @@ describe("Simplified API", () => {
   });
 
   it("should throw for unknown env preset", () => {
-    expect(() => createSandbox({ env: "unknown" as unknown as "es2022" })).toThrow(
-      "Unknown env preset",
-    );
+    expect(() =>
+      createSandbox({ env: "unknown" as unknown as "es2022" }),
+    ).toThrow("Unknown env preset");
   });
 
   it("should throw for unknown API preset", () => {
-    expect(() => createSandbox({ env: "es2022", apis: ["unknown" as unknown as "fetch"] })).toThrow(
-      "Unknown API preset",
-    );
+    expect(() =>
+      createSandbox({ env: "es2022", apis: ["unknown" as unknown as "fetch"] }),
+    ).toThrow("Unknown API preset");
   });
 
   it("should allow enabling additional features", async () => {
@@ -277,7 +282,9 @@ describe("Simplified API", () => {
       features: { disable: ["ArrowFunctions"] },
     });
 
-    expect(() => sandbox.runSync("(() => 1)()")).toThrow("ArrowFunctions is not enabled");
+    expect(() => sandbox.runSync("(() => 1)()")).toThrow(
+      "ArrowFunctions is not enabled",
+    );
   });
 
   it("should enforce per-run loop limits", () => {
@@ -444,12 +451,18 @@ describe("Simplified API", () => {
       const sandbox = createSandbox({ env: "es2022" });
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-      const runA = sandbox.run("async function f(){ await sleep(20); return secret; } f()", {
-        globals: { secret: "A", sleep },
-      });
-      const runB = sandbox.run("async function g(){ await sleep(1); return secret; } g()", {
-        globals: { secret: "B", sleep },
-      });
+      const runA = sandbox.run(
+        "async function f(){ await sleep(20); return secret; } f()",
+        {
+          globals: { secret: "A", sleep },
+        },
+      );
+      const runB = sandbox.run(
+        "async function g(){ await sleep(1); return secret; } g()",
+        {
+          globals: { secret: "B", sleep },
+        },
+      );
 
       const [a, b] = await Promise.all([runA, runB]);
       expect(a).toBe("A");
@@ -461,15 +474,23 @@ describe("Simplified API", () => {
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
       await Promise.all([
-        sandbox.run("async function f(){ await sleep(20); return secret; } f()", {
-          globals: { secret: "A", sleep },
-        }),
-        sandbox.run("async function g(){ await sleep(1); return secret; } g()", {
-          globals: { secret: "B", sleep },
-        }),
+        sandbox.run(
+          "async function f(){ await sleep(20); return secret; } f()",
+          {
+            globals: { secret: "A", sleep },
+          },
+        ),
+        sandbox.run(
+          "async function g(){ await sleep(1); return secret; } g()",
+          {
+            globals: { secret: "B", sleep },
+          },
+        ),
       ]);
 
-      expect(sandbox.run("secret")).rejects.toThrow("Undefined variable 'secret'");
+      expect(sandbox.run("secret")).rejects.toThrow(
+        "Undefined variable 'secret'",
+      );
     });
 
     it("should handle one run failing without corrupting another run's globals", async () => {
@@ -481,7 +502,10 @@ describe("Simplified API", () => {
       });
       const runB = sandbox.run("secret;", { globals: { secret: "B" } });
 
-      const [, resultB] = await Promise.all([runA.catch((e) => e.message), runB]);
+      const [, resultB] = await Promise.all([
+        runA.catch((e) => e.message),
+        runB,
+      ]);
       expect(resultB).toBe("B");
     });
 
@@ -498,7 +522,9 @@ describe("Simplified API", () => {
 
       await Promise.all(promises);
 
-      expect(sandbox.run("value")).rejects.toThrow("Undefined variable 'value'");
+      expect(sandbox.run("value")).rejects.toThrow(
+        "Undefined variable 'value'",
+      );
     });
 
     it("should serialize runModule() calls with run() calls", async () => {
@@ -509,9 +535,12 @@ describe("Simplified API", () => {
 
       const [scriptResult, moduleResult] = await Promise.all([
         sandbox.run("secret", { globals: { secret: "script" } }),
-        sandbox.runModule('import { value } from "mod.js"; export const result = value;', {
-          path: "main.js",
-        }),
+        sandbox.runModule(
+          'import { value } from "mod.js"; export const result = value;',
+          {
+            path: "main.js",
+          },
+        ),
       ]);
 
       expect(scriptResult).toBe("script");
