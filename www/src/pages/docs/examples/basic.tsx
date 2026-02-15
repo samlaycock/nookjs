@@ -37,9 +37,7 @@ sandbox.runSync(\`
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Formula Evaluator
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Formula Evaluator</h2>
         <p className="text-neutral-300 mb-4">
           Build a spreadsheet-style formula evaluator with cell references:
         </p>
@@ -85,12 +83,8 @@ evaluate("SUM(A1, A2) * IF(B1 > 50, 2, 1)", cells); // 60`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Configuration/Rules Engine
-        </h2>
-        <p className="text-neutral-300 mb-4">
-          Let users define business rules in JavaScript:
-        </p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Configuration/Rules Engine</h2>
+        <p className="text-neutral-300 mb-4">Let users define business rules in JavaScript:</p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
 
@@ -149,12 +143,8 @@ const applicableDiscounts = rules.filter((rule) =>
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Template Rendering
-        </h2>
-        <p className="text-neutral-300 mb-4">
-          Execute template expressions safely:
-        </p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Template Rendering</h2>
+        <p className="text-neutral-300 mb-4">Execute template expressions safely:</p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
 
@@ -219,12 +209,8 @@ const html = render(template, {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Data Transformation
-        </h2>
-        <p className="text-neutral-300 mb-4">
-          Let users define data transformations:
-        </p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Data Transformation</h2>
+        <p className="text-neutral-300 mb-4">Let users define data transformations:</p>
         <CodeBlock
           code={`import { createSandbox } from "nookjs";
 
@@ -260,12 +246,8 @@ const result = transform({
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Validation Rules
-        </h2>
-        <p className="text-neutral-300 mb-4">
-          Let users define validation logic:
-        </p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Validation Rules</h2>
+        <p className="text-neutral-300 mb-4">Let users define validation logic:</p>
         <CodeBlock
           code={`import { createSandbox, RuntimeError } from "nookjs";
 
@@ -318,9 +300,7 @@ const result = validateUser({
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Calculated Fields
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Calculated Fields</h2>
         <p className="text-neutral-300 mb-4">
           Add computed properties to objects based on user-defined formulas:
         </p>

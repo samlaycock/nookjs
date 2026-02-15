@@ -11,9 +11,7 @@ export function Installation() {
       </p>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Package Managers
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Package Managers</h2>
 
         <div className="space-y-4">
           <div>
@@ -39,9 +37,7 @@ export function Installation() {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Requirements
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Requirements</h2>
         <ul className="space-y-2 text-neutral-300">
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
@@ -49,29 +45,22 @@ export function Installation() {
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
-            <span>
-              Modern browser with ES2020 support (for browser environments)
-            </span>
+            <span>Modern browser with ES2020 support (for browser environments)</span>
           </li>
         </ul>
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Module Formats
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Module Formats</h2>
         <p className="text-neutral-300 mb-4">
-          NookJS is distributed in multiple module formats to support various
-          environments:
+          NookJS is distributed in multiple module formats to support various environments:
         </p>
         <ul className="space-y-2 text-neutral-300">
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
             <span>
               <strong className="text-neutral-100">ESM</strong> -{" "}
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                dist/index.mjs
-              </code>{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">dist/index.mjs</code>{" "}
               (recommended)
             </span>
           </li>
@@ -79,18 +68,14 @@ export function Installation() {
             <span className="text-amber-500">&#9632;</span>
             <span>
               <strong className="text-neutral-100">CommonJS</strong> -{" "}
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                dist/index.js
-              </code>
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">dist/index.js</code>
             </span>
           </li>
           <li className="flex gap-3">
             <span className="text-amber-500">&#9632;</span>
             <span>
               <strong className="text-neutral-100">TypeScript</strong> -{" "}
-              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
-                dist/index.d.ts
-              </code>{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">dist/index.d.ts</code>{" "}
               (type definitions included)
             </span>
           </li>
@@ -98,12 +83,8 @@ export function Installation() {
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Basic Import
-        </h2>
-        <p className="text-neutral-300 mb-4">
-          Import the core classes and presets you need:
-        </p>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Basic Import</h2>
+        <p className="text-neutral-300 mb-4">Import the core classes and presets you need:</p>
         <CodeBlock
           code={`// ESM (recommended)
 import { createSandbox, run, parse } from "nookjs";
@@ -114,9 +95,7 @@ const { createSandbox, run, parse } = require("nookjs");`}
       </section>
 
       <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">
-          Available Exports
-        </h2>
+        <h2 className="text-2xl font-semibold text-neutral-100 mb-4">Available Exports</h2>
         <p className="text-neutral-300 mb-4">NookJS exports the following:</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -212,10 +191,7 @@ const { createSandbox, run, parse } = require("nookjs");`}
       </section>
 
       <div className="flex justify-between pt-8 border-t border-neutral-800">
-        <Link
-          to="/docs"
-          className="text-neutral-400 hover:text-amber-400 transition-colors"
-        >
+        <Link to="/docs" className="text-neutral-400 hover:text-amber-400 transition-colors">
           &larr; Introduction
         </Link>
         <Link

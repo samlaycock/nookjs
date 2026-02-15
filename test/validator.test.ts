@@ -11,8 +11,7 @@ describe("Validator", () => {
         it("should validate all code with constructor validator", () => {
           const validator = (ast: ESTree.Program) => {
             // Only allow programs with no while loops
-            const hasWhileLoop =
-              JSON.stringify(ast).includes('"WhileStatement"');
+            const hasWhileLoop = JSON.stringify(ast).includes('"WhileStatement"');
             return !hasWhileLoop;
           };
 
@@ -22,9 +21,9 @@ describe("Validator", () => {
           expect(interpreter.evaluate("let x = 5; x + 3")).toBe(8);
 
           // Should fail - has while loop
-          expect(() =>
-            interpreter.evaluate("let i = 0; while (i < 5) { i = i + 1; } i"),
-          ).toThrow("AST validation failed");
+          expect(() => interpreter.evaluate("let i = 0; while (i < 5) { i = i + 1; } i")).toThrow(
+            "AST validation failed",
+          );
         });
 
         it("should allow code that passes validation", () => {
@@ -47,17 +46,13 @@ describe("Validator", () => {
           const validator = () => false; // Reject everything
 
           const interpreter = new Interpreter({ validator });
-          expect(() => interpreter.evaluate("1 + 1")).toThrow(
-            "AST validation failed",
-          );
+          expect(() => interpreter.evaluate("1 + 1")).toThrow("AST validation failed");
         });
 
         it("should work with no validator", () => {
           const interpreter = new Interpreter();
           expect(interpreter.evaluate("1 + 1")).toBe(2);
-          expect(
-            interpreter.evaluate("let i = 0; while (i < 3) { i = i + 1; } i"),
-          ).toBe(3);
+          expect(interpreter.evaluate("let i = 0; while (i < 3) { i = i + 1; } i")).toBe(3);
         });
       });
 
@@ -71,9 +66,9 @@ describe("Validator", () => {
           expect(interpreter.evaluate("5 + 5")).toBe(10);
 
           // Call with validator fails
-          expect(() =>
-            interpreter.evaluate("3 + 3", { validator: strictValidator }),
-          ).toThrow("AST validation failed");
+          expect(() => interpreter.evaluate("3 + 3", { validator: strictValidator })).toThrow(
+            "AST validation failed",
+          );
 
           // Next call without validator works again
           expect(interpreter.evaluate("7 + 7")).toBe(14);
@@ -93,9 +88,7 @@ describe("Validator", () => {
           };
 
           // With no-loops validator
-          expect(
-            interpreter.evaluate("10 + 5", { validator: noLoopsValidator }),
-          ).toBe(15);
+          expect(interpreter.evaluate("10 + 5", { validator: noLoopsValidator })).toBe(15);
           expect(() =>
             interpreter.evaluate("let i = 0; while (i < 5) { i = i + 1; } i", {
               validator: noLoopsValidator,
@@ -103,9 +96,7 @@ describe("Validator", () => {
           ).toThrow("AST validation failed");
 
           // With no-functions validator
-          expect(
-            interpreter.evaluate("20 + 5", { validator: noFunctionsValidator }),
-          ).toBe(25);
+          expect(interpreter.evaluate("20 + 5", { validator: noFunctionsValidator })).toBe(25);
           expect(() =>
             interpreter.evaluate("function foo() { return 42; } foo()", {
               validator: noFunctionsValidator,
@@ -125,9 +116,7 @@ describe("Validator", () => {
 
           // Constructor validator would reject this
           // But per-call validator allows it
-          expect(
-            interpreter.evaluate("1 + 1", { validator: perCallValidator }),
-          ).toBe(2);
+          expect(interpreter.evaluate("1 + 1", { validator: perCallValidator })).toBe(2);
         });
 
         it("should fall back to constructor validator if no per-call validator", () => {
@@ -146,8 +135,7 @@ describe("Validator", () => {
             // No variable declarations or assignments
             const code = JSON.stringify(ast);
             return (
-              !code.includes('"VariableDeclaration"') &&
-              !code.includes('"AssignmentExpression"')
+              !code.includes('"VariableDeclaration"') && !code.includes('"AssignmentExpression"')
             );
           };
 
@@ -158,14 +146,10 @@ describe("Validator", () => {
           expect(interpreter.evaluate("10 * 2")).toBe(20);
 
           // Variable declarations fail
-          expect(() => interpreter.evaluate("let x = 5")).toThrow(
-            "AST validation failed",
-          );
+          expect(() => interpreter.evaluate("let x = 5")).toThrow("AST validation failed");
 
           // Assignments fail
-          expect(() => interpreter.evaluate("x = 10")).toThrow(
-            "AST validation failed",
-          );
+          expect(() => interpreter.evaluate("x = 10")).toThrow("AST validation failed");
         });
 
         it("should restrict maximum AST depth", () => {
@@ -194,9 +178,7 @@ describe("Validator", () => {
 
           // Deeply nested expression might fail (depending on depth)
           const deeplyNested = "1" + " + 1".repeat(50);
-          expect(() => interpreter.evaluate(deeplyNested)).toThrow(
-            "AST validation failed",
-          );
+          expect(() => interpreter.evaluate(deeplyNested)).toThrow("AST validation failed");
         });
 
         it("should restrict function complexity", () => {
@@ -242,9 +224,7 @@ describe("Validator", () => {
         let a = 4;
         let b = 5;
       `;
-          expect(() => interpreter.evaluate(largeProgram)).toThrow(
-            "AST validation failed",
-          );
+          expect(() => interpreter.evaluate(largeProgram)).toThrow("AST validation failed");
         });
 
         it("should block specific identifiers", () => {
@@ -284,9 +264,9 @@ describe("Validator", () => {
           expect(interpreter.evaluate("PI * 2")).toBeCloseTo(6.28318, 4);
 
           // Validator still enforced
-          expect(() =>
-            interpreter.evaluate("let i = 0; while (i < 5) { i = i + 1; }"),
-          ).toThrow("AST validation failed");
+          expect(() => interpreter.evaluate("let i = 0; while (i < 5) { i = i + 1; }")).toThrow(
+            "AST validation failed",
+          );
         });
 
         it("should work with per-call globals and validator", () => {
@@ -331,9 +311,7 @@ describe("Validator", () => {
 
           const interpreter = new Interpreter({ validator: throwingValidator });
 
-          expect(() => interpreter.evaluate("1 + 1")).toThrow(
-            "Custom validator error",
-          );
+          expect(() => interpreter.evaluate("1 + 1")).toThrow("Custom validator error");
         });
       });
     });

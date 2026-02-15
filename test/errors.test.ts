@@ -13,15 +13,11 @@ describe("Error Subclasses", () => {
 
     describe("TypeError", () => {
       it("should create a TypeError", () => {
-        expect(interpreter.evaluate("new TypeError('test').message")).toBe(
-          "test",
-        );
+        expect(interpreter.evaluate("new TypeError('test').message")).toBe("test");
       });
 
       it("should have correct name", () => {
-        expect(interpreter.evaluate("new TypeError('test').name")).toBe(
-          "TypeError",
-        );
+        expect(interpreter.evaluate("new TypeError('test').name")).toBe("TypeError");
       });
 
       it("should be throwable and catchable", () => {
@@ -37,9 +33,7 @@ describe("Error Subclasses", () => {
       });
 
       it("should be instance of Error", () => {
-        expect(interpreter.evaluate("new TypeError() instanceof Error")).toBe(
-          true,
-        );
+        expect(interpreter.evaluate("new TypeError() instanceof Error")).toBe(true);
       });
     });
 
@@ -63,43 +57,33 @@ describe("Error Subclasses", () => {
 
     describe("ReferenceError", () => {
       it("should create a ReferenceError", () => {
-        expect(
-          interpreter.evaluate("new ReferenceError('undefined var').message"),
-        ).toBe("undefined var");
+        expect(interpreter.evaluate("new ReferenceError('undefined var').message")).toBe(
+          "undefined var",
+        );
       });
 
       it("should have correct name", () => {
-        expect(interpreter.evaluate("new ReferenceError().name")).toBe(
-          "ReferenceError",
-        );
+        expect(interpreter.evaluate("new ReferenceError().name")).toBe("ReferenceError");
       });
     });
 
     describe("SyntaxError", () => {
       it("should create a SyntaxError", () => {
-        expect(
-          interpreter.evaluate("new SyntaxError('bad syntax').message"),
-        ).toBe("bad syntax");
+        expect(interpreter.evaluate("new SyntaxError('bad syntax').message")).toBe("bad syntax");
       });
 
       it("should have correct name", () => {
-        expect(interpreter.evaluate("new SyntaxError().name")).toBe(
-          "SyntaxError",
-        );
+        expect(interpreter.evaluate("new SyntaxError().name")).toBe("SyntaxError");
       });
     });
 
     describe("RangeError", () => {
       it("should create a RangeError", () => {
-        expect(
-          interpreter.evaluate("new RangeError('out of range').message"),
-        ).toBe("out of range");
+        expect(interpreter.evaluate("new RangeError('out of range').message")).toBe("out of range");
       });
 
       it("should have correct name", () => {
-        expect(interpreter.evaluate("new RangeError().name")).toBe(
-          "RangeError",
-        );
+        expect(interpreter.evaluate("new RangeError().name")).toBe("RangeError");
       });
     });
 
@@ -111,27 +95,19 @@ describe("Error Subclasses", () => {
 
     describe("Error instanceof checks", () => {
       it("TypeError should be instance of Error", () => {
-        expect(interpreter.evaluate("new TypeError() instanceof Error")).toBe(
-          true,
-        );
+        expect(interpreter.evaluate("new TypeError() instanceof Error")).toBe(true);
       });
 
       it("ReferenceError should be instance of Error", () => {
-        expect(
-          interpreter.evaluate("new ReferenceError() instanceof Error"),
-        ).toBe(true);
+        expect(interpreter.evaluate("new ReferenceError() instanceof Error")).toBe(true);
       });
 
       it("SyntaxError should be instance of Error", () => {
-        expect(interpreter.evaluate("new SyntaxError() instanceof Error")).toBe(
-          true,
-        );
+        expect(interpreter.evaluate("new SyntaxError() instanceof Error")).toBe(true);
       });
 
       it("RangeError should be instance of Error", () => {
-        expect(interpreter.evaluate("new RangeError() instanceof Error")).toBe(
-          true,
-        );
+        expect(interpreter.evaluate("new RangeError() instanceof Error")).toBe(true);
       });
     });
   });

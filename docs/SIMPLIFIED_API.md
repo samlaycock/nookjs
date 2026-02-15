@@ -167,12 +167,9 @@ Use generics when you want typed return values from `run` and `runModule`:
 
 ```typescript
 const value = await sandbox.run<number>("40 + 2");
-const moduleExports = await sandbox.runModule<{ result: number }>(
-  "export const result = 40 + 2;",
-  {
-    path: "main.js",
-  },
-);
+const moduleExports = await sandbox.runModule<{ result: number }>("export const result = 40 + 2;", {
+  path: "main.js",
+});
 ```
 
 ## Advanced API

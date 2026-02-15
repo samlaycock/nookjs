@@ -43,9 +43,7 @@ export class ResourceExhaustedError extends InterpreterError {
   limit: number;
 
   constructor(resourceType: keyof ResourceLimits, used: number, limit: number) {
-    super(
-      `Resource limit exceeded: ${resourceType} (used: ${used}, limit: ${limit})`,
-    );
+    super(`Resource limit exceeded: ${resourceType} (used: ${used}, limit: ${limit})`);
     this.name = "ResourceExhaustedError";
     this.resourceType = resourceType;
     this.used = used;
@@ -212,9 +210,7 @@ export class ResourceTracker {
   private checkLimits(): void {
     const stats = this.getStats();
 
-    for (const key of Object.keys(
-      stats.limitStatus,
-    ) as (keyof ResourceLimits)[]) {
+    for (const key of Object.keys(stats.limitStatus) as (keyof ResourceLimits)[]) {
       const status = stats.limitStatus[key];
       if (status && status.used >= status.limit) {
         this.exhaustedLimit = key;

@@ -271,9 +271,7 @@ async function main() {
   console.log(formatSummary(results));
 
   if (skipped.length > 0) {
-    console.log(
-      `\nSkipped ${skipped.length} benchmark(s): ${skipped.join(", ")}`,
-    );
+    console.log(`\nSkipped ${skipped.length} benchmark(s): ${skipped.join(", ")}`);
   }
 
   const jsonOutput = {
@@ -285,10 +283,7 @@ async function main() {
   };
 
   console.log("Writing results to benchmark-async-results.json...");
-  await Bun.write(
-    "benchmark-async-results.json",
-    JSON.stringify(jsonOutput, null, 2),
-  );
+  await Bun.write("benchmark-async-results.json", JSON.stringify(jsonOutput, null, 2));
   console.log("Done!");
 }
 
