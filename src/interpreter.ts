@@ -3044,8 +3044,8 @@ export class Interpreter {
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
     this.currentSourceCode = sourceCode;
     this.callStack = [];
-    this.beginEvaluation(options);
     try {
+      this.beginEvaluation(options);
       const ast = this.parseAndValidate(input, options);
       const needsFreshScope = typeof input !== "string";
       const previousEnv = this.environment;
@@ -3073,13 +3073,19 @@ export class Interpreter {
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
     this.currentSourceCode = sourceCode;
     this.callStack = [];
-    this.beginEvaluation(options);
-    this.setCurrentAbortSignal(options?.signal);
-    const abortSignal = this.getCurrentAbortSignal();
-    if (abortSignal?.aborted) {
+    try {
+      this.beginEvaluation(options);
+      this.setCurrentAbortSignal(options?.signal);
+      const abortSignal = this.getCurrentAbortSignal();
+      if (abortSignal?.aborted) {
+        this.endEvaluation(options);
+        releaseMutex();
+        throw new InterpreterError("Execution aborted");
+      }
+    } catch (error) {
       this.endEvaluation(options);
       releaseMutex();
-      throw new InterpreterError("Execution aborted");
+      throw error;
     }
     try {
       try {
