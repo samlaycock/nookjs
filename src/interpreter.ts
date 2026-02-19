@@ -3808,8 +3808,12 @@ export class Interpreter {
       throw new InterpreterError(`Cannot find module '${specifier}'`);
     }
 
-    if (moduleRecord.status !== "initializing") {
+    if (moduleRecord.status === "initialized") {
       return moduleRecord.exports;
+    }
+
+    if (moduleRecord.status === "failed") {
+      throw moduleRecord.error ?? new InterpreterError(`Module '${specifier}' failed to evaluate`);
     }
 
     // Circular import: this module is already being evaluated in the active chain.
@@ -3818,22 +3822,28 @@ export class Interpreter {
       return moduleRecord.exports;
     }
 
-    // Module is initializing; evaluate its AST now to populate exports.
-    let ast: ESTree.Program;
-    if (moduleRecord.source !== undefined) {
-      ast = parseModule(moduleRecord.source, { next: true });
-    } else if (moduleRecord.ast) {
-      ast = moduleRecord.ast;
-    } else {
-      throw new InterpreterError(`Module '${specifier}' has no source or AST`);
+    try {
+      // Module is initializing; evaluate its AST now to populate exports.
+      let ast: ESTree.Program;
+      if (moduleRecord.source !== undefined) {
+        ast = parseModule(moduleRecord.source, { next: true });
+      } else if (moduleRecord.ast) {
+        ast = moduleRecord.ast;
+      } else {
+        throw new InterpreterError(`Module '${specifier}' has no source or AST`);
+      }
+
+      this.validateAst(ast);
+      this.initializeModuleExportPlaceholders(moduleRecord, ast);
+
+      const exports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
+      this.moduleSystem.setModuleExports(specifier, exports);
+      return exports;
+    } catch (error) {
+      const moduleError = error instanceof Error ? error : new Error(String(error));
+      this.moduleSystem.setModuleFailed(specifier, moduleError);
+      throw error;
     }
-
-    this.validateAst(ast);
-    this.initializeModuleExportPlaceholders(moduleRecord, ast);
-
-    const exports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
-    this.moduleSystem.setModuleExports(specifier, exports);
-    return exports;
   }
 
   private async evaluateImportDeclaration(

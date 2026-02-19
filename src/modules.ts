@@ -255,6 +255,10 @@ export class ModuleSystem {
           if (existingByPath.status === "initializing") {
             return existingByPath;
           }
+          // If previously failed, return cached failure record
+          if (existingByPath.status === "failed") {
+            return existingByPath;
+          }
         }
       }
 

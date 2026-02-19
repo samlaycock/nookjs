@@ -2689,12 +2689,13 @@ describe("Module System", () => {
     });
 
     test("should track failed module in metadata", async () => {
+      let badModuleEvaluations = 0;
       const resolver: ModuleResolver = {
         resolve(specifier) {
           if (specifier === "bad.js") {
             return {
               type: "source",
-              code: "syntax error {{{{",
+              code: "export const side = bump(); export const x = nope;",
               path: specifier,
             };
           }
@@ -2703,22 +2704,44 @@ describe("Module System", () => {
       };
 
       const interpreter = new Interpreter({
+        globals: {
+          bump: () => {
+            badModuleEvaluations += 1;
+            return badModuleEvaluations;
+          },
+        },
         modules: { enabled: true, resolver },
       });
 
+      let firstError: unknown;
       try {
         await interpreter.evaluateModuleAsync(`import { x } from "bad.js";`, {
           path: "main.js",
         });
-      } catch {
-        // Expected to fail
+      } catch (error) {
+        firstError = error;
       }
+      expect(firstError).toBeDefined();
+      const firstErrorMessage =
+        firstError instanceof Error ? firstError.message : String(firstError);
+      expect(firstErrorMessage).toContain("Undefined variable 'nope'");
 
-      // Module should still be in cache but might be in failed state
-      // (depending on when failure occurs - during parse vs evaluation)
-      const cached = interpreter.isModuleCached("bad.js");
-      // This test documents behavior - the module record is created before parse
-      expect(cached).toBe(true);
+      const metadata = interpreter.getModuleMetadata("bad.js");
+      expect(metadata).toBeDefined();
+      expect(metadata?.status).toBe("failed");
+      expect(metadata?.error).toBeDefined();
+      expect(badModuleEvaluations).toBe(1);
+
+      let secondError: unknown;
+      try {
+        await interpreter.evaluateModuleAsync(`import { x } from "bad.js";`, {
+          path: "main2.js",
+        });
+      } catch (error) {
+        secondError = error;
+      }
+      expect(secondError).toBeDefined();
+      expect(badModuleEvaluations).toBe(1);
     });
 
     test("should handle getLoadedModulePaths with multiple modules", async () => {
