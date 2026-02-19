@@ -3663,9 +3663,7 @@ export class Interpreter {
         if (statement.declaration) {
           if (statement.declaration.type === "VariableDeclaration") {
             for (const declarator of statement.declaration.declarations) {
-              if (declarator.id.type === "Identifier") {
-                exportNames.add(declarator.id.name);
-              }
+              this.collectPatternBindingNames(declarator.id, exportNames);
             }
           } else if (
             (statement.declaration.type === "FunctionDeclaration" ||
@@ -3699,6 +3697,55 @@ export class Interpreter {
     }
 
     return exportNames;
+  }
+
+  private isBindingPatternNode(value: ESTree.Expression | ESTree.Pattern): value is ESTree.Pattern {
+    return (
+      value.type === "Identifier" ||
+      value.type === "ObjectPattern" ||
+      value.type === "ArrayPattern" ||
+      value.type === "AssignmentPattern" ||
+      value.type === "RestElement"
+    );
+  }
+
+  private collectPatternBindingNames(pattern: ESTree.Pattern, exportNames: Set<string>): void {
+    if (pattern.type === "Identifier") {
+      exportNames.add(pattern.name);
+      return;
+    }
+
+    if (pattern.type === "AssignmentPattern") {
+      this.collectPatternBindingNames(pattern.left, exportNames);
+      return;
+    }
+
+    if (pattern.type === "RestElement") {
+      this.collectPatternBindingNames(pattern.argument, exportNames);
+      return;
+    }
+
+    if (pattern.type === "ArrayPattern") {
+      for (const element of pattern.elements) {
+        if (element) {
+          this.collectPatternBindingNames(element, exportNames);
+        }
+      }
+      return;
+    }
+
+    if (pattern.type === "ObjectPattern") {
+      for (const property of pattern.properties) {
+        if (property.type === "RestElement") {
+          this.collectPatternBindingNames(property.argument, exportNames);
+          continue;
+        }
+
+        if (this.isBindingPatternNode(property.value)) {
+          this.collectPatternBindingNames(property.value, exportNames);
+        }
+      }
+    }
   }
 
   private initializeModuleExportPlaceholders(
@@ -3808,9 +3855,12 @@ export class Interpreter {
         if (node.declaration.type === "VariableDeclaration") {
           await this.evaluateVariableDeclarationAsync(node.declaration);
           for (const declarator of node.declaration.declarations) {
-            if (declarator.id.type === "Identifier") {
-              const value = moduleEnv.get(declarator.id.name);
-              exports[declarator.id.name] = value;
+            const bindingNames = new Set<string>();
+            this.collectPatternBindingNames(declarator.id, bindingNames);
+            for (const bindingName of bindingNames) {
+              if (moduleEnv.has(bindingName)) {
+                exports[bindingName] = moduleEnv.get(bindingName);
+              }
             }
           }
         } else if (node.declaration.type === "FunctionDeclaration") {
