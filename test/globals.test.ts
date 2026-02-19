@@ -235,6 +235,16 @@ describe("Injected Globals", () => {
         expect(interpreter.evaluate("a")).toBe(100);
       });
 
+      it("should roll back per-call globals when injection fails", () => {
+        const interpreter = new Interpreter();
+
+        expect(() => {
+          interpreter.evaluate("1", { globals: { safe: 1, Function } });
+        }).toThrow("Global 'Function' is not allowed for security reasons");
+
+        expect(() => interpreter.evaluate("safe")).toThrow("Undefined variable 'safe'");
+      });
+
       it("should not overwrite user-declared variables with late globals", () => {
         const interpreter = new Interpreter();
         interpreter.evaluate("let x = 100");
