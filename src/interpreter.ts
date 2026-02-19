@@ -15,7 +15,7 @@
 
 import type { ESTree, Location } from "./ast";
 import type { StackFrame } from "./errors";
-import type { ModuleOptions, ModuleMetadata } from "./modules";
+import type { ModuleOptions, ModuleMetadata, ModuleRecord } from "./modules";
 
 import { parseModule, parseScript } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
@@ -3655,6 +3655,63 @@ export class Interpreter {
     }
   }
 
+  private collectStaticExportNames(ast: ESTree.Program): Set<string> {
+    const exportNames = new Set<string>();
+
+    for (const statement of ast.body) {
+      if (statement.type === "ExportNamedDeclaration") {
+        if (statement.declaration) {
+          if (statement.declaration.type === "VariableDeclaration") {
+            for (const declarator of statement.declaration.declarations) {
+              if (declarator.id.type === "Identifier") {
+                exportNames.add(declarator.id.name);
+              }
+            }
+          } else if (
+            (statement.declaration.type === "FunctionDeclaration" ||
+              statement.declaration.type === "ClassDeclaration") &&
+            statement.declaration.id
+          ) {
+            exportNames.add(statement.declaration.id.name);
+          }
+        }
+
+        if (statement.specifiers) {
+          for (const specifier of statement.specifiers) {
+            if (
+              (specifier.type === "ExportSpecifier" ||
+                specifier.type === "ExportDefaultSpecifier") &&
+              specifier.exported.type === "Identifier"
+            ) {
+              exportNames.add(specifier.exported.name);
+            }
+          }
+        }
+      } else if (statement.type === "ExportDefaultDeclaration") {
+        exportNames.add("default");
+      } else if (
+        statement.type === "ExportAllDeclaration" &&
+        statement.exported &&
+        statement.exported.type === "Identifier"
+      ) {
+        exportNames.add(statement.exported.name);
+      }
+    }
+
+    return exportNames;
+  }
+
+  private initializeModuleExportPlaceholders(
+    moduleRecord: ModuleRecord,
+    ast: ESTree.Program,
+  ): void {
+    for (const exportName of this.collectStaticExportNames(ast)) {
+      if (!(exportName in moduleRecord.exports)) {
+        moduleRecord.exports[exportName] = undefined;
+      }
+    }
+  }
+
   /**
    * Resolve a module specifier and return its exports, evaluating if needed.
    */
@@ -3675,6 +3732,12 @@ export class Interpreter {
       return moduleRecord.exports;
     }
 
+    // Circular import: this module is already being evaluated in the active chain.
+    // Reuse in-progress exports to avoid recursive re-entry and depth-limit failures.
+    if (this.moduleSystem.getImporterChain().includes(moduleRecord.path)) {
+      return moduleRecord.exports;
+    }
+
     // Module is initializing; evaluate its AST now to populate exports.
     let ast: ESTree.Program;
     if (moduleRecord.source !== undefined) {
@@ -3686,6 +3749,7 @@ export class Interpreter {
     }
 
     this.validateAst(ast);
+    this.initializeModuleExportPlaceholders(moduleRecord, ast);
 
     const exports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
     this.moduleSystem.setModuleExports(specifier, exports);
