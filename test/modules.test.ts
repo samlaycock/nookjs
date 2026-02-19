@@ -1639,6 +1639,19 @@ describe("Module System", () => {
         expect(result.myDefault).toBe(99);
       });
 
+      test("should throw when re-exporting a missing named export", async () => {
+        const files = new Map([["source.js", "export const a = 1;"]]);
+        const interpreter = new Interpreter({
+          modules: { enabled: true, resolver: createResolver(files) },
+        });
+
+        expect(
+          interpreter.evaluateModuleAsync(`export { missing } from "source.js";`, {
+            path: "main.js",
+          }),
+        ).rejects.toThrow("Module 'source.js' does not export 'missing'");
+      });
+
       test("should re-export from multiple sources", async () => {
         const files = new Map([
           ["a.js", "export const fromA = 1;"],

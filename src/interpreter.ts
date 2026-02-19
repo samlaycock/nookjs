@@ -3920,7 +3920,11 @@ export class Interpreter {
 
         for (const spec of node.specifiers) {
           if (spec.type === "ExportSpecifier") {
-            const value = sourceExports[spec.local.name];
+            const importedName = spec.local.name;
+            if (!(importedName in sourceExports)) {
+              throw new InterpreterError(`Module '${specifier}' does not export '${importedName}'`);
+            }
+            const value = sourceExports[importedName];
             exports[spec.exported.name] = value;
           }
         }
