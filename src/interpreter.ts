@@ -2366,8 +2366,8 @@ export class Interpreter {
   private constructorFeatureControl?: FeatureControl; // Feature control that applies to all evaluate() calls
   private constructorFeatureSet?: Set<LanguageFeature>; // Cached feature set for faster lookup
   private securityOptions: SecurityOptions; // Security options for sandbox
-  private perCallGlobalKeys: Set<string> = new Set(); // Track per-call globals for cleanup
-  private overriddenConstructorGlobals: Map<string, any> = new Map(); // Track original values when per-call globals override
+  private perCallGlobalKeysStack: Set<string>[] = []; // Track per-evaluation per-call globals for cleanup
+  private overriddenConstructorGlobalsStack: Map<string, any>[] = []; // Track original values when per-call globals override
 
   // Execution control (async-only abort signal)
   private executionCheckCounter = 0;
@@ -2618,7 +2618,13 @@ export class Interpreter {
     globals: Record<string, any>,
     allowOverride: boolean = false,
     trackKeys: boolean = false,
+    perCallGlobalKeys?: Set<string>,
+    overriddenConstructorGlobals?: Map<string, any>,
   ): void {
+    if (trackKeys && (!perCallGlobalKeys || !overriddenConstructorGlobals)) {
+      throw new InterpreterError("Internal error: per-call global tracking state is missing");
+    }
+
     for (const [key, value] of Object.entries(globals)) {
       // Reject high-risk host objects/functions regardless of allowOverride.
       if (this.isForbiddenGlobal(key, value)) {
@@ -2638,12 +2644,12 @@ export class Interpreter {
           // Save the original value if it's a constructor global being overridden
           // This allows us to restore it later when per-call globals are cleaned up
           if (trackKeys && key in this.constructorGlobals) {
-            this.overriddenConstructorGlobals.set(key, this.environment.get(key));
+            overriddenConstructorGlobals!.set(key, this.environment.get(key));
           }
           // Try to force update the global (only works for injected globals, not user variables)
           const wasUpdated = this.environment.forceSet(key, wrappedValue, true);
           if (wasUpdated && trackKeys) {
-            this.perCallGlobalKeys.add(key);
+            perCallGlobalKeys!.add(key);
           }
         }
         // If not allowOverride, skip this variable (don't overwrite user code variables)
@@ -2651,7 +2657,7 @@ export class Interpreter {
         // Variable doesn't exist yet - declare it as const and mark as global
         this.environment.declare(key, wrappedValue, "const", true);
         if (trackKeys) {
-          this.perCallGlobalKeys.add(key);
+          perCallGlobalKeys!.add(key);
         }
       }
     }
@@ -2684,19 +2690,22 @@ export class Interpreter {
    *
    * Called in finally block of evaluate()/evaluateAsync()
    */
-  private removePerCallGlobals(): void {
-    for (const key of this.perCallGlobalKeys) {
-      if (this.overriddenConstructorGlobals.has(key)) {
+  private removePerCallGlobals(
+    perCallGlobalKeys: Set<string>,
+    overriddenConstructorGlobals: Map<string, any>,
+  ): void {
+    for (const key of perCallGlobalKeys) {
+      if (overriddenConstructorGlobals.has(key)) {
         // This per-call global overrode a constructor global - restore original value
-        const originalValue = this.overriddenConstructorGlobals.get(key);
+        const originalValue = overriddenConstructorGlobals.get(key);
         this.environment.forceSet(key, originalValue, true);
       } else {
         // This was a new per-call global - delete it completely
         this.environment.delete(key);
       }
     }
-    this.perCallGlobalKeys.clear();
-    this.overriddenConstructorGlobals.clear();
+    perCallGlobalKeys.clear();
+    overriddenConstructorGlobals.clear();
   }
 
   /**
@@ -2851,7 +2860,24 @@ export class Interpreter {
 
     // Inject per-call globals if provided (with override capability).
     if (options?.globals) {
-      this.injectGlobals(options.globals, true, true);
+      const perCallGlobalKeys = new Set<string>();
+      const overriddenConstructorGlobals = new Map<string, any>();
+      this.perCallGlobalKeysStack.push(perCallGlobalKeys);
+      this.overriddenConstructorGlobalsStack.push(overriddenConstructorGlobals);
+      try {
+        this.injectGlobals(
+          options.globals,
+          true,
+          true,
+          perCallGlobalKeys,
+          overriddenConstructorGlobals,
+        );
+      } catch (error) {
+        this.removePerCallGlobals(perCallGlobalKeys, overriddenConstructorGlobals);
+        this.perCallGlobalKeysStack.pop();
+        this.overriddenConstructorGlobalsStack.pop();
+        throw error;
+      }
     }
 
     // Set per-call feature control if provided.
@@ -2936,7 +2962,11 @@ export class Interpreter {
 
     // Always clean up per-call globals after execution.
     if (options?.globals) {
-      this.removePerCallGlobals();
+      const perCallGlobalKeys = this.perCallGlobalKeysStack.pop();
+      const overriddenConstructorGlobals = this.overriddenConstructorGlobalsStack.pop();
+      if (perCallGlobalKeys && overriddenConstructorGlobals) {
+        this.removePerCallGlobals(perCallGlobalKeys, overriddenConstructorGlobals);
+      }
     }
 
     // Pop context from stack to isolate per-run state
@@ -3044,8 +3074,10 @@ export class Interpreter {
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
     this.currentSourceCode = sourceCode;
     this.callStack = [];
-    this.beginEvaluation(options);
+    let evaluationStarted = false;
     try {
+      this.beginEvaluation(options);
+      evaluationStarted = true;
       const ast = this.parseAndValidate(input, options);
       const needsFreshScope = typeof input !== "string";
       const previousEnv = this.environment;
@@ -3062,7 +3094,9 @@ export class Interpreter {
     } catch (error) {
       throw this.enhanceError(error);
     } finally {
-      this.endEvaluation(options);
+      if (evaluationStarted) {
+        this.endEvaluation(options);
+      }
       this.currentSourceCode = "";
       this.callStack = [];
     }
@@ -3073,38 +3107,38 @@ export class Interpreter {
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
     this.currentSourceCode = sourceCode;
     this.callStack = [];
-    this.beginEvaluation(options);
-    this.setCurrentAbortSignal(options?.signal);
-    const abortSignal = this.getCurrentAbortSignal();
-    if (abortSignal?.aborted) {
-      this.endEvaluation(options);
-      releaseMutex();
-      throw new InterpreterError("Execution aborted");
-    }
+    let evaluationStarted = false;
     try {
-      try {
-        const ast = this.parseAndValidate(input, options);
-        const needsFreshScope = typeof input !== "string";
-        const previousEnv = this.environment;
-        if (needsFreshScope) {
-          this.environment = new Environment(this.environment);
-        }
-        try {
-          const result = await this.evaluateNodeAsync(ast);
-          return result instanceof RawValue ? result.value : result;
-        } finally {
-          if (needsFreshScope) {
-            this.environment = previousEnv;
-          }
-        }
-      } catch (error) {
-        throw this.enhanceError(error);
-      } finally {
-        this.endEvaluation(options);
-        this.currentSourceCode = "";
-        this.callStack = [];
+      this.beginEvaluation(options);
+      evaluationStarted = true;
+      this.setCurrentAbortSignal(options?.signal);
+      const abortSignal = this.getCurrentAbortSignal();
+      if (abortSignal?.aborted) {
+        throw new InterpreterError("Execution aborted");
       }
+
+      const ast = this.parseAndValidate(input, options);
+      const needsFreshScope = typeof input !== "string";
+      const previousEnv = this.environment;
+      if (needsFreshScope) {
+        this.environment = new Environment(this.environment);
+      }
+      try {
+        const result = await this.evaluateNodeAsync(ast);
+        return result instanceof RawValue ? result.value : result;
+      } finally {
+        if (needsFreshScope) {
+          this.environment = previousEnv;
+        }
+      }
+    } catch (error) {
+      throw this.enhanceError(error);
     } finally {
+      if (evaluationStarted) {
+        this.endEvaluation(options);
+      }
+      this.currentSourceCode = "";
+      this.callStack = [];
       releaseMutex();
     }
   }
@@ -3584,27 +3618,26 @@ export class Interpreter {
 
     this.currentSourceCode = code;
     this.callStack = [];
-    this.beginEvaluation(options);
-    this.setCurrentAbortSignal(options.signal);
-    const abortSignal = this.getCurrentAbortSignal();
-    if (abortSignal?.aborted) {
-      this.endEvaluation(options);
-      releaseMutex();
-      throw new InterpreterError("Execution aborted");
-    }
-
+    let evaluationStarted = false;
     try {
-      try {
-        const ast = this.parseModuleAndValidate(code, options);
-        return await this.evaluateModuleAstAsync(ast, options.path);
-      } catch (error) {
-        throw this.enhanceError(error);
-      } finally {
-        this.endEvaluation(options);
-        this.currentSourceCode = "";
-        this.callStack = [];
+      this.beginEvaluation(options);
+      evaluationStarted = true;
+      this.setCurrentAbortSignal(options.signal);
+      const abortSignal = this.getCurrentAbortSignal();
+      if (abortSignal?.aborted) {
+        throw new InterpreterError("Execution aborted");
       }
+
+      const ast = this.parseModuleAndValidate(code, options);
+      return await this.evaluateModuleAstAsync(ast, options.path);
+    } catch (error) {
+      throw this.enhanceError(error);
     } finally {
+      if (evaluationStarted) {
+        this.endEvaluation(options);
+      }
+      this.currentSourceCode = "";
+      this.callStack = [];
       releaseMutex();
     }
   }

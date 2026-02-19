@@ -421,6 +421,34 @@ describe("Async", () => {
           });
           return expect(interpreter.evaluateAsync("x")).rejects.toThrow("Undefined variable 'x'");
         });
+
+        it("should roll back globals and release mutex when injection fails", async () => {
+          const interpreter = new Interpreter();
+
+          let firstError: unknown;
+          try {
+            await interpreter.evaluateAsync("1", { globals: { safe: 1, Function } });
+          } catch (error) {
+            firstError = error;
+          }
+          const firstErrorMessage =
+            firstError instanceof Error ? firstError.message : String(firstError);
+          expect(firstErrorMessage).toContain(
+            "Global 'Function' is not allowed for security reasons",
+          );
+
+          let secondError: unknown;
+          try {
+            await interpreter.evaluateAsync("safe");
+          } catch (error) {
+            secondError = error;
+          }
+          const secondErrorMessage =
+            secondError instanceof Error ? secondError.message : String(secondError);
+          expect(secondErrorMessage).toContain("Undefined variable 'safe'");
+
+          expect(await interpreter.evaluateAsync("2 + 2")).toBe(4);
+        });
       });
 
       describe("Error handling in async mode", () => {
