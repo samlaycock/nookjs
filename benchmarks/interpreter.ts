@@ -8,7 +8,6 @@
 import type { ComparisonResult } from "./shared/format";
 
 import { Interpreter } from "../src/interpreter";
-
 import { formatTable, formatSummary } from "./shared/format";
 
 interface BenchmarkResult {

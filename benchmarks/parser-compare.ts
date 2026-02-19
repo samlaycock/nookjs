@@ -1,7 +1,6 @@
 import type { ComparisonResult } from "./shared/format";
 
 import { parseModule } from "../src/ast";
-
 import { formatTable, formatSummary } from "./shared/format";
 
 const { parseModule: parseMeriyah } = await import("meriyah");
