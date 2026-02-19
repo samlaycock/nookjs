@@ -9,7 +9,6 @@ import type { ComparisonResult } from "./shared/format";
 
 import { Interpreter } from "../src/interpreter";
 import { ES2024, preset } from "../src/presets";
-
 import { formatTable, formatSummary } from "./shared/format";
 
 interface AsyncBenchmarkResult {
