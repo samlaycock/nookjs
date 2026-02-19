@@ -1955,6 +1955,22 @@ describe("Module System", () => {
       );
       expect(result.result).toBe("ab");
     });
+
+    test("should resolve circular imports when export uses destructuring", async () => {
+      const files = new Map([
+        ["a.js", `import { b } from "b.js"; export const { a } = { a: () => "a" + b() };`],
+        ["b.js", `import { a } from "a.js"; export const b = () => "b";`],
+      ]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { a } from "a.js"; export const result = a();`,
+        { path: "main.js" },
+      );
+      expect(result.result).toBe("ab");
+    });
   });
 
   // ============================================================================
