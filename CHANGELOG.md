@@ -1,5 +1,49 @@
 # nookjs
 
+## 0.4.2
+
+### Patch Changes
+
+- 053ce30: Fix module failure caching state so failed modules are tracked as `failed` instead of remaining `initializing`.
+
+  Failed module parse/evaluation now updates metadata with the stored error and reuses the failed cache record on subsequent imports, avoiding repeated re-evaluation attempts.
+
+- 38dc510: Fix circular ES module handling so in-progress modules are reused instead of recursively re-evaluated.
+
+  This prevents true import cycles (for example `a -> b -> a`) from recursing until module max depth is exceeded.
+
+- 4d90f9e: Update stale project-structure paths in `CONTRIBUTING.md`.
+
+  This refreshes the structure examples to match the current repository layout (`src/index.ts`, `test/` directory, current source modules) and fixes outdated `tests/` references in the contribution workflow.
+
+- ad25e87: Remove unused `parseScript` and `parseModule` options parameters in the AST parser API.
+
+  These options were accepted but ignored. The signatures now match runtime behavior, and related interpreter call sites were updated to call the parser helpers without no-op options.
+
+- fb7a1c0: Clarify JavaScript compatibility expectations for arithmetic edge cases.
+
+  This updates package and documentation wording to explicitly call out that division/modulo by zero intentionally throws `InterpreterError` rather than using native JS `Infinity`/`NaN` results.
+
+- 77e0958: Fix missing-name validation for named re-exports.
+
+  `export { missing } from "source.js"` now throws when the source module does not export the requested binding, matching named import validation behavior.
+
+- bd79cd3: Pin CI/release toolchain versions and enforce frozen lockfile installs.
+
+  This pins GitHub Actions Bun setup versions, pins the website deploy Wrangler action version, pins `@types/bun` in `package.json`, and updates workflow install steps to use `bun install --frozen-lockfile` for more reproducible CI and release runs.
+
+- 4998249: Add explicit module-system regression coverage for circular imports and missing named re-exports.
+
+  This adds tests for a direct `a -> b -> a` circular chain and for aliased missing re-exports (`export { missing as renamed } from ...`) to guard against regressions in ESM resolution and export validation.
+
+- 35eda5b: Add opt-in strict evaluation isolation to serialize mixed sync/async access safely.
+
+  When `strictEvaluationIsolation: true` is set on `Interpreter` (or `createSandbox`), synchronous `evaluate()` / `runSync()` calls are blocked while async/module evaluations are pending, preventing shared-state races between sync and async runs on the same instance.
+
+- 399b0f3: Fix per-call globals cleanup when global injection fails before evaluation starts.
+
+  This makes per-call global injection transactional so failed setup no longer leaks globals between runs, and it ensures async/module evaluation mutexes are still released when setup fails early.
+
 ## 0.4.1
 
 ### Patch Changes
@@ -25,6 +69,7 @@
 ### Minor Changes
 
 - 9cf6162: Improve the simplified sandbox API and onboarding experience:
+
   - add safe default per-run limits for `createSandbox()` (`callDepth`, `loops`, `memoryBytes`)
   - add first-class `timeoutMs` support for async `run()` and `runModule()` (sandbox default + per-call override)
   - add typed generics for `run`, `runSync`, and `runModule` return values
@@ -39,6 +84,7 @@
 ### Minor Changes
 
 - 35fe723: Add ES module support with import/export syntax
+
   - Support all import types: named, default, namespace, side-effect only
   - Support all export types: named declarations, default, re-exports, `export * as namespace`
   - Pluggable `ModuleResolver` interface for loading modules from any source
@@ -58,6 +104,7 @@
 ### Patch Changes
 
 - b6850f7: Fix Promise support in async evaluation
+
   - Prevent auto-awaiting of Promise values returned from host functions, preserving Promise identity for `.then()` chaining
   - Allow `.catch` and `.finally` access on Promises (previously only `.then` was allowlisted)
   - Unwrap non-plain-object proxies for native method compatibility (e.g., `clearTimeout` with proxied `Timeout` objects)
