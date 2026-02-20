@@ -3096,12 +3096,7 @@ export class Interpreter {
     input: string | ESTree.Program,
     options?: EvaluateOptions,
   ): ESTree.Program {
-    const ast =
-      typeof input === "string"
-        ? parseScript(input, {
-            next: true,
-          })
-        : input;
+    const ast = typeof input === "string" ? parseScript(input) : input;
 
     this.validateAst(ast, options);
     this.ensureNoTopLevelAwait(ast);
@@ -3113,12 +3108,7 @@ export class Interpreter {
     input: string | ESTree.Program,
     options?: EvaluateOptions,
   ): ESTree.Program {
-    const ast =
-      typeof input === "string"
-        ? parseModule(input, {
-            next: true,
-          })
-        : input;
+    const ast = typeof input === "string" ? parseModule(input) : input;
 
     this.validateAst(ast, options);
 
@@ -3255,7 +3245,7 @@ export class Interpreter {
    * ```
    */
   parse(code: string, options?: ParseOptions): ESTree.Program {
-    const ast = parseScript(code, { next: true });
+    const ast = parseScript(code);
 
     if (options?.validator) {
       const isValid = options.validator(ast);
@@ -3883,7 +3873,7 @@ export class Interpreter {
       // Module is initializing; evaluate its AST now to populate exports.
       let ast: ESTree.Program;
       if (moduleRecord.source !== undefined) {
-        ast = parseModule(moduleRecord.source, { next: true });
+        ast = parseModule(moduleRecord.source);
       } else if (moduleRecord.ast) {
         ast = moduleRecord.ast;
       } else {
