@@ -23,6 +23,6 @@ Binary operations such as `+`, `-`, comparisons, bitwise operators, and `**`.
 
 - `in` requires the right-hand side to be an object.
 - `instanceof` supports host constructors, `ClassValue`, and `FunctionValue` instances.
-- Division/modulo by zero throws an `InterpreterError`.
+- Division/modulo by zero intentionally throws an `InterpreterError` (native JS would produce infinities/NaN).
 - String concatenation with `+` coerces the other operand to a string.
 - Exponentiation (`**`) has right-to-left associativity: `2 ** 3 ** 2` = `2 ** (3 ** 2)` = `512`.

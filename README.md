@@ -14,6 +14,14 @@ NookJS is a JavaScript interpreter designed for safely executing untrusted code 
 - **Global Injection**: Safe injection of host functions and data with property access protection
 - **Zero Dependencies**: Custom AST parser with no runtime dependencies
 
+### Compatibility Note
+
+NookJS prioritizes sandbox safety and predictable host isolation over exact native-JavaScript parity in every edge case. Some behaviors are intentionally different from native JS semantics.
+
+One important example: division/modulo by zero throws `InterpreterError` instead of returning `Infinity`, `-Infinity`, or `NaN`.
+
+See [Limitations](#limitations) for the full list of known semantic differences.
+
 ### Use Cases
 
 - **Plugin Systems**: Allow users to write custom logic without compromising security
