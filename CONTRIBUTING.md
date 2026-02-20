@@ -67,12 +67,15 @@ nookjs/
 ├── src/                  # Source code
 │   ├── ast.ts           # AST parser
 │   ├── interpreter.ts   # Main interpreter
-│   ├── values.ts        # Value types
-│   └── ...
+│   ├── modules.ts       # ES module system
+│   ├── sandbox.ts       # Simplified sandbox API
+│   ├── resource-tracker.ts
+│   └── index.ts         # Package entry point exports
+├── test/                # Test files
 ├── docs/                # Documentation
-├── tests/               # Test files
 ├── conventions/         # Development conventions
-└── index.ts             # Entry point
+├── package.json         # Scripts + package metadata
+└── bun.lock             # Locked dependency versions
 ```
 
 ## Conventions
@@ -92,7 +95,7 @@ To add support for a new JavaScript feature:
 
 1. **Parse**: Add the AST node type to `src/ast.ts` parser
 2. **Evaluate**: Add evaluation logic in `src/interpreter.ts`
-3. **Test**: Add comprehensive tests in `tests/`
+3. **Test**: Add comprehensive tests in `test/`
 4. **Document**: Update `docs/README.md` with feature details
 
 ### Security Considerations
