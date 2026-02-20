@@ -1652,6 +1652,19 @@ describe("Module System", () => {
         ).rejects.toThrow("Module 'source.js' does not export 'missing'");
       });
 
+      test("should throw when re-exporting a missing named export with alias", async () => {
+        const files = new Map([["source.js", "export const a = 1;"]]);
+        const interpreter = new Interpreter({
+          modules: { enabled: true, resolver: createResolver(files) },
+        });
+
+        expect(
+          interpreter.evaluateModuleAsync(`export { missing as renamed } from "source.js";`, {
+            path: "main.js",
+          }),
+        ).rejects.toThrow("Module 'source.js' does not export 'missing'");
+      });
+
       test("should re-export from multiple sources", async () => {
         const files = new Map([
           ["a.js", "export const fromA = 1;"],
@@ -1967,6 +1980,22 @@ describe("Module System", () => {
         { path: "main.js" },
       );
       expect(result.result).toBe("ab");
+    });
+
+    test("should resolve direct a -> b -> a circular chain for value exports", async () => {
+      const files = new Map([
+        ["a.js", `import { bValue } from "b.js"; export const aValue = "a:" + bValue;`],
+        ["b.js", `import { aValue } from "a.js"; export const bValue = "b";`],
+      ]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { aValue } from "a.js"; export const result = aValue;`,
+        { path: "main.js" },
+      );
+      expect(result.result).toBe("a:b");
     });
 
     test("should resolve circular imports when export uses destructuring", async () => {
