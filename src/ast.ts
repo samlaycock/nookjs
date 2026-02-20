@@ -3,11 +3,6 @@ export interface Location {
   end: { line: number; column: number };
 }
 
-interface ParseOptions {
-  readonly next?: boolean;
-  readonly profile?: boolean;
-}
-
 interface ParseProfile {
   readonly tokens: number;
   readonly tokenizeMs: number;
@@ -4178,12 +4173,12 @@ class Parser {
   }
 }
 
-export function parseModule(input: string, _options: ParseOptions = {}): ESTree.Program {
+export function parseModule(input: string): ESTree.Program {
   const parser = new Parser(input, true);
   return parser.parseProgram();
 }
 
-export function parseScript(input: string, _options: ParseOptions = {}): ESTree.Program {
+export function parseScript(input: string): ESTree.Program {
   const parser = new Parser(input, false);
   return parser.parseProgram();
 }
