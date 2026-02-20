@@ -2176,6 +2176,17 @@ export type InterpreterOptions = {
    * When enabled, allows import/export statements with a custom resolver
    */
   modules?: ModuleOptions;
+  /**
+   * When true, enforces strict evaluation isolation across sync and async APIs.
+   *
+   * In strict mode:
+   * - evaluateAsync() and evaluateModuleAsync() remain serialized via the mutex.
+   * - evaluate() is blocked while any async/module evaluation is pending or running.
+   *
+   * This prevents sync evaluations from mutating shared state while async evaluations are in-flight.
+   * Default: false
+   */
+  strictEvaluationIsolation?: boolean;
 };
 
 export type EvaluateOptions = {
@@ -2359,7 +2370,8 @@ export class Interpreter {
   // - This prevents cross-request data leakage when multiple async evaluations run concurrently.
   // - Each evaluation waits for any previous evaluation to complete before starting.
   // - Per-call globals are properly cleaned up after each evaluation.
-  // - sync evaluate() runs immediately and is not serialized with async evaluations.
+  // - sync evaluate() runs immediately and is not serialized with async evaluations by default.
+  // - when strictEvaluationIsolation is enabled, sync evaluate() cannot overlap pending async/module runs.
 
   private constructorGlobals: Record<string, any>; // Globals that persist across all evaluate() calls
   private constructorValidator?: ASTValidator; // AST validator that applies to all evaluate() calls
@@ -2438,6 +2450,8 @@ export class Interpreter {
   private integratedExhaustedLimit: keyof ResourceLimits | null = null;
 
   private moduleSystem: ModuleSystem | null = null;
+  private strictEvaluationIsolation: boolean;
+  private queuedEvaluations = 0;
   private nodeHandlers: Record<
     string,
     { sync: (node: ASTNode) => any; async: (node: ASTNode) => any }
@@ -2462,6 +2476,8 @@ export class Interpreter {
     if (options?.modules) {
       this.moduleSystem = new ModuleSystem(options.modules);
     }
+
+    this.strictEvaluationIsolation = options?.strictEvaluationIsolation ?? false;
 
     // Inject built-in globals that should always be available
     this.injectBuiltinGlobals();
@@ -2552,6 +2568,7 @@ export class Interpreter {
    */
   private async acquireEvaluationMutex(): Promise<() => void> {
     const previousQueue = this.evaluationMutexQueue;
+    this.queuedEvaluations++;
 
     let releaseFn: () => void;
     const isNext = new Promise<void>((resolve) => {
@@ -2561,7 +2578,45 @@ export class Interpreter {
     this.evaluationMutexQueue = previousQueue.then(() => isNext);
 
     await previousQueue;
-    return releaseFn!;
+    let released = false;
+    return () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      this.queuedEvaluations--;
+      releaseFn!();
+    };
+  }
+
+  private acquireSyncEvaluationMutexIfNeeded(): (() => void) | undefined {
+    if (!this.strictEvaluationIsolation) {
+      return undefined;
+    }
+
+    if (this.queuedEvaluations > 0) {
+      throw new InterpreterError(
+        "Strict isolation is enabled: synchronous evaluate() cannot run while another evaluation is pending. Use evaluateAsync() or wait for pending evaluations to finish.",
+      );
+    }
+
+    this.queuedEvaluations++;
+
+    let releaseFn: () => void;
+    const isNext = new Promise<void>((resolve) => {
+      releaseFn = resolve;
+    });
+    this.evaluationMutexQueue = this.evaluationMutexQueue.then(() => isNext);
+
+    let released = false;
+    return () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      this.queuedEvaluations--;
+      releaseFn!();
+    };
   }
 
   private evaluationMutexQueue: Promise<void> = Promise.resolve();
@@ -3071,6 +3126,7 @@ export class Interpreter {
   }
 
   evaluate(input: string | ESTree.Program, options?: EvaluateOptions): any {
+    const releaseMutex = this.acquireSyncEvaluationMutexIfNeeded();
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
     this.currentSourceCode = sourceCode;
     this.callStack = [];
@@ -3099,6 +3155,7 @@ export class Interpreter {
       }
       this.currentSourceCode = "";
       this.callStack = [];
+      releaseMutex?.();
     }
   }
 

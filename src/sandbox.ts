@@ -144,6 +144,7 @@ export interface SandboxOptions {
   readonly validator?: (ast: ESTree.Program) => boolean;
   readonly trackResources?: boolean;
   readonly security?: SecurityOptions;
+  readonly strictEvaluationIsolation?: boolean;
 }
 
 export interface RunOptions {
@@ -578,6 +579,7 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
     ...(featureControl ? { featureControl } : {}),
     ...(trackResources ? { resourceTracking: true } : {}),
     ...(options.validator ? { validator: options.validator } : {}),
+    ...(options.strictEvaluationIsolation ? { strictEvaluationIsolation: true } : {}),
     globals: {
       ...baseOptions.globals,
       ...options.globals,
