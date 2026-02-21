@@ -961,6 +961,7 @@ class GeneratorValue extends BaseGeneratorValue {
 
     try {
       this.interpreter.bindFunctionParameters(this.fn, this.args);
+      this.interpreter.hoistVarDeclarationsInScope(this.fn.body.body);
 
       for (const statement of this.fn.body.body) {
         const result = yield* this.executeStatement(statement);
@@ -1642,6 +1643,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
 
     try {
       await this.interpreter.bindFunctionParametersAsync(this.fn, this.args);
+      this.interpreter.hoistVarDeclarationsInScope(this.fn.body.body);
 
       for (const statement of this.fn.body.body) {
         const result = yield* this.executeStatement(statement);
@@ -4664,7 +4666,8 @@ export class Interpreter {
     }
   }
 
-  private hoistVarDeclarationsInScope(statements: ESTree.Statement[]): void {
+  // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
+  public hoistVarDeclarationsInScope(statements: ESTree.Statement[]): void {
     for (const statement of statements) {
       this.hoistVarDeclarationsInStatement(statement);
     }
