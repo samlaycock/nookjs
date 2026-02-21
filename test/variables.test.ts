@@ -93,6 +93,21 @@ describe("Variables", () => {
           expect(result).toBe(42);
         });
 
+        test("var initializer overwrites function declaration binding in function scope", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function test() {
+              function x() {
+                return 1;
+              }
+              var x = 42;
+              return x;
+            }
+            test();
+          `);
+          expect(result).toBe(42);
+        });
+
         test("var allows re-declaration", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`

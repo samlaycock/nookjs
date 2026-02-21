@@ -1889,6 +1889,31 @@ class Environment {
     if (kind === "var") {
       // var is function-scoped, so hoist to nearest function scope or global
       const targetEnv = this.findVarScope();
+      let functionDeclarationBinding:
+        | {
+            value: any;
+            kind: "let" | "const" | "var";
+            isGlobal?: boolean;
+            isFunctionDeclaration?: boolean;
+          }
+        | undefined;
+
+      // Keep block-scoped function declaration bindings in sync with the shared var binding.
+      // This preserves closure behavior while allowing var initializers to overwrite function values.
+      const ownBinding = this.variables.get(name);
+      if (ownBinding?.isFunctionDeclaration) {
+        functionDeclarationBinding = ownBinding;
+      } else {
+        let env = this.parent;
+        while (env && env !== targetEnv) {
+          const scopedBinding = env.variables.get(name);
+          if (scopedBinding?.isFunctionDeclaration) {
+            functionDeclarationBinding = scopedBinding;
+            break;
+          }
+          env = env.parent;
+        }
+      }
 
       // If variable already exists as var, just update it
       const existing = targetEnv.variables.get(name);
@@ -1896,6 +1921,9 @@ class Environment {
         if (existing.kind === "var") {
           // Re-declaration with var is allowed, just update the value
           existing.value = value;
+          if (functionDeclarationBinding && functionDeclarationBinding !== existing) {
+            functionDeclarationBinding.value = value;
+          }
           return;
         } else if (existing.isFunctionDeclaration) {
           // var declarations can coexist with function declarations in the same scope.
@@ -1910,6 +1938,9 @@ class Environment {
 
       // Declare new var in function scope
       targetEnv.variables.set(name, { value, kind, isGlobal });
+      if (functionDeclarationBinding) {
+        functionDeclarationBinding.value = value;
+      }
       return;
     }
 
@@ -1925,7 +1956,13 @@ class Environment {
   }
 
   declareFunctionDeclaration(name: string, value: any): void {
-    if (this.variables.has(name)) {
+    const existing = this.variables.get(name);
+    if (existing) {
+      if (existing.kind === "var") {
+        existing.value = value;
+        existing.isFunctionDeclaration = true;
+        return;
+      }
       throw new InterpreterError(`Variable '${name}' has already been declared`);
     }
     this.variables.set(name, { value, kind: "let", isFunctionDeclaration: true });
