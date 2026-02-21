@@ -121,6 +121,8 @@ export class FunctionValue {
     public homeClass: ClassValue | null = null, // Class this method belongs to (for super binding)
     public homeIsStatic: boolean = false, // Whether the method is static
     public destructuredParams: Map<number, ESTree.ObjectPattern | ESTree.ArrayPattern> = new Map(), // Destructuring patterns by param index
+    public isArrowFunction: boolean = false, // Arrow functions capture lexical this/arguments
+    public lexicalThisValue: any = undefined, // Captured this at arrow creation time
   ) {}
 }
 
@@ -4802,6 +4804,11 @@ export class Interpreter {
    */
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
   public bindFunctionParameters(fn: FunctionValue, args: any[]): void {
+    if (!fn.isArrowFunction && !fn.params.includes("arguments")) {
+      // Non-arrow functions get their own arguments object.
+      this.environment.declare("arguments", args.slice(), "var");
+    }
+
     const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
 
     // Bind regular parameters (with default value support)
@@ -4836,6 +4843,11 @@ export class Interpreter {
    */
   // Public for GeneratorValue/AsyncGeneratorValue access. Internal use only.
   public async bindFunctionParametersAsync(fn: FunctionValue, args: any[]): Promise<void> {
+    if (!fn.isArrowFunction && !fn.params.includes("arguments")) {
+      // Non-arrow functions get their own arguments object.
+      this.environment.declare("arguments", args.slice(), "var");
+    }
+
     const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
 
     // Bind regular parameters (with default value support)
@@ -5627,12 +5639,13 @@ export class Interpreter {
 
     const previousEnvironment = this.environment;
     const previousSuperBinding = this.currentSuperBinding;
-    this.environment = new Environment(fn.closure, thisValue, true);
+    const resolvedThisValue = fn.isArrowFunction ? fn.lexicalThisValue : thisValue;
+    this.environment = new Environment(fn.closure, resolvedThisValue, true);
 
     if (fn.homeClass) {
       this.currentSuperBinding = {
         parentClass: fn.homeClass.parentClass,
-        thisValue,
+        thisValue: resolvedThisValue,
         currentClass: fn.homeClass,
         isStatic: fn.homeIsStatic,
       };
@@ -7190,6 +7203,8 @@ export class Interpreter {
       null,
       false,
       destructuredParams,
+      true,
+      this.environment.getThis(),
     );
 
     return func;
