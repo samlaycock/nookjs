@@ -127,6 +127,13 @@ Simplifies error sanitization.
 - `"sanitize"` - keep messages, sanitize stacks
 - `"full"` - expose full host errors
 
+### `numericSemantics`
+
+Controls division/modulo by zero behavior:
+
+- `"safe"` (default): throw `InterpreterError` on `/ 0` and `% 0`
+- `"strict-js"`: preserve native JS numeric behavior (`Infinity`, `-Infinity`, `NaN`)
+
 ### `modules`
 
 Quick module wiring without a custom resolver.

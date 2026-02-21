@@ -2225,6 +2225,8 @@ export type SecurityOptions = {
   hideHostErrorMessages?: boolean;
 };
 
+export type NumericSemantics = "safe" | "strict-js";
+
 export type InterpreterOptions = {
   globals?: Record<string, any>;
   validator?: ASTValidator;
@@ -2262,6 +2264,12 @@ export type InterpreterOptions = {
    * Default: false
    */
   strictEvaluationIsolation?: boolean;
+  /**
+   * Controls numeric edge-case behavior for division/modulo by zero.
+   * - "safe" (default): throw InterpreterError for `/ 0` and `% 0`
+   * - "strict-js": preserve native JS semantics (`Infinity`, `-Infinity`, `NaN`)
+   */
+  numericSemantics?: NumericSemantics;
 };
 
 export type EvaluateOptions = {
@@ -2526,6 +2534,7 @@ export class Interpreter {
 
   private moduleSystem: ModuleSystem | null = null;
   private strictEvaluationIsolation: boolean;
+  private numericSemantics: NumericSemantics;
   private queuedEvaluations = 0;
   private nodeHandlers: Record<
     string,
@@ -2553,6 +2562,7 @@ export class Interpreter {
     }
 
     this.strictEvaluationIsolation = options?.strictEvaluationIsolation ?? false;
+    this.numericSemantics = options?.numericSemantics ?? "safe";
 
     // Inject built-in globals that should always be available
     this.injectBuiltinGlobals();
@@ -4734,12 +4744,12 @@ export class Interpreter {
       case "*":
         return left * right;
       case "/":
-        if (right === 0) {
+        if (right === 0 && this.numericSemantics === "safe") {
           throw new InterpreterError("Division by zero");
         }
         return left / right;
       case "%":
-        if (right === 0) {
+        if (right === 0 && this.numericSemantics === "safe") {
           throw new InterpreterError("Modulo by zero");
         }
         return left % right;

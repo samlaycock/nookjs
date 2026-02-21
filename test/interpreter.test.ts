@@ -95,6 +95,16 @@ describe("Interpreter", () => {
         expect(() => interpreter.evaluate("5 / 0")).toThrow(InterpreterError);
         expect(() => interpreter.evaluate("5 / 0")).toThrow("Division by zero");
       });
+
+      test("supports native JS division-by-zero semantics in strict-js mode", () => {
+        const strictJsInterpreter = new Interpreter({ numericSemantics: "strict-js" });
+
+        expect(strictJsInterpreter.evaluate("5 / 0")).toBe(Infinity);
+        expect(strictJsInterpreter.evaluate("-5 / 0")).toBe(-Infinity);
+        expect(strictJsInterpreter.evaluate("5 / -0")).toBe(-Infinity);
+        expect(strictJsInterpreter.evaluate("-5 / -0")).toBe(Infinity);
+        expect(Number.isNaN(strictJsInterpreter.evaluate("0 / 0"))).toBe(true);
+      });
     });
 
     describe("Binary Operations - Modulo", () => {
@@ -109,6 +119,14 @@ describe("Interpreter", () => {
       test("throws error on modulo by zero", () => {
         expect(() => interpreter.evaluate("5 % 0")).toThrow(InterpreterError);
         expect(() => interpreter.evaluate("5 % 0")).toThrow("Modulo by zero");
+      });
+
+      test("supports native JS modulo-by-zero semantics in strict-js mode", () => {
+        const strictJsInterpreter = new Interpreter({ numericSemantics: "strict-js" });
+
+        expect(Number.isNaN(strictJsInterpreter.evaluate("5 % 0"))).toBe(true);
+        expect(Number.isNaN(strictJsInterpreter.evaluate("5 % -0"))).toBe(true);
+        expect(Number.isNaN(strictJsInterpreter.evaluate("0 % 0"))).toBe(true);
       });
     });
 
