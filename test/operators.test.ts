@@ -1718,6 +1718,22 @@ describe("Operators", () => {
           expect(interpreter.evaluate(`let x = 17; x %= 5; x`)).toBe(2);
         });
 
+        test("/= throws on division by zero in safe mode", () => {
+          const interpreter = new Interpreter();
+          expect(() => interpreter.evaluate(`let x = 5; x /= 0; x`)).toThrow("Division by zero");
+        });
+
+        test("%= throws on modulo by zero in safe mode", () => {
+          const interpreter = new Interpreter();
+          expect(() => interpreter.evaluate(`let x = 5; x %= 0; x`)).toThrow("Modulo by zero");
+        });
+
+        test("/= and %= follow native JS behavior in strict-js mode", () => {
+          const interpreter = new Interpreter({ numericSemantics: "strict-js" });
+          expect(interpreter.evaluate(`let x = 5; x /= 0; x`)).toBe(Infinity);
+          expect(Number.isNaN(interpreter.evaluate(`let y = 5; y %= 0; y`))).toBe(true);
+        });
+
         test("**= exponentiation assignment", () => {
           const interpreter = new Interpreter();
           expect(interpreter.evaluate(`let x = 2; x **= 3; x`)).toBe(8);
@@ -1912,6 +1928,41 @@ describe("Operators", () => {
             run()
           `);
           expect(result).toBe(15);
+        });
+
+        test("/= and %= respect numeric semantics in async context", async () => {
+          const safeInterpreter = new Interpreter({ globals: { Promise } });
+          try {
+            await safeInterpreter.evaluateAsync(`
+              let x = 5;
+              x /= 0;
+              x;
+            `);
+            expect.unreachable("Expected division by zero to throw in safe mode");
+          } catch (error) {
+            expect(String(error)).toContain("Division by zero");
+          }
+
+          const strictJsInterpreter = new Interpreter({
+            globals: { Promise },
+            numericSemantics: "strict-js",
+          });
+          expect(
+            await strictJsInterpreter.evaluateAsync(`
+              let x = 5;
+              x /= 0;
+              x;
+            `),
+          ).toBe(Infinity);
+          expect(
+            Number.isNaN(
+              await strictJsInterpreter.evaluateAsync(`
+                let y = 5;
+                y %= 0;
+                y;
+              `),
+            ),
+          ).toBe(true);
         });
       });
 
