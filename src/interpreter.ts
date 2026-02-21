@@ -4490,8 +4490,25 @@ export class Interpreter {
     return await handler.async(node);
   }
 
+  private hoistFunctionDeclarationsInScope(statements: ESTree.Statement[]): void {
+    for (const statement of statements) {
+      if (statement.type === "FunctionDeclaration") {
+        this.evaluateFunctionDeclaration(statement);
+      }
+    }
+  }
+
   private evaluateProgram(node: ESTree.Program): any {
-    return this.evaluateNodeList(node.body, (statement) => this.evaluateNode(statement));
+    this.hoistFunctionDeclarationsInScope(node.body);
+
+    let result: any = undefined;
+    for (const statement of node.body) {
+      if (statement.type === "FunctionDeclaration") {
+        continue;
+      }
+      result = this.evaluateNode(statement);
+    }
+    return result;
   }
 
   private evaluateLiteral(node: ESTree.Literal): any {
@@ -6601,7 +6618,12 @@ export class Interpreter {
     let result: any = undefined;
 
     try {
+      this.hoistFunctionDeclarationsInScope(node.body);
+
       for (const statement of node.body) {
+        if (statement.type === "FunctionDeclaration") {
+          continue;
+        }
         result = this.evaluateNode(statement);
         // If we hit a return/break/continue statement, propagate it up
         if (this.shouldPropagateControlFlow(result)) {
@@ -8896,9 +8918,16 @@ export class Interpreter {
   // ============================================================================
 
   private async evaluateProgramAsync(node: ESTree.Program): Promise<any> {
-    return await this.evaluateNodeListAsync(node.body, (statement) =>
-      this.evaluateNodeAsync(statement),
-    );
+    this.hoistFunctionDeclarationsInScope(node.body);
+
+    let result: any = undefined;
+    for (const statement of node.body) {
+      if (statement.type === "FunctionDeclaration") {
+        continue;
+      }
+      result = await this.evaluateNodeAsync(statement);
+    }
+    return result;
   }
 
   private async evaluateBinaryExpressionAsync(node: ESTree.BinaryExpression): Promise<any> {
@@ -9808,7 +9837,12 @@ export class Interpreter {
     let result: any = undefined;
 
     try {
+      this.hoistFunctionDeclarationsInScope(node.body);
+
       for (const statement of node.body) {
+        if (statement.type === "FunctionDeclaration") {
+          continue;
+        }
         result = await this.evaluateNodeAsync(statement);
         if (this.shouldPropagateControlFlow(result)) {
           return result;

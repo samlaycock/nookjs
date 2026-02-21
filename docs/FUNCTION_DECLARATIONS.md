@@ -12,4 +12,5 @@ Defines a named function using `function foo() { ... }`.
 
 ## Gotchas
 
-- Function declarations execute in order (no full hoisting semantics).
+- Function declarations are hoisted to the top of their current scope before statement execution.
+- Hoisting is scope-local: declarations inside a block are available throughout that block, but not outside it.

@@ -66,6 +66,45 @@ describe("Functions", () => {
         });
       });
 
+      describe("Function declaration hoisting", () => {
+        test("can call a function before its declaration in the same scope", () => {
+          const code = `
+            result();
+            function result() {
+              return 42;
+            }
+          `;
+          expect(interpreter.evaluate(code)).toBe(42);
+        });
+
+        test("hoists nested function declarations before statements run", () => {
+          const code = `
+            function outer() {
+              return inner();
+              function inner() {
+                return 99;
+              }
+            }
+            outer()
+          `;
+          expect(interpreter.evaluate(code)).toBe(99);
+        });
+
+        test("hoists function declarations to block scope", () => {
+          const code = `
+            let result;
+            {
+              result = getValue();
+              function getValue() {
+                return 7;
+              }
+            }
+            result
+          `;
+          expect(interpreter.evaluate(code)).toBe(7);
+        });
+      });
+
       describe("Function parameters", () => {
         test("function with single parameter", () => {
           const code = `
