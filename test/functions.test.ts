@@ -814,6 +814,49 @@ describe("Functions", () => {
           expect(interpreter.evaluate(code)).toBe(15);
         });
 
+        it("should capture lexical this from enclosing method context", () => {
+          const interpreter = new Interpreter();
+          const code = `
+            function makeGetter() {
+              return {
+                value: 2,
+                get: () => this.value
+              };
+            }
+            let receiver = { value: 10, make: makeGetter };
+            let obj = receiver.make();
+            obj.get()
+          `;
+          expect(interpreter.evaluate(code)).toBe(10);
+        });
+
+        it("should capture lexical arguments from enclosing function", () => {
+          const interpreter = new Interpreter();
+          const code = `
+            function outer(a, b) {
+              let inner = () => arguments[0] + arguments[1];
+              return inner(100, 200);
+            }
+            outer(2, 3)
+          `;
+          expect(interpreter.evaluate(code)).toBe(5);
+        });
+
+        it("should preserve lexical arguments through nested arrows", () => {
+          const interpreter = new Interpreter();
+          const code = `
+            function outer(a, b) {
+              let first = () => {
+                let second = () => arguments[0] * arguments[1];
+                return second();
+              };
+              return first();
+            }
+            outer(3, 4)
+          `;
+          expect(interpreter.evaluate(code)).toBe(12);
+        });
+
         it("should create closures with arrow functions", () => {
           const interpreter = new Interpreter();
           const code = `

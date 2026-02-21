@@ -593,6 +593,21 @@ describe("Async", () => {
           `);
           expect(result).toBe(20);
         });
+
+        it("should capture lexical this and arguments", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(`
+            const obj = {
+              offset: 1,
+              run: async function(a, b) {
+                const inner = async () => arguments[0] + arguments[1] + this.offset;
+                return await inner(100, 200);
+              }
+            };
+            obj.run(2, 3)
+          `);
+          expect(result).toBe(6);
+        });
       });
 
       describe("Await expressions", () => {

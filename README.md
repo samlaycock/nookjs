@@ -545,7 +545,6 @@ resource tracking is enabled.
 
 ### Language semantics that differ from native JS
 
-- Arrow functions currently do not implement lexical `this`/`arguments`; they behave like normal functions.
 - Function declarations are evaluated in order (no full native hoisting behavior).
 - `var` is not hoisted to `undefined`; it is created at evaluation time.
 - `division`/`modulo` by zero throws `InterpreterError` instead of yielding JS numeric infinities/NaN.

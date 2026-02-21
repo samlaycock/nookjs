@@ -12,4 +12,4 @@ Uses `this` inside functions and classes.
 
 ## Gotchas
 
-- Arrow functions do not capture lexical `this`.
+- Arrow functions capture lexical `this` from their enclosing scope.
