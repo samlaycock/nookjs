@@ -4498,6 +4498,12 @@ export class Interpreter {
     }
   }
 
+  private hoistFunctionDeclarationsInSwitchCases(cases: ESTree.SwitchCase[]): void {
+    for (const switchCase of cases) {
+      this.hoistFunctionDeclarationsInScope(switchCase.consequent);
+    }
+  }
+
   private evaluateProgram(node: ESTree.Program): any {
     this.hoistFunctionDeclarationsInScope(node.body);
 
@@ -7026,6 +7032,8 @@ export class Interpreter {
       throw new InterpreterError("SwitchStatement is not enabled");
     }
 
+    this.hoistFunctionDeclarationsInSwitchCases(node.cases);
+
     // Evaluate the discriminant (the expression being switched on)
     const discriminant = this.evaluateNode(node.discriminant);
 
@@ -7051,6 +7059,9 @@ export class Interpreter {
       // If matched (either this case or falling through), execute consequent statements
       if (matched) {
         for (const statement of switchCase.consequent) {
+          if (statement.type === "FunctionDeclaration") {
+            continue;
+          }
           result = this.evaluateNode(statement);
 
           // If we hit a return statement, propagate it up
@@ -10205,6 +10216,8 @@ export class Interpreter {
       throw new InterpreterError("SwitchStatement is not enabled");
     }
 
+    this.hoistFunctionDeclarationsInSwitchCases(node.cases);
+
     // Evaluate the discriminant
     const discriminant = await this.evaluateNodeAsync(node.discriminant);
 
@@ -10229,6 +10242,9 @@ export class Interpreter {
       // If matched, execute consequent statements
       if (matched) {
         for (const statement of switchCase.consequent) {
+          if (statement.type === "FunctionDeclaration") {
+            continue;
+          }
           result = await this.evaluateNodeAsync(statement);
 
           if (isControlFlowKind(result, "return")) {

@@ -103,6 +103,40 @@ describe("Functions", () => {
           `;
           expect(interpreter.evaluate(code)).toBe(7);
         });
+
+        test("hoists function declarations within a switch case before statement execution", () => {
+          const code = `
+            let output;
+            switch (1) {
+              case 1:
+                output = read();
+                function read() {
+                  return 11;
+                }
+                break;
+            }
+            output
+          `;
+          expect(interpreter.evaluate(code)).toBe(11);
+        });
+
+        test("hoists function declarations across switch cases in the same switch scope", () => {
+          const code = `
+            let output;
+            switch (1) {
+              case 1:
+                output = fromLaterCase();
+                break;
+              case 2:
+                function fromLaterCase() {
+                  return 21;
+                }
+                break;
+            }
+            output
+          `;
+          expect(interpreter.evaluate(code)).toBe(21);
+        });
       });
 
       describe("Function parameters", () => {
