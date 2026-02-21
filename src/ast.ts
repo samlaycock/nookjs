@@ -4174,12 +4174,12 @@ class Parser {
 }
 
 export function parseModule(input: string): ESTree.Program {
-  const parser = new Parser(input, true);
+  const parser = new Parser(stripLeadingHashbang(input), true);
   return parser.parseProgram();
 }
 
 export function parseScript(input: string): ESTree.Program {
-  const parser = new Parser(input, false);
+  const parser = new Parser(stripLeadingHashbang(input), false);
   return parser.parseProgram();
 }
 
@@ -4192,8 +4192,9 @@ export function parseModuleWithProfile(input: string): {
     tokenizeMs: 0,
     parseMs: 0,
   };
+  const normalizedInput = stripLeadingHashbang(input);
   const start = now();
-  const parser = new Parser(input, true, profile);
+  const parser = new Parser(normalizedInput, true, profile);
   const ast = parser.parseProgram();
   const end = now();
   const total = end - start;
@@ -4210,4 +4211,8 @@ export function parseModuleWithProfile(input: string): {
 
 function now(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function stripLeadingHashbang(input: string): string {
+  return input.replace(/^#![^\r\n]*/, "");
 }

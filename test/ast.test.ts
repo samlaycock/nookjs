@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 
 import type { ESTree } from "../src/ast";
 
-import { parseModule, parseModuleWithProfile } from "../src/ast";
+import { parseModule, parseModuleWithProfile, parseScript } from "../src/ast";
 import { Interpreter } from "../src/interpreter";
 
 const parseFirstStatement = (code: string): ESTree.Statement => {
@@ -84,6 +84,18 @@ describe("AST", () => {
         expect(sw.cases.length).toBe(2);
         expect(sw.cases[0]?.test?.type).toBe("Literal");
         expect(sw.cases[1]?.test).toBeNull();
+      });
+
+      it("ignores leading hashbang in module parsing with LF line endings", () => {
+        const ast = parseModule("#!/usr/bin/env node\nconsole.log('ok');");
+        expect(ast.body.length).toBe(1);
+        expect(ast.body[0]?.type).toBe("ExpressionStatement");
+      });
+
+      it("ignores leading hashbang in script parsing with CRLF line endings", () => {
+        const ast = parseScript("#!/usr/bin/env node\r\nconsole.log('ok');");
+        expect(ast.body.length).toBe(1);
+        expect(ast.body[0]?.type).toBe("ExpressionStatement");
       });
     });
 
@@ -369,6 +381,11 @@ describe("AST", () => {
 
       it("rejects throw with line break", () => {
         expect(() => parseModule("throw\n1")).toThrow();
+      });
+
+      it("rejects non-leading hashbang syntax", () => {
+        expect(() => parseModule("const x = 1;\n#!/usr/bin/env node")).toThrow();
+        expect(() => parseScript("const x = 1;\n#!/usr/bin/env node")).toThrow();
       });
     });
 
