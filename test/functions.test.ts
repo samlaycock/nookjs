@@ -1546,6 +1546,24 @@ describe("Functions", () => {
           expect(result).toEqual([1, 1, 2, 2]);
         });
 
+        test("var is hoisted inside generator functions", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function* gen() {
+              const before = x;
+              var x = 10;
+              yield before;
+              yield x;
+            }
+            const g = gen();
+            const results = [];
+            results.push(g.next().value);
+            results.push(g.next().value);
+            results;
+          `);
+          expect(result).toEqual([undefined, 10]);
+        });
+
         test("generator maintains closure state", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -1588,6 +1606,27 @@ describe("Functions", () => {
             run()
           `);
           expect(result).toEqual([1, 2, 3]);
+        });
+
+        test("var is hoisted inside async generator functions", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(`
+            async function run() {
+              async function* gen() {
+                const before = x;
+                var x = 10;
+                yield before;
+                yield x;
+              }
+              const g = gen();
+              const results = [];
+              results.push((await g.next()).value);
+              results.push((await g.next()).value);
+              return results;
+            }
+            run()
+          `);
+          expect(result).toEqual([undefined, 10]);
         });
 
         test("async generator with await", async () => {
