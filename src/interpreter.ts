@@ -5709,17 +5709,15 @@ export class Interpreter {
     for (let i = 0; i < count; i++) {
       const arg = args[i];
       if (arg?.type === "SpreadElement") {
-        // Spread in call: fn(...arr) - expand array as separate arguments.
+        // Spread in call: fn(...iterable) - expand iterable items as separate arguments.
         if (!this.isFeatureEnabled("SpreadOperator")) {
           throw new InterpreterError("SpreadOperator is not enabled");
         }
 
         const spreadValue = this.evaluateNode((arg as ESTree.SpreadElement).argument);
-        if (!Array.isArray(spreadValue)) {
-          throw new InterpreterError("Spread syntax in function calls requires an array");
-        }
-        // Avoid push(...spreadValue) to sidestep argument count limits on large arrays.
-        this.appendSpreadArgs(evaluatedArgs, spreadValue);
+        const spreadArray = this.validateArraySpread(spreadValue);
+        // Avoid push(...spreadArray) to sidestep argument count limits on large arrays.
+        this.appendSpreadArgs(evaluatedArgs, spreadArray);
       } else {
         evaluatedArgs.push(this.evaluateNode(arg as ESTree.Expression));
       }
@@ -5756,17 +5754,15 @@ export class Interpreter {
     for (let i = 0; i < count; i++) {
       const arg = args[i];
       if (arg?.type === "SpreadElement") {
-        // Spread in call: fn(...arr) - expand array as separate arguments.
+        // Spread in call: fn(...iterable) - expand iterable items as separate arguments.
         if (!this.isFeatureEnabled("SpreadOperator")) {
           throw new InterpreterError("SpreadOperator is not enabled");
         }
 
         const spreadValue = await this.evaluateNodeAsync((arg as ESTree.SpreadElement).argument);
-        if (!Array.isArray(spreadValue)) {
-          throw new InterpreterError("Spread syntax in function calls requires an array");
-        }
-        // Avoid push(...spreadValue) to sidestep argument count limits on large arrays.
-        this.appendSpreadArgs(evaluatedArgs, spreadValue);
+        const spreadArray = this.validateArraySpread(spreadValue);
+        // Avoid push(...spreadArray) to sidestep argument count limits on large arrays.
+        this.appendSpreadArgs(evaluatedArgs, spreadArray);
       } else {
         let val = await this.evaluateNodeAsync(arg as ESTree.Expression);
         // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)

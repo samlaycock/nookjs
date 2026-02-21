@@ -2051,14 +2051,74 @@ describe("Variables", () => {
           expect(result).toBe(3);
         });
 
-        it("should throw error when spreading non-array in call", () => {
+        it("should spread a string into function arguments", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function collect(a, b, c) {
+              return [a, b, c];
+            }
+            collect(...'abc');
+          `);
+          expect(result).toEqual(["a", "b", "c"]);
+        });
+
+        it("should spread a Set into function arguments", () => {
+          const interpreter = new Interpreter({ globals: { Set } });
+          const result = interpreter.evaluate(`
+            function collect(...args) {
+              return args;
+            }
+            const values = new Set([1, 2, 3]);
+            collect(...values);
+          `);
+          expect(result).toEqual([1, 2, 3]);
+        });
+
+        it("should spread map iterator values into function arguments", () => {
+          const interpreter = new Interpreter({ globals: { Map } });
+          const result = interpreter.evaluate(`
+            function collect(...args) {
+              return args;
+            }
+            const values = new Map([["a", 10], ["b", 20]]).values();
+            collect(...values);
+          `);
+          expect(result).toEqual([10, 20]);
+        });
+
+        it("should spread custom iterables into function arguments", () => {
+          const customIterable = {
+            [Symbol.iterator]: () => {
+              let value = 3;
+              return {
+                next: () => {
+                  value = value + 1;
+                  if (value <= 6) return { value: value, done: false };
+                  return { value: undefined, done: true };
+                },
+              };
+            },
+          };
+          const interpreter = new Interpreter({ globals: { customIterable } });
+          const result = interpreter.evaluate(`
+            function collect(...args) {
+              return args;
+            }
+            collect(...customIterable);
+          `);
+          expect(result).toEqual([4, 5, 6]);
+        });
+
+        it("should throw error when spreading non-iterable primitive in call", () => {
           const interpreter = new Interpreter();
           expect(() => {
             interpreter.evaluate(`
               function fn(a) { return a; }
               fn(...5);
             `);
-          }).toThrow("Spread syntax in function calls requires an array");
+          }).toThrow(
+            "Spread syntax requires an iterable (array, generator, or object with [Symbol.iterator])",
+          );
         });
 
         it("should throw error when spreading object in call", () => {
@@ -2068,7 +2128,9 @@ describe("Variables", () => {
               function fn(a) { return a; }
               fn(...{a: 1});
             `);
-          }).toThrow("Spread syntax in function calls requires an array");
+          }).toThrow(
+            "Spread syntax requires an iterable (array, generator, or object with [Symbol.iterator])",
+          );
         });
 
         it("should work with rest parameters", () => {
@@ -2124,6 +2186,19 @@ describe("Variables", () => {
             sum(...arr[0], ...arr[1]);
           `);
           expect(result).toBe(10);
+        });
+
+        it("should spread iterables in evaluateAsync() call expressions", async () => {
+          const interpreter = new Interpreter({ globals: { Set } });
+          const result = await interpreter.evaluateAsync(`
+            function collect(...args) {
+              return args;
+            }
+            const chars = "xy";
+            const nums = new Set([1, 2]);
+            collect(...chars, ...nums);
+          `);
+          expect(result).toEqual(["x", "y", 1, 2]);
         });
       });
 
