@@ -69,6 +69,30 @@ describe("Variables", () => {
           expect(result).toEqual([undefined, 1]);
         });
 
+        test("var declaration can coexist with function declaration in the same scope", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function value() {
+              return 1;
+            }
+            var value;
+            value();
+          `);
+          expect(result).toBe(1);
+        });
+
+        test("var initializer can overwrite function declaration binding", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function value() {
+              return 1;
+            }
+            var value = 42;
+            value;
+          `);
+          expect(result).toBe(42);
+        });
+
         test("var allows re-declaration", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`

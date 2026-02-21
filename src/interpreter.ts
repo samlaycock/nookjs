@@ -1858,7 +1858,12 @@ export class HostFunctionValue {
 class Environment {
   private variables: Map<
     string,
-    { value: any; kind: "let" | "const" | "var"; isGlobal?: boolean }
+    {
+      value: any;
+      kind: "let" | "const" | "var";
+      isGlobal?: boolean;
+      isFunctionDeclaration?: boolean;
+    }
   > = new Map();
   private parent: Environment | null = null;
   private thisValue: any = undefined;
@@ -1892,6 +1897,11 @@ class Environment {
           // Re-declaration with var is allowed, just update the value
           existing.value = value;
           return;
+        } else if (existing.isFunctionDeclaration) {
+          // var declarations can coexist with function declarations in the same scope.
+          // An initializer updates the shared binding value.
+          existing.value = value;
+          return;
         } else {
           // Cannot redeclare let/const as var
           throw new InterpreterError(`Identifier '${name}' has already been declared`);
@@ -1912,6 +1922,13 @@ class Environment {
       throw new InterpreterError(`Variable '${name}' has already been declared`);
     }
     this.variables.set(name, { value, kind, isGlobal });
+  }
+
+  declareFunctionDeclaration(name: string, value: any): void {
+    if (this.variables.has(name)) {
+      throw new InterpreterError(`Variable '${name}' has already been declared`);
+    }
+    this.variables.set(name, { value, kind: "let", isFunctionDeclaration: true });
   }
 
   /**
@@ -1938,7 +1955,7 @@ class Environment {
     const targetEnv = this.findVarScope();
     const existing = targetEnv.variables.get(name);
     if (existing) {
-      if (existing.kind !== "var") {
+      if (existing.kind !== "var" && !existing.isFunctionDeclaration) {
         throw new InterpreterError(`Identifier '${name}' has already been declared`);
       }
       return;
@@ -7258,7 +7275,7 @@ export class Interpreter {
     );
 
     // Declare the function in the current environment
-    this.environment.declare(name, func, "let");
+    this.environment.declareFunctionDeclaration(name, func);
 
     return undefined;
   }
