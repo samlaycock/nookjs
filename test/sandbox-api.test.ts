@@ -15,6 +15,14 @@ describe("Simplified API", () => {
     expect(value).toBe(42);
   });
 
+  it("createSandbox() should support strict-js numeric semantics", async () => {
+    const sandbox = createSandbox({ env: "es2022", numericSemantics: "strict-js" });
+
+    expect(await sandbox.run<number>("5 / 0")).toBe(Infinity);
+    expect(await sandbox.run<number>("-5 / -0")).toBe(Infinity);
+    expect(Number.isNaN(await sandbox.run<number>("5 % 0"))).toBe(true);
+  });
+
   it("runSync() should return structured result when requested", () => {
     const sandbox = createSandbox({ env: "es2022" });
 

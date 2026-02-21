@@ -8,6 +8,7 @@ export type {
   ParseOptions,
   LanguageFeature,
   FeatureControl,
+  NumericSemantics,
   SecurityOptions,
   ExecutionStats,
   ExecutionStep,

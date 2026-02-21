@@ -18,7 +18,10 @@ NookJS is a JavaScript interpreter designed for safely executing untrusted code 
 
 NookJS prioritizes sandbox safety and predictable host isolation over exact native-JavaScript parity in every edge case. Some behaviors are intentionally different from native JS semantics.
 
-One important example: division/modulo by zero throws `InterpreterError` instead of returning `Infinity`, `-Infinity`, or `NaN`.
+One important example: by default (`numericSemantics: "safe"`), division/modulo by zero throws
+`InterpreterError` instead of returning `Infinity`, `-Infinity`, or `NaN`.
+
+If you need native JavaScript numeric behavior, set `numericSemantics: "strict-js"`.
 
 See [Limitations](#limitations) for the full list of known semantic differences.
 
@@ -545,8 +548,26 @@ resource tracking is enabled.
 
 ### Language semantics that differ from native JS
 
-- `division`/`modulo` by zero throws `InterpreterError` instead of yielding JS numeric infinities/NaN.
+- By default (`numericSemantics: "safe"`), `division`/`modulo` by zero throws `InterpreterError` instead of yielding JS numeric infinities/NaN.
 - Generator/async generator objects do not provide full native prototype/`instanceof` behavior.
+
+### Migration: native numeric semantics
+
+To match native JS behavior for division/modulo by zero, enable:
+
+```typescript
+const sandbox = createSandbox({
+  env: "es2022",
+  numericSemantics: "strict-js",
+});
+```
+
+With `"strict-js"`:
+
+- `5 / 0` -> `Infinity`
+- `5 / -0` -> `-Infinity`
+- `0 / 0` -> `NaN`
+- `5 % 0` -> `NaN`
 
 ### Syntax/feature scope
 
@@ -643,6 +664,7 @@ const ast = parse("1 + 2");
 - `limits.total`: Cumulative resource limits (requires integrated tracking)
 - `timeoutMs`: First-class async timeout (sandbox-level default or per-run override)
 - `policy.errors`: `"safe"` | `"sanitize"` | `"full"`
+- `numericSemantics`: `"safe"` (default, throw on `/0` and `%0`) | `"strict-js"` (native JS infinities/NaN)
 - `modules`: `{ files, ast, externals }` for easy module resolution
 
 ### Internal Classes

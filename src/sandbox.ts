@@ -5,6 +5,7 @@ import type {
   FeatureControl,
   InterpreterOptions,
   LanguageFeature,
+  NumericSemantics,
   SecurityOptions,
 } from "./interpreter";
 import type { ModuleOptions, ModuleResolver } from "./modules";
@@ -145,6 +146,7 @@ export interface SandboxOptions {
   readonly trackResources?: boolean;
   readonly security?: SecurityOptions;
   readonly strictEvaluationIsolation?: boolean;
+  readonly numericSemantics?: NumericSemantics;
 }
 
 export interface RunOptions {
@@ -580,6 +582,7 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
     ...(trackResources ? { resourceTracking: true } : {}),
     ...(options.validator ? { validator: options.validator } : {}),
     ...(options.strictEvaluationIsolation ? { strictEvaluationIsolation: true } : {}),
+    ...(options.numericSemantics ? { numericSemantics: options.numericSemantics } : {}),
     globals: {
       ...baseOptions.globals,
       ...options.globals,
