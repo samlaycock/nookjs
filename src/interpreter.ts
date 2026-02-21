@@ -1905,6 +1905,10 @@ class Environment {
 
     // let and const are block-scoped - check current scope only
     if (this.variables.has(name)) {
+      const existing = this.variables.get(name);
+      if (existing?.kind === "var") {
+        throw new InterpreterError(`Identifier '${name}' has already been declared`);
+      }
       throw new InterpreterError(`Variable '${name}' has already been declared`);
     }
     this.variables.set(name, { value, kind, isGlobal });
@@ -1928,6 +1932,19 @@ class Environment {
       env = env.parent;
     }
     return env ?? lastEnv;
+  }
+
+  hoistVarBinding(name: string): void {
+    const targetEnv = this.findVarScope();
+    const existing = targetEnv.variables.get(name);
+    if (existing) {
+      if (existing.kind !== "var") {
+        throw new InterpreterError(`Identifier '${name}' has already been declared`);
+      }
+      return;
+    }
+
+    targetEnv.variables.set(name, { value: undefined, kind: "var" });
   }
 
   get(name: string): any {
@@ -4504,8 +4521,104 @@ export class Interpreter {
     }
   }
 
+  private hoistVarBindingsFromDeclarators(declarators: ESTree.VariableDeclarator[]): void {
+    for (const declarator of declarators) {
+      const bindingNames = new Set<string>();
+      this.collectPatternBindingNames(declarator.id, bindingNames);
+      for (const bindingName of bindingNames) {
+        this.environment.hoistVarBinding(bindingName);
+      }
+    }
+  }
+
+  private hoistVarDeclarationsInStatement(statement: ESTree.Statement): void {
+    switch (statement.type) {
+      case "VariableDeclaration":
+        if (statement.kind === "var") {
+          this.hoistVarBindingsFromDeclarators(statement.declarations);
+        }
+        return;
+
+      case "BlockStatement":
+        this.hoistVarDeclarationsInScope(statement.body);
+        return;
+
+      case "IfStatement":
+        this.hoistVarDeclarationsInStatement(statement.consequent);
+        if (statement.alternate) {
+          this.hoistVarDeclarationsInStatement(statement.alternate);
+        }
+        return;
+
+      case "WhileStatement":
+      case "DoWhileStatement":
+      case "LabeledStatement":
+        this.hoistVarDeclarationsInStatement(statement.body);
+        return;
+
+      case "ForStatement":
+        if (statement.init?.type === "VariableDeclaration" && statement.init.kind === "var") {
+          this.hoistVarBindingsFromDeclarators(statement.init.declarations);
+        }
+        this.hoistVarDeclarationsInStatement(statement.body);
+        return;
+
+      case "ForInStatement":
+      case "ForOfStatement":
+        if (statement.left.type === "VariableDeclaration" && statement.left.kind === "var") {
+          this.hoistVarBindingsFromDeclarators(statement.left.declarations);
+        }
+        this.hoistVarDeclarationsInStatement(statement.body);
+        return;
+
+      case "SwitchStatement":
+        for (const switchCase of statement.cases) {
+          this.hoistVarDeclarationsInScope(switchCase.consequent);
+        }
+        return;
+
+      case "TryStatement":
+        this.hoistVarDeclarationsInStatement(statement.block);
+        if (statement.handler) {
+          this.hoistVarDeclarationsInStatement(statement.handler.body);
+        }
+        if (statement.finalizer) {
+          this.hoistVarDeclarationsInStatement(statement.finalizer);
+        }
+        return;
+
+      case "ExportNamedDeclaration":
+        if (
+          statement.declaration?.type === "VariableDeclaration" &&
+          statement.declaration.kind === "var"
+        ) {
+          this.hoistVarBindingsFromDeclarators(statement.declaration.declarations);
+        }
+        return;
+
+      case "ExportDefaultDeclaration":
+        if (
+          statement.declaration?.type === "VariableDeclaration" &&
+          statement.declaration.kind === "var"
+        ) {
+          this.hoistVarBindingsFromDeclarators(statement.declaration.declarations);
+        }
+        return;
+
+      default:
+        return;
+    }
+  }
+
+  private hoistVarDeclarationsInScope(statements: ESTree.Statement[]): void {
+    for (const statement of statements) {
+      this.hoistVarDeclarationsInStatement(statement);
+    }
+  }
+
   private evaluateProgram(node: ESTree.Program): any {
     this.hoistFunctionDeclarationsInScope(node.body);
+    this.hoistVarDeclarationsInScope(node.body);
 
     let result: any = undefined;
     for (const statement of node.body) {
@@ -5702,6 +5815,7 @@ export class Interpreter {
     try {
       // Bind parameters to arguments
       this.bindFunctionParameters(fn, args);
+      this.hoistVarDeclarationsInScope(fn.body.body);
 
       // Execute the function body
       const result = this.evaluateNode(fn.body);
@@ -5725,6 +5839,7 @@ export class Interpreter {
     try {
       // Bind parameters to arguments (use async version to handle async default values)
       await this.bindFunctionParametersAsync(fn, args);
+      this.hoistVarDeclarationsInScope(fn.body.body);
 
       // Execute the function body
       const result = await this.evaluateNodeAsync(fn.body);
@@ -6591,6 +6706,12 @@ export class Interpreter {
       }
 
       const name = (declarator.id as ESTree.Identifier).name;
+
+      if (kind === "var" && declarator.init === null) {
+        this.environment.hoistVarBinding(name);
+        lastValue = undefined;
+        continue;
+      }
 
       // When resuming from a yield, skip variables that have already been declared
       // (their values have already been assigned from the yield expression)
@@ -8930,6 +9051,7 @@ export class Interpreter {
 
   private async evaluateProgramAsync(node: ESTree.Program): Promise<any> {
     this.hoistFunctionDeclarationsInScope(node.body);
+    this.hoistVarDeclarationsInScope(node.body);
 
     let result: any = undefined;
     for (const statement of node.body) {
@@ -9813,6 +9935,12 @@ export class Interpreter {
       }
 
       const name = (declarator.id as ESTree.Identifier).name;
+
+      if (kind === "var" && declarator.init === null) {
+        this.environment.hoistVarBinding(name);
+        lastValue = undefined;
+        continue;
+      }
 
       // When resuming from a yield, skip variables that have already been declared
       // (their values have already been assigned from the yield expression)

@@ -27,6 +27,48 @@ describe("Variables", () => {
           expect(result).toBe("undefined");
         });
 
+        test("reading var before declaration returns undefined", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function test() {
+              const before = x;
+              var x = 10;
+              return [before, x];
+            }
+            test();
+          `);
+          expect(result).toEqual([undefined, 10]);
+        });
+
+        test("writing var before declaration updates hoisted binding", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function test() {
+              x = 5;
+              var x;
+              return x;
+            }
+            test();
+          `);
+          expect(result).toBe(5);
+        });
+
+        test("nested function var declarations hoist within their own scope", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function outer() {
+              var x = 1;
+              function inner() {
+                return x;
+                var x = 2;
+              }
+              return [inner(), x];
+            }
+            outer();
+          `);
+          expect(result).toEqual([undefined, 1]);
+        });
+
         test("var allows re-declaration", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`

@@ -12,6 +12,6 @@ Declares variables using `var`, `let`, or `const`.
 
 ## Gotchas
 
-- `var` is not hoisted to `undefined`; it is created when evaluated.
+- `var` declarations are hoisted to `undefined` in their function/global scope.
 - `const` requires an initializer and cannot be reassigned.
 - Destructuring requires `Destructuring` to be enabled.
