@@ -2181,6 +2181,7 @@ export type LanguageFeature =
   | "Generators" // function* and generator behavior
   | "AsyncGenerators" // async function* and async generator behavior
   | "YieldExpression" // yield and yield* expressions
+  | "DynamicImport" // dynamic import() expressions
   | "OptionalChaining" // optional chaining (?.)
   | "LogicalAssignment" // ||=, &&=, ??=
   | "UpdateExpression" // ++ and -- operators
@@ -3929,7 +3930,7 @@ export class Interpreter {
    */
   private async resolveModuleExports(
     specifier: string,
-    importerPath: string,
+    importerPath: string | null,
   ): Promise<Record<string, any>> {
     if (!this.moduleSystem) {
       throw new InterpreterError("Module system is not enabled");
@@ -4476,6 +4477,14 @@ export class Interpreter {
           );
         },
         async: (node) => this.evaluateAwaitExpressionAsync(node as ESTree.AwaitExpression),
+      },
+      ImportExpression: {
+        sync: () => {
+          throw new InterpreterError(
+            "Cannot use import() in synchronous evaluate(). Use evaluateAsync() instead.",
+          );
+        },
+        async: (node) => this.evaluateImportExpressionAsync(node as ESTree.ImportExpression),
       },
       YieldExpression: {
         sync: (node) => this.evaluateYieldExpression(node as ESTree.YieldExpression),
@@ -10491,6 +10500,35 @@ export class Interpreter {
 
     // Await the promise (or pass through non-promise values)
     return await value;
+  }
+
+  private async evaluateImportExpressionAsync(node: ESTree.ImportExpression): Promise<any> {
+    if (!this.isFeatureEnabled("DynamicImport")) {
+      throw new InterpreterError("DynamicImport is not enabled");
+    }
+    if (!this.moduleSystem) {
+      throw new InterpreterError("Module system is not enabled");
+    }
+
+    let sourceValue = await this.evaluateNodeAsync(node.source);
+    if (isControlFlowKind(sourceValue, "yield")) {
+      return sourceValue;
+    }
+    if (sourceValue instanceof RawValue) {
+      sourceValue = sourceValue.value;
+    }
+    if (typeof sourceValue !== "string") {
+      throw new InterpreterError("Dynamic import specifier must resolve to a string");
+    }
+
+    const importerChain = this.moduleSystem.getImporterChain();
+    const importerPath =
+      importerChain.length > 0 ? (importerChain[importerChain.length - 1] ?? null) : null;
+    const promise = this.resolveModuleExports(sourceValue, importerPath).then((exports) =>
+      ReadOnlyProxy.wrap(exports, `import("${sourceValue}")`, this.securityOptions),
+    );
+
+    return new RawValue(promise);
   }
 
   /**
