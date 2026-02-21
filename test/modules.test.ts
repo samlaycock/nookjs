@@ -184,6 +184,133 @@ describe("Module System", () => {
     });
   });
 
+  describe("Dynamic import()", () => {
+    test("should resolve dynamic imports in module evaluation", async () => {
+      const files = new Map<string, string>([["dep.js", "export const value = 41;"]]);
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          const code = files.get(specifier);
+          if (!code) return null;
+          return { type: "source", code, path: specifier };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(
+        `const dep = await import("dep.js");
+         export const value = dep.value + 1;`,
+        { path: "main.js" },
+      );
+
+      expect(exports.value).toBe(42);
+    });
+
+    test("should resolve dynamic imports in async script evaluation", async () => {
+      const files = new Map<string, string>([["dep.js", "export const value = 42;"]]);
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          const code = files.get(specifier);
+          if (!code) return null;
+          return { type: "source", code, path: specifier };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const result = await interpreter.evaluateAsync(`
+        async function load() {
+          const dep = await import("dep.js");
+          return dep.value;
+        }
+        load();
+      `);
+
+      expect(result).toBe(42);
+    });
+
+    test("should enforce resolver authorization for dynamic import", async () => {
+      const resolver: ModuleResolver = {
+        resolve() {
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      expect(
+        interpreter.evaluateModuleAsync(`await import("forbidden.js");`, {
+          path: "main.js",
+        }),
+      ).rejects.toThrow("Cannot find module");
+    });
+
+    test("should reuse cached exports for repeated dynamic imports", async () => {
+      let resolveCount = 0;
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "dep.js") {
+            return null;
+          }
+          resolveCount += 1;
+          return {
+            type: "source",
+            code: `export const value = ${resolveCount};`,
+            path: "dep.js",
+          };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(
+        `const first = await import("dep.js");
+         const second = await import("dep.js");
+         export const values = [first.value, second.value];`,
+        { path: "main.js" },
+      );
+
+      expect(resolveCount).toBe(2);
+      expect(exports.values).toEqual([1, 1]);
+    });
+
+    test("should apply maxDepth to dynamic import chains", async () => {
+      const files = new Map<string, string>([
+        ["a.js", `const b = await import("b.js"); export const value = b.value;`],
+        ["b.js", `const c = await import("c.js"); export const value = c.value;`],
+        ["c.js", `export const value = 42;`],
+      ]);
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          const code = files.get(specifier);
+          if (!code) return null;
+          return { type: "source", code, path: specifier };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, maxDepth: 3 },
+      });
+
+      expect(
+        interpreter.evaluateModuleAsync(`const a = await import("a.js"); export const value = a;`, {
+          path: "main.js",
+        }),
+      ).rejects.toThrow("depth exceeded");
+    });
+  });
+
   describe("Export Types", () => {
     test("should handle export const", async () => {
       const resolver: ModuleResolver = {

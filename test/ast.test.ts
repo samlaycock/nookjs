@@ -195,6 +195,14 @@ describe("AST", () => {
         expect(comp.type).toBe("MemberExpression");
         expect((comp as ESTree.MemberExpression).computed).toBe(true);
       });
+
+      it("parses dynamic import expressions", () => {
+        const dynamicImport = parseFirstExpression('import("./dep.js");');
+        expect(dynamicImport.type).toBe("ImportExpression");
+        const importExpression = dynamicImport as ESTree.ImportExpression;
+        expect(importExpression.source.type).toBe("Literal");
+        expect((importExpression.source as ESTree.Literal).value).toBe("./dep.js");
+      });
     });
 
     describe("Functions and arrows", () => {

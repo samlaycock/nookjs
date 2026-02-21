@@ -253,7 +253,7 @@ export const ES2019: InterpreterOptions = {
  * - BigInt (via globals)
  * - Promise.allSettled() (on Promise)
  * - globalThis (via globals)
- * - Dynamic import (not applicable)
+ * - Dynamic import (import())
  *
  * Note: Nullish coalescing is included under LogicalOperators in all presets.
  */
@@ -265,6 +265,7 @@ export const ES2020: InterpreterOptions = {
       ...(ES2019.featureControl!.features as LanguageFeature[]),
       "OptionalChaining",
       "BigIntLiteral",
+      "DynamicImport",
     ],
   },
   globals: {

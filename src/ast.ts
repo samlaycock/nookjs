@@ -59,6 +59,7 @@ export namespace ESTree {
     | ConditionalExpression
     | AssignmentExpression
     | CallExpression
+    | ImportExpression
     | NewExpression
     | MemberExpression
     | ArrayExpression
@@ -303,6 +304,11 @@ export namespace ESTree {
     readonly callee: Expression | Super;
     readonly arguments: (Expression | SpreadElement)[];
     readonly optional: boolean;
+  }
+
+  export interface ImportExpression extends Node {
+    readonly type: "ImportExpression";
+    readonly source: Expression;
   }
 
   export interface NewExpression extends Node {
@@ -1607,7 +1613,12 @@ class Parser {
           }
           break;
         case "import":
-          result = this.parseImportDeclaration();
+          if (
+            this.tokenizer.peekType() !== TOKEN.Punctuator ||
+            this.tokenizer.peekValue() !== "("
+          ) {
+            result = this.parseImportDeclaration();
+          }
           break;
         case "export":
           result = this.parseExportDeclaration();
@@ -2353,6 +2364,14 @@ class Parser {
     }
 
     throw new ParseError("Invalid import declaration");
+  }
+
+  private parseImportExpression(): ESTree.ImportExpression {
+    this.expectKeyword("import");
+    this.expectPunctuator("(");
+    const source = this.parseExpression();
+    this.expectPunctuator(")");
+    return { type: "ImportExpression", source };
   }
 
   private parseImportSpecifier(): ESTree.NamedImportSpecifier {
@@ -3354,6 +3373,8 @@ class Parser {
           case "super":
             this.next();
             return { type: "Super" };
+          case "import":
+            return this.parseImportExpression();
           case "function":
             return this.parseFunctionExpression();
           case "async":
