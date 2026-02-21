@@ -6577,9 +6577,9 @@ export class Interpreter {
         case "*=":
           return currentValue * rightValue;
         case "/=":
-          return currentValue / rightValue;
+          return this.applyBinaryOperator("/", currentValue, rightValue);
         case "%=":
-          return currentValue % rightValue;
+          return this.applyBinaryOperator("%", currentValue, rightValue);
         case "**=":
           return currentValue ** rightValue;
         case "<<=":
@@ -9815,9 +9815,9 @@ export class Interpreter {
         case "*=":
           return currentValue * rightValue;
         case "/=":
-          return currentValue / rightValue;
+          return this.applyBinaryOperator("/", currentValue, rightValue);
         case "%=":
-          return currentValue % rightValue;
+          return this.applyBinaryOperator("%", currentValue, rightValue);
         case "**=":
           return currentValue ** rightValue;
         case "<<=":
