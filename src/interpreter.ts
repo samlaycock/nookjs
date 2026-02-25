@@ -2534,6 +2534,7 @@ export class Interpreter {
   private integratedExhaustedLimit: keyof ResourceLimits | null = null;
 
   private moduleSystem: ModuleSystem | null = null;
+  private moduleImportMetaStack: any[] = [];
   private strictEvaluationIsolation: boolean;
   private numericSemantics: NumericSemantics;
   private queuedEvaluations = 0;
@@ -3780,9 +3781,54 @@ export class Interpreter {
    *
    * @param ast - The parsed module AST
    * @param path - The module path (for resolver)
+   * @param importMetaExtensions - Additional resolver-provided import.meta properties
    * @returns The module's exported values
    */
-  async evaluateModuleAstAsync(ast: ESTree.Program, path: string): Promise<Record<string, any>> {
+  private createImportMetaUrl(path: string): string {
+    if (/^[A-Za-z][A-Za-z\d+.-]*:/.test(path)) {
+      return path;
+    }
+
+    try {
+      return new URL(path, "file:///").href;
+    } catch {
+      return `file://${path}`;
+    }
+  }
+
+  private createModuleImportMeta(
+    path: string,
+    importMetaExtensions?: Record<string, any>,
+  ): Record<string, any> {
+    const baseMeta: Record<string, any> = {
+      url: this.createImportMetaUrl(path),
+    };
+
+    if (importMetaExtensions && typeof importMetaExtensions === "object") {
+      for (const [key, value] of Object.entries(importMetaExtensions)) {
+        if (key === "url") {
+          continue;
+        }
+        baseMeta[key] = value;
+      }
+    }
+
+    return ReadOnlyProxy.wrap(baseMeta, "import.meta", this.securityOptions);
+  }
+
+  private getCurrentModuleImportMeta(): Record<string, any> {
+    const current = this.moduleImportMetaStack[this.moduleImportMetaStack.length - 1];
+    if (!current) {
+      throw new InterpreterError("import.meta is only available during module evaluation");
+    }
+    return current;
+  }
+
+  async evaluateModuleAstAsync(
+    ast: ESTree.Program,
+    path: string,
+    importMetaExtensions?: Record<string, any>,
+  ): Promise<Record<string, any>> {
     if (!this.moduleSystem) {
       throw new InterpreterError("Module system is not enabled");
     }
@@ -3791,6 +3837,7 @@ export class Interpreter {
     this.moduleSystem.pushEvaluation(path);
 
     try {
+      this.moduleImportMetaStack.push(this.createModuleImportMeta(path, importMetaExtensions));
       const exports: Record<string, any> = {};
       const moduleEnv = new Environment(this.environment);
 
@@ -3816,6 +3863,7 @@ export class Interpreter {
 
       return ReadOnlyProxy.wrap(exports, "module.exports", this.securityOptions);
     } finally {
+      this.moduleImportMetaStack.pop();
       // Always pop from evaluation stack, even on error
       this.moduleSystem.popEvaluation();
     }
@@ -3969,7 +4017,11 @@ export class Interpreter {
       this.validateAst(ast);
       this.initializeModuleExportPlaceholders(moduleRecord, ast);
 
-      const exports = await this.evaluateModuleAstAsync(ast, moduleRecord.path);
+      const exports = await this.evaluateModuleAstAsync(
+        ast,
+        moduleRecord.path,
+        moduleRecord.importMeta,
+      );
       this.moduleSystem.setModuleExports(specifier, exports);
       return exports;
     } catch (error) {
@@ -4485,6 +4537,10 @@ export class Interpreter {
           );
         },
         async: (node) => this.evaluateImportExpressionAsync(node as ESTree.ImportExpression),
+      },
+      MetaProperty: {
+        sync: (node) => this.evaluateMetaProperty(node as ESTree.MetaProperty),
+        async: (node) => this.evaluateMetaPropertyAsync(node as ESTree.MetaProperty),
       },
       YieldExpression: {
         sync: (node) => this.evaluateYieldExpression(node as ESTree.YieldExpression),
@@ -8039,6 +8095,15 @@ export class Interpreter {
     return this.resolveConstructorReturn(result, instance);
   }
 
+  private evaluateMetaProperty(node: ESTree.MetaProperty): any {
+    if (node.meta.name === "import" && node.property.name === "meta") {
+      return this.getCurrentModuleImportMeta();
+    }
+    throw new InterpreterError(
+      `Unsupported meta property: ${node.meta.name}.${node.property.name}`,
+    );
+  }
+
   private evaluateMemberExpression(node: ESTree.MemberExpression): any {
     if (!this.isFeatureEnabled("MemberExpression")) {
       throw new InterpreterError("MemberExpression is not enabled");
@@ -10885,6 +10950,10 @@ export class Interpreter {
     }
     // Note: TypeScript exhaustively checks all valid types above
     // Any other type would be a parser error, not a runtime case
+  }
+
+  private async evaluateMetaPropertyAsync(node: ESTree.MetaProperty): Promise<any> {
+    return this.evaluateMetaProperty(node);
   }
 
   private async evaluateMemberExpressionAsync(node: ESTree.MemberExpression): Promise<any> {

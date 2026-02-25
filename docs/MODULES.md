@@ -455,7 +455,7 @@ const sandbox = createSandbox({
 ## Differences from Native ES Modules
 
 1. **Dynamic import is async-only**: Use `import()` from async contexts (e.g. `await import("./mod.js")`)
-2. **No import.meta**: The `import.meta` object is not available
+2. **Partial import.meta support**: Read-only `import.meta.url` is available (with optional resolver-provided fields)
 3. **Synchronous resolution**: While resolver can be async, module graph is built before execution
 4. **Custom resolution**: No automatic Node.js-style resolution (you control it via resolver)
 5. **No live bindings**: Exports are snapshotted at evaluation time

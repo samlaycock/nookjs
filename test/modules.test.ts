@@ -3747,4 +3747,108 @@ describe("Module System", () => {
       expect(resolveCalls.some((c) => c.importer === "importer2.js")).toBe(true);
     });
   });
+
+  describe("import.meta", () => {
+    test("should expose import.meta.url in entry modules", async () => {
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: { resolve: () => null } },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(`export const url = import.meta.url;`, {
+        path: "/app/main.js",
+      });
+
+      expect(exports.url).toBe("file:///app/main.js");
+    });
+
+    test("should preserve canonical import.meta.url through re-exports", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier === "barrel.js") {
+            return {
+              type: "source",
+              code: 'export { metaUrl } from "meta-source.js";',
+              path: "/modules/barrel.js",
+            };
+          }
+
+          if (specifier === "meta-source.js") {
+            return {
+              type: "source",
+              code: "export const metaUrl = import.meta.url;",
+              path: "/canonical/meta-source.js",
+            };
+          }
+
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(
+        `import { metaUrl } from "barrel.js";
+        export { metaUrl };`,
+        {
+          path: "/app/main.js",
+        },
+      );
+
+      expect(exports.metaUrl).toBe("file:///canonical/meta-source.js");
+    });
+
+    test("should merge resolver-provided import.meta fields without allowing url override", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "dep.js") {
+            return null;
+          }
+          return {
+            type: "source",
+            code: "export const meta = { url: import.meta.url, env: import.meta.env };",
+            path: "/canonical/dep.js",
+          };
+        },
+        getImportMeta({ path }) {
+          return {
+            env: "test",
+            url: `override:${path}`,
+          };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(
+        `import { meta } from "dep.js";
+        export { meta };`,
+        {
+          path: "/app/main.js",
+        },
+      );
+
+      expect(exports.meta.env).toBe("test");
+      expect(exports.meta.url).toBe("file:///canonical/dep.js");
+    });
+
+    test("should make import.meta read-only", async () => {
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: { resolve: () => null } },
+      });
+
+      return expect(
+        interpreter.evaluateModuleAsync(
+          `const meta = import.meta;
+           meta.url = "https://example.test/override";`,
+          {
+            path: "/app/main.js",
+          },
+        ),
+      ).rejects.toThrow("read-only");
+    });
+  });
 });
