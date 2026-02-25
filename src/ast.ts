@@ -60,6 +60,7 @@ export namespace ESTree {
     | AssignmentExpression
     | CallExpression
     | ImportExpression
+    | MetaProperty
     | NewExpression
     | MemberExpression
     | ArrayExpression
@@ -309,6 +310,12 @@ export namespace ESTree {
   export interface ImportExpression extends Node {
     readonly type: "ImportExpression";
     readonly source: Expression;
+  }
+
+  export interface MetaProperty extends Node {
+    readonly type: "MetaProperty";
+    readonly meta: Identifier;
+    readonly property: Identifier;
   }
 
   export interface NewExpression extends Node {
@@ -2374,6 +2381,20 @@ class Parser {
     return { type: "ImportExpression", source };
   }
 
+  private parseImportMetaProperty(): ESTree.MetaProperty {
+    this.expectKeyword("import");
+    this.expectPunctuator(".");
+    if (this.currentType !== TOKEN.Identifier || this.currentValue !== "meta") {
+      throw new ParseError("Expected 'meta' after 'import.'");
+    }
+
+    return {
+      type: "MetaProperty",
+      meta: { type: "Identifier", name: "import" },
+      property: this.parseIdentifier(),
+    };
+  }
+
   private parseImportSpecifier(): ESTree.NamedImportSpecifier {
     const imported = this.parseIdentifier();
 
@@ -3374,6 +3395,12 @@ class Parser {
             this.next();
             return { type: "Super" };
           case "import":
+            if (
+              this.tokenizer.peekType() === TOKEN.Punctuator &&
+              this.tokenizer.peekValue() === "."
+            ) {
+              return this.parseImportMetaProperty();
+            }
             return this.parseImportExpression();
           case "function":
             return this.parseFunctionExpression();

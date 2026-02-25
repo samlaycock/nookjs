@@ -17,6 +17,15 @@ export interface ModuleResolverContext {
   importerChain: readonly string[];
 }
 
+export interface ModuleImportMetaContext {
+  /** The resolved canonical path of the module being evaluated */
+  path: string;
+  /** The original specifier used to load the module */
+  specifier: string;
+  /** The path of the importing module, or null for entry point */
+  importer: string | null;
+}
+
 /**
  * Resolver interface for loading modules.
  *
@@ -49,6 +58,14 @@ export interface ModuleResolver {
    * Useful for error reporting and debugging.
    */
   onError?(specifier: string, importer: string | null, error: Error): void;
+
+  /**
+   * Optional hook for extending `import.meta` during module evaluation.
+   * Return additional properties to merge onto the sandbox-safe base object.
+   */
+  getImportMeta?(
+    context: ModuleImportMetaContext,
+  ): Record<string, any> | Promise<Record<string, any> | null> | null;
 }
 
 export interface ModuleOptions {
@@ -89,6 +106,7 @@ export interface ModuleRecord {
   path: string;
   specifier: string;
   exports: Record<string, any>;
+  importMeta?: Record<string, any>;
   status: "initializing" | "initialized" | "failed";
   error?: Error;
   source?: string;
@@ -269,6 +287,17 @@ export class ModuleSystem {
         status: "initializing",
         loadedAt: Date.now(),
       };
+
+      if (this.options.resolver.getImportMeta) {
+        const importMeta = await this.options.resolver.getImportMeta({
+          path: source.path,
+          specifier,
+          importer,
+        });
+        if (importMeta && typeof importMeta === "object") {
+          record.importMeta = deepClone(importMeta);
+        }
+      }
 
       if (this.options.cache) {
         this.cacheByPath.set(source.path, record);
