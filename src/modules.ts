@@ -115,67 +115,21 @@ export interface ModuleRecord {
 }
 
 /**
- * Deep clones an object to prevent mutations from affecting the original.
- * Handles nested objects, arrays, and common value types.
+ * Creates a shallow copy while preserving property descriptors/getters.
+ * This avoids expensive recursive cloning and preserves branded nested values.
  */
-function deepClone<T>(obj: T, seen = new WeakMap()): T {
-  // Handle primitives and null
-  if (obj === null || typeof obj !== "object") {
-    return obj;
-  }
+function shallowCloneWithDescriptors<T extends object>(obj: T): T {
+  const clone = Array.isArray(obj) ? [] : Object.create(Object.getPrototypeOf(obj));
 
-  // Handle circular references
-  if (seen.has(obj as object)) {
-    return seen.get(obj as object);
-  }
-
-  // Handle Date
-  if (obj instanceof Date) {
-    return new Date(obj.getTime()) as T;
-  }
-
-  // Handle RegExp
-  if (obj instanceof RegExp) {
-    return new RegExp(obj.source, obj.flags) as T;
-  }
-
-  // Handle Array
-  if (Array.isArray(obj)) {
-    const cloned: unknown[] = [];
-    seen.set(obj, cloned);
-    for (let i = 0; i < obj.length; i++) {
-      cloned[i] = deepClone(obj[i], seen);
+  for (const key of Reflect.ownKeys(obj)) {
+    const descriptor = Object.getOwnPropertyDescriptor(obj, key);
+    if (!descriptor) {
+      continue;
     }
-    return cloned as T;
+    Object.defineProperty(clone, key, descriptor);
   }
 
-  // Handle Map
-  if (obj instanceof Map) {
-    const cloned = new Map();
-    seen.set(obj, cloned);
-    obj.forEach((value, key) => {
-      cloned.set(deepClone(key, seen), deepClone(value, seen));
-    });
-    return cloned as T;
-  }
-
-  // Handle Set
-  if (obj instanceof Set) {
-    const cloned = new Set();
-    seen.set(obj, cloned);
-    obj.forEach((value) => {
-      cloned.add(deepClone(value, seen));
-    });
-    return cloned as T;
-  }
-
-  // Handle plain objects
-  const cloned = Object.create(Object.getPrototypeOf(obj));
-  seen.set(obj as object, cloned);
-  for (const key of Reflect.ownKeys(obj as object)) {
-    cloned[key] = deepClone((obj as Record<string | symbol, unknown>)[key], seen);
-  }
-  return cloned;
+  return clone as T;
 }
 
 export class ModuleSystem {
@@ -295,7 +249,7 @@ export class ModuleSystem {
           importer,
         });
         if (importMeta && typeof importMeta === "object") {
-          record.importMeta = deepClone(importMeta);
+          record.importMeta = shallowCloneWithDescriptors(importMeta);
         }
       }
 
@@ -305,10 +259,11 @@ export class ModuleSystem {
       }
 
       if (source.type === "namespace") {
-        // Deep clone namespace exports to prevent mutations affecting resolver
+        // Shallow-clone top-level exports to avoid mutating resolver-owned objects
+        // while preserving accessors/descriptors and branded nested instances.
         // Note: Don't freeze here - ReadOnlyProxy handles immutability and freezing
         // causes issues with proxy wrapping
-        record.exports = deepClone(source.exports);
+        record.exports = shallowCloneWithDescriptors(source.exports);
         record.status = "initialized";
         this.options.resolver.onLoad?.(specifier, source.path, record.exports);
         return record;
