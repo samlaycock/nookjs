@@ -19,7 +19,7 @@ export namespace ESTree {
   export interface Program extends Node {
     readonly type: "Program";
     readonly body: Statement[];
-    readonly sourceType: "module";
+    readonly sourceType: "script" | "module";
   }
 
   export type Statement =
@@ -1534,7 +1534,7 @@ class Parser {
     this.allowTopLevelAwait = allowTopLevelAwait;
   }
 
-  parseProgram(): ESTree.Program {
+  parseProgram(sourceType: ESTree.Program["sourceType"]): ESTree.Program {
     const body: ESTree.Statement[] = [];
     while ((this.currentType as TokenType) !== TOKEN.EOF) {
       if (this.currentType === TOKEN.Punctuator && this.currentValue === ";") {
@@ -1549,7 +1549,7 @@ class Parser {
     return {
       type: "Program",
       body,
-      sourceType: "module",
+      sourceType,
     };
   }
 
@@ -4378,12 +4378,12 @@ class Parser {
 
 export function parseModule(input: string): ESTree.Program {
   const parser = new Parser(stripLeadingHashbang(input), true);
-  return parser.parseProgram();
+  return parser.parseProgram("module");
 }
 
 export function parseScript(input: string): ESTree.Program {
   const parser = new Parser(stripLeadingHashbang(input), false);
-  return parser.parseProgram();
+  return parser.parseProgram("script");
 }
 
 export function parseModuleWithProfile(input: string): {
@@ -4398,7 +4398,7 @@ export function parseModuleWithProfile(input: string): {
   const normalizedInput = stripLeadingHashbang(input);
   const start = now();
   const parser = new Parser(normalizedInput, true, profile);
-  const ast = parser.parseProgram();
+  const ast = parser.parseProgram("module");
   const end = now();
   const total = end - start;
   const parseMs = Math.max(0, total - profile.tokenizeMs);

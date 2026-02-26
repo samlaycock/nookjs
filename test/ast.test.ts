@@ -97,6 +97,16 @@ describe("AST", () => {
         expect(ast.body.length).toBe(1);
         expect(ast.body[0]?.type).toBe("ExpressionStatement");
       });
+
+      it("returns script sourceType for parseScript", () => {
+        const ast = parseScript("1;");
+        expect(ast.sourceType).toBe("script");
+      });
+
+      it("returns module sourceType for parseModule", () => {
+        const ast = parseModule("export const x = 1;");
+        expect(ast.sourceType).toBe("module");
+      });
     });
 
     describe("Control flow", () => {
@@ -459,7 +469,7 @@ describe("AST", () => {
 
         expect(ast).toBeDefined();
         expect(ast.type).toBe("Program");
-        expect(ast.sourceType).toBe("module");
+        expect(ast.sourceType).toBe("script");
         expect(Array.isArray(ast.body)).toBe(true);
       });
 
