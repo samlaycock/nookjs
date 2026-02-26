@@ -184,6 +184,41 @@ describe("Module System", () => {
     });
   });
 
+  describe("TypeScript Type-Only Module Syntax (Stripped)", () => {
+    test("should omit type-only imports/exports from runtime module resolution", async () => {
+      const resolvedSpecifiers: string[] = [];
+      const files = new Map<string, string>([["values.js", "export const value = 42;"]]);
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          resolvedSpecifiers.push(specifier);
+          const code = files.get(specifier);
+          if (!code) return null;
+          return { type: "source", code, path: specifier };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(
+        `
+          import type { Foo } from "types.js";
+          import { value, type Hidden } from "values.js";
+          export type { Foo } from "types.js";
+          export { value, type Hidden };
+        `,
+        { path: "main.js" },
+      );
+
+      expect(exports.value).toBe(42);
+      expect("Foo" in exports).toBe(false);
+      expect("Hidden" in exports).toBe(false);
+      expect(resolvedSpecifiers).toEqual(["values.js"]);
+    });
+  });
+
   describe("Dynamic import()", () => {
     test("should resolve dynamic imports in module evaluation", async () => {
       const files = new Map<string, string>([["dep.js", "export const value = 41;"]]);

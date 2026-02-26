@@ -283,6 +283,49 @@ describe("AST", () => {
         expect(ast.body.length).toBe(1);
         expect(ast.body[0]?.type).toBe("VariableDeclaration");
       });
+
+      it("drops type-only imports/exports and strips mixed type specifiers", () => {
+        const ast = parseModule(`
+          import type { Foo } from "./types";
+          import { value, type Hidden } from "./values";
+          export type { Foo } from "./types";
+          export { value, type Hidden };
+        `);
+
+        expect(ast.body.length).toBe(2);
+
+        const importDecl = ast.body[0] as ESTree.ImportDeclaration;
+        expect(importDecl.type).toBe("ImportDeclaration");
+        expect((importDecl.source as ESTree.Literal).value).toBe("./values");
+        expect(importDecl.specifiers.length).toBe(1);
+        expect(importDecl.specifiers[0]?.type).toBe("ImportSpecifier");
+        expect((importDecl.specifiers[0] as ESTree.NamedImportSpecifier).local.name).toBe("value");
+
+        const exportDecl = ast.body[1] as ESTree.ExportNamedDeclaration;
+        expect(exportDecl.type).toBe("ExportNamedDeclaration");
+        expect(exportDecl.source).toBeUndefined();
+        expect(exportDecl.specifiers?.length).toBe(1);
+        const exportSpecifier = exportDecl.specifiers?.[0] as
+          | ESTree.NamedExportSpecifier
+          | undefined;
+        expect(exportSpecifier?.type).toBe("ExportSpecifier");
+        expect(exportSpecifier?.exported.name).toBe("value");
+      });
+
+      it("applies type-only import stripping in parseScript for strip-mode compatibility", () => {
+        const ast = parseScript(`
+          import type { Foo } from "./types";
+          import { value, type Hidden } from "./values";
+        `);
+
+        expect(ast.body.length).toBe(1);
+        const importDecl = ast.body[0] as ESTree.ImportDeclaration;
+        expect(importDecl.type).toBe("ImportDeclaration");
+        expect(importDecl.specifiers.length).toBe(1);
+        expect((importDecl.specifiers[0] as ESTree.NamedImportSpecifier).imported.name).toBe(
+          "value",
+        );
+      });
     });
 
     describe("Arrays, objects, patterns, and templates", () => {
