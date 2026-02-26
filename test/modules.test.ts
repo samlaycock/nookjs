@@ -1987,7 +1987,9 @@ describe("Module System", () => {
 
       const result = await interpreter.evaluateModuleAsync(
         `import { obj } from "mod.js";
-         export const same = obj === obj;`,
+         const a = obj;
+         const b = obj;
+         export const same = a === b;`,
         { path: "main.js" },
       );
 
@@ -2002,7 +2004,9 @@ describe("Module System", () => {
 
       const result = await interpreter.evaluateModuleAsync(
         `import * as ns from "mod.js";
-         export const same = ns === ns;`,
+         const a = ns;
+         const b = ns;
+         export const same = a === b;`,
         { path: "main.js" },
       );
 
