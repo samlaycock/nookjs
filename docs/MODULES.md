@@ -458,7 +458,7 @@ const sandbox = createSandbox({
 2. **Partial import.meta support**: Read-only `import.meta.url` is available (with optional resolver-provided fields)
 3. **Synchronous resolution**: While resolver can be async, module graph is built before execution
 4. **Custom resolution**: No automatic Node.js-style resolution (you control it via resolver)
-5. **No live bindings**: Exports are snapshotted at evaluation time
+5. **Approximate ESM semantics**: Named imports/re-exports use live bindings, but full native ESM TDZ/instantiation behavior is not guaranteed
 
 ## Complete Example
 

@@ -1862,6 +1862,7 @@ class Environment {
     string,
     {
       value: any;
+      getter?: () => any;
       kind: "let" | "const" | "var";
       isGlobal?: boolean;
       isFunctionDeclaration?: boolean;
@@ -1957,6 +1958,27 @@ class Environment {
     this.variables.set(name, { value, kind, isGlobal });
   }
 
+  declareGetter(
+    name: string,
+    getter: () => any,
+    kind: "let" | "const" | "var" = "const",
+    isGlobal: boolean = false,
+  ): void {
+    if (kind === "var") {
+      throw new InterpreterError("Getter-backed var bindings are not supported");
+    }
+
+    if (this.variables.has(name)) {
+      const existing = this.variables.get(name);
+      if (existing?.kind === "var") {
+        throw new InterpreterError(`Identifier '${name}' has already been declared`);
+      }
+      throw new InterpreterError(`Variable '${name}' has already been declared`);
+    }
+
+    this.variables.set(name, { value: undefined, getter, kind, isGlobal });
+  }
+
   declareFunctionDeclaration(name: string, value: any): void {
     const existing = this.variables.get(name);
     if (existing) {
@@ -2006,12 +2028,18 @@ class Environment {
   get(name: string): any {
     const entry = this.variables.get(name);
     if (entry) {
+      if (entry.getter) {
+        return entry.getter();
+      }
       return entry.value;
     }
     let env = this.parent;
     while (env) {
       const nextEntry = env.variables.get(name);
       if (nextEntry) {
+        if (nextEntry.getter) {
+          return nextEntry.getter();
+        }
         return nextEntry.value;
       }
       env = env.parent;
@@ -3828,6 +3856,7 @@ export class Interpreter {
     ast: ESTree.Program,
     path: string,
     importMetaExtensions?: Record<string, any>,
+    targetExports?: Record<string, any>,
   ): Promise<Record<string, any>> {
     if (!this.moduleSystem) {
       throw new InterpreterError("Module system is not enabled");
@@ -3838,7 +3867,7 @@ export class Interpreter {
 
     try {
       this.moduleImportMetaStack.push(this.createModuleImportMeta(path, importMetaExtensions));
-      const exports: Record<string, any> = {};
+      const exports: Record<string, any> = targetExports ?? {};
       const moduleEnv = new Environment(this.environment);
 
       for (const statement of ast.body) {
@@ -3973,6 +4002,26 @@ export class Interpreter {
     }
   }
 
+  private defineLiveExport(
+    exports: Record<string, any>,
+    exportName: string,
+    getter: () => any,
+  ): void {
+    Object.defineProperty(exports, exportName, {
+      configurable: true,
+      enumerable: true,
+      get: getter,
+    });
+  }
+
+  private createLiveNamespaceObject(sourceExports: Record<string, any>): Record<string, any> {
+    const namespace: Record<string, any> = {};
+    for (const key of Object.keys(sourceExports)) {
+      this.defineLiveExport(namespace, key, () => sourceExports[key]);
+    }
+    return namespace;
+  }
+
   /**
    * Resolve a module specifier and return its exports, evaluating if needed.
    */
@@ -4021,6 +4070,7 @@ export class Interpreter {
         ast,
         moduleRecord.path,
         moduleRecord.importMeta,
+        moduleRecord.exports,
       );
       this.moduleSystem.setModuleExports(specifier, exports);
       return exports;
@@ -4041,18 +4091,18 @@ export class Interpreter {
 
     for (const spec of node.specifiers) {
       if (spec.type === "ImportNamespaceSpecifier") {
-        moduleEnv.declare(
+        moduleEnv.declareGetter(
           spec.local.name,
-          ReadOnlyProxy.wrap(importedExports, spec.local.name, this.securityOptions),
+          () => ReadOnlyProxy.wrap(importedExports, spec.local.name, this.securityOptions),
           "const",
         );
       } else if (spec.type === "ImportDefaultSpecifier") {
         if (!("default" in importedExports)) {
           throw new InterpreterError(`Module '${specifier}' does not have a default export`);
         }
-        moduleEnv.declare(
+        moduleEnv.declareGetter(
           spec.local.name,
-          ReadOnlyProxy.wrap(importedExports.default, spec.local.name, this.securityOptions),
+          () => ReadOnlyProxy.wrap(importedExports.default, spec.local.name, this.securityOptions),
           "const",
         );
       } else {
@@ -4061,9 +4111,14 @@ export class Interpreter {
         if (!(importedName in importedExports)) {
           throw new InterpreterError(`Module '${specifier}' does not export '${importedName}'`);
         }
-        moduleEnv.declare(
+        moduleEnv.declareGetter(
           spec.local.name,
-          ReadOnlyProxy.wrap(importedExports[importedName], spec.local.name, this.securityOptions),
+          () =>
+            ReadOnlyProxy.wrap(
+              importedExports[importedName],
+              spec.local.name,
+              this.securityOptions,
+            ),
           "const",
         );
       }
@@ -4087,19 +4142,21 @@ export class Interpreter {
             this.collectPatternBindingNames(declarator.id, bindingNames);
             for (const bindingName of bindingNames) {
               if (moduleEnv.has(bindingName)) {
-                exports[bindingName] = moduleEnv.get(bindingName);
+                this.defineLiveExport(exports, bindingName, () => moduleEnv.get(bindingName));
               }
             }
           }
         } else if (node.declaration.type === "FunctionDeclaration") {
           this.evaluateFunctionDeclaration(node.declaration);
           if (node.declaration.id && node.declaration.id.type === "Identifier") {
-            exports[node.declaration.id.name] = moduleEnv.get(node.declaration.id.name);
+            const exportName = node.declaration.id.name;
+            this.defineLiveExport(exports, exportName, () => moduleEnv.get(exportName));
           }
         } else if (node.declaration.type === "ClassDeclaration") {
           await this.evaluateClassDeclarationAsync(node.declaration);
           if (node.declaration.id && node.declaration.id.type === "Identifier") {
-            exports[node.declaration.id.name] = moduleEnv.get(node.declaration.id.name);
+            const exportName = node.declaration.id.name;
+            this.defineLiveExport(exports, exportName, () => moduleEnv.get(exportName));
           }
         }
       } finally {
@@ -4119,18 +4176,20 @@ export class Interpreter {
             if (!(importedName in sourceExports)) {
               throw new InterpreterError(`Module '${specifier}' does not export '${importedName}'`);
             }
-            const value = sourceExports[importedName];
-            exports[spec.exported.name] = value;
+            const exportName = spec.exported.name;
+            this.defineLiveExport(exports, exportName, () => sourceExports[importedName]);
           }
         }
       } else {
         // Handle local exports: export { foo }
         for (const spec of node.specifiers) {
           if (spec.type === "ExportSpecifier") {
-            const value = moduleEnv.get(spec.local.name);
-            exports[spec.exported.name] = value;
+            const localName = spec.local.name;
+            const exportName = spec.exported.name;
+            this.defineLiveExport(exports, exportName, () => moduleEnv.get(localName));
           } else if (spec.type === "ExportDefaultSpecifier") {
-            exports[spec.exported.name] = moduleEnv.get(spec.exported.name);
+            const exportName = spec.exported.name;
+            this.defineLiveExport(exports, exportName, () => moduleEnv.get(exportName));
           }
         }
       }
@@ -4239,10 +4298,7 @@ export class Interpreter {
 
     // Handle "export * as namespace from 'module'"
     if (node.exported) {
-      const namespace: Record<string, any> = {};
-      for (const [key, value] of Object.entries(sourceExports)) {
-        namespace[key] = value;
-      }
+      const namespace = this.createLiveNamespaceObject(sourceExports);
       exports[node.exported.name] = namespace;
       // Only declare in moduleEnv if not already declared
       if (!moduleEnv.has(node.exported.name)) {
@@ -4252,12 +4308,12 @@ export class Interpreter {
       // Handle "export * from 'module'" - re-export all named exports
       // Note: For diamond dependencies, the same export may come from multiple paths
       // We only add to exports (not moduleEnv) to avoid duplicate declaration errors
-      for (const [key, value] of Object.entries(sourceExports)) {
+      for (const key of Object.keys(sourceExports)) {
         // Skip 'default' export per ES module spec
         if (key !== "default") {
           // Only add if not already exported (first one wins per ES spec)
           if (!(key in exports)) {
-            exports[key] = value;
+            this.defineLiveExport(exports, key, () => sourceExports[key]);
           }
         }
       }
