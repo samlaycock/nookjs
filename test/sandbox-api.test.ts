@@ -172,6 +172,40 @@ describe("Simplified API", () => {
     expect(exports.result).toBe(42);
   });
 
+  it("runModule() should forward resolver getImportMeta from sandbox options", async () => {
+    const sandbox = createSandbox({
+      env: "es2022",
+      modules: {
+        resolver: {
+          resolve(specifier) {
+            if (specifier !== "dep.js") {
+              return null;
+            }
+            return {
+              type: "source",
+              code: "export const meta = { url: import.meta.url, env: import.meta.env };",
+              path: "/canonical/dep.js",
+            };
+          },
+          getImportMeta({ path }) {
+            return {
+              env: `sandbox:${path}`,
+              url: `override:${path}`,
+            };
+          },
+        },
+      },
+    });
+
+    const exports = await sandbox.runModule<{ result: { env: string; url: string } }>(
+      'import { meta } from "dep.js"; export const result = meta;',
+      { path: "/app/main.js" },
+    );
+
+    expect(exports.result.env).toBe("sandbox:/canonical/dep.js");
+    expect(exports.result.url).toBe("file:///canonical/dep.js");
+  });
+
   it("runModule() should respect cache settings", async () => {
     const files: Record<string, string> = {
       "value.js": "export const value = 1;",
