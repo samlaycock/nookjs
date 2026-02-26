@@ -1562,7 +1562,7 @@ class Parser {
       return this.parseBlockStatement();
     }
     if (type === TOKEN.Identifier || type === TOKEN.Keyword) {
-      if (value === "type" || value === "interface") {
+      if ((value === "type" || value === "interface") && this.isTypeOnlyStatementStart(value)) {
         this.parseTypeOnlyStatement(value);
         return null;
       }
@@ -1648,6 +1648,48 @@ class Parser {
 
   private parseStatementOrEmpty(): ESTree.Statement {
     return this.parseStatement() ?? { type: "EmptyStatement" };
+  }
+
+  private isTypeOnlyStatementStart(kind: "type" | "interface"): boolean {
+    const snapshot = this.snapshot();
+    try {
+      this.next();
+      if (this.currentType !== TOKEN.Identifier && this.currentType !== TOKEN.Keyword) {
+        return false;
+      }
+      this.parseIdentifier();
+
+      if (kind === "type") {
+        if ((this.currentType as TokenType) === TOKEN.Punctuator && this.currentValue === "<") {
+          this.skipType(STOP_TOKEN.Equals);
+        }
+        return (this.currentType as TokenType) === TOKEN.Punctuator && this.currentValue === "=";
+      }
+
+      if ((this.currentType as TokenType) === TOKEN.Punctuator && this.currentValue === "<") {
+        this.skipType(STOP_TOKEN.Interface);
+      }
+      if (
+        (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+        this.currentValue === "extends"
+      ) {
+        this.next();
+        while (true) {
+          this.skipType(STOP_TOKEN.Implements);
+          if (!this.consumePunctuator(",")) {
+            break;
+          }
+        }
+      }
+      return (this.currentType as TokenType) === TOKEN.Punctuator && this.currentValue === "{";
+    } catch (error) {
+      if (error instanceof ParseError) {
+        return false;
+      }
+      throw error;
+    } finally {
+      this.restore(snapshot);
+    }
   }
 
   private parseTypeOnlyStatement(kind: "type" | "interface"): void {

@@ -284,6 +284,18 @@ describe("AST", () => {
         expect(ast.body[0]?.type).toBe("VariableDeclaration");
       });
 
+      it("parses labeled statements that start with type/interface", () => {
+        const typeLabel = parseFirstStatement("type: while(false){}");
+        expect(typeLabel.type).toBe("LabeledStatement");
+        expect((typeLabel as ESTree.LabeledStatement).label.name).toBe("type");
+        expect((typeLabel as ESTree.LabeledStatement).body.type).toBe("WhileStatement");
+
+        const interfaceLabel = parseFirstStatement("interface: x = 1;");
+        expect(interfaceLabel.type).toBe("LabeledStatement");
+        expect((interfaceLabel as ESTree.LabeledStatement).label.name).toBe("interface");
+        expect((interfaceLabel as ESTree.LabeledStatement).body.type).toBe("ExpressionStatement");
+      });
+
       it("drops type-only imports/exports and strips mixed type specifiers", () => {
         const ast = parseModule(`
           import type { Foo } from "./types";
