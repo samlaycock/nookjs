@@ -882,9 +882,9 @@ class Tokenizer {
       case "$":
         return { raw: "\\$", cooked: "$" };
       case "u":
-        return { raw: "\\u", cooked: "u" };
+        return this.readUnicodeEscapeSequence(start);
       case "x":
-        return { raw: "\\x", cooked: "x" };
+        return this.readHexEscapeSequence(start);
       default:
         if (ch === "\n") {
           return { raw: "\\\n", cooked: "\n" };
@@ -896,6 +896,7 @@ class Tokenizer {
   // Cooked-only escape parsing for strings to avoid allocating raw+object pairs.
   private readEscapeSequenceCooked(): string {
     const input = this.input;
+    const start = this.index;
     this.index += 1;
     const ch = input[this.index] ?? "";
     this.index += 1;
@@ -914,12 +915,76 @@ class Tokenizer {
       case "$":
         return "$";
       case "u":
-        return "u";
+        return this.readUnicodeEscapeSequence(start).cooked;
       case "x":
-        return "x";
+        return this.readHexEscapeSequence(start).cooked;
       default:
         return ch === "\n" ? "\n" : ch;
     }
+  }
+
+  private readHexEscapeSequence(start: number): { raw: string; cooked: string } {
+    const value = this.readFixedHexDigits(2, "Invalid hex escape sequence");
+    return { raw: this.input.slice(start, this.index), cooked: String.fromCharCode(value) };
+  }
+
+  private readUnicodeEscapeSequence(start: number): { raw: string; cooked: string } {
+    const input = this.input;
+    if (input.charCodeAt(this.index) === 123) {
+      this.index += 1;
+      let value = 0;
+      let digits = 0;
+      while (this.index < input.length) {
+        const code = input.charCodeAt(this.index);
+        if (code === 125) {
+          if (digits === 0) {
+            throw new ParseError("Invalid unicode escape sequence");
+          }
+          this.index += 1;
+          return { raw: input.slice(start, this.index), cooked: String.fromCodePoint(value) };
+        }
+        if (!this.isHexDigit(code)) {
+          throw new ParseError("Invalid unicode escape sequence");
+        }
+        value = value * 16 + this.hexDigitValue(code);
+        if (value > 1114111) {
+          throw new ParseError("Invalid unicode escape sequence");
+        }
+        digits += 1;
+        this.index += 1;
+      }
+      throw new ParseError("Invalid unicode escape sequence");
+    }
+
+    const value = this.readFixedHexDigits(4, "Invalid unicode escape sequence");
+    return { raw: input.slice(start, this.index), cooked: String.fromCharCode(value) };
+  }
+
+  private readFixedHexDigits(count: number, errorMessage: string): number {
+    let value = 0;
+    for (let i = 0; i < count; i += 1) {
+      const code = this.input.charCodeAt(this.index);
+      if (!this.isHexDigit(code)) {
+        throw new ParseError(errorMessage);
+      }
+      value = value * 16 + this.hexDigitValue(code);
+      this.index += 1;
+    }
+    return value;
+  }
+
+  private isHexDigit(code: number): boolean {
+    return (code >= 48 && code <= 57) || (code >= 65 && code <= 70) || (code >= 97 && code <= 102);
+  }
+
+  private hexDigitValue(code: number): number {
+    if (code >= 48 && code <= 57) {
+      return code - 48;
+    }
+    if (code >= 65 && code <= 70) {
+      return code - 55;
+    }
+    return code - 87;
   }
 
   private readTokenInto(setCurrent: boolean): void {
