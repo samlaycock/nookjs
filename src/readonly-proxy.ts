@@ -211,6 +211,58 @@ export function sanitizeErrorStack(stack: string | undefined): string {
  * - Sanitizes Error stack traces to prevent host path leakage
  */
 export class ReadOnlyProxy {
+  private static objectProxyCacheByOptions = new WeakMap<SecurityOptions, WeakMap<object, any>>();
+  private static functionWrapperCacheByOptions = new WeakMap<
+    SecurityOptions,
+    WeakMap<Function, HostFunctionValue>
+  >();
+  private static methodWrapperCacheByOptions = new WeakMap<
+    SecurityOptions,
+    WeakMap<object, Map<PropertyKey, { fn: Function; wrapper: HostFunctionValue }>>
+  >();
+
+  private static getObjectProxyCache(securityOptions: SecurityOptions): WeakMap<object, any> {
+    let cache = ReadOnlyProxy.objectProxyCacheByOptions.get(securityOptions);
+    if (!cache) {
+      cache = new WeakMap<object, any>();
+      ReadOnlyProxy.objectProxyCacheByOptions.set(securityOptions, cache);
+    }
+    return cache;
+  }
+
+  private static getFunctionWrapperCache(
+    securityOptions: SecurityOptions,
+  ): WeakMap<Function, HostFunctionValue> {
+    let cache = ReadOnlyProxy.functionWrapperCacheByOptions.get(securityOptions);
+    if (!cache) {
+      cache = new WeakMap<Function, HostFunctionValue>();
+      ReadOnlyProxy.functionWrapperCacheByOptions.set(securityOptions, cache);
+    }
+    return cache;
+  }
+
+  private static getMethodWrapperCache(
+    securityOptions: SecurityOptions,
+    target: object,
+  ): Map<PropertyKey, { fn: Function; wrapper: HostFunctionValue }> {
+    let cacheByTarget = ReadOnlyProxy.methodWrapperCacheByOptions.get(securityOptions);
+    if (!cacheByTarget) {
+      cacheByTarget = new WeakMap<
+        object,
+        Map<PropertyKey, { fn: Function; wrapper: HostFunctionValue }>
+      >();
+      ReadOnlyProxy.methodWrapperCacheByOptions.set(securityOptions, cacheByTarget);
+    }
+
+    let cache = cacheByTarget.get(target);
+    if (!cache) {
+      cache = new Map<PropertyKey, { fn: Function; wrapper: HostFunctionValue }>();
+      cacheByTarget.set(target, cache);
+    }
+
+    return cache;
+  }
+
   private static wrapIterator(
     iterator: Iterator<any> | AsyncIterator<any>,
     name: string,
@@ -287,16 +339,37 @@ export class ReadOnlyProxy {
     // If the value itself is a function (not an object with function properties),
     // wrap it directly as HostFunctionValue instead of proxying it
     if (typeof value === "function") {
+      const functionWrapperCache = ReadOnlyProxy.getFunctionWrapperCache(effectiveOptions);
+      const cachedWrapper = functionWrapperCache.get(value);
+      if (cachedWrapper) {
+        return cachedWrapper;
+      }
+
       const isAsync = value.constructor.name === "AsyncFunction";
       // Preserve constructability for native classes/functions (e.g., Error, Response).
-      return new HostFunctionValue(value, name, isAsync, false, false, securityOptions);
+      const wrappedFunction = new HostFunctionValue(
+        value,
+        name,
+        isAsync,
+        false,
+        false,
+        securityOptions,
+      );
+      functionWrapperCache.set(value, wrappedFunction);
+      return wrappedFunction;
     }
 
     // Check if this is an Error instance - needs special handling for stack sanitization
     const isError = value instanceof Error;
 
+    const objectProxyCache = ReadOnlyProxy.getObjectProxyCache(effectiveOptions);
+    const cachedProxy = objectProxyCache.get(value);
+    if (cachedProxy) {
+      return cachedProxy;
+    }
+
     // Create a proxy that intercepts all operations (for objects like Math, console, etc.)
-    return new Proxy(value, {
+    const proxy = new Proxy(value, {
       get(target, prop, _receiver) {
         // Allow retrieving the underlying target for instanceof checks
         if (prop === PROXY_TARGET) {
@@ -363,10 +436,16 @@ export class ReadOnlyProxy {
 
         // If it's a function, wrap it as HostFunctionValue
         if (typeof val === "function") {
+          const methodWrapperCache = ReadOnlyProxy.getMethodWrapperCache(effectiveOptions, target);
+          const cachedMethodWrapper = methodWrapperCache.get(prop);
+          if (cachedMethodWrapper && cachedMethodWrapper.fn === val) {
+            return cachedMethodWrapper.wrapper;
+          }
+
           // Detect if it's an async function
           const isAsync = val.constructor.name === "AsyncFunction";
 
-          return new HostFunctionValue(
+          const wrappedMethod = new HostFunctionValue(
             (...args: any[]) => {
               // Call with target as 'this' to preserve method binding
               // Example: Math.floor.call(Math, 4.7) should work
@@ -378,6 +457,8 @@ export class ReadOnlyProxy {
             false,
             securityOptions,
           );
+          methodWrapperCache.set(prop, { fn: val, wrapper: wrappedMethod });
+          return wrappedMethod;
         }
 
         // If it's an object (including arrays), recursively wrap it
@@ -458,5 +539,7 @@ export class ReadOnlyProxy {
         return keys.filter((key) => !isDangerousProperty(key));
       },
     });
+    objectProxyCache.set(value, proxy);
+    return proxy;
   }
 }
