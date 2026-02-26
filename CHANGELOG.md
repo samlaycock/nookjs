@@ -1,5 +1,69 @@
 # nookjs
 
+## 0.5.0
+
+### Minor Changes
+
+- 8398889: Support TypeScript type-only ES module syntax in the strip-only parser, including `import type`, `export type`, and mixed named specifiers like `import { value, type Foo }`.
+- 598124a: Add ES module `import.meta` support with read-only `import.meta.url` and an optional resolver hook for custom `import.meta` fields.
+- 8b3d6b0: Add support for dynamic `import()` expressions in async evaluation paths.
+
+  This introduces parser and interpreter support for `ImportExpression`, routes dynamic imports through the existing module resolver and cache logic, and enforces module authorization/depth limits consistently with static imports. It also updates ES2020+ preset feature flags and module documentation, plus adds regression tests for parsing, success paths, blocked imports, max depth, and caching behavior.
+
+### Patch Changes
+
+- d3952a6: Strip leading hashbang lines in parser entry points so common CLI scripts parse without pre-processing.
+
+  - Normalize `parseModule`, `parseScript`, and `parseModuleWithProfile` input by stripping a leading `#!...` line.
+  - Add regression tests for hashbang handling with LF and CRLF inputs.
+  - Keep non-leading `#!` invalid syntax to avoid broad tokenizer behavior changes.
+  - Update AST parser docs to describe supported hashbang stripping behavior.
+
+- b626594: Implement function declaration hoisting so declarations are pre-bound before statement execution in program and block scopes.
+
+  - Add a scope-level declaration pass that hoists `FunctionDeclaration` nodes before executing statements.
+  - Skip re-evaluating hoisted function declaration statements during normal execution.
+  - Add regression tests for calling functions before declaration at top-level, in nested function scope, and inside block scope.
+  - Update documentation to remove the previous no-hoisting limitation and describe scope-local hoisting behavior.
+
+- a387f03: Support iterable spread arguments in call expressions so call spread behavior matches native JavaScript more closely.
+
+  - Expand call spread arguments from generic iterables/iterators (including strings, Sets, Map iterators, and custom iterables), not just arrays.
+  - Keep sync and async argument evaluation paths aligned by using the same iterable validation logic.
+  - Preserve clear runtime errors for non-iterable spread values.
+  - Add regression coverage for iterable call spread success/failure cases and async call spread behavior.
+  - Update call/spread docs to reflect iterable support in call position.
+
+- 7394b49: Implement live ESM bindings for named imports and re-exports instead of snapshotting export values at evaluation time.
+
+  - Make imported bindings getter-backed so reads reflect exporter updates.
+  - Keep re-exported bindings (`export { ... } from` and `export *`) live.
+  - Reuse the in-progress module exports object during evaluation to improve circular import behavior.
+  - Add module tests covering mutable exports, re-exports, and circular live-binding scenarios.
+  - Update module docs to remove the stale "No live bindings" limitation.
+
+- 40c5b6a: Fix `var` hoisting semantics so `var` bindings are created as `undefined` at function/global scope setup time instead of only when declaration statements execute.
+
+  - Hoist `var` bindings before executing program and function bodies, including declarations nested inside blocks and loops.
+  - Preserve assignment semantics so `var x;` does not overwrite an already-hoisted value at declaration execution time.
+  - Add regressions for pre-declaration read/write behavior and nested-function scope shadowing.
+  - Update docs to remove the outdated limitation that said `var` is not hoisted.
+
+- a5ab163: Fix arrow functions to use lexical `this` and lexical `arguments` from the enclosing scope.
+
+  - Capture arrow `this` at creation time and ignore call-site receiver binding.
+  - Bind `arguments` for non-arrow functions so nested arrows resolve enclosing call arguments.
+  - Add regression tests for method-context arrows, nested lexical arguments, and async arrows.
+  - Update docs to remove the previous arrow lexical `this`/`arguments` limitation.
+
+- c7c675b: Add configurable numeric semantics for division/modulo by zero to improve JS compatibility without changing the default sandbox behavior.
+
+  - Introduce `numericSemantics: "safe" | "strict-js"` on both `InterpreterOptions` and `SandboxOptions`.
+  - Keep `"safe"` as the default, preserving existing `InterpreterError` throws for `/ 0` and `% 0`.
+  - Enable native JS numeric behavior in `"strict-js"` mode (`Infinity`, `-Infinity`, `NaN`).
+  - Add tests for strict-js division/modulo edge cases including positive/negative zero and `NaN`.
+  - Update README and operator/simplified API docs with migration guidance and configuration examples.
+
 ## 0.4.2
 
 ### Patch Changes
