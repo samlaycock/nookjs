@@ -1,5 +1,27 @@
 # nookjs
 
+## 0.5.1
+
+### Patch Changes
+
+- ee92a7a: Decode `\xNN`, `\uNNNN`, and `\u{...}` escapes correctly in parser string literals and template quasis
+  so parsed/interpreted values match JavaScript behavior instead of returning placeholder cooked values.
+- 1a09deb: Return the correct `Program.sourceType` from the AST parser helpers: `parseScript()` now emits
+  `"script"` and `parseModule()` continues to emit `"module"`.
+- 536f90e: Cache `ReadOnlyProxy` object proxies and host function wrappers to preserve identity across repeated
+  property access and reduce allocations on hot paths.
+- e2c5d93: Forward the sandbox module resolver `getImportMeta` hook so `createSandbox({ modules: { resolver } })`
+  can customize `import.meta` fields consistently with the interpreter module API.
+- df5d554: Tighten TypeScript declaration stripping lookahead so statements starting with `type` or `interface`
+  are only skipped when they match actual TS declaration syntax, preserving valid JavaScript labeled
+  statements like `type: while (...) {}` and `interface: x = 1`.
+- a2ab82b: Honor `timeoutMs`/abort cancellation while async `run()` and `runModule()` calls are waiting in the
+  evaluation mutex queue, so queued evaluations abort on wall-clock timeout instead of only after they
+  eventually acquire the lock.
+- 2ba19eb: Preserve accessors and branded values when loading resolver-provided module namespace exports and
+  `import.meta` extensions by replacing deep cloning at those boundaries with descriptor-preserving
+  shallow copies.
+
 ## 0.5.0
 
 ### Minor Changes
