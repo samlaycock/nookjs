@@ -414,6 +414,7 @@ const resolveModules = (modules?: SandboxModules): ModuleOptions | undefined => 
     onError: modules.resolver?.onError
       ? (specifier, importer, error) => modules.resolver?.onError?.(specifier, importer, error)
       : undefined,
+    getImportMeta: modules.resolver?.getImportMeta,
   };
 
   return {
