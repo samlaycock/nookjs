@@ -1667,6 +1667,29 @@ describe("Security", () => {
       });
     });
 
+    describe("Wrapper identity stability", () => {
+      it("should return the same proxy for repeated reads of the same nested object", () => {
+        const shared = { value: 42 };
+        const wrapped = ReadOnlyProxy.wrap({ nested: shared }, "obj");
+
+        expect((wrapped as any).nested).toBe((wrapped as any).nested);
+      });
+
+      it("should return the same host function wrapper for repeated method access", () => {
+        const wrapped = ReadOnlyProxy.wrap(
+          {
+            value: 42,
+            method() {
+              return this.value;
+            },
+          },
+          "obj",
+        );
+
+        expect((wrapped as any).method).toBe((wrapped as any).method);
+      });
+    });
+
     describe("Nested object protection", () => {
       it("should recursively protect nested objects", () => {
         const testObj = {
