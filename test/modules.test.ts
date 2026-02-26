@@ -1950,6 +1950,81 @@ describe("Module System", () => {
     });
   });
 
+  describe("Live ESM Bindings", () => {
+    const createResolver = (files: Map<string, string>): ModuleResolver => ({
+      resolve(specifier) {
+        const code = files.get(specifier);
+        if (!code) return null;
+        return { type: "source", code, path: specifier };
+      },
+    });
+
+    test("should keep named imports live after exporter updates", async () => {
+      const files = new Map<string, string>([
+        ["counter.js", "export let n = 0; export function inc() { n++; }"],
+      ]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { n, inc } from "counter.js";
+         export const before = n;
+         inc();
+         export const after = n;`,
+        { path: "main.js" },
+      );
+
+      expect(result.before).toBe(0);
+      expect(result.after).toBe(1);
+    });
+
+    test("should keep named re-exports live", async () => {
+      const files = new Map<string, string>([
+        ["counter.js", "export let n = 0; export function inc() { n++; }"],
+        ["barrel.js", 'export { n, inc } from "counter.js";'],
+      ]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { n, inc } from "barrel.js";
+         inc();
+         export const after = n;`,
+        { path: "main.js" },
+      );
+
+      expect(result.after).toBe(1);
+    });
+
+    test("should preserve live bindings across circular imports", async () => {
+      const files = new Map<string, string>([
+        [
+          "a.js",
+          `import { readB } from "b.js";
+           export let a = 0;
+           export function setA(v) { a = v; }
+           export const before = readB();
+           setA(1);
+           export const after = readB();`,
+        ],
+        ["b.js", 'import { a } from "a.js"; export function readB() { return a; }'],
+      ]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { before, after } from "a.js";
+         export const values = [before, after];`,
+        { path: "main.js" },
+      );
+
+      expect(result.values).toEqual([0, 1]);
+    });
+  });
+
   // ============================================================================
   // ERROR HANDLING
   // ============================================================================
