@@ -860,7 +860,7 @@ class Tokenizer {
     throw new ParseError("Unterminated template literal starting at " + start);
   }
 
-  // Minimal escape handling for templates; leaves full unicode parsing to future.
+  // Escape handling for templates; returns both raw and cooked values.
   private readEscapeSequence(): { raw: string; cooked: string } {
     const input = this.input;
     const start = this.index;
