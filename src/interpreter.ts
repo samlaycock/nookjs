@@ -2678,21 +2678,55 @@ export class Interpreter {
   /**
    * Acquire the evaluation mutex. Returns a promise that resolves when it's this evaluation's turn.
    * This ensures evaluations are serialized to prevent cross-request data leakage.
+   * When an AbortSignal is provided, cancellation is honored while waiting in the queue.
    *
    * @returns A function to call when evaluation is complete, releasing the mutex
    */
-  private async acquireEvaluationMutex(): Promise<() => void> {
+  private async acquireEvaluationMutex(signal?: AbortSignal): Promise<() => void> {
+    if (signal?.aborted) {
+      throw new InterpreterError("Execution aborted");
+    }
+
     const previousQueue = this.evaluationMutexQueue;
     this.queuedEvaluations++;
 
-    let releaseFn: () => void;
+    let resolveQueueSlot: () => void;
     const isNext = new Promise<void>((resolve) => {
-      releaseFn = resolve;
+      resolveQueueSlot = resolve;
     });
+
+    let queueSlotReleased = false;
+    const releaseQueueSlot = () => {
+      if (queueSlotReleased) {
+        return;
+      }
+      queueSlotReleased = true;
+      resolveQueueSlot!();
+    };
 
     this.evaluationMutexQueue = previousQueue.then(() => isNext);
 
-    await previousQueue;
+    if (signal) {
+      let onAbort: (() => void) | undefined;
+      try {
+        await new Promise<void>((resolve, reject) => {
+          onAbort = () => reject(new InterpreterError("Execution aborted"));
+          signal.addEventListener("abort", onAbort, { once: true });
+          previousQueue.then(resolve, reject);
+        });
+      } catch (error) {
+        this.queuedEvaluations--;
+        releaseQueueSlot();
+        throw error;
+      } finally {
+        if (onAbort) {
+          signal.removeEventListener("abort", onAbort);
+        }
+      }
+    } else {
+      await previousQueue;
+    }
+
     let released = false;
     return () => {
       if (released) {
@@ -2700,7 +2734,7 @@ export class Interpreter {
       }
       released = true;
       this.queuedEvaluations--;
-      releaseFn!();
+      releaseQueueSlot();
     };
   }
 
@@ -3265,7 +3299,7 @@ export class Interpreter {
   }
 
   async evaluateAsync(input: string | ESTree.Program, options?: EvaluateOptions): Promise<any> {
-    const releaseMutex = await this.acquireEvaluationMutex();
+    const releaseMutex = await this.acquireEvaluationMutex(options?.signal);
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
     this.currentSourceCode = sourceCode;
     this.callStack = [];
@@ -3770,7 +3804,7 @@ export class Interpreter {
     code: string,
     options: ModuleEvaluateOptions,
   ): Promise<Record<string, any>> {
-    const releaseMutex = await this.acquireEvaluationMutex();
+    const releaseMutex = await this.acquireEvaluationMutex(options.signal);
     if (!this.moduleSystem) {
       releaseMutex();
       throw new InterpreterError(

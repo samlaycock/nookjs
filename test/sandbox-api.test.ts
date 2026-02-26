@@ -432,6 +432,102 @@ describe("Simplified API", () => {
     }
   });
 
+  it("run() should abort while waiting for the evaluation mutex", async () => {
+    let releaseFirst!: () => void;
+    let markFirstBlocked!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      markFirstBlocked = resolve;
+    });
+
+    const sandbox = createSandbox({
+      env: "es2022",
+      globals: {
+        block: () => {
+          markFirstBlocked();
+          return new Promise<void>((resolve) => {
+            releaseFirst = resolve;
+          });
+        },
+      },
+    });
+
+    const firstRun = sandbox.run(
+      `
+      async function hold() {
+        await block();
+        return "first";
+      }
+      hold();
+    `,
+    );
+    await firstBlocked;
+
+    const secondRun = sandbox.run("2 + 2", { timeoutMs: 10 });
+    const guard = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Guard timeout exceeded")), 200);
+    });
+
+    try {
+      await Promise.race([secondRun, guard]);
+      expect.unreachable("Expected queued run to abort while waiting for the mutex");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain("Execution aborted");
+    } finally {
+      releaseFirst();
+      expect(await firstRun).toBe("first");
+    }
+  });
+
+  it("runModule() should abort while waiting for the evaluation mutex", async () => {
+    let releaseFirst!: () => void;
+    let markFirstBlocked!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      markFirstBlocked = resolve;
+    });
+
+    const sandbox = createSandbox({
+      env: "es2022",
+      modules: {},
+      globals: {
+        block: () => {
+          markFirstBlocked();
+          return new Promise<void>((resolve) => {
+            releaseFirst = resolve;
+          });
+        },
+      },
+    });
+
+    const firstRun = sandbox.runModule(
+      `
+      await block();
+      export const result = "first";
+    `,
+      { path: "first.js" },
+    );
+    await firstBlocked;
+
+    const secondRun = sandbox.runModule("export const result = 2 + 2;", {
+      path: "second.js",
+      timeoutMs: 10,
+    });
+    const guard = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Guard timeout exceeded")), 200);
+    });
+
+    try {
+      await Promise.race([secondRun, guard]);
+      expect.unreachable("Expected queued runModule() to abort while waiting for the mutex");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain("Execution aborted");
+    } finally {
+      releaseFirst();
+      expect((await firstRun).result).toBe("first");
+    }
+  });
+
   it("runSync() should reject timeoutMs", () => {
     const sandbox = createSandbox({ env: "es2022" });
 
