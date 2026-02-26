@@ -1979,6 +1979,57 @@ describe("Module System", () => {
       expect(result.after).toBe(1);
     });
 
+    test("should preserve named import object identity across reads", async () => {
+      const files = new Map<string, string>([["mod.js", "export const obj = { x: 1 };"]]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { obj } from "mod.js";
+         export const same = obj === obj;`,
+        { path: "main.js" },
+      );
+
+      expect(result.same).toBe(true);
+    });
+
+    test("should preserve namespace import object identity across reads", async () => {
+      const files = new Map<string, string>([["mod.js", "export const obj = { x: 1 };"]]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import * as ns from "mod.js";
+         export const same = ns === ns;`,
+        { path: "main.js" },
+      );
+
+      expect(result.same).toBe(true);
+    });
+
+    test("should keep cached import wrapper live when imported object binding is reassigned", async () => {
+      const files = new Map<string, string>([
+        ["mod.js", "export let obj = { x: 1 }; export function swap() { obj = { x: 2 }; }"],
+      ]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { obj, swap } from "mod.js";
+         const before = obj;
+         swap();
+         export const changed = before !== obj;
+         export const next = obj.x;`,
+        { path: "main.js" },
+      );
+
+      expect(result.changed).toBe(true);
+      expect(result.next).toBe(2);
+    });
+
     test("should keep named re-exports live", async () => {
       const files = new Map<string, string>([
         ["counter.js", "export let n = 0; export function inc() { n++; }"],
