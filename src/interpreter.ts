@@ -4088,12 +4088,36 @@ export class Interpreter {
   ): Promise<void> {
     const specifier = (node.source as ESTree.Literal).value as string;
     const importedExports = await this.resolveModuleExports(specifier, importerPath);
+    const importedExportsTarget =
+      (typeof importedExports === "object" || typeof importedExports === "function") &&
+      importedExports !== null &&
+      (importedExports as { [PROXY_TARGET]?: Record<string, any> })[PROXY_TARGET]
+        ? ((importedExports as { [PROXY_TARGET]?: Record<string, any> })[PROXY_TARGET] as Record<
+            string,
+            any
+          >)
+        : importedExports;
+    const createReadonlyImportGetter = (readRawValue: () => any, label: string): (() => any) => {
+      let hasCachedWrappedValue = false;
+      let lastRawValue: any;
+      let lastWrappedValue: any;
+
+      return () => {
+        const rawValue = readRawValue();
+        if (!hasCachedWrappedValue || !Object.is(rawValue, lastRawValue)) {
+          lastRawValue = rawValue;
+          lastWrappedValue = ReadOnlyProxy.wrap(rawValue, label, this.securityOptions);
+          hasCachedWrappedValue = true;
+        }
+        return lastWrappedValue;
+      };
+    };
 
     for (const spec of node.specifiers) {
       if (spec.type === "ImportNamespaceSpecifier") {
         moduleEnv.declareGetter(
           spec.local.name,
-          () => ReadOnlyProxy.wrap(importedExports, spec.local.name, this.securityOptions),
+          createReadonlyImportGetter(() => importedExports, spec.local.name),
           "const",
         );
       } else if (spec.type === "ImportDefaultSpecifier") {
@@ -4102,7 +4126,7 @@ export class Interpreter {
         }
         moduleEnv.declareGetter(
           spec.local.name,
-          () => ReadOnlyProxy.wrap(importedExports.default, spec.local.name, this.securityOptions),
+          createReadonlyImportGetter(() => importedExportsTarget.default, spec.local.name),
           "const",
         );
       } else {
@@ -4113,12 +4137,7 @@ export class Interpreter {
         }
         moduleEnv.declareGetter(
           spec.local.name,
-          () =>
-            ReadOnlyProxy.wrap(
-              importedExports[importedName],
-              spec.local.name,
-              this.securityOptions,
-            ),
+          createReadonlyImportGetter(() => importedExportsTarget[importedName], spec.local.name),
           "const",
         );
       }
