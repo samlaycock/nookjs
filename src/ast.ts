@@ -1624,11 +1624,18 @@ class Parser {
             this.tokenizer.peekType() !== TOKEN.Punctuator ||
             this.tokenizer.peekValue() !== "("
           ) {
-            result = this.parseImportDeclaration();
+            const importDecl = this.parseImportDeclaration();
+            if (!importDecl) {
+              return null;
+            }
+            result = importDecl;
           }
           break;
         case "export":
           result = this.parseExportDeclaration();
+          if (!result) {
+            return null;
+          }
           break;
       }
     }
@@ -2327,7 +2334,7 @@ class Parser {
     };
   }
 
-  private parseImportDeclaration(): ESTree.ImportDeclaration {
+  private parseImportDeclaration(): ESTree.ImportDeclaration | null {
     this.expectKeyword("import");
 
     // Side-effect only import: import "module.js"
@@ -2343,6 +2350,12 @@ class Parser {
 
     if (this.currentType === TOKEN.Number) {
       throw new ParseError("Module source must be a string literal");
+    }
+
+    if (this.isTypeOnlyImportDeclarationStart()) {
+      this.next(); // consume `type`
+      this.parseTypeOnlyImportDeclaration();
+      return null;
     }
 
     if (this.currentType === TOKEN.Punctuator && this.currentValue === "{") {
@@ -2395,31 +2408,46 @@ class Parser {
     };
   }
 
-  private parseImportSpecifier(): ESTree.NamedImportSpecifier {
+  private parseImportSpecifier(): ESTree.NamedImportSpecifier | null {
+    let isTypeOnly = false;
+    if (this.isTypeOnlyNamedImportSpecifierStart()) {
+      this.next(); // consume `type`
+      isTypeOnly = true;
+    }
+
     const imported = this.parseIdentifier();
 
     if (this.currentType === TOKEN.Identifier && this.currentValue === "as") {
       this.next();
       const local = this.parseIdentifier();
+      if (isTypeOnly) {
+        return null;
+      }
       return { type: "ImportSpecifier", local, imported };
     }
 
+    if (isTypeOnly) {
+      return null;
+    }
     return { type: "ImportSpecifier", local: imported, imported };
   }
 
   private parseNamedImportDeclarationWithDefault(
     defaultSpec: ESTree.DefaultImportSpecifier,
-  ): ESTree.ImportDeclaration {
+  ): ESTree.ImportDeclaration | null {
     this.expectPunctuator(",");
     return this.parseNamedImportDeclaration([defaultSpec]);
   }
 
   private parseNamedImportDeclaration(
     specifiers: ESTree.ImportSpecifier[] = [],
-  ): ESTree.ImportDeclaration {
+  ): ESTree.ImportDeclaration | null {
     this.expectPunctuator("{");
     while (this.currentType !== TOKEN.Punctuator || this.currentValue !== "}") {
-      specifiers.push(this.parseImportSpecifier());
+      const specifier = this.parseImportSpecifier();
+      if (specifier) {
+        specifiers.push(specifier);
+      }
       if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
         this.next();
         continue;
@@ -2428,6 +2456,9 @@ class Parser {
     }
     this.expectPunctuator("}");
     const source = this.parseImportSource();
+    if (specifiers.length === 0) {
+      return null;
+    }
     return {
       type: "ImportDeclaration",
       source,
@@ -2469,8 +2500,15 @@ class Parser {
   private parseExportDeclaration():
     | ESTree.ExportNamedDeclaration
     | ESTree.ExportDefaultDeclaration
-    | ESTree.ExportAllDeclaration {
+    | ESTree.ExportAllDeclaration
+    | null {
     this.expectKeyword("export");
+
+    if (this.isTypeOnlyExportDeclarationStart()) {
+      this.next(); // consume `type`
+      this.parseTypeOnlyExportDeclaration();
+      return null;
+    }
 
     if (this.currentType === TOKEN.Keyword) {
       if (this.currentValue === "default") {
@@ -2515,17 +2553,14 @@ class Parser {
     throw new ParseError("Invalid export declaration");
   }
 
-  private parseExportNamedDeclaration(): ESTree.ExportNamedDeclaration {
+  private parseExportNamedDeclaration(): ESTree.ExportNamedDeclaration | null {
     this.expectPunctuator("{");
     const specifiers: ESTree.NamedExportSpecifier[] = [];
     while (this.currentType !== TOKEN.Punctuator || this.currentValue !== "}") {
-      const local = this.parseIdentifier();
-      let exported: ESTree.Identifier = local;
-      if (this.currentType === TOKEN.Identifier && this.currentValue === "as") {
-        this.next();
-        exported = this.parseIdentifier();
+      const specifier = this.parseNamedExportSpecifier();
+      if (specifier) {
+        specifiers.push(specifier);
       }
-      specifiers.push({ type: "ExportSpecifier", local, exported });
       if (this.currentType === TOKEN.Punctuator && this.currentValue === ",") {
         this.next();
         continue;
@@ -2543,6 +2578,10 @@ class Parser {
       source = this.parseLiteral();
     }
     this.consumeSemicolon();
+
+    if (specifiers.length === 0) {
+      return null;
+    }
 
     return {
       type: "ExportNamedDeclaration",
@@ -2774,6 +2813,122 @@ class Parser {
     const expression = this.parseExpression();
     this.consumeSemicolon();
     return { type: "ExpressionStatement", expression };
+  }
+
+  private isTypeOnlyImportDeclarationStart(): boolean {
+    if (this.currentType !== TOKEN.Identifier || this.currentValue !== "type") {
+      return false;
+    }
+
+    const nextType = this.tokenizer.peekType();
+    const nextValue = this.tokenizer.peekValue();
+    if (nextType === TOKEN.Punctuator && (nextValue === "{" || nextValue === "*")) {
+      return true;
+    }
+
+    if ((nextType === TOKEN.Identifier || nextType === TOKEN.Keyword) && nextValue !== "from") {
+      return true;
+    }
+
+    return false;
+  }
+
+  private parseTypeOnlyImportDeclaration(): void {
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "{") {
+      this.parseNamedImportDeclaration();
+      return;
+    }
+
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "*") {
+      this.parseNamespaceImportDeclaration();
+      return;
+    }
+
+    if (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) {
+      this.parseIdentifier();
+      if (this.consumePunctuator(",")) {
+        const type = this.currentType as TokenType;
+        const value = this.currentValue as string;
+        if (type === TOKEN.Punctuator && value === "{") {
+          this.parseNamedImportDeclaration();
+          return;
+        }
+        if (type === TOKEN.Punctuator && value === "*") {
+          this.parseNamespaceImportDeclaration();
+          return;
+        }
+        throw new ParseError("Invalid import declaration");
+      }
+      this.parseImportSource();
+      return;
+    }
+
+    throw new ParseError("Invalid import declaration");
+  }
+
+  private isTypeOnlyNamedImportSpecifierStart(): boolean {
+    if (this.currentType !== TOKEN.Identifier || this.currentValue !== "type") {
+      return false;
+    }
+
+    const nextType = this.tokenizer.peekType();
+    const nextValue = this.tokenizer.peekValue();
+    return (nextType === TOKEN.Identifier || nextType === TOKEN.Keyword) && nextValue !== "as";
+  }
+
+  private isTypeOnlyExportDeclarationStart(): boolean {
+    if (this.currentType !== TOKEN.Identifier || this.currentValue !== "type") {
+      return false;
+    }
+
+    const nextType = this.tokenizer.peekType();
+    const nextValue = this.tokenizer.peekValue();
+    return nextType === TOKEN.Punctuator && (nextValue === "{" || nextValue === "*");
+  }
+
+  private parseTypeOnlyExportDeclaration(): void {
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "{") {
+      this.parseExportNamedDeclaration();
+      return;
+    }
+
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "*") {
+      this.parseExportAllDeclaration();
+      return;
+    }
+
+    throw new ParseError("Invalid export declaration");
+  }
+
+  private parseNamedExportSpecifier(): ESTree.NamedExportSpecifier | null {
+    let isTypeOnly = false;
+    if (this.isTypeOnlyNamedExportSpecifierStart()) {
+      this.next(); // consume `type`
+      isTypeOnly = true;
+    }
+
+    const local = this.parseIdentifier();
+    let exported: ESTree.Identifier = local;
+    if (this.currentType === TOKEN.Identifier && this.currentValue === "as") {
+      this.next();
+      exported = this.parseIdentifier();
+    }
+
+    if (isTypeOnly) {
+      return null;
+    }
+
+    return { type: "ExportSpecifier", local, exported };
+  }
+
+  private isTypeOnlyNamedExportSpecifierStart(): boolean {
+    if (this.currentType !== TOKEN.Identifier || this.currentValue !== "type") {
+      return false;
+    }
+
+    const nextType = this.tokenizer.peekType();
+    const nextValue = this.tokenizer.peekValue();
+    return (nextType === TOKEN.Identifier || nextType === TOKEN.Keyword) && nextValue !== "as";
   }
 
   private consumeTypeAnnotation(stopTokens: StopToken): void {

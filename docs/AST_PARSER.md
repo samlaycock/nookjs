@@ -27,12 +27,12 @@ Type syntax is parsed and discarded so runtime behavior matches plain JavaScript
 - Optional (`?`) and definite assignment (`!`) markers
 - `implements` clauses
 - `type` and `interface` declarations (parsed and dropped)
+- Type-only module syntax (`import type`, `export type`, and mixed `type` specifiers)
 
 Deliberately unsupported:
 
 - TSX/JSX
 - `enum` / `namespace`
-- Type-only imports/exports (`import type`, `export type`)
 - ES module `import` / `export` are parsed, but only allowed during module evaluation (see [MODULES](MODULES.md))
 
 ## Expression Parsing
