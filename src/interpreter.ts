@@ -3867,11 +3867,17 @@ export class Interpreter {
     };
 
     if (importMetaExtensions && typeof importMetaExtensions === "object") {
-      for (const [key, value] of Object.entries(importMetaExtensions)) {
+      for (const key of Reflect.ownKeys(importMetaExtensions)) {
         if (key === "url") {
           continue;
         }
-        baseMeta[key] = value;
+
+        const descriptor = Object.getOwnPropertyDescriptor(importMetaExtensions, key);
+        if (!descriptor?.enumerable) {
+          continue;
+        }
+
+        Object.defineProperty(baseMeta, key, descriptor);
       }
     }
 

@@ -3808,6 +3808,79 @@ describe("Module System", () => {
       expect(result.debug).toBe(true);
       expect(result.version).toBe("1.0.0");
     });
+
+    test("should preserve getter behavior for pre-built namespace exports", async () => {
+      let reads = 0;
+      const exports = {} as Record<string, any>;
+      Object.defineProperty(exports, "dynamic", {
+        enumerable: true,
+        get() {
+          reads += 1;
+          return reads;
+        },
+      });
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "dynamic") {
+            return null;
+          }
+
+          return {
+            type: "namespace",
+            exports,
+            path: specifier,
+          };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import * as ns from "dynamic";
+         export const first = ns.dynamic;
+         export const second = ns.dynamic;`,
+        { path: "main.js" },
+      );
+
+      expect(result.first).toBe(1);
+      expect(result.second).toBe(2);
+      expect(reads).toBeGreaterThanOrEqual(2);
+    });
+
+    test("should preserve branded objects for pre-built namespace exports", async () => {
+      const url = new URL("https://example.test/path?q=1");
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "url-mod") {
+            return null;
+          }
+
+          return {
+            type: "namespace",
+            exports: { url },
+            path: specifier,
+          };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { url } from "url-mod";
+         export const href = url.href;
+         export const host = url.host;`,
+        { path: "main.js" },
+      );
+
+      expect(result.href).toBe("https://example.test/path?q=1");
+      expect(result.host).toBe("example.test");
+    });
   });
 
   describe("Security - Authorization Cache Bypass Regression (P0)", () => {
@@ -4058,6 +4131,50 @@ describe("Module System", () => {
 
       expect(exports.meta.env).toBe("test");
       expect(exports.meta.url).toBe("file:///canonical/dep.js");
+    });
+
+    test("should preserve getter behavior for resolver-provided import.meta fields", async () => {
+      let reads = 0;
+      const metaExtensions = {} as Record<string, any>;
+      Object.defineProperty(metaExtensions, "counter", {
+        enumerable: true,
+        get() {
+          reads += 1;
+          return reads;
+        },
+      });
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "dep.js") {
+            return null;
+          }
+
+          return {
+            type: "source",
+            code: "export const values = [import.meta.counter, import.meta.counter];",
+            path: "/canonical/dep.js",
+          };
+        },
+        getImportMeta() {
+          return metaExtensions;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(
+        `import { values } from "dep.js";
+         export { values };`,
+        {
+          path: "/app/main.js",
+        },
+      );
+
+      expect(exports.values).toEqual([1, 2]);
+      expect(reads).toBeGreaterThanOrEqual(2);
     });
 
     test("should make import.meta read-only", async () => {
