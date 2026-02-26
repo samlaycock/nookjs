@@ -151,6 +151,17 @@ describe("AST", () => {
         expect(id.type).toBe("Identifier");
       });
 
+      it("decodes hex and unicode escapes in string literals", () => {
+        const hex = parseFirstExpression('"\\x41";');
+        expect((hex as ESTree.Literal).value).toBe("A");
+
+        const unicode = parseFirstExpression('"\\u0041";');
+        expect((unicode as ESTree.Literal).value).toBe("A");
+
+        const codePoint = parseFirstExpression('"\\u{1F600}";');
+        expect((codePoint as ESTree.Literal).value).toBe(String.fromCodePoint(0x1f600));
+      });
+
       it("parses this/super", () => {
         const thisExpr = parseFirstExpression("this;");
         expect(thisExpr.type).toBe("ThisExpression");
@@ -368,6 +379,13 @@ describe("AST", () => {
         const tpl = expr as ESTree.TemplateLiteral;
         expect(tpl.quasis.length).toBe(2);
         expect(tpl.expressions.length).toBe(1);
+      });
+
+      it("decodes hex and unicode escapes in template quasis", () => {
+        const expr = parseFirstExpression("`\\x41 \\u0042 \\u{43}`;");
+        const tpl = expr as ESTree.TemplateLiteral;
+        expect(tpl.quasis[0]?.value.raw).toBe("\\x41 \\u0042 \\u{43}");
+        expect(tpl.quasis[0]?.value.cooked).toBe("A B C");
       });
     });
 
