@@ -2053,6 +2053,66 @@ describe("Module System", () => {
       expect(result.after).toBe(1);
     });
 
+    test("should preserve object identity through named re-exports", async () => {
+      const files = new Map<string, string>([
+        ["source.js", "export const obj = { x: 1 };"],
+        ["barrel.js", 'export { obj } from "source.js";'],
+      ]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { obj } from "barrel.js";
+         const a = obj;
+         const b = obj;
+         export const same = a === b;`,
+        { path: "main.js" },
+      );
+
+      expect(result.same).toBe(true);
+    });
+
+    test("should preserve object identity through export-star re-exports", async () => {
+      const files = new Map<string, string>([
+        ["source.js", "export const obj = { x: 1 };"],
+        ["barrel.js", 'export * from "source.js";'],
+      ]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { obj } from "barrel.js";
+         const a = obj;
+         const b = obj;
+         export const same = a === b;`,
+        { path: "main.js" },
+      );
+
+      expect(result.same).toBe(true);
+    });
+
+    test("should preserve object identity through namespace re-exports", async () => {
+      const files = new Map<string, string>([
+        ["source.js", "export const obj = { x: 1 };"],
+        ["barrel.js", 'export * as ns from "source.js";'],
+      ]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { ns } from "barrel.js";
+         const a = ns;
+         const b = ns;
+         export const same = a === b;`,
+        { path: "main.js" },
+      );
+
+      expect(result.same).toBe(true);
+    });
+
     test("should preserve live bindings across circular imports", async () => {
       const files = new Map<string, string>([
         [

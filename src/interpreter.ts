@@ -4014,10 +4014,22 @@ export class Interpreter {
     });
   }
 
+  private getModuleExportsTarget(moduleExports: Record<string, any>): Record<string, any> {
+    if (
+      (typeof moduleExports === "object" || typeof moduleExports === "function") &&
+      moduleExports !== null &&
+      (moduleExports as { [PROXY_TARGET]?: Record<string, any> })[PROXY_TARGET]
+    ) {
+      return (moduleExports as { [PROXY_TARGET]?: Record<string, any> })[PROXY_TARGET]!;
+    }
+    return moduleExports;
+  }
+
   private createLiveNamespaceObject(sourceExports: Record<string, any>): Record<string, any> {
+    const sourceExportsTarget = this.getModuleExportsTarget(sourceExports);
     const namespace: Record<string, any> = {};
     for (const key of Object.keys(sourceExports)) {
-      this.defineLiveExport(namespace, key, () => sourceExports[key]);
+      this.defineLiveExport(namespace, key, () => sourceExportsTarget[key]);
     }
     return namespace;
   }
@@ -4088,15 +4100,7 @@ export class Interpreter {
   ): Promise<void> {
     const specifier = (node.source as ESTree.Literal).value as string;
     const importedExports = await this.resolveModuleExports(specifier, importerPath);
-    const importedExportsTarget =
-      (typeof importedExports === "object" || typeof importedExports === "function") &&
-      importedExports !== null &&
-      (importedExports as { [PROXY_TARGET]?: Record<string, any> })[PROXY_TARGET]
-        ? ((importedExports as { [PROXY_TARGET]?: Record<string, any> })[PROXY_TARGET] as Record<
-            string,
-            any
-          >)
-        : importedExports;
+    const importedExportsTarget = this.getModuleExportsTarget(importedExports);
     const createReadonlyImportGetter = (readRawValue: () => any, label: string): (() => any) => {
       let hasCachedWrappedValue = false;
       let lastRawValue: any;
@@ -4188,6 +4192,7 @@ export class Interpreter {
       if (node.source) {
         const specifier = (node.source as ESTree.Literal).value as string;
         const sourceExports = await this.resolveModuleExports(specifier, currentPath);
+        const sourceExportsTarget = this.getModuleExportsTarget(sourceExports);
 
         for (const spec of node.specifiers) {
           if (spec.type === "ExportSpecifier") {
@@ -4196,7 +4201,7 @@ export class Interpreter {
               throw new InterpreterError(`Module '${specifier}' does not export '${importedName}'`);
             }
             const exportName = spec.exported.name;
-            this.defineLiveExport(exports, exportName, () => sourceExports[importedName]);
+            this.defineLiveExport(exports, exportName, () => sourceExportsTarget[importedName]);
           }
         }
       } else {
@@ -4314,6 +4319,7 @@ export class Interpreter {
   ): Promise<void> {
     const specifier = (node.source as ESTree.Literal).value as string;
     const sourceExports = await this.resolveModuleExports(specifier, currentPath);
+    const sourceExportsTarget = this.getModuleExportsTarget(sourceExports);
 
     // Handle "export * as namespace from 'module'"
     if (node.exported) {
@@ -4332,7 +4338,7 @@ export class Interpreter {
         if (key !== "default") {
           // Only add if not already exported (first one wins per ES spec)
           if (!(key in exports)) {
-            this.defineLiveExport(exports, key, () => sourceExports[key]);
+            this.defineLiveExport(exports, key, () => sourceExportsTarget[key]);
           }
         }
       }
