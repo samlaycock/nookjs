@@ -276,7 +276,10 @@ export class ReadOnlyProxy {
             return async (value?: any) => {
               const result = await (target as AsyncIterator<any>).next(value);
               if (result && typeof result === "object" && "value" in result) {
-                result.value = ReadOnlyProxy.wrap(result.value, `${name}[]`, securityOptions);
+                return {
+                  ...result,
+                  value: ReadOnlyProxy.wrap(result.value, `${name}[]`, securityOptions),
+                };
               }
               return result;
             };
@@ -284,7 +287,10 @@ export class ReadOnlyProxy {
           return (value?: any) => {
             const result = (target as Iterator<any>).next(value);
             if (result && typeof result === "object" && "value" in result) {
-              result.value = ReadOnlyProxy.wrap(result.value, `${name}[]`, securityOptions);
+              return {
+                ...result,
+                value: ReadOnlyProxy.wrap(result.value, `${name}[]`, securityOptions),
+              };
             }
             return result;
           };
