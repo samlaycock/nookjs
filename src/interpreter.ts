@@ -16,6 +16,7 @@
 import type { ESTree, Location } from "./ast";
 import type { StackFrame } from "./errors";
 import type { ModuleOptions, ModuleMetadata, ModuleRecord } from "./modules";
+import type { NativeUnwrapAllowlistEntry } from "./readonly-proxy";
 
 import { parseModule, parseScript } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
@@ -2261,6 +2262,14 @@ export type SecurityOptions = {
    * Default: true
    */
   hideHostErrorMessages?: boolean;
+
+  /**
+   * Additional branded host object types that may be unwrapped when passed to
+   * native host functions for compatibility with brand-checked APIs.
+   *
+   * Default: none (conservative mode).
+   */
+  nativeUnwrapAllowlist?: readonly NativeUnwrapAllowlistEntry[];
 };
 
 export type NumericSemantics = "safe" | "strict-js";
@@ -2593,6 +2602,7 @@ export class Interpreter {
     this.securityOptions = {
       sanitizeErrors: options?.security?.sanitizeErrors ?? true,
       hideHostErrorMessages: options?.security?.hideHostErrorMessages ?? true,
+      nativeUnwrapAllowlist: options?.security?.nativeUnwrapAllowlist,
     };
 
     // Initialize module system if provided
@@ -6016,7 +6026,7 @@ export class Interpreter {
         }
       } else {
         // Unwrap proxied TypedArrays/ArrayBuffers for native method compatibility
-        wrappedArgs[i] = unwrapForNative(arg);
+        wrappedArgs[i] = unwrapForNative(arg, this.securityOptions);
       }
     }
     return wrappedArgs;

@@ -27,6 +27,9 @@ const sandbox = createSandbox({
 
     // Hide original error messages from host functions (default: true)
     hideHostErrorMessages: true,
+
+    // Optional extra branded types to unwrap for host API compatibility (default: [])
+    nativeUnwrapAllowlist: ["DataView", "Headers"],
   },
 });
 ```
@@ -83,6 +86,44 @@ Host function 'readFile' threw error: ENOENT: no such file, open '/etc/passwd'
 ```
 Host function 'readFile' threw error: [error details hidden]
 ```
+
+### `nativeUnwrapAllowlist` (default: `[]`)
+
+By default, only a conservative built-in set is unwrapped for host-call compatibility:
+
+- TypedArrays
+- `ArrayBuffer`
+- timer objects used by `clearTimeout` / `clearInterval`
+
+You can opt into additional branded types when required by host APIs that perform strict brand checks. Supported entries:
+
+- `DataView`
+- `Blob`
+- `File`
+- `Headers`
+- `Request`
+- `Response`
+- `URL`
+- `URLSearchParams`
+- `FormData`
+
+Example:
+
+```typescript
+const sandbox = createSandbox({
+  env: "es2024",
+  apis: ["fetch", "buffer"],
+  security: {
+    nativeUnwrapAllowlist: ["DataView", "Headers"],
+  },
+});
+```
+
+Security tradeoff:
+
+- Allowlisted values bypass `ReadOnlyProxy` wrapping when passed to host functions.
+- Host code receives the real object instance and can mutate it if that type is mutable.
+- Enable only the minimum set of types needed for your compatibility requirements.
 
 ## What is Blocked
 
@@ -191,6 +232,8 @@ await sandbox.run(`
 #### Unwrapped for Native Methods
 
 When TypedArrays or `ArrayBuffer` instances are passed to host functions, they are **automatically unwrapped** from their `ReadOnlyProxy` wrapper. This is necessary because native methods like `TextDecoder.decode()` require actual TypedArray instances, not Proxy objects.
+
+Additional branded objects can be unwrapped only when explicitly configured with `security.nativeUnwrapAllowlist`.
 
 ```typescript
 const sandbox = createSandbox({ env: "es2024", apis: ["text", "buffer"] });
