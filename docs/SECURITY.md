@@ -123,6 +123,8 @@ Security tradeoff:
 
 - Allowlisted values bypass `ReadOnlyProxy` wrapping when passed to host functions.
 - Host code receives the real object instance and can mutate it if that type is mutable.
+- Entries are exact in spirit: allowing `Blob` does not implicitly allow `File`.
+- If you need `File` unwrapping, include `"File"` explicitly.
 - Enable only the minimum set of types needed for your compatibility requirements.
 
 ## What is Blocked

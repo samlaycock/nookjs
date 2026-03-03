@@ -2107,6 +2107,72 @@ describe("Security", () => {
         const result = interpreter.evaluate("hostReadHeader(headers)");
         expect(result).toBe("ok");
       });
+
+      it("should allow Blob unwrapping when explicitly allowlisted", () => {
+        if (typeof Blob !== "function") {
+          return;
+        }
+
+        const blob = new Blob(["hello"], { type: "text/plain" });
+        const hostIsBlob = (input: unknown): boolean => {
+          return input instanceof Blob;
+        };
+
+        const interpreter = new Interpreter({
+          globals: { blob, hostIsBlob },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["Blob"],
+          },
+        });
+
+        const result = interpreter.evaluate("hostIsBlob(blob)");
+        expect(result).toBe(true);
+      });
+
+      it("should not unwrap File when only Blob is allowlisted", () => {
+        if (typeof File !== "function") {
+          return;
+        }
+
+        const file = new File(["hello"], "note.txt", { type: "text/plain" });
+        const hostIsFile = (input: unknown): boolean => {
+          return input instanceof File;
+        };
+
+        const interpreter = new Interpreter({
+          globals: { file, hostIsFile },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["Blob"],
+          },
+        });
+
+        const result = interpreter.evaluate("hostIsFile(file)");
+        expect(result).toBe(false);
+      });
+
+      it("should allow File unwrapping when explicitly allowlisted", () => {
+        if (typeof File !== "function") {
+          return;
+        }
+
+        const file = new File(["hello"], "note.txt", { type: "text/plain" });
+        const hostIsFile = (input: unknown): boolean => {
+          return input instanceof File;
+        };
+
+        const interpreter = new Interpreter({
+          globals: { file, hostIsFile },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["File"],
+          },
+        });
+
+        const result = interpreter.evaluate("hostIsFile(file)");
+        expect(result).toBe(true);
+      });
     });
   });
 });
