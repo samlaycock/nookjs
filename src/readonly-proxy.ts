@@ -27,6 +27,20 @@ const TYPED_ARRAY_CONSTRUCTORS = [
   BigUint64Array,
 ] as const;
 
+const NATIVE_UNWRAP_ALLOWLIST_ENTRIES = [
+  "DataView",
+  "Blob",
+  "File",
+  "Headers",
+  "Request",
+  "Response",
+  "URL",
+  "URLSearchParams",
+  "FormData",
+] as const;
+
+export type NativeUnwrapAllowlistEntry = (typeof NATIVE_UNWRAP_ALLOWLIST_ENTRIES)[number];
+
 /**
  * Check if a value is a TypedArray instance.
  */
@@ -39,6 +53,57 @@ function isTypedArray(value: unknown): value is ArrayBufferView {
       return true;
     }
   }
+  return false;
+}
+
+function isInstanceOfGlobalConstructor(value: unknown, constructorName: string): boolean {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeConstructor = (globalThis as Record<string, unknown>)[constructorName];
+  if (typeof maybeConstructor !== "function") {
+    return false;
+  }
+
+  try {
+    return value instanceof (maybeConstructor as any);
+  } catch {
+    return false;
+  }
+}
+
+const NATIVE_UNWRAP_ALLOWLIST_CHECKS: Record<
+  NativeUnwrapAllowlistEntry,
+  (value: unknown) => boolean
+> = {
+  DataView: (value: unknown): boolean => value instanceof DataView,
+  Blob: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "Blob"),
+  File: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "File"),
+  Headers: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "Headers"),
+  Request: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "Request"),
+  Response: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "Response"),
+  URL: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "URL"),
+  URLSearchParams: (value: unknown): boolean =>
+    isInstanceOfGlobalConstructor(value, "URLSearchParams"),
+  FormData: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "FormData"),
+};
+
+function shouldUnwrapAllowlistedTarget(
+  target: unknown,
+  allowlist: readonly NativeUnwrapAllowlistEntry[] | undefined,
+): boolean {
+  if (!allowlist || allowlist.length === 0) {
+    return false;
+  }
+
+  for (const allowedType of allowlist) {
+    const check = NATIVE_UNWRAP_ALLOWLIST_CHECKS[allowedType];
+    if (check && check(target)) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -60,7 +125,7 @@ function isTypedArray(value: unknown): value is ArrayBufferView {
  * @param value - The value to potentially unwrap
  * @returns The unwrapped value if it was a proxy wrapping a permitted type, otherwise the original proxy
  */
-export function unwrapForNative(value: unknown): unknown {
+export function unwrapForNative(value: unknown, securityOptions?: SecurityOptions): unknown {
   if (value === null || value === undefined) {
     return value;
   }
@@ -68,6 +133,8 @@ export function unwrapForNative(value: unknown): unknown {
   if (typeof value !== "object") {
     return value;
   }
+
+  const effectiveSecurityOptions = securityOptions ?? globalSecurityOptions;
 
   // Check if this is a proxy by attempting to access PROXY_TARGET
   const target = (value as any)[PROXY_TARGET];
@@ -93,6 +160,12 @@ export function unwrapForNative(value: unknown): unknown {
   // Timeout objects are returned by setTimeout/setInterval and need to be passed
   // back to the timer APIs for cancellation to work.
   if (isTimerObject(target)) {
+    return target;
+  }
+
+  // Optionally unwrap additional branded host objects for compatibility.
+  // Default remains conservative: no extra object types are unwrapped.
+  if (shouldUnwrapAllowlistedTarget(target, effectiveSecurityOptions.nativeUnwrapAllowlist)) {
     return target;
   }
 
@@ -145,6 +218,17 @@ export interface SecurityOptions {
    * Default: true
    */
   sanitizeErrors?: boolean;
+
+  /**
+   * Additional branded host object types that may be unwrapped when passed to native
+   * host functions.
+   *
+   * Default: none (conservative mode).
+   *
+   * WARNING: Any listed type bypasses ReadOnlyProxy wrapping at host-call boundaries.
+   * Only allow types you consider safe for your embedding environment.
+   */
+  nativeUnwrapAllowlist?: readonly NativeUnwrapAllowlistEntry[];
 }
 
 // Global security options - can be set by the Interpreter

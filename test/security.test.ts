@@ -2049,6 +2049,64 @@ describe("Security", () => {
         const view = interpreter.evaluate("new Uint8Array(buffer)");
         expect(view.byteLength).toBe(16);
       });
+
+      it("should keep DataView wrapped by default for conservative behavior", () => {
+        const buffer = new ArrayBuffer(1);
+        const view = new DataView(buffer);
+        view.setUint8(0, 65);
+
+        const hostReadByte = (input: DataView): number => {
+          return input.getUint8(0);
+        };
+
+        const interpreter = new Interpreter({ globals: { view, hostReadByte } });
+        expect(() => {
+          interpreter.evaluate("hostReadByte(view)");
+        }).toThrow();
+      });
+
+      it("should allow DataView unwrapping when explicitly allowlisted", () => {
+        const buffer = new ArrayBuffer(1);
+        const view = new DataView(buffer);
+        view.setUint8(0, 65);
+
+        const hostReadByte = (input: DataView): number => {
+          return input.getUint8(0);
+        };
+
+        const interpreter = new Interpreter({
+          globals: { view, hostReadByte },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["DataView"],
+          },
+        });
+
+        const result = interpreter.evaluate("hostReadByte(view)");
+        expect(result).toBe(65);
+      });
+
+      it("should allow Headers unwrapping when explicitly allowlisted", () => {
+        if (typeof Headers !== "function") {
+          return;
+        }
+
+        const headers = new Headers([["x-test", "ok"]]);
+        const hostReadHeader = (input: Headers): string | null => {
+          return input.get("x-test");
+        };
+
+        const interpreter = new Interpreter({
+          globals: { headers, hostReadHeader },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["Headers"],
+          },
+        });
+
+        const result = interpreter.evaluate("hostReadHeader(headers)");
+        expect(result).toBe("ok");
+      });
     });
   });
 });
