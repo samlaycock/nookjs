@@ -467,6 +467,33 @@ describe("Host Constructors", () => {
     });
 
     describe("Static method access on host constructors", () => {
+      it("should return stable wrappers for repeated static method reads", () => {
+        const interpreter = new Interpreter({
+          globals: {
+            Promise,
+            Object,
+            Uint8Array,
+          },
+        });
+
+        const result = interpreter.evaluate(`
+          const promiseResolveA = Promise.resolve;
+          const promiseResolveB = Promise.resolve;
+          const objectKeysA = Object.keys;
+          const objectKeysB = Object.keys;
+          const uint8FromA = Uint8Array.from;
+          const uint8FromB = Uint8Array.from;
+
+          [
+            promiseResolveA === promiseResolveB,
+            objectKeysA === objectKeysB,
+            uint8FromA === uint8FromB,
+          ]
+        `);
+
+        expect(result).toEqual([true, true, true]);
+      });
+
       it("should access Array.isArray()", () => {
         const interpreter = new Interpreter({
           globals: {
