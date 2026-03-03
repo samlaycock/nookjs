@@ -1850,6 +1850,95 @@ describe("Security", () => {
           result.value.secret = "HACKED";
         }).toThrow("Cannot modify property 'secret' on global 'gen[]' (read-only)");
       });
+
+      it("should not mutate frozen sync iterator result objects", () => {
+        const frozenResult = Object.freeze({
+          value: { secret: "TOP" },
+          done: false,
+        });
+
+        const iterable = {
+          [Symbol.iterator]() {
+            return {
+              next() {
+                return frozenResult;
+              },
+            };
+          },
+        };
+
+        const wrapped = ReadOnlyProxy.wrap(iterable, "iterable");
+        const iterator = (wrapped as any)[Symbol.iterator]();
+        const result = iterator.next();
+
+        expect(result).not.toBe(frozenResult);
+        expect(() => {
+          result.value.secret = "HACKED";
+        }).toThrow("Cannot modify property 'secret' on global 'iterable[]' (read-only)");
+      });
+
+      it("should not corrupt sync iterators that reuse result objects", () => {
+        const sharedResult = {
+          value: { secret: "TOP1" },
+          done: false,
+        };
+        let count = 0;
+
+        const iterable = {
+          [Symbol.iterator]() {
+            return {
+              next() {
+                if (count === 0) {
+                  count += 1;
+                  return sharedResult;
+                }
+                if (count === 1) {
+                  sharedResult.value.secret = "TOP2";
+                  count += 1;
+                  return sharedResult;
+                }
+                return { value: undefined, done: true };
+              },
+            };
+          },
+        };
+
+        const wrapped = ReadOnlyProxy.wrap(iterable, "iterable");
+        const iterator = (wrapped as any)[Symbol.iterator]();
+        iterator.next();
+        let second: any;
+
+        expect(() => {
+          second = iterator.next();
+        }).not.toThrow();
+        expect(second.value.secret).toBe("TOP2");
+      });
+
+      it("should not mutate frozen async iterator result objects", async () => {
+        const frozenResult = Object.freeze({
+          value: { secret: "TOP" },
+          done: false,
+        });
+
+        const asyncIterable = {
+          [Symbol.asyncIterator]() {
+            return {
+              async next() {
+                return frozenResult;
+              },
+            };
+          },
+        };
+
+        const wrapped = ReadOnlyProxy.wrap(asyncIterable, "asyncIterable");
+        const iterator = (wrapped as any)[Symbol.asyncIterator]();
+        const result = await iterator.next();
+
+        expect(result).not.toBe(frozenResult);
+        expect(() => {
+          result.value.secret = "HACKED";
+        }).toThrow("Cannot modify property 'secret' on global 'asyncIterable[]' (read-only)");
+      });
     });
 
     describe("Reflect API bypass prevention", () => {
