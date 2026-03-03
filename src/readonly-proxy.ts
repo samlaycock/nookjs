@@ -77,7 +77,7 @@ const NATIVE_UNWRAP_ALLOWLIST_CHECKS: Record<
   NativeUnwrapAllowlistEntry,
   (value: unknown) => boolean
 > = {
-  DataView: (value: unknown): boolean => value instanceof DataView,
+  DataView: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "DataView"),
   Blob: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "Blob"),
   File: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "File"),
   Headers: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "Headers"),
