@@ -73,22 +73,6 @@ function isInstanceOfGlobalConstructor(value: unknown, constructorName: string):
   }
 }
 
-const NATIVE_UNWRAP_ALLOWLIST_CHECKS: Record<
-  NativeUnwrapAllowlistEntry,
-  (value: unknown) => boolean
-> = {
-  DataView: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "DataView"),
-  Blob: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "Blob"),
-  File: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "File"),
-  Headers: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "Headers"),
-  Request: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "Request"),
-  Response: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "Response"),
-  URL: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "URL"),
-  URLSearchParams: (value: unknown): boolean =>
-    isInstanceOfGlobalConstructor(value, "URLSearchParams"),
-  FormData: (value: unknown): boolean => isInstanceOfGlobalConstructor(value, "FormData"),
-};
-
 function shouldUnwrapAllowlistedTarget(
   target: unknown,
   allowlist: readonly NativeUnwrapAllowlistEntry[] | undefined,
@@ -97,9 +81,23 @@ function shouldUnwrapAllowlistedTarget(
     return false;
   }
 
+  // File extends Blob. Keep allowlist behavior least-privilege:
+  // `Blob` should not implicitly include `File`.
+  const isFile = isInstanceOfGlobalConstructor(target, "File");
+
   for (const allowedType of allowlist) {
-    const check = NATIVE_UNWRAP_ALLOWLIST_CHECKS[allowedType];
-    if (check && check(target)) {
+    if (allowedType === "Blob") {
+      if (isInstanceOfGlobalConstructor(target, "Blob") && !isFile) {
+        return true;
+      }
+      continue;
+    }
+
+    if (allowedType === "File" && isFile) {
+      return true;
+    }
+
+    if (allowedType !== "File" && isInstanceOfGlobalConstructor(target, allowedType)) {
       return true;
     }
   }
