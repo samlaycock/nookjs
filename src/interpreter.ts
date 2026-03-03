@@ -1724,6 +1724,8 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
  * Allows calling host functions from sandbox code while preventing property access for security
  */
 export class HostFunctionValue {
+  private staticMethodCache: Map<PropertyKey, { original: Function; wrapped: any }> = new Map();
+
   constructor(
     public hostFunc: Function,
     public name: string,
@@ -1775,12 +1777,19 @@ export class HostFunctionValue {
           // For function properties (static methods), bind them to the parent
           // so that `Promise.resolve()` has correct `this` binding
           if (typeof val === "function") {
+            const cached = target.staticMethodCache.get(prop);
+            if (cached && cached.original === val) {
+              return cached.wrapped;
+            }
+
             const bound = val.bind(target.hostFunc);
-            return ReadOnlyProxy.wrap(
+            const wrapped = ReadOnlyProxy.wrap(
               bound,
               `${target.name}.${String(prop)}`,
               target.securityOptions,
             );
+            target.staticMethodCache.set(prop, { original: val, wrapped });
+            return wrapped;
           }
           // Wrap non-function values through ReadOnlyProxy for security
           return ReadOnlyProxy.wrap(val, `${target.name}.${String(prop)}`, target.securityOptions);
