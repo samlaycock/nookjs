@@ -83,7 +83,8 @@ function shouldUnwrapAllowlistedTarget(
 
   // File extends Blob. Keep allowlist behavior least-privilege:
   // `Blob` should not implicitly include `File`.
-  const isFile = isInstanceOfGlobalConstructor(target, "File");
+  const needsFileCheck = allowlist.includes("Blob") || allowlist.includes("File");
+  const isFile = needsFileCheck && isInstanceOfGlobalConstructor(target, "File");
 
   for (const allowedType of allowlist) {
     if (allowedType === "Blob") {
