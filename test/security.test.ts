@@ -2155,6 +2155,28 @@ describe("Security", () => {
         expect(result).toBe(false);
       });
 
+      it("should not unwrap Blob when only File is allowlisted", () => {
+        if (typeof Blob !== "function" || typeof File !== "function") {
+          return;
+        }
+
+        const blob = new Blob(["hello"], { type: "text/plain" });
+        const hostIsBlob = (input: unknown): boolean => {
+          return input instanceof Blob;
+        };
+
+        const interpreter = new Interpreter({
+          globals: { blob, hostIsBlob },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["File"],
+          },
+        });
+
+        const result = interpreter.evaluate("hostIsBlob(blob)");
+        expect(result).toBe(false);
+      });
+
       it("should allow File unwrapping when explicitly allowlisted", () => {
         if (typeof File !== "function") {
           return;
