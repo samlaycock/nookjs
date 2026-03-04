@@ -87,7 +87,7 @@ Host function 'readFile' threw error: ENOENT: no such file, open '/etc/passwd'
 Host function 'readFile' threw error: [error details hidden]
 ```
 
-### `nativeUnwrapAllowlist` (default: `[]`)
+### `nativeUnwrapAllowlist` (default: none)
 
 By default, only a conservative built-in set is unwrapped for host-call compatibility:
 
