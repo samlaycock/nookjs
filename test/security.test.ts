@@ -2059,10 +2059,13 @@ describe("Security", () => {
           return input.getUint8(0);
         };
 
-        const interpreter = new Interpreter({ globals: { view, hostReadByte } });
+        const interpreter = new Interpreter({
+          globals: { view, hostReadByte },
+          security: { hideHostErrorMessages: false },
+        });
         expect(() => {
           interpreter.evaluate("hostReadByte(view)");
-        }).toThrow();
+        }).toThrow(/ProxyObject|getUint8 is not a function/);
       });
 
       it("should allow DataView unwrapping when explicitly allowlisted", () => {
