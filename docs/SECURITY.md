@@ -28,7 +28,7 @@ const sandbox = createSandbox({
     // Hide original error messages from host functions (default: true)
     hideHostErrorMessages: true,
 
-    // Optional extra branded types to unwrap for host API compatibility (default: [])
+    // Optional extra branded types to unwrap for host API compatibility (default: none)
     nativeUnwrapAllowlist: ["DataView", "Headers"],
   },
 });
@@ -125,6 +125,7 @@ Security tradeoff:
 - Host code receives the real object instance and can mutate it if that type is mutable.
 - Entries are exact in spirit: allowing `Blob` does not implicitly allow `File`.
 - If you need `File` unwrapping, include `"File"` explicitly.
+- Container entries like `FormData` and `Request` may also require entry/body types like `Blob` or `File`; native APIs often expect real instances, not proxies.
 - Enable only the minimum set of types needed for your compatibility requirements.
 
 ## What is Blocked
