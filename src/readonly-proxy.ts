@@ -93,11 +93,14 @@ function shouldUnwrapAllowlistedTarget(
       continue;
     }
 
-    if (allowedType === "File" && isFile) {
-      return true;
+    if (allowedType === "File") {
+      if (isFile) {
+        return true;
+      }
+      continue;
     }
 
-    if (allowedType !== "File" && isInstanceOfGlobalConstructor(target, allowedType)) {
+    if (isInstanceOfGlobalConstructor(target, allowedType)) {
       return true;
     }
   }
