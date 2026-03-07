@@ -2471,6 +2471,7 @@ class EvaluationContext {
   featureControl?: FeatureControl;
   featureSet?: Set<LanguageFeature>;
   abortSignal?: AbortSignal;
+  evaluationStartTime = 0;
   maxCallStackDepth?: number;
   maxLoopIterations?: number;
   maxMemory?: number;
@@ -2554,8 +2555,6 @@ export class Interpreter {
     new WeakMap();
   private thisInitStack: boolean[] = [];
   private constructorStack: ClassValue[] = [];
-
-  private evaluationStartTime = 0;
 
   // Execution statistics tracking
   private statsNodeCount = 0;
@@ -2984,7 +2983,10 @@ export class Interpreter {
    */
   private checkExecutionLimits(): void {
     const abortSignal = this.getCurrentAbortSignal();
-    if (!abortSignal) {
+    const maxCpuTime = this.integratedResourceTracking
+      ? this.integratedLimits.maxCpuTime
+      : undefined;
+    if (!abortSignal && maxCpuTime === undefined) {
       return;
     }
     // Reduce overhead by checking only every N nodes.
@@ -2993,8 +2995,16 @@ export class Interpreter {
     if (this.executionCheckCounter !== 0) {
       return;
     }
-    if (abortSignal.aborted) {
+    if (abortSignal?.aborted) {
       throw new InterpreterError("Execution aborted");
+    }
+
+    if (maxCpuTime !== undefined) {
+      const cpuTimeMs = this.integratedCumulativeCpuTime + this.getCurrentEvaluationCpuTime();
+      if (cpuTimeMs >= maxCpuTime) {
+        this.integratedExhaustedLimit = "maxCpuTime";
+        throw new ResourceExhaustedError("maxCpuTime", cpuTimeMs, maxCpuTime);
+      }
     }
   }
 
@@ -3136,7 +3146,7 @@ export class Interpreter {
     this.statsLoopIterations = 0;
     this.statsStartTime = performance.now();
     this.statsEndTime = 0;
-    this.evaluationStartTime = performance.now();
+    context.evaluationStartTime = this.statsStartTime;
   }
 
   private endEvaluation(options?: EvaluateOptions): void {
@@ -3146,7 +3156,7 @@ export class Interpreter {
     const currentMemoryUsage = this.getCurrentMemoryUsage();
 
     if (this.integratedResourceTracking) {
-      const cpuTimeMs = this.statsEndTime - this.evaluationStartTime;
+      const cpuTimeMs = this.getCurrentEvaluationCpuTime(this.statsEndTime);
       this.integratedEvaluationNumber++;
 
       if (currentMemoryUsage > this.integratedPeakMemory) {
@@ -3197,6 +3207,15 @@ export class Interpreter {
 
     // Clear execution control.
     this.executionCheckCounter = 0;
+  }
+
+  private getCurrentEvaluationCpuTime(endTime = performance.now()): number {
+    const context = this.getCurrentContext();
+    if (!context) {
+      return 0;
+    }
+
+    return endTime - context.evaluationStartTime;
   }
 
   private validateAst(ast: ESTree.Program, options?: EvaluateOptions): void {

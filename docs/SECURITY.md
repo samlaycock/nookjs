@@ -490,7 +490,7 @@ type ResourceLimits = {
   maxTotalMemory?: number; // bytes
   maxTotalIterations?: number; // loop iterations
   maxFunctionCalls?: number; // total function invocations
-  maxCpuTime?: number; // milliseconds (best-effort)
+  maxCpuTime?: number; // milliseconds (best-effort wall-clock enforcement)
   maxEvaluations?: number; // number of evaluate() calls
 };
 ```
@@ -617,7 +617,7 @@ For evaluation history and detailed inspection, use the internal Interpreter API
 - **Minimal overhead:** Resource tracking adds negligible performance cost
 - **Bounded history:** The history buffer is capped (default: 100 entries)
 - **Optional:** Only enabled when `resourceTracking: true` is set
-- **CPU time is best-effort:** JavaScript doesn't expose precise CPU time; wall-clock time is used
+- **CPU time is best-effort:** JavaScript doesn't expose precise CPU time, so NookJS enforces `maxCpuTime` using periodic wall-clock checks during evaluation
 
 ### Comparison: Per-Evaluation vs Cumulative Limits
 
@@ -627,6 +627,7 @@ For evaluation history and detailed inspection, use the internal Interpreter API
 | Memory          | `maxMemory`                   | `maxTotalMemory`                 |
 | Loop iterations | `maxLoopIterations`           | `maxTotalIterations`             |
 | Function calls  | Not available                 | `maxFunctionCalls`               |
+| CPU time        | Not available                 | `maxCpuTime`                     |
 | Use case        | Prevent single runaway script | Multi-tenant resource accounting |
 
 ## Security Testing

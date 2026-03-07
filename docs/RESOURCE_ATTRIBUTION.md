@@ -118,7 +118,7 @@ type ResourceLimits = {
   maxTotalMemory?: number; // bytes (cumulative)
   maxTotalIterations?: number; // loop iterations (cumulative)
   maxFunctionCalls?: number; // function invocations (cumulative)
-  maxCpuTime?: number; // milliseconds (best-effort)
+  maxCpuTime?: number; // milliseconds (best-effort wall-clock enforcement)
   maxEvaluations?: number; // number of evaluate() calls
 };
 ```
@@ -343,7 +343,7 @@ This is not precise memory accounting but serves to detect runaway allocations.
 
 ### CPU Time Notes
 
-CPU time is estimated using wall-clock time. This is a best-effort approximation since JavaScript doesn't expose precise CPU timing.
+CPU time is estimated using wall-clock time. This is a best-effort approximation since JavaScript doesn't expose precise CPU timing, and `maxCpuTime` is enforced via periodic wall-clock checks during evaluation.
 
 ## Comparison with Per-Evaluation Limits
 
