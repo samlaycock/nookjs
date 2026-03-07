@@ -98,6 +98,45 @@ describe("Resource Tracking", () => {
       });
 
       describe("limits enforcement", () => {
+        test("should abort the current evaluation when maxCpuTime is exceeded", () => {
+          const interpreter = new Interpreter({
+            ...ES2022,
+            resourceTracking: true,
+          });
+          interpreter.setResourceLimit("maxCpuTime", 15);
+
+          const originalNow = Object.getOwnPropertyDescriptor(performance, "now");
+          let currentTime = 0;
+
+          Object.defineProperty(performance, "now", {
+            configurable: true,
+            value: () => {
+              const value = currentTime;
+              currentTime += 5;
+              return value;
+            },
+          });
+
+          try {
+            expect(() => {
+              interpreter.evaluate(
+                `
+              let total = 0;
+              for (let i = 0; i < 5000; i++) {
+                total += i;
+              }
+              total;
+            `,
+                { maxLoopIterations: 10000 },
+              );
+            }).toThrow(ResourceExhaustedError);
+          } finally {
+            if (originalNow) {
+              Object.defineProperty(performance, "now", originalNow);
+            }
+          }
+        });
+
         test("should throw when maxTotalIterations exceeded", () => {
           const interpreter = new Interpreter({
             ...ES2022,
