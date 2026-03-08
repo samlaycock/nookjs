@@ -253,7 +253,7 @@ export namespace ESTree {
   export interface BinaryExpression extends Node {
     readonly type: "BinaryExpression";
     readonly operator: string;
-    readonly left: Expression;
+    readonly left: Expression | PrivateIdentifier;
     readonly right: Expression;
   }
 
@@ -3332,7 +3332,26 @@ class Parser {
 
   // Precedence-climbing for binary operators, with optional "in" suppression.
   private parseBinaryPrecedence(minPrecedence: number, allowIn: boolean): ESTree.Expression {
-    let left = this.parseExponentExpression();
+    let left: ESTree.Expression | ESTree.PrivateIdentifier;
+    if (this.currentType === TOKEN.PrivateIdentifier) {
+      const name = this.currentValue;
+      this.next();
+      left = { type: "PrivateIdentifier", name };
+    } else {
+      left = this.parseExponentExpression();
+    }
+
+    if (left.type === "PrivateIdentifier") {
+      if (
+        this.currentType !== TOKEN.Keyword ||
+        this.currentValue !== "in" ||
+        !allowIn ||
+        minPrecedence > 8
+      ) {
+        throw new ParseError("Private identifiers can only be used in an 'in' expression");
+      }
+    }
+
     while (true) {
       const type = this.currentType;
       if (type === TOKEN.Keyword) {
@@ -3394,12 +3413,18 @@ class Parser {
       }
       this.next();
       const right = this.parseBinaryPrecedence(precedence + 1, allowIn);
+      if (left.type === "PrivateIdentifier" && operator !== "in") {
+        throw new ParseError("Private identifiers can only be used in an 'in' expression");
+      }
       left = {
         type: "BinaryExpression",
         operator,
         left,
         right,
       };
+    }
+    if (left.type === "PrivateIdentifier") {
+      throw new ParseError("Private identifiers can only be used in an 'in' expression");
     }
     return left;
   }

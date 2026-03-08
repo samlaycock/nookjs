@@ -6244,6 +6244,11 @@ export class Interpreter {
       throw new InterpreterError("BinaryOperators is not enabled");
     }
 
+    if (node.operator === "in" && node.left.type === "PrivateIdentifier") {
+      const right = this.evaluateNode(node.right);
+      return this.evaluatePrivateInExpression(node.left.name, right);
+    }
+
     const left = this.evaluateNode(node.left);
     if (isControlFlowKind(left, "yield")) return left;
     const right = this.evaluateNode(node.right);
@@ -9362,6 +9367,11 @@ export class Interpreter {
   private async evaluateBinaryExpressionAsync(node: ESTree.BinaryExpression): Promise<any> {
     if (!this.isFeatureEnabled("BinaryOperators")) {
       throw new InterpreterError("BinaryOperators is not enabled");
+    }
+
+    if (node.operator === "in" && node.left.type === "PrivateIdentifier") {
+      const right = await this.evaluateNodeAsync(node.right);
+      return this.evaluatePrivateInExpression(node.left.name, right);
     }
 
     const left = await this.evaluateNodeAsync(node.left);
@@ -13097,6 +13107,29 @@ export class Interpreter {
     }
 
     throw new InterpreterError(`Private field #${fieldName} is not defined`);
+  }
+
+  private evaluatePrivateInExpression(fieldName: string, right: any): boolean {
+    if ((typeof right !== "object" || right === null) && !(right instanceof ClassValue)) {
+      throw new InterpreterError(
+        "Cannot use 'in' operator to search for '#" + fieldName + "' in " + right,
+      );
+    }
+
+    if (!this.currentSuperBinding) {
+      throw new InterpreterError(`Cannot check private field #${fieldName} outside of class`);
+    }
+
+    const currentClass = this.currentSuperBinding.currentClass;
+    if (
+      currentClass.privateStaticFields.has(fieldName) ||
+      currentClass.privateStaticMethods.has(fieldName)
+    ) {
+      return right === currentClass;
+    }
+
+    const privateFields = currentClass.privateFieldStorage.get(right);
+    return privateFields?.has(fieldName) === true;
   }
 
   /**
