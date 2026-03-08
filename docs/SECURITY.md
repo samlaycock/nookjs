@@ -404,7 +404,7 @@ await sandbox.run(code, {
 
 ### Execution Limits and AbortSignal
 
-You can also use `AbortSignal` for immediate cancellation:
+You can also use `AbortSignal` for immediate cancellation of async execution:
 
 ```typescript
 const controller = new AbortController();
@@ -417,6 +417,8 @@ await sandbox.run(code, {
   limits: { loops: 100000 },
 });
 ```
+
+`AbortSignal` is async-only. `runSync()` and synchronous `evaluate()` reject it instead of silently ignoring it.
 
 ## Resource Attribution for Multi-Tenant Environments
 

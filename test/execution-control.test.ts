@@ -496,16 +496,15 @@ describe("Execution Control", () => {
         expect(result).toBe(4);
       });
 
-      test("signal is ignored in synchronous evaluate", () => {
+      test("synchronous evaluate rejects AbortSignal", () => {
         const interpreter = new Interpreter();
         const controller = new AbortController();
-        controller.abort();
 
-        // Sync evaluate ignores the signal — it completes normally
-        const result = interpreter.evaluate(`1 + 1`, {
-          signal: controller.signal,
-        });
-        expect(result).toBe(2);
+        expect(() =>
+          interpreter.evaluate(`1 + 1`, {
+            signal: controller.signal,
+          }),
+        ).toThrow("signal is only supported for async execution");
       });
     });
   });

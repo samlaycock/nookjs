@@ -536,6 +536,15 @@ describe("Simplified API", () => {
     );
   });
 
+  it("runSync() should reject AbortSignal", () => {
+    const sandbox = createSandbox({ env: "es2022" });
+    const controller = new AbortController();
+
+    expect(() => sandbox.runSync("1 + 1", { signal: controller.signal })).toThrow(
+      "signal is only supported for async execution",
+    );
+  });
+
   it("should enforce total evaluation limits", () => {
     const sandbox = createSandbox({
       env: "es2022",
