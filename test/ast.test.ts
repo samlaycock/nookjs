@@ -457,6 +457,17 @@ describe("AST", () => {
         expect(() => parseModule("let obj = { #x: 1 };")).toThrow();
       });
 
+      it("parses private identifiers in in-expressions", () => {
+        expect(() =>
+          parseModule("class Box { #value; has(obj) { return #value in obj; } }"),
+        ).not.toThrow();
+      });
+
+      it("rejects private identifiers outside in-expressions", () => {
+        expect(() => parseModule("class Box { #value; read() { return #value; } }")).toThrow();
+        expect(() => parseModule("class Box { #value; add(x) { return #value + x; } }")).toThrow();
+      });
+
       it("rejects invalid assignment targets", () => {
         expect(() => parseModule("1 = 2;")).toThrow();
       });

@@ -1941,6 +1941,36 @@ describe("Classes", () => {
             `);
         }).toThrow(/PrivateFields is not enabled/);
       });
+
+      it("should support private in checks for instance fields", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Secret {
+              #value = 1;
+              has(obj) { return #value in obj; }
+            }
+            const instance = new Secret();
+            [instance.has(instance), instance.has({})];
+          `);
+        expect(result).toEqual([true, false]);
+      });
+
+      it("should support private in checks for static private members", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Secret {
+              static #token = 1;
+              static hasToken(obj) { return #token in obj; }
+            }
+            [Secret.hasToken(Secret), Secret.hasToken({})];
+          `);
+        expect(result).toEqual([true, false]);
+      });
+
+      it("should throw when private in check is used outside class context", () => {
+        const interpreter = new Interpreter();
+        expect(() => interpreter.evaluate("#value in {};")).toThrow();
+      });
     });
   });
 });
