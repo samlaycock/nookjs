@@ -154,7 +154,15 @@ export interface RunOptions {
   readonly features?: FeatureToggles;
   readonly limits?: RunLimits;
   readonly validator?: (ast: ESTree.Program) => boolean;
+  /**
+   * AbortSignal is only supported for async execution via run()/runModule().
+   * Synchronous runSync() calls reject this option.
+   */
   readonly signal?: AbortSignal;
+  /**
+   * timeoutMs is only supported for async execution via run()/runModule().
+   * Synchronous runSync() calls reject this option.
+   */
   readonly timeoutMs?: number;
   readonly result?: ResultMode;
 }
@@ -529,6 +537,12 @@ const assertSyncTimeoutIsDisabled = (defaultTimeoutMs?: number, options?: RunOpt
   }
 };
 
+const assertSyncSignalIsDisabled = (options?: RunOptions): void => {
+  if (options?.signal !== undefined) {
+    throw new Error("signal is only supported for async execution");
+  }
+};
+
 const formatResult = <T>(
   value: T,
   mode: ResultMode | undefined,
@@ -623,6 +637,7 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
   function runSync<T = unknown>(code: string, runOptions?: RunOptions): T;
   function runSync<T = unknown>(code: string, runOptions?: RunOptions): T | RunResult<T> {
     assertSyncTimeoutIsDisabled(defaultTimeoutMs, runOptions);
+    assertSyncSignalIsDisabled(runOptions);
     const evaluateOptions = buildEvaluateOptions(baseFeatureSet, defaultLimits, runOptions);
     const value = interpreter.evaluate(code, evaluateOptions) as T;
     return formatResult(value, runOptions?.result, interpreter, trackResources);

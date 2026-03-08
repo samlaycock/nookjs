@@ -2329,7 +2329,8 @@ export type EvaluateOptions = {
   featureControl?: FeatureControl;
   /**
    * AbortSignal to allow cancellation of async evaluation.
-   * Only supported in evaluateAsync(). Ignored by synchronous evaluate().
+   * Only supported in evaluateAsync().
+   * Synchronous evaluate() rejects this option.
    * Throws InterpreterError when aborted.
    */
   signal?: AbortSignal;
@@ -3119,7 +3120,7 @@ export class Interpreter {
       context.featureSet = new Set(options.featureControl.features);
     }
 
-    // Signal is set separately by evaluateAsync(); not used in sync evaluate().
+    // Signal is set separately by evaluateAsync().
     context.abortSignal = undefined;
     this.executionCheckCounter = Interpreter.EXECUTION_CHECK_MASK;
 
@@ -3302,6 +3303,12 @@ export class Interpreter {
     return ast;
   }
 
+  private assertSyncSignalIsDisabled(options?: EvaluateOptions): void {
+    if (options?.signal !== undefined) {
+      throw new InterpreterError("signal is only supported for async execution");
+    }
+  }
+
   evaluate(input: string | ESTree.Program, options?: EvaluateOptions): any {
     const releaseMutex = this.acquireSyncEvaluationMutexIfNeeded();
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
@@ -3309,6 +3316,7 @@ export class Interpreter {
     this.callStack = [];
     let evaluationStarted = false;
     try {
+      this.assertSyncSignalIsDisabled(options);
       this.beginEvaluation(options);
       evaluationStarted = true;
       const ast = this.parseAndValidate(input, options);

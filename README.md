@@ -436,7 +436,7 @@ It is designed for untrusted code execution with:
 - Dangerous property blocking
 - Forbidden global injection (`eval`, `Function`, `Proxy`, `Reflect`, etc.)
 - Error sanitization controls
-- Execution guards (`limits`, `timeoutMs`, `AbortSignal`)
+- Execution guards (`limits`, async `timeoutMs`, async `AbortSignal`)
 
 For production multi-tenant workloads, pair interpreter controls with external isolation/rate-limits.
 See [Security Guide](docs/SECURITY.md).
@@ -503,7 +503,9 @@ Use multiple controls together:
 - Per-run limits (`loops`, `callDepth`, `memoryBytes`)
 - Total limits for cumulative usage (`limits.total`)
 - Async timeout (`timeoutMs`)
-- Optional cancellation (`AbortSignal`)
+- Optional async cancellation (`AbortSignal`)
+
+`timeoutMs` and `AbortSignal` are async-only controls. `runSync()` / `evaluate()` reject them.
 
 ### How do I get better error details during development?
 
