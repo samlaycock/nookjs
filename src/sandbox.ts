@@ -145,6 +145,10 @@ export interface SandboxOptions {
   readonly validator?: (ast: ESTree.Program) => boolean;
   readonly trackResources?: boolean;
   readonly security?: SecurityOptions;
+  /**
+   * Defaults to true for createSandbox() so reusable sandboxes serialize sync,
+   * async, and module evaluations unless callers explicitly opt out.
+   */
   readonly strictEvaluationIsolation?: boolean;
   readonly numericSemantics?: NumericSemantics;
 }
@@ -391,6 +395,7 @@ const resolveModules = (modules?: SandboxModules): ModuleOptions | undefined => 
   const files = modules.files ?? {};
   const ast = modules.ast ?? {};
   const externals = modules.externals ?? {};
+  const customResolver = modules.resolver;
   const resolver: ModuleResolver = {
     resolve(specifier, importer, context) {
       if (Object.prototype.hasOwnProperty.call(files, specifier)) {
@@ -414,15 +419,17 @@ const resolveModules = (modules?: SandboxModules): ModuleOptions | undefined => 
         }
       }
 
-      return modules.resolver?.resolve(specifier, importer, context) ?? null;
+      return customResolver?.resolve(specifier, importer, context) ?? null;
     },
-    onLoad: modules.resolver?.onLoad
-      ? (specifier, path, exports) => modules.resolver?.onLoad?.(specifier, path, exports)
+    onLoad: customResolver?.onLoad
+      ? (specifier, path, exports) => customResolver.onLoad?.(specifier, path, exports)
       : undefined,
-    onError: modules.resolver?.onError
-      ? (specifier, importer, error) => modules.resolver?.onError?.(specifier, importer, error)
+    onError: customResolver?.onError
+      ? (specifier, importer, error) => customResolver.onError?.(specifier, importer, error)
       : undefined,
-    getImportMeta: modules.resolver?.getImportMeta,
+    getImportMeta: customResolver?.getImportMeta
+      ? (context) => customResolver.getImportMeta!(context)
+      : undefined,
   };
 
   return {
@@ -596,7 +603,7 @@ export const createSandbox = (options: SandboxOptions = {}): Sandbox => {
     ...(featureControl ? { featureControl } : {}),
     ...(trackResources ? { resourceTracking: true } : {}),
     ...(options.validator ? { validator: options.validator } : {}),
-    ...(options.strictEvaluationIsolation ? { strictEvaluationIsolation: true } : {}),
+    strictEvaluationIsolation: options.strictEvaluationIsolation ?? true,
     ...(options.numericSemantics ? { numericSemantics: options.numericSemantics } : {}),
     globals: {
       ...baseOptions.globals,

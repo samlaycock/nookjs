@@ -43,7 +43,7 @@ describe("Strict Evaluation Isolation", () => {
     expect(asyncResult).toBe("A");
   });
 
-  it("should block runSync() while run() is pending when enabled via createSandbox()", async () => {
+  it("should block runSync() while run() is pending by default in createSandbox()", async () => {
     const gateState: { release: () => void } = { release: () => {} };
     const gate = new Promise<void>((resolve) => {
       gateState.release = resolve;
@@ -52,7 +52,6 @@ describe("Strict Evaluation Isolation", () => {
     const waitForGate = () => gate;
     const sandbox = createSandbox({
       env: "es2022",
-      strictEvaluationIsolation: true,
       globals: { waitForGate },
     });
 
@@ -84,5 +83,78 @@ describe("Strict Evaluation Isolation", () => {
     expect(syncErrorMessage).toContain("Strict isolation is enabled");
     const asyncResult = await asyncRun;
     expect(asyncResult).toBe("A");
+  });
+
+  it("should allow sync overlap when strictEvaluationIsolation is explicitly disabled in createSandbox()", async () => {
+    const gateState: { release: () => void } = { release: () => {} };
+    const gate = new Promise<void>((resolve) => {
+      gateState.release = resolve;
+    });
+
+    const waitForGate = () => gate;
+    const sandbox = createSandbox({
+      env: "es2022",
+      strictEvaluationIsolation: false,
+      globals: { waitForGate },
+    });
+
+    const asyncRun = sandbox.run(
+      `
+        async function readSecret() {
+          await waitForGate();
+          return secret;
+        }
+
+        readSecret();
+      `,
+      {
+        globals: { secret: "A" },
+      },
+    );
+
+    const syncResult = sandbox.runSync("secret", { globals: { secret: "B" } });
+    gateState.release();
+
+    expect(syncResult).toBe("B");
+    const asyncResult = await asyncRun;
+    expect(asyncResult).toBe("A");
+  });
+
+  it("should block runSync() while runModule() is pending by default in createSandbox()", async () => {
+    const gateState: { release: () => void } = { release: () => {} };
+    const gate = new Promise<void>((resolve) => {
+      gateState.release = resolve;
+    });
+
+    const sandbox = createSandbox({
+      env: "es2022",
+      modules: {},
+      globals: {
+        waitForGate: () => gate,
+      },
+    });
+
+    const moduleRun = sandbox.runModule(
+      `
+        const secret = await waitForGate().then(() => "A");
+        export { secret };
+      `,
+      { path: "main.js" },
+    );
+
+    const syncRun: { error: unknown } = { error: undefined };
+    try {
+      sandbox.runSync("secret", { globals: { secret: "B" } });
+    } catch (error) {
+      syncRun.error = error;
+    } finally {
+      gateState.release();
+    }
+
+    const syncErrorMessage =
+      syncRun.error instanceof Error ? syncRun.error.message : String(syncRun.error);
+    expect(syncErrorMessage).toContain("Strict isolation is enabled");
+    const moduleExports = await moduleRun;
+    expect(moduleExports.secret).toBe("A");
   });
 });

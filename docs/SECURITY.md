@@ -11,6 +11,10 @@ The interpreter provides a secure sandbox for executing untrusted JavaScript cod
 3. **Forbidden Globals** - Prevents injection of code-execution primitives
 4. **Error Sanitization** - Prevents leakage of host information through error messages and stack traces
 
+For the simplified API, reusable sandboxes created with `createSandbox()` also serialize
+sync, async, and module evaluations by default so pending work cannot overlap on the same
+shared sandbox unless you explicitly opt out.
+
 ## Security Options
 
 The sandbox accepts a `security` option with the following settings:
