@@ -12298,6 +12298,14 @@ export class Interpreter {
     };
 
     try {
+      if (
+        classValue.privateInstanceMethods.size > 0 &&
+        !classValue.privateFieldStorage.has(instance)
+      ) {
+        // Seed a brand marker so private instance methods can validate membership.
+        classValue.privateFieldStorage.set(instance, new Map<string, any>());
+      }
+
       for (const field of classValue.instanceFields) {
         const value = field.initializer ? this.evaluateNode(field.initializer) : undefined;
 
@@ -12358,6 +12366,14 @@ export class Interpreter {
     };
 
     try {
+      if (
+        classValue.privateInstanceMethods.size > 0 &&
+        !classValue.privateFieldStorage.has(instance)
+      ) {
+        // Seed a brand marker so private instance methods can validate membership.
+        classValue.privateFieldStorage.set(instance, new Map<string, any>());
+      }
+
       for (const field of classValue.instanceFields) {
         const value = field.initializer
           ? await this.evaluateNodeAsync(field.initializer)
@@ -13110,6 +13126,10 @@ export class Interpreter {
   }
 
   private evaluatePrivateInExpression(fieldName: string, right: any): boolean {
+    if (!this.isFeatureEnabled("PrivateFields")) {
+      throw new InterpreterError("PrivateFields is not enabled");
+    }
+
     if ((typeof right !== "object" || right === null) && !(right instanceof ClassValue)) {
       throw new InterpreterError(
         "Cannot use 'in' operator to search for '#" + fieldName + "' in " + right,
@@ -13129,7 +13149,11 @@ export class Interpreter {
     }
 
     const privateFields = currentClass.privateFieldStorage.get(right);
-    return privateFields?.has(fieldName) === true;
+    return (
+      privateFields?.has(fieldName) === true ||
+      (currentClass.privateFieldStorage.has(right) &&
+        currentClass.privateInstanceMethods.has(fieldName))
+    );
   }
 
   /**

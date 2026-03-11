@@ -1955,6 +1955,19 @@ describe("Classes", () => {
         expect(result).toEqual([true, false]);
       });
 
+      it("should support private in checks for instance methods", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Secret {
+              #token() { return 1; }
+              hasToken(obj) { return #token in obj; }
+            }
+            const instance = new Secret();
+            [instance.hasToken(instance), instance.hasToken({})];
+          `);
+        expect(result).toEqual([true, false]);
+      });
+
       it("should support private in checks for static private members", () => {
         const interpreter = new Interpreter();
         const result = interpreter.evaluate(`
@@ -1965,6 +1978,23 @@ describe("Classes", () => {
             [Secret.hasToken(Secret), Secret.hasToken({})];
           `);
         expect(result).toEqual([true, false]);
+      });
+
+      it("should block private in checks when feature is disabled at evaluation time", () => {
+        const interpreter = new Interpreter();
+        interpreter.evaluate(`
+            class Secret {
+              #value = 1;
+              has(obj) { return #value in obj; }
+            }
+            const instance = new Secret();
+          `);
+
+        expect(() =>
+          interpreter.evaluate("instance.has(instance);", {
+            featureControl: { mode: "blacklist", features: ["PrivateFields"] },
+          }),
+        ).toThrow(/PrivateFields is not enabled/);
       });
 
       it("should throw when private in check is used outside class context", () => {
