@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
 
+import { InterpreterError } from "../src/errors";
 import { Interpreter } from "../src/interpreter";
 
 describe("Execution Control", () => {
@@ -500,11 +501,16 @@ describe("Execution Control", () => {
         const interpreter = new Interpreter();
         const controller = new AbortController();
 
-        expect(() =>
+        try {
           interpreter.evaluate(`1 + 1`, {
             signal: controller.signal,
-          }),
-        ).toThrow("signal is only supported for async execution");
+          });
+          expect.unreachable("Expected sync evaluate() to reject AbortSignal");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect(error).not.toBeInstanceOf(InterpreterError);
+          expect((error as Error).message).toBe("signal is only supported for async execution");
+        }
       });
     });
   });

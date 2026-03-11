@@ -3305,7 +3305,7 @@ export class Interpreter {
 
   private assertSyncSignalIsDisabled(options?: EvaluateOptions): void {
     if (options?.signal !== undefined) {
-      throw new InterpreterError("signal is only supported for async execution");
+      throw new Error("signal is only supported for async execution");
     }
   }
 
