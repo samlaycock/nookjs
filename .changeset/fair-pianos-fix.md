@@ -1,5 +1,5 @@
 ---
-"nookjs": patch
+"nookjs": minor
 ---
 
 Make `createSandbox()` enable strict evaluation isolation by default so reusable sandboxes serialize sync, async, and module evaluations unless callers explicitly opt out.
