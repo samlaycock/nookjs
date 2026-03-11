@@ -36,6 +36,10 @@ const result = await sandbox.run("double(PI)");
 console.log(result); // 6.28318
 ```
 
+Reusable sandboxes are strict by default: `runSync()` will not start while a prior
+`run()` or `runModule()` call is still pending. This makes the simplified API's
+concurrency model safe by default for shared sandbox instances.
+
 ## Parse without executing
 
 ```typescript
@@ -133,6 +137,21 @@ Controls division/modulo by zero behavior:
 
 - `"safe"` (default): throw `InterpreterError` on `/ 0` and `% 0`
 - `"strict-js"`: preserve native JS numeric behavior (`Infinity`, `-Infinity`, `NaN`)
+
+### `strictEvaluationIsolation`
+
+Controls whether `runSync()` may overlap with pending async or module evaluations on the
+same reusable sandbox.
+
+- `true` (default): serialize sync, async, and module work on the shared sandbox
+- `false`: allow `runSync()` to overlap pending async/module evaluations
+
+```typescript
+const sandbox = createSandbox({
+  env: "es2022",
+  strictEvaluationIsolation: false,
+});
+```
 
 ### `modules`
 
