@@ -217,6 +217,10 @@ export class ModuleSystem {
       // Cache key is the resolved path (source.path), not the specifier,
       // to ensure cache entries are tied to the specific resolved module.
       if (this.options.cache) {
+        // Preserve all successfully authorized specifiers, even when they
+        // resolve to a module path that is already cached.
+        this.specifierToPath.set(specifier, source.path);
+
         const existingByPath = this.cacheByPath.get(source.path);
         if (existingByPath) {
           // If already initialized, return cached exports
@@ -255,7 +259,6 @@ export class ModuleSystem {
 
       if (this.options.cache) {
         this.cacheByPath.set(source.path, record);
-        this.specifierToPath.set(specifier, source.path);
       }
 
       if (source.type === "namespace") {
