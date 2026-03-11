@@ -48,6 +48,21 @@ export interface ModuleResolver {
   ): ModuleSource | Promise<ModuleSource | null> | null;
 
   /**
+   * Optional callback invoked after resolving a canonical module path and before
+   * returning either a cached record or newly loaded source.
+   *
+   * Use this to keep importer-aware authorization checks separate from source
+   * loading so cached modules can skip repeated resolve() work without bypassing
+   * per-import access control.
+   */
+  authorize?(
+    specifier: string,
+    importer: string | null,
+    resolvedPath: string,
+    context?: ModuleResolverContext,
+  ): boolean | Promise<boolean>;
+
+  /**
    * Optional callback invoked after a module is successfully loaded.
    * Useful for logging, metrics, or post-processing.
    */
@@ -137,6 +152,8 @@ export class ModuleSystem {
   private cacheByPath: Map<string, ModuleRecord> = new Map();
   // Secondary index: specifier -> path (for specifier-based lookups)
   private specifierToPath: Map<string, string> = new Map();
+  // Context-specific index for reusing cached module paths without re-running resolve()
+  private resolvedPathByContext: Map<string, string> = new Map();
   private options: ModuleOptions;
   // Track depth per evaluation context using a stack (fixes shared depth counter)
   private evaluationStack: string[] = [];
@@ -180,6 +197,14 @@ export class ModuleSystem {
     return this.evaluationStack.length;
   }
 
+  private getResolutionContextKey(
+    specifier: string,
+    importer: string | null,
+    importerChain: readonly string[],
+  ): string {
+    return JSON.stringify([specifier, importer, importerChain]);
+  }
+
   async resolveModule(specifier: string, importer: string | null): Promise<ModuleRecord | null> {
     if (!this.options.enabled) {
       throw new Error("Module system is not enabled");
@@ -207,16 +232,57 @@ export class ModuleSystem {
         importer,
         importerChain: this.getImporterChain(),
       };
+      const resolutionContextKey = this.getResolutionContextKey(
+        specifier,
+        importer,
+        context.importerChain,
+      );
+
+      if (this.options.cache && this.options.resolver.authorize) {
+        const cachedPath = this.resolvedPathByContext.get(resolutionContextKey);
+        if (cachedPath) {
+          const existingByPath = this.cacheByPath.get(cachedPath);
+          if (existingByPath) {
+            const isAuthorized = await this.options.resolver.authorize(
+              specifier,
+              importer,
+              cachedPath,
+              context,
+            );
+            if (!isAuthorized) {
+              return null;
+            }
+
+            this.specifierToPath.set(specifier, cachedPath);
+            return existingByPath;
+          }
+
+          this.resolvedPathByContext.delete(resolutionContextKey);
+        }
+      }
 
       const source = await this.options.resolver.resolve(specifier, importer, context);
       if (source === null) {
         return null;
       }
 
-      // After resolver authorizes, check cache by resolved path.
+      if (this.options.resolver.authorize) {
+        const isAuthorized = await this.options.resolver.authorize(
+          specifier,
+          importer,
+          source.path,
+          context,
+        );
+        if (!isAuthorized) {
+          return null;
+        }
+      }
+
+      // After resolve() and optional authorize(), check cache by resolved path.
       // Cache key is the resolved path (source.path), not the specifier,
       // to ensure cache entries are tied to the specific resolved module.
       if (this.options.cache) {
+        this.resolvedPathByContext.set(resolutionContextKey, source.path);
         // Preserve all successfully authorized specifiers, even when they
         // resolve to a module path that is already cached.
         this.specifierToPath.set(specifier, source.path);
@@ -353,6 +419,7 @@ export class ModuleSystem {
   clearCache(): void {
     this.cacheByPath.clear();
     this.specifierToPath.clear();
+    this.resolvedPathByContext.clear();
     this.evaluationStack = [];
   }
 
