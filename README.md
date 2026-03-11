@@ -574,15 +574,21 @@ With `"strict-js"`:
 ### Syntax/feature scope
 
 - Parser targets interpreter-supported syntax, not arbitrary JS/TS grammar.
-- Hashbang (`#!`) is not stripped by the parser.
-- TypeScript support is strip-only and excludes TSX/JSX, `enum`, `namespace`, and type-only import/export.
+- Leading hashbang (`#!`) lines are stripped in script/module entry parsing.
+- TypeScript support is strip-only: it handles type annotations and type-only import/export erasure, but still excludes TSX/JSX, `enum`, and `namespace`.
 - Some constructs have intentionally narrower behavior (for example, spread/destructuring/loop gotchas in feature docs).
 
-### Module system gaps vs native ESM
+### Module system: supported today vs native ESM gaps
 
-- No dynamic `import()`.
-- No `import.meta`.
-- No live bindings; exports are snapshot-based.
+Supported today:
+
+- Async `import()` works during module evaluation and async script execution.
+- Read-only `import.meta.url` is available, and resolvers can extend `import.meta` with additional fields.
+- Named imports/re-exports use live bindings across the module graph.
+
+Still intentionally approximate:
+
+- Full native ESM TDZ/instantiation timing is not guaranteed.
 - Module resolution is custom/resolver-driven (no automatic Node resolution).
 - Module system is opt-in and disabled unless `modules` config is provided.
 
