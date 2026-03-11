@@ -1,5 +1,5 @@
 ---
-"nookjs": patch
+"nookjs": minor
 ---
 
 Reject `AbortSignal` in synchronous `evaluate()` and `runSync()` calls instead of silently ignoring it.
