@@ -192,6 +192,19 @@ interface ModuleResolver {
   ): ModuleSource | Promise<ModuleSource | null> | null;
 
   /**
+   * Optional: authorize a resolved canonical path before using cached exports.
+   *
+   * This lets you keep importer-aware access control separate from source
+   * loading so cached modules can skip repeated resolve() work.
+   */
+  authorize?(
+    specifier: string,
+    importer: string | null,
+    resolvedPath: string,
+    context?: ModuleResolverContext,
+  ): boolean | Promise<boolean>;
+
+  /**
    * Optional: Called after a module is successfully loaded.
    */
   onLoad?(specifier: string, path: string, exports: Record<string, any>): void;
@@ -208,6 +221,40 @@ interface ModuleResolverContext {
   importerChain: readonly string[]; // Full chain for cycle detection
 }
 ```
+
+### Separating Authorization From Loading
+
+If your resolver needs importer-aware authorization, prefer putting that logic in
+`authorize()` and keeping `resolve()` focused on mapping a specifier to source.
+When `authorize()` is present, NookJS still checks access on every import, but it
+can reuse cached module records for repeated imports from the same resolution context
+instead of calling `resolve()` again.
+
+```typescript
+const resolver: ModuleResolver = {
+  resolve(specifier) {
+    if (specifier === "./shared") {
+      return {
+        type: "source",
+        code: "export const value = 1;",
+        path: "/app/shared.js",
+      };
+    }
+    return null;
+  },
+
+  authorize(specifier, importer, resolvedPath) {
+    return (
+      specifier === "./shared" &&
+      importer?.startsWith("/app/") === true &&
+      resolvedPath === "/app/shared.js"
+    );
+  },
+};
+```
+
+If `authorize()` is omitted, NookJS preserves the existing behavior and calls
+`resolve()` on every import so authorization can remain embedded inside the resolver.
 
 ### Module Source Types
 

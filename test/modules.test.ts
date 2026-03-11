@@ -4022,6 +4022,94 @@ describe("Module System", () => {
       expect(resolveCount).toBe(2);
     });
 
+    test("should use authorize hook to avoid repeated resolution for cached imports", async () => {
+      let resolveCount = 0;
+      let authorizeCount = 0;
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "./shared") {
+            return null;
+          }
+          resolveCount += 1;
+          return {
+            type: "source",
+            code: `export const value = ${resolveCount};`,
+            path: "/shared.js",
+          };
+        },
+        authorize(specifier, importer, resolvedPath) {
+          if (specifier !== "./shared" || importer !== "main.js" || resolvedPath !== "/shared.js") {
+            return false;
+          }
+          authorizeCount += 1;
+          return true;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        'import { value } from "./shared"; import { value as v2 } from "./shared"; export const out = [value, v2];',
+        { path: "main.js" },
+      );
+
+      expect(result.out).toEqual([1, 1]);
+      expect(resolveCount).toBe(1);
+      expect(authorizeCount).toBe(2);
+    });
+
+    test("should re-authorize cached modules for different importers when authorize hook is used", async () => {
+      let resolveCount = 0;
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "./secret") {
+            return null;
+          }
+          resolveCount += 1;
+          return {
+            type: "source",
+            code: 'export const token = "TOPSECRET";',
+            path: "/tenantA/secret.js",
+          };
+        },
+        authorize(specifier, importer, resolvedPath) {
+          return (
+            specifier === "./secret" &&
+            importer === "allowed.js" &&
+            resolvedPath === "/tenantA/secret.js"
+          );
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      const allowed = await interpreter.evaluateModuleAsync(
+        'import { token } from "./secret"; export const out = token;',
+        { path: "allowed.js" },
+      );
+      expect(allowed.out).toBe("TOPSECRET");
+
+      const attackerImport = interpreter.evaluateModuleAsync(
+        'import { token } from "./secret"; export const out = token;',
+        { path: "attacker.js" },
+      );
+      await attackerImport.then(
+        () => {
+          throw new Error("Expected attacker import to be rejected");
+        },
+        (error: unknown) => {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain("Cannot find module");
+        },
+      );
+
+      expect(resolveCount).toBe(2);
+    });
+
     test("should handle path aliasing correctly for allowed imports", async () => {
       const resolver: ModuleResolver = {
         resolve(specifier) {
