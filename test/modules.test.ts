@@ -3053,6 +3053,42 @@ describe("Module System", () => {
   // ============================================================================
 
   describe("Introspection Edge Cases", () => {
+    test("should preserve introspection metadata for aliased specifiers that share a cached path", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier === "./a" || specifier === "./a.js") {
+            return {
+              type: "source",
+              code: "export const value = 1;",
+              path: "/modules/a.js",
+            };
+          }
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        'import { value as first } from "./a"; import { value as second } from "./a.js"; export const sum = first + second;',
+        { path: "main.js" },
+      );
+
+      expect(result.sum).toBe(2);
+      expect(interpreter.getModuleCacheSize()).toBe(1);
+      expect(interpreter.getLoadedModulePaths()).toEqual(["/modules/a.js"]);
+      expect(interpreter.isModuleCached("./a")).toBe(true);
+      expect(interpreter.isModuleCached("./a.js")).toBe(true);
+      expect(interpreter.getLoadedModuleSpecifiers()).toEqual(
+        expect.arrayContaining(["./a", "./a.js"]),
+      );
+      expect(interpreter.getModuleMetadata("./a")?.path).toBe("/modules/a.js");
+      expect(interpreter.getModuleMetadata("./a.js")?.path).toBe("/modules/a.js");
+      expect(interpreter.getModuleExportsBySpecifier("./a.js")?.value).toBe(1);
+    });
+
     test("should return undefined metadata for non-existent module", async () => {
       const resolver: ModuleResolver = {
         resolve() {
