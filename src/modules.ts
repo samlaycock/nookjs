@@ -1,5 +1,7 @@
 import type { ESTree } from "./ast";
 
+const MAX_RESOLVED_PATH_CONTEXT_CACHE_SIZE = 1024;
+
 export type ModuleSource =
   | { type: "source"; code: string; path: string }
   | { type: "ast"; ast: ESTree.Program; path: string }
@@ -205,6 +207,32 @@ export class ModuleSystem {
     return JSON.stringify([specifier, importer, importerChain]);
   }
 
+  private getResolvedPathForContext(resolutionContextKey: string): string | undefined {
+    const cachedPath = this.resolvedPathByContext.get(resolutionContextKey);
+    if (cachedPath === undefined) {
+      return undefined;
+    }
+
+    // Keep hot resolution contexts alive while bounding growth overall.
+    this.resolvedPathByContext.delete(resolutionContextKey);
+    this.resolvedPathByContext.set(resolutionContextKey, cachedPath);
+    return cachedPath;
+  }
+
+  private cacheResolvedPathForContext(resolutionContextKey: string, path: string): void {
+    if (this.resolvedPathByContext.has(resolutionContextKey)) {
+      this.resolvedPathByContext.delete(resolutionContextKey);
+    }
+    this.resolvedPathByContext.set(resolutionContextKey, path);
+
+    if (this.resolvedPathByContext.size > MAX_RESOLVED_PATH_CONTEXT_CACHE_SIZE) {
+      const oldestResolutionContextKey = this.resolvedPathByContext.keys().next().value;
+      if (oldestResolutionContextKey !== undefined) {
+        this.resolvedPathByContext.delete(oldestResolutionContextKey);
+      }
+    }
+  }
+
   async resolveModule(specifier: string, importer: string | null): Promise<ModuleRecord | null> {
     if (!this.options.enabled) {
       throw new Error("Module system is not enabled");
@@ -223,10 +251,10 @@ export class ModuleSystem {
     }
 
     try {
-      // Build resolver context - resolver is ALWAYS called first to enforce
-      // importer-aware authorization policy before any cache access.
-      // This prevents cache-based authorization bypass where one importer's
-      // allowed access could be reused by another importer with different permissions.
+      // Build resolver context. Without authorize(), resolve() stays the first gate
+      // so importer-aware access control can remain embedded in resolver logic.
+      // With authorize(), we can reuse a cached resolved path for the same context
+      // while still re-checking authorization before returning cached records.
       const context: ModuleResolverContext = {
         specifier,
         importer,
@@ -239,7 +267,7 @@ export class ModuleSystem {
       );
 
       if (this.options.cache && this.options.resolver.authorize) {
-        const cachedPath = this.resolvedPathByContext.get(resolutionContextKey);
+        const cachedPath = this.getResolvedPathForContext(resolutionContextKey);
         if (cachedPath) {
           const existingByPath = this.cacheByPath.get(cachedPath);
           if (existingByPath) {
@@ -282,13 +310,13 @@ export class ModuleSystem {
       // Cache key is the resolved path (source.path), not the specifier,
       // to ensure cache entries are tied to the specific resolved module.
       if (this.options.cache) {
-        this.resolvedPathByContext.set(resolutionContextKey, source.path);
         // Preserve all successfully authorized specifiers, even when they
         // resolve to a module path that is already cached.
         this.specifierToPath.set(specifier, source.path);
 
         const existingByPath = this.cacheByPath.get(source.path);
         if (existingByPath) {
+          this.cacheResolvedPathForContext(resolutionContextKey, source.path);
           // If already initialized, return cached exports
           if (existingByPath.status === "initialized") {
             return existingByPath;
@@ -325,6 +353,7 @@ export class ModuleSystem {
 
       if (this.options.cache) {
         this.cacheByPath.set(source.path, record);
+        this.cacheResolvedPathForContext(resolutionContextKey, source.path);
       }
 
       if (source.type === "namespace") {

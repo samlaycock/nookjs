@@ -1,8 +1,7 @@
 import { describe, test, expect } from "bun:test";
 
-import type { ModuleResolver } from "../src/modules";
-
 import { Interpreter } from "../src/interpreter";
+import { ModuleSystem, type ModuleResolver } from "../src/modules";
 
 describe("Module System", () => {
   describe("Module Resolver Interface", () => {
@@ -4108,6 +4107,90 @@ describe("Module System", () => {
       );
 
       expect(resolveCount).toBe(2);
+    });
+
+    test("should only publish context fast-path entries after the cache record exists", async () => {
+      let releaseImportMeta: (() => void) | undefined;
+      const importMetaBlocked = new Promise<void>((resolve) => {
+        releaseImportMeta = resolve;
+      });
+      let signalImportMetaStarted: (() => void) | undefined;
+      const importMetaStarted = new Promise<void>((resolve) => {
+        signalImportMetaStarted = resolve;
+      });
+
+      const moduleSystem = new ModuleSystem({
+        enabled: true,
+        cache: true,
+        resolver: {
+          resolve(specifier) {
+            if (specifier !== "./shared") {
+              return null;
+            }
+            return {
+              type: "source",
+              code: "export const value = 1;",
+              path: "/shared.js",
+            };
+          },
+          authorize() {
+            return true;
+          },
+          async getImportMeta() {
+            signalImportMetaStarted?.();
+            await importMetaBlocked;
+            return { tag: "shared" };
+          },
+        },
+      });
+      const internalModuleSystem = moduleSystem as unknown as {
+        cacheByPath: Map<string, unknown>;
+        resolvedPathByContext: Map<string, string>;
+      };
+
+      const pendingResolution = moduleSystem.resolveModule("./shared", "main.js");
+      await importMetaStarted;
+
+      expect(internalModuleSystem.cacheByPath.has("/shared.js")).toBe(false);
+      expect(internalModuleSystem.resolvedPathByContext.size).toBe(0);
+
+      releaseImportMeta?.();
+      const record = await pendingResolution;
+
+      expect(record?.path).toBe("/shared.js");
+      expect(internalModuleSystem.cacheByPath.has("/shared.js")).toBe(true);
+      expect(internalModuleSystem.resolvedPathByContext.size).toBe(1);
+    });
+
+    test("should bound resolved-path context cache growth", async () => {
+      const moduleSystem = new ModuleSystem({
+        enabled: true,
+        cache: true,
+        resolver: {
+          resolve(specifier) {
+            if (specifier !== "./shared") {
+              return null;
+            }
+            return {
+              type: "namespace",
+              exports: { value: 1 },
+              path: "/shared.js",
+            };
+          },
+          authorize() {
+            return true;
+          },
+        },
+      });
+      const internalModuleSystem = moduleSystem as unknown as {
+        resolvedPathByContext: Map<string, string>;
+      };
+
+      for (let index = 0; index < 1100; index++) {
+        await moduleSystem.resolveModule("./shared", `importer-${index}.js`);
+      }
+
+      expect(internalModuleSystem.resolvedPathByContext.size).toBeLessThanOrEqual(1024);
     });
 
     test("should handle path aliasing correctly for allowed imports", async () => {
