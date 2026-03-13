@@ -8026,6 +8026,7 @@ export class Interpreter {
         if (property.computed) {
           // Computed property: {[expr]: value} - evaluate the expression to get the key
           key = this.evaluateComputedPropertyKey(property.key as ESTree.Expression);
+          this.validateDynamicPropertyKey(key);
         } else {
           // Static property: {x} or {x: newName} - key is an identifier
           key = (property.key as ESTree.Identifier).name;
@@ -11142,6 +11143,7 @@ export class Interpreter {
         if (property.computed) {
           // Computed property: {[expr]: value}
           key = await this.evaluateComputedPropertyKeyAsync(property.key as ESTree.Expression);
+          this.validateDynamicPropertyKey(key);
         } else {
           // Static property: {x} or {x: newName}
           key = (property.key as ESTree.Identifier).name;
