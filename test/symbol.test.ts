@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 
 import { Interpreter } from "../src/interpreter";
-import { ES2015 } from "../src/presets";
+import { ES2015, ES2024 } from "../src/presets";
 
 describe("Symbol", () => {
   describe("ES2015", () => {
@@ -98,6 +98,67 @@ describe("Symbol", () => {
           obj.name + ':' + obj[sym];
         `);
         expect(result).toBe("string:symbol");
+      });
+
+      it("should support symbol-keyed properties on class instances", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const first = Symbol("token");
+          const second = Symbol("token");
+          class Box {}
+          const box = new Box();
+          box[first] = 1;
+          box[second] = 2;
+          [box[first], box[second]];
+        `);
+        expect(result).toEqual([1, 2]);
+      });
+
+      it("should preserve symbol identity for computed class members", () => {
+        const interpreter = new Interpreter(ES2024);
+        const result = interpreter.evaluate(`
+          const first = Symbol("dup");
+          const second = Symbol("dup");
+          class Registry {
+            [first]() {
+              return 1;
+            }
+
+            [second]() {
+              return 2;
+            }
+
+            static [first] = "a";
+            static [second] = "b";
+          }
+
+          const registry = new Registry();
+          [registry[first](), registry[second](), Registry[first], Registry[second]];
+        `);
+        expect(result).toEqual([1, 2, "a", "b"]);
+      });
+
+      it("should support symbol-keyed update expressions", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const count = Symbol("count");
+          const obj = { [count]: 0 };
+          obj[count]++;
+          ++obj[count];
+          obj[count];
+        `);
+        expect(result).toBe(2);
+      });
+
+      it("should support computed symbol keys in object destructuring", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const key = Symbol("value");
+          const obj = { [key]: 42 };
+          const { [key]: value } = obj;
+          value;
+        `);
+        expect(result).toBe(42);
       });
     });
 
