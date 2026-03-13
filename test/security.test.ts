@@ -497,6 +497,20 @@ describe("Security", () => {
           `);
         }).toThrow("Symbol 'Symbol(Symbol.toPrimitive)' is not allowed for security reasons");
       });
+
+      it("should block dangerous symbol access on class instances", () => {
+        const sym = Symbol.toStringTag;
+        const interpreter = new Interpreter({
+          globals: { sym },
+        });
+        expect(() => {
+          interpreter.evaluate(`
+            class Box {}
+            const box = new Box();
+            box[sym];
+          `);
+        }).toThrow("Symbol 'Symbol(Symbol.toStringTag)' is not allowed for security reasons");
+      });
     });
 
     describe("host function bypass prevention", () => {

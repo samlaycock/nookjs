@@ -132,7 +132,7 @@ export class FunctionValue {
  * Stores the field name and initializer AST node for lazy evaluation at instantiation
  */
 interface ClassFieldInitializer {
-  name: string;
+  name: string | symbol;
   initializer: ESTree.Expression | null;
   computed: boolean;
   keyNode: ESTree.Expression | ESTree.PrivateIdentifier | null;
@@ -151,16 +151,16 @@ export class ClassValue {
   constructor(
     public name: string | null,
     public constructorMethod: FunctionValue | null,
-    public instanceMethods: Map<string, FunctionValue>,
-    public staticMethods: Map<string, FunctionValue>,
-    public instanceGetters: Map<string, FunctionValue>,
-    public instanceSetters: Map<string, FunctionValue>,
-    public staticGetters: Map<string, FunctionValue>,
-    public staticSetters: Map<string, FunctionValue>,
+    public instanceMethods: Map<string | symbol, FunctionValue>,
+    public staticMethods: Map<string | symbol, FunctionValue>,
+    public instanceGetters: Map<string | symbol, FunctionValue>,
+    public instanceSetters: Map<string | symbol, FunctionValue>,
+    public staticGetters: Map<string | symbol, FunctionValue>,
+    public staticSetters: Map<string | symbol, FunctionValue>,
     public parentClass: ClassValue | null,
     public closure: Environment,
     public instanceFields: ClassFieldInitializer[] = [], // Instance field initializers (evaluated at instantiation)
-    public staticFields: Map<string, any> = new Map(), // Static field values (evaluated at class definition)
+    public staticFields: Map<string | symbol, any> = new Map(), // Static field values (evaluated at class definition)
     public privateInstanceMethods: Map<string, FunctionValue> = new Map(), // Private instance methods
     public privateStaticMethods: Map<string, FunctionValue> = new Map(), // Private static methods
     public privateStaticFields: Map<string, any> = new Map(), // Private static field values
@@ -5665,6 +5665,28 @@ export class Interpreter {
     }
   }
 
+  private toPropertyKey(value: any): string | symbol {
+    return typeof value === "symbol" ? value : String(value);
+  }
+
+  private evaluateComputedPropertyKey(node: ESTree.Expression): string | symbol {
+    return this.toPropertyKey(this.evaluateNode(node));
+  }
+
+  private async evaluateComputedPropertyKeyAsync(
+    node: ESTree.Expression,
+  ): Promise<string | symbol> {
+    return this.toPropertyKey(await this.evaluateNodeAsync(node));
+  }
+
+  private validateDynamicPropertyKey(property: string | symbol): void {
+    if (typeof property === "symbol") {
+      this.validateSymbolProperty(property);
+      return;
+    }
+    validatePropertyName(property);
+  }
+
   private ensureNoPrototypeAccessForSymbol(object: any, property: symbol): void {
     // Mirror inherited-property checks for symbol keys to prevent prototype probing.
     if (this.isReadOnlyProxyObject(object)) {
@@ -6204,7 +6226,11 @@ export class Interpreter {
       if (typeof propertyValue === "symbol") {
         this.validateSymbolProperty(propertyValue);
         if (instanceClass) {
-          throw new InterpreterError("Symbol properties are not supported");
+          return this.getInstanceProperty(
+            obj as Record<string | symbol, any>,
+            instanceClass,
+            propertyValue,
+          );
         }
         if (typeof obj === "object" && obj !== null) {
           this.ensureNoInternalObjectAccess(obj);
@@ -6217,7 +6243,11 @@ export class Interpreter {
         validatePropertyName(propName);
       }
       if (instanceClass) {
-        return this.getInstanceProperty(obj as Record<string, any>, instanceClass, propName);
+        return this.getInstanceProperty(
+          obj as Record<string | symbol, any>,
+          instanceClass,
+          propName,
+        );
       }
       if (typeof obj === "object" && obj !== null) {
         this.ensureNoInternalObjectAccess(obj);
@@ -6231,7 +6261,11 @@ export class Interpreter {
       const property = (memberExpr.property as ESTree.Identifier).name;
       if (instanceClass) {
         validatePropertyName(property);
-        return this.getInstanceProperty(obj as Record<string, any>, instanceClass, property);
+        return this.getInstanceProperty(
+          obj as Record<string | symbol, any>,
+          instanceClass,
+          property,
+        );
       }
       if (typeof obj === "object" && obj !== null) {
         if (
@@ -6355,7 +6389,7 @@ export class Interpreter {
       const memberExpr = node.argument as ESTree.MemberExpression;
       const object = this.evaluateNode(memberExpr.object);
       const property = memberExpr.computed
-        ? String(this.evaluateNode(memberExpr.property))
+        ? this.evaluateComputedPropertyKey(memberExpr.property as ESTree.Expression)
         : (memberExpr.property as ESTree.Identifier).name;
 
       const currentValue = object[property];
@@ -6475,12 +6509,20 @@ export class Interpreter {
 
       if (memberExpr.computed) {
         // Computed property: arr[index] = value or obj["key"] = value
-        const property = this.evaluateNode(memberExpr.property);
+        const property = this.evaluateComputedPropertyKey(memberExpr.property as ESTree.Expression);
         const instanceClass = this.getInstanceClass(object);
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
-          if (object instanceof ClassValue || instanceClass) {
-            throw new InterpreterError("Symbol properties are not supported");
+          if (object instanceof ClassValue) {
+            return this.assignClassStaticMember(object, property, value);
+          }
+          if (instanceClass) {
+            return this.assignInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              property,
+              value,
+            );
           }
           if (typeof object === "object" && object !== null) {
             object[property] = value;
@@ -6597,17 +6639,14 @@ export class Interpreter {
         const instanceClass = this.getInstanceClass(object);
         if (instanceClass) {
           if (memberExpr.computed) {
-            const property = this.evaluateNode(memberExpr.property);
-            if (typeof property === "symbol") {
-              this.validateSymbolProperty(property);
-              throw new InterpreterError("Symbol properties are not supported");
-            }
-            const propName = String(property);
-            validatePropertyName(propName);
+            const property = this.evaluateComputedPropertyKey(
+              memberExpr.property as ESTree.Expression,
+            );
+            this.validateDynamicPropertyKey(property);
             currentValue = this.getInstanceProperty(
               object as Record<string, any>,
               instanceClass,
-              propName,
+              property,
             );
           } else {
             if (memberExpr.property.type !== "Identifier") {
@@ -6730,15 +6769,20 @@ export class Interpreter {
       }
 
       if (memberExpr.computed) {
-        const property = this.evaluateNode(memberExpr.property);
+        const property = this.evaluateComputedPropertyKey(memberExpr.property as ESTree.Expression);
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
           if (object instanceof ClassValue) {
-            throw new InterpreterError("Symbol properties are not supported");
+            return this.assignClassStaticMember(object, property, newValue);
           }
           const instanceClass = this.getInstanceClass(object);
           if (instanceClass) {
-            throw new InterpreterError("Symbol properties are not supported");
+            return this.assignInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              property,
+              newValue,
+            );
           }
           if (typeof object === "object" && object !== null) {
             object[property] = newValue;
@@ -6872,12 +6916,29 @@ export class Interpreter {
 
       if (memberExpr.computed) {
         // Computed property: arr[i] += 1 or obj["key"] += 1
-        const property = this.evaluateNode(memberExpr.property);
+        const property = this.evaluateComputedPropertyKey(memberExpr.property as ESTree.Expression);
 
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
-          if (object instanceof ClassValue || this.getInstanceClass(object)) {
-            throw new InterpreterError("Symbol properties are not supported");
+          if (object instanceof ClassValue) {
+            const currentValue = this.accessClassStaticMember(object, memberExpr);
+            const newValue = computeNewValue(currentValue);
+            return this.assignClassStaticMember(object, property, newValue);
+          }
+          const instanceClass = this.getInstanceClass(object);
+          if (instanceClass) {
+            const currentValue = this.getInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              property,
+            );
+            const newValue = computeNewValue(currentValue);
+            return this.assignInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              property,
+              newValue,
+            );
           }
           if (typeof object === "object" && object !== null) {
             const currentValue = object[property];
@@ -7948,7 +8009,7 @@ export class Interpreter {
     this.validateObjectDestructuring(value);
 
     // Track which keys have been destructured (needed for rest)
-    const destructuredKeys = new Set<string>();
+    const destructuredKeys = new Set<string | symbol>();
     let restElement: ESTree.RestElement | null = null;
 
     // First pass: Process regular properties and track keys
@@ -7961,11 +8022,10 @@ export class Interpreter {
 
       if (property.type === "Property") {
         // Extract the key (property name in source object)
-        let key: string;
+        let key: string | symbol;
         if (property.computed) {
           // Computed property: {[expr]: value} - evaluate the expression to get the key
-          const computedKey = this.evaluateNode(property.key);
-          key = String(computedKey);
+          key = this.evaluateComputedPropertyKey(property.key as ESTree.Expression);
         } else {
           // Static property: {x} or {x: newName} - key is an identifier
           key = (property.key as ESTree.Identifier).name;
@@ -8318,14 +8378,13 @@ export class Interpreter {
     const instanceClass = this.getInstanceClass(object);
     if (instanceClass) {
       if (node.computed) {
-        const property = this.evaluateNode(node.property);
-        if (typeof property === "symbol") {
-          this.validateSymbolProperty(property);
-          throw new InterpreterError("Symbol properties are not supported");
-        }
-        const propName = String(property);
-        validatePropertyName(propName);
-        return this.getInstanceProperty(object as Record<string, any>, instanceClass, propName);
+        const property = this.evaluateComputedPropertyKey(node.property as ESTree.Expression);
+        this.validateDynamicPropertyKey(property);
+        return this.getInstanceProperty(
+          object as Record<string | symbol, any>,
+          instanceClass,
+          property,
+        );
       }
 
       if (node.property.type !== "Identifier") {
@@ -8338,7 +8397,11 @@ export class Interpreter {
       ) {
         validatePropertyName(property);
       }
-      return this.getInstanceProperty(object as Record<string, any>, instanceClass, property);
+      return this.getInstanceProperty(
+        object as Record<string | symbol, any>,
+        instanceClass,
+        property,
+      );
     }
 
     if (node.computed) {
@@ -9738,12 +9801,22 @@ export class Interpreter {
       }
 
       if (memberExpr.computed) {
-        const property = await this.evaluateNodeAsync(memberExpr.property);
+        const property = await this.evaluateComputedPropertyKeyAsync(
+          memberExpr.property as ESTree.Expression,
+        );
         const instanceClass = this.getInstanceClass(object);
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
-          if (object instanceof ClassValue || instanceClass) {
-            throw new InterpreterError("Symbol properties are not supported");
+          if (object instanceof ClassValue) {
+            return await this.assignClassStaticMemberAsync(object, property, value);
+          }
+          if (instanceClass) {
+            return this.assignInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              property,
+              value,
+            );
           }
           if (typeof object === "object" && object !== null) {
             object[property] = value;
@@ -9852,17 +9925,14 @@ export class Interpreter {
         const instanceClass = this.getInstanceClass(object);
         if (instanceClass) {
           if (memberExpr.computed) {
-            const property = await this.evaluateNodeAsync(memberExpr.property);
-            if (typeof property === "symbol") {
-              this.validateSymbolProperty(property);
-              throw new InterpreterError("Symbol properties are not supported");
-            }
-            const propName = String(property);
-            validatePropertyName(propName);
+            const property = await this.evaluateComputedPropertyKeyAsync(
+              memberExpr.property as ESTree.Expression,
+            );
+            this.validateDynamicPropertyKey(property);
             currentValue = this.getInstanceProperty(
               object as Record<string, any>,
               instanceClass,
-              propName,
+              property,
             );
           } else {
             if (memberExpr.property.type !== "Identifier") {
@@ -9982,15 +10052,22 @@ export class Interpreter {
       }
 
       if (memberExpr.computed) {
-        const property = await this.evaluateNodeAsync(memberExpr.property);
+        const property = await this.evaluateComputedPropertyKeyAsync(
+          memberExpr.property as ESTree.Expression,
+        );
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
           if (object instanceof ClassValue) {
-            throw new InterpreterError("Symbol properties are not supported");
+            return await this.assignClassStaticMemberAsync(object, property, newValue);
           }
           const instanceClass = this.getInstanceClass(object);
           if (instanceClass) {
-            throw new InterpreterError("Symbol properties are not supported");
+            return this.assignInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              property,
+              newValue,
+            );
           }
           if (typeof object === "object" && object !== null) {
             object[property] = newValue;
@@ -10124,12 +10201,31 @@ export class Interpreter {
 
       if (memberExpr.computed) {
         // Computed property: arr[i] += 1 or obj["key"] += 1
-        const property = await this.evaluateNodeAsync(memberExpr.property);
+        const property = await this.evaluateComputedPropertyKeyAsync(
+          memberExpr.property as ESTree.Expression,
+        );
 
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
-          if (object instanceof ClassValue || this.getInstanceClass(object)) {
-            throw new InterpreterError("Symbol properties are not supported");
+          if (object instanceof ClassValue) {
+            const currentValue = await this.accessClassStaticMemberAsync(object, memberExpr);
+            const newValue = computeNewValue(currentValue);
+            return await this.assignClassStaticMemberAsync(object, property, newValue);
+          }
+          const instanceClass = this.getInstanceClass(object);
+          if (instanceClass) {
+            const currentValue = this.getInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              property,
+            );
+            const newValue = computeNewValue(currentValue);
+            return this.assignInstanceProperty(
+              object as Record<string, any>,
+              instanceClass,
+              property,
+              newValue,
+            );
           }
           if (typeof object === "object" && object !== null) {
             const currentValue = object[property];
@@ -11029,7 +11125,7 @@ export class Interpreter {
     this.validateObjectDestructuring(value);
 
     // Track which keys have been destructured (needed for rest)
-    const destructuredKeys = new Set<string>();
+    const destructuredKeys = new Set<string | symbol>();
     let restElement: ESTree.RestElement | null = null;
 
     // First pass: Process regular properties and track keys
@@ -11042,11 +11138,10 @@ export class Interpreter {
 
       if (property.type === "Property") {
         // Extract the key (property name in source object)
-        let key: string;
+        let key: string | symbol;
         if (property.computed) {
           // Computed property: {[expr]: value}
-          const computedKey = await this.evaluateNodeAsync(property.key);
-          key = String(computedKey);
+          key = await this.evaluateComputedPropertyKeyAsync(property.key as ESTree.Expression);
         } else {
           // Static property: {x} or {x: newName}
           key = (property.key as ESTree.Identifier).name;
@@ -11181,14 +11276,15 @@ export class Interpreter {
     const instanceClass = this.getInstanceClass(object);
     if (instanceClass) {
       if (node.computed) {
-        const property = await this.evaluateNodeAsync(node.property);
-        if (typeof property === "symbol") {
-          this.validateSymbolProperty(property);
-          throw new InterpreterError("Symbol properties are not supported");
-        }
-        const propName = String(property);
-        validatePropertyName(propName);
-        return this.getInstanceProperty(object as Record<string, any>, instanceClass, propName);
+        const property = await this.evaluateComputedPropertyKeyAsync(
+          node.property as ESTree.Expression,
+        );
+        this.validateDynamicPropertyKey(property);
+        return this.getInstanceProperty(
+          object as Record<string | symbol, any>,
+          instanceClass,
+          property,
+        );
       }
 
       if (node.property.type !== "Identifier") {
@@ -11201,7 +11297,11 @@ export class Interpreter {
       ) {
         validatePropertyName(property);
       }
-      return this.getInstanceProperty(object as Record<string, any>, instanceClass, property);
+      return this.getInstanceProperty(
+        object as Record<string | symbol, any>,
+        instanceClass,
+        property,
+      );
     }
 
     if (node.computed) {
@@ -11518,14 +11618,14 @@ export class Interpreter {
     node: ESTree.ClassDeclaration | ESTree.ClassExpression,
     parentClass: ClassValue | null,
   ): ClassValue {
-    const instanceMethods = new Map<string, FunctionValue>();
-    const staticMethods = new Map<string, FunctionValue>();
-    const instanceGetters = new Map<string, FunctionValue>();
-    const instanceSetters = new Map<string, FunctionValue>();
-    const staticGetters = new Map<string, FunctionValue>();
-    const staticSetters = new Map<string, FunctionValue>();
+    const instanceMethods = new Map<string | symbol, FunctionValue>();
+    const staticMethods = new Map<string | symbol, FunctionValue>();
+    const instanceGetters = new Map<string | symbol, FunctionValue>();
+    const instanceSetters = new Map<string | symbol, FunctionValue>();
+    const staticGetters = new Map<string | symbol, FunctionValue>();
+    const staticSetters = new Map<string | symbol, FunctionValue>();
     const instanceFields: ClassFieldInitializer[] = [];
-    const staticFields = new Map<string, any>();
+    const staticFields = new Map<string | symbol, any>();
     const privateInstanceMethods = new Map<string, FunctionValue>();
     const privateStaticMethods = new Map<string, FunctionValue>();
     const privateStaticFields = new Map<string, any>();
@@ -11584,7 +11684,7 @@ export class Interpreter {
             const methodName = this.extractClassMethodName(methodDef);
 
             if (methodDef.kind !== "constructor") {
-              validatePropertyName(methodName);
+              this.validateDynamicPropertyKey(methodName);
             }
 
             const funcValue = this.createMethodFunction(
@@ -11653,7 +11753,7 @@ export class Interpreter {
 
             const fieldName = this.extractPropertyDefinitionName(propDef);
 
-            validatePropertyName(fieldName);
+            this.validateDynamicPropertyKey(fieldName);
 
             if (propDef.static) {
               const value = propDef.value
@@ -11694,14 +11794,14 @@ export class Interpreter {
     node: ESTree.ClassDeclaration | ESTree.ClassExpression,
     parentClass: ClassValue | null,
   ): Promise<ClassValue> {
-    const instanceMethods = new Map<string, FunctionValue>();
-    const staticMethods = new Map<string, FunctionValue>();
-    const instanceGetters = new Map<string, FunctionValue>();
-    const instanceSetters = new Map<string, FunctionValue>();
-    const staticGetters = new Map<string, FunctionValue>();
-    const staticSetters = new Map<string, FunctionValue>();
+    const instanceMethods = new Map<string | symbol, FunctionValue>();
+    const staticMethods = new Map<string | symbol, FunctionValue>();
+    const instanceGetters = new Map<string | symbol, FunctionValue>();
+    const instanceSetters = new Map<string | symbol, FunctionValue>();
+    const staticGetters = new Map<string | symbol, FunctionValue>();
+    const staticSetters = new Map<string | symbol, FunctionValue>();
     const instanceFields: ClassFieldInitializer[] = [];
-    const staticFields = new Map<string, any>();
+    const staticFields = new Map<string | symbol, any>();
     const privateInstanceMethods = new Map<string, FunctionValue>();
     const privateStaticMethods = new Map<string, FunctionValue>();
     const privateStaticFields = new Map<string, any>();
@@ -11760,7 +11860,7 @@ export class Interpreter {
             const methodName = await this.extractClassMethodNameAsync(methodDef);
 
             if (methodDef.kind !== "constructor") {
-              validatePropertyName(methodName);
+              this.validateDynamicPropertyKey(methodName);
             }
 
             const funcValue = this.createMethodFunction(
@@ -11829,7 +11929,7 @@ export class Interpreter {
 
             const fieldName = await this.extractPropertyDefinitionNameAsync(propDef);
 
-            validatePropertyName(fieldName);
+            this.validateDynamicPropertyKey(fieldName);
 
             if (propDef.static) {
               const value = propDef.value
@@ -11981,14 +12081,13 @@ export class Interpreter {
   /**
    * Extract method name from a MethodDefinition, handling computed properties.
    */
-  private extractClassMethodName(methodDef: ESTree.MethodDefinition): string {
+  private extractClassMethodName(methodDef: ESTree.MethodDefinition): string | symbol {
     if (methodDef.key === null) {
       throw new InterpreterError("Method key is null");
     }
     if (methodDef.computed) {
       // Computed property: [expr]() { }
-      const keyValue = this.evaluateNode(methodDef.key);
-      return String(keyValue);
+      return this.evaluateComputedPropertyKey(methodDef.key as ESTree.Expression);
     } else if (methodDef.key.type === "Identifier") {
       return (methodDef.key as ESTree.Identifier).name;
     } else if (methodDef.key.type === "Literal") {
@@ -12000,13 +12099,14 @@ export class Interpreter {
   /**
    * Async version of extractClassMethodName.
    */
-  private async extractClassMethodNameAsync(methodDef: ESTree.MethodDefinition): Promise<string> {
+  private async extractClassMethodNameAsync(
+    methodDef: ESTree.MethodDefinition,
+  ): Promise<string | symbol> {
     if (methodDef.key === null) {
       throw new InterpreterError("Method key is null");
     }
     if (methodDef.computed) {
-      const keyValue = await this.evaluateNodeAsync(methodDef.key);
-      return String(keyValue);
+      return this.evaluateComputedPropertyKeyAsync(methodDef.key as ESTree.Expression);
     } else if (methodDef.key.type === "Identifier") {
       return (methodDef.key as ESTree.Identifier).name;
     } else if (methodDef.key.type === "Literal") {
@@ -12018,14 +12118,13 @@ export class Interpreter {
   /**
    * Extract field name from a PropertyDefinition, handling computed properties.
    */
-  private extractPropertyDefinitionName(propDef: ESTree.PropertyDefinition): string {
+  private extractPropertyDefinitionName(propDef: ESTree.PropertyDefinition): string | symbol {
     if (propDef.key === null) {
       throw new InterpreterError("Property definition key is null");
     }
     if (propDef.computed) {
       // Computed property: [expr] = value
-      const keyValue = this.evaluateNode(propDef.key as ESTree.Expression);
-      return String(keyValue);
+      return this.evaluateComputedPropertyKey(propDef.key as ESTree.Expression);
     } else if (propDef.key.type === "Identifier") {
       return (propDef.key as ESTree.Identifier).name;
     } else if (propDef.key.type === "Literal") {
@@ -12039,13 +12138,12 @@ export class Interpreter {
    */
   private async extractPropertyDefinitionNameAsync(
     propDef: ESTree.PropertyDefinition,
-  ): Promise<string> {
+  ): Promise<string | symbol> {
     if (propDef.key === null) {
       throw new InterpreterError("Property definition key is null");
     }
     if (propDef.computed) {
-      const keyValue = await this.evaluateNodeAsync(propDef.key as ESTree.Expression);
-      return String(keyValue);
+      return this.evaluateComputedPropertyKeyAsync(propDef.key as ESTree.Expression);
     } else if (propDef.key.type === "Identifier") {
       return (propDef.key as ESTree.Identifier).name;
     } else if (propDef.key.type === "Literal") {
@@ -12098,7 +12196,7 @@ export class Interpreter {
   }
 
   private tagClassMethodMap(
-    methods: Map<string, FunctionValue>,
+    methods: Map<string | symbol, FunctionValue>,
     classValue: ClassValue,
     isStatic: boolean,
   ): void {
@@ -12113,7 +12211,7 @@ export class Interpreter {
    */
   private instantiateClass(classValue: ClassValue, argNodes: ESTree.Expression[]): any {
     // Create instance object
-    let instance: Record<string, any> = Object.create(null);
+    let instance: Record<string | symbol, any> = Object.create(null);
     this.instanceClassMap.set(instance, classValue);
 
     // Evaluate arguments
@@ -12162,7 +12260,7 @@ export class Interpreter {
     classValue: ClassValue,
     argNodes: ESTree.Expression[],
   ): Promise<any> {
-    let instance: Record<string, any> = Object.create(null);
+    let instance: Record<string | symbol, any> = Object.create(null);
     this.instanceClassMap.set(instance, classValue);
 
     const args = await this.evaluateArgumentsAsync(argNodes);
@@ -12226,7 +12324,10 @@ export class Interpreter {
    * Set up instance methods, getters, and setters on an instance object.
    * Walks the inheritance chain (parent first) so child methods override parent methods.
    */
-  private setupInstanceMethods(instance: Record<string, any>, classValue: ClassValue): void {
+  private setupInstanceMethods(
+    instance: Record<string | symbol, any>,
+    classValue: ClassValue,
+  ): void {
     // Build inheritance chain (root first)
     const classChain: ClassValue[] = [];
     let current: ClassValue | null = classValue;
@@ -12242,7 +12343,7 @@ export class Interpreter {
       }
 
       // Add getters/setters via Object.defineProperty
-      const processedProps = new Set<string>();
+      const processedProps = new Set<string | symbol>();
 
       for (const [name, getter] of cls.instanceGetters) {
         const setter = cls.instanceSetters.get(name);
@@ -12276,7 +12377,10 @@ export class Interpreter {
    * Initialize instance fields on an instance object.
    * Walks the inheritance chain (parent first) so child fields can override parent fields.
    */
-  private initializeInstanceFields(instance: Record<string, any>, classValue: ClassValue): void {
+  private initializeInstanceFields(
+    instance: Record<string | symbol, any>,
+    classValue: ClassValue,
+  ): void {
     // Build inheritance chain (root first)
     const classChain: ClassValue[] = [];
     let current: ClassValue | null = classValue;
@@ -12292,7 +12396,7 @@ export class Interpreter {
   }
 
   private initializeInstanceFieldsForClass(
-    instance: Record<string, any>,
+    instance: Record<string | symbol, any>,
     classValue: ClassValue,
   ): void {
     const previousEnvironment = this.environment;
@@ -12323,11 +12427,11 @@ export class Interpreter {
             privateFields = new Map<string, any>();
             classValue.privateFieldStorage.set(instance, privateFields);
           }
-          privateFields.set(field.name, value);
+          privateFields.set(field.name as string, value);
         } else {
           let fieldName = field.name;
           if (field.computed && field.keyNode) {
-            fieldName = String(this.evaluateNode(field.keyNode as ESTree.Expression));
+            fieldName = this.evaluateComputedPropertyKey(field.keyNode as ESTree.Expression);
           }
           instance[fieldName] = value;
         }
@@ -12342,7 +12446,7 @@ export class Interpreter {
    * Async version of initializeInstanceFields.
    */
   private async initializeInstanceFieldsAsync(
-    instance: Record<string, any>,
+    instance: Record<string | symbol, any>,
     classValue: ClassValue,
   ): Promise<void> {
     // Build inheritance chain (root first)
@@ -12360,7 +12464,7 @@ export class Interpreter {
   }
 
   private async initializeInstanceFieldsForClassAsync(
-    instance: Record<string, any>,
+    instance: Record<string | symbol, any>,
     classValue: ClassValue,
   ): Promise<void> {
     const previousEnvironment = this.environment;
@@ -12393,11 +12497,13 @@ export class Interpreter {
             privateFields = new Map<string, any>();
             classValue.privateFieldStorage.set(instance, privateFields);
           }
-          privateFields.set(field.name, value);
+          privateFields.set(field.name as string, value);
         } else {
           let fieldName = field.name;
           if (field.computed && field.keyNode) {
-            fieldName = String(await this.evaluateNodeAsync(field.keyNode as ESTree.Expression));
+            fieldName = await this.evaluateComputedPropertyKeyAsync(
+              field.keyNode as ESTree.Expression,
+            );
           }
           instance[fieldName] = value;
         }
@@ -12671,7 +12777,7 @@ export class Interpreter {
    */
   private lookupSuperMethod(
     superBinding: SuperBinding,
-    methodName: string,
+    methodName: string | symbol,
   ): { method: FunctionValue; definingClass: ClassValue } | null {
     let current = superBinding.parentClass;
     while (current) {
@@ -12686,7 +12792,7 @@ export class Interpreter {
 
   private lookupInstanceMethod(
     classValue: ClassValue,
-    methodName: string,
+    methodName: string | symbol,
   ): { method: FunctionValue; definingClass: ClassValue } | null {
     let current: ClassValue | null = classValue;
     while (current) {
@@ -12704,7 +12810,7 @@ export class Interpreter {
    */
   private lookupSuperGetter(
     superBinding: SuperBinding,
-    propertyName: string,
+    propertyName: string | symbol,
   ): { getter: FunctionValue; definingClass: ClassValue } | null {
     let current = superBinding.parentClass;
     while (current) {
@@ -12719,7 +12825,7 @@ export class Interpreter {
 
   private lookupInstanceGetter(
     classValue: ClassValue,
-    propertyName: string,
+    propertyName: string | symbol,
   ): { getter: FunctionValue; definingClass: ClassValue } | null {
     let current: ClassValue | null = classValue;
     while (current) {
@@ -12737,7 +12843,7 @@ export class Interpreter {
    */
   private lookupSuperSetter(
     superBinding: SuperBinding,
-    propertyName: string,
+    propertyName: string | symbol,
   ): { setter: FunctionValue; definingClass: ClassValue } | null {
     let current = superBinding.parentClass;
     while (current) {
@@ -12752,7 +12858,7 @@ export class Interpreter {
 
   private lookupInstanceSetter(
     classValue: ClassValue,
-    propertyName: string,
+    propertyName: string | symbol,
   ): { setter: FunctionValue; definingClass: ClassValue } | null {
     let current: ClassValue | null = classValue;
     while (current) {
@@ -12767,7 +12873,7 @@ export class Interpreter {
 
   private lookupSuperStaticMethod(
     superBinding: SuperBinding,
-    methodName: string,
+    methodName: string | symbol,
   ): { method: FunctionValue; definingClass: ClassValue } | null {
     let current = superBinding.parentClass;
     while (current) {
@@ -12782,7 +12888,7 @@ export class Interpreter {
 
   private lookupSuperStaticGetter(
     superBinding: SuperBinding,
-    propertyName: string,
+    propertyName: string | symbol,
   ): { getter: FunctionValue; definingClass: ClassValue } | null {
     let current = superBinding.parentClass;
     while (current) {
@@ -12797,7 +12903,7 @@ export class Interpreter {
 
   private lookupSuperStaticSetter(
     superBinding: SuperBinding,
-    propertyName: string,
+    propertyName: string | symbol,
   ): { setter: FunctionValue; definingClass: ClassValue } | null {
     let current = superBinding.parentClass;
     while (current) {
@@ -12811,9 +12917,9 @@ export class Interpreter {
   }
 
   private getInstanceProperty(
-    instance: Record<string, any>,
+    instance: Record<string | symbol, any>,
     classValue: ClassValue,
-    propertyName: string,
+    propertyName: string | symbol,
   ): any {
     if (Object.prototype.hasOwnProperty.call(instance, propertyName)) {
       return instance[propertyName];
@@ -12833,9 +12939,9 @@ export class Interpreter {
   }
 
   private assignInstanceProperty(
-    instance: Record<string, any>,
+    instance: Record<string | symbol, any>,
     classValue: ClassValue,
-    propertyName: string,
+    propertyName: string | symbol,
     value: any,
   ): any {
     const setterResult = this.lookupInstanceSetter(classValue, propertyName);
@@ -12853,10 +12959,10 @@ export class Interpreter {
    */
   private accessClassStaticMember(classValue: ClassValue, node: ESTree.MemberExpression): any {
     const propertyName = node.computed
-      ? String(this.evaluateNode(node.property))
+      ? this.evaluateComputedPropertyKey(node.property as ESTree.Expression)
       : (node.property as ESTree.Identifier).name;
 
-    validatePropertyName(propertyName);
+    this.validateDynamicPropertyKey(propertyName);
 
     // Check for static method
     const method = classValue.staticMethods.get(propertyName);
@@ -12887,10 +12993,10 @@ export class Interpreter {
     node: ESTree.MemberExpression,
   ): Promise<any> {
     const propertyName = node.computed
-      ? String(await this.evaluateNodeAsync(node.property))
+      ? await this.evaluateComputedPropertyKeyAsync(node.property as ESTree.Expression)
       : (node.property as ESTree.Identifier).name;
 
-    validatePropertyName(propertyName);
+    this.validateDynamicPropertyKey(propertyName);
 
     const method = classValue.staticMethods.get(propertyName);
     if (method) {
@@ -12912,8 +13018,12 @@ export class Interpreter {
   /**
    * Assign a value to a static class member.
    */
-  private assignClassStaticMember(classValue: ClassValue, propertyName: string, value: any): any {
-    validatePropertyName(propertyName);
+  private assignClassStaticMember(
+    classValue: ClassValue,
+    propertyName: string | symbol,
+    value: any,
+  ): any {
+    this.validateDynamicPropertyKey(propertyName);
 
     const setter = classValue.staticSetters.get(propertyName);
     if (setter) {
@@ -12930,10 +13040,10 @@ export class Interpreter {
    */
   private async assignClassStaticMemberAsync(
     classValue: ClassValue,
-    propertyName: string,
+    propertyName: string | symbol,
     value: any,
   ): Promise<any> {
-    validatePropertyName(propertyName);
+    this.validateDynamicPropertyKey(propertyName);
 
     const setter = classValue.staticSetters.get(propertyName);
     if (setter) {
@@ -12962,10 +13072,10 @@ export class Interpreter {
     }
 
     const propertyName = node.computed
-      ? String(this.evaluateNode(node.property))
+      ? this.evaluateComputedPropertyKey(node.property as ESTree.Expression)
       : (node.property as ESTree.Identifier).name;
 
-    validatePropertyName(propertyName);
+    this.validateDynamicPropertyKey(propertyName);
 
     if (this.currentSuperBinding.isStatic) {
       const setterResult = this.lookupSuperStaticSetter(this.currentSuperBinding, propertyName);
@@ -13016,10 +13126,10 @@ export class Interpreter {
     }
 
     const propertyName = node.computed
-      ? String(await this.evaluateNodeAsync(node.property))
+      ? await this.evaluateComputedPropertyKeyAsync(node.property as ESTree.Expression)
       : (node.property as ESTree.Identifier).name;
 
-    validatePropertyName(propertyName);
+    this.validateDynamicPropertyKey(propertyName);
 
     if (this.currentSuperBinding.isStatic) {
       const setterResult = this.lookupSuperStaticSetter(this.currentSuperBinding, propertyName);
@@ -13179,10 +13289,10 @@ export class Interpreter {
 
     // Get the property name
     const propertyName = node.computed
-      ? String(this.evaluateNode(node.property))
+      ? this.evaluateComputedPropertyKey(node.property as ESTree.Expression)
       : (node.property as ESTree.Identifier).name;
 
-    validatePropertyName(propertyName);
+    this.validateDynamicPropertyKey(propertyName);
 
     // First check for a method
     if (this.currentSuperBinding.isStatic) {
