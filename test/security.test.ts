@@ -511,6 +511,20 @@ describe("Security", () => {
           `);
         }).toThrow("Symbol 'Symbol(Symbol.toStringTag)' is not allowed for security reasons");
       });
+
+      it("should block dangerous symbol access through computed destructuring", () => {
+        const sym = Symbol.toStringTag;
+        const box = { [Symbol.toStringTag]: "secret" };
+        const interpreter = new Interpreter({
+          globals: { sym, box },
+        });
+        expect(() => {
+          interpreter.evaluate(`
+            const { [sym]: leaked } = box;
+            leaked;
+          `);
+        }).toThrow("Symbol 'Symbol(Symbol.toStringTag)' is not allowed for security reasons");
+      });
     });
 
     describe("host function bypass prevention", () => {
