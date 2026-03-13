@@ -4059,6 +4059,38 @@ describe("Module System", () => {
       expect(authorizeCount).toBe(2);
     });
 
+    test("should reuse authorize fast-path entries for empty-string module paths", async () => {
+      let resolveCount = 0;
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "./root") {
+            return null;
+          }
+          resolveCount += 1;
+          return {
+            type: "source",
+            code: "export const value = 1;",
+            path: "",
+          };
+        },
+        authorize(specifier, importer, resolvedPath) {
+          return specifier === "./root" && importer === "main.js" && resolvedPath === "";
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        'import { value } from "./root"; import { value as second } from "./root"; export const out = [value, second];',
+        { path: "main.js" },
+      );
+
+      expect(result.out).toEqual([1, 1]);
+      expect(resolveCount).toBe(1);
+    });
+
     test("should re-authorize cached modules for different importers when authorize hook is used", async () => {
       let resolveCount = 0;
       const resolver: ModuleResolver = {

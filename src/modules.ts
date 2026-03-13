@@ -268,7 +268,7 @@ export class ModuleSystem {
 
       if (this.options.cache && this.options.resolver.authorize) {
         const cachedPath = this.getResolvedPathForContext(resolutionContextKey);
-        if (cachedPath) {
+        if (cachedPath !== undefined) {
           const existingByPath = this.cacheByPath.get(cachedPath);
           if (existingByPath) {
             const isAuthorized = await this.options.resolver.authorize(
