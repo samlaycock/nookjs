@@ -23,7 +23,7 @@ import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from ".
 import { InterpreterError, SecurityError, ErrorCode } from "./errors";
 import { ModuleSystem } from "./modules";
 import { ReadOnlyProxy, PROXY_TARGET, sanitizeErrorStack, unwrapForNative } from "./readonly-proxy";
-import { ResourceExhaustedError } from "./resource-tracker";
+import { ResourceExhaustedError, ResourceTracker } from "./resource-tracker";
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const GeneratorFunction = Object.getPrototypeOf(function* () {}).constructor;
@@ -2566,18 +2566,7 @@ export class Interpreter {
 
   // Integrated resource tracking state
   private integratedResourceTracking = false;
-  private integratedLimits: ResourceLimits = {};
-  private integratedHistorySize = 100;
-  private integratedHistory: ResourceHistoryEntry[] = [];
-  private integratedEvaluationNumber = 0;
-  private integratedCumulativeMemory = 0;
-  private integratedCumulativeIterations = 0;
-  private integratedCumulativeFunctionCalls = 0;
-  private integratedCumulativeCpuTime = 0;
-  private integratedPeakMemory = 0;
-  private integratedLargestEvaluationMemory = 0;
-  private integratedLargestEvaluationIterations = 0;
-  private integratedExhaustedLimit: keyof ResourceLimits | null = null;
+  private integratedResourceTracker: ResourceTracker | null = null;
 
   private moduleSystem: ModuleSystem | null = null;
   private moduleImportMetaStack: any[] = [];
@@ -2618,6 +2607,7 @@ export class Interpreter {
     this.injectGlobals(this.constructorGlobals);
 
     this.integratedResourceTracking = options?.resourceTracking ?? false;
+    this.integratedResourceTracker = this.integratedResourceTracking ? new ResourceTracker() : null;
     this.nodeHandlers = this.createNodeHandlers();
   }
 
@@ -2984,9 +2974,8 @@ export class Interpreter {
    */
   private checkExecutionLimits(): void {
     const abortSignal = this.getCurrentAbortSignal();
-    const maxCpuTime = this.integratedResourceTracking
-      ? this.integratedLimits.maxCpuTime
-      : undefined;
+    const tracker = this.integratedResourceTracker;
+    const maxCpuTime = tracker?.getLimit("maxCpuTime");
     if (!abortSignal && maxCpuTime === undefined) {
       return;
     }
@@ -3001,9 +2990,8 @@ export class Interpreter {
     }
 
     if (maxCpuTime !== undefined) {
-      const cpuTimeMs = this.integratedCumulativeCpuTime + this.getCurrentEvaluationCpuTime();
+      const cpuTimeMs = (tracker?.getStats().cpuTimeMs ?? 0) + this.getCurrentEvaluationCpuTime();
       if (cpuTimeMs >= maxCpuTime) {
-        this.integratedExhaustedLimit = "maxCpuTime";
         throw new ResourceExhaustedError("maxCpuTime", cpuTimeMs, maxCpuTime);
       }
     }
@@ -3081,13 +3069,7 @@ export class Interpreter {
   }
 
   private beginEvaluation(options?: EvaluateOptions): void {
-    if (this.integratedResourceTracking && this.integratedExhaustedLimit !== null) {
-      throw new ResourceExhaustedError(
-        this.integratedExhaustedLimit,
-        this.getResourceStats().limitStatus[this.integratedExhaustedLimit]?.used ?? 0,
-        this.integratedLimits[this.integratedExhaustedLimit] ?? 0,
-      );
-    }
+    this.integratedResourceTracker?.beginEvaluation();
 
     const context = new EvaluationContext();
     context.validator = options?.validator;
@@ -3156,42 +3138,14 @@ export class Interpreter {
 
     const currentMemoryUsage = this.getCurrentMemoryUsage();
 
-    if (this.integratedResourceTracking) {
+    if (this.integratedResourceTracker) {
       const cpuTimeMs = this.getCurrentEvaluationCpuTime(this.statsEndTime);
-      this.integratedEvaluationNumber++;
-
-      if (currentMemoryUsage > this.integratedPeakMemory) {
-        this.integratedPeakMemory = currentMemoryUsage;
-      }
-
-      if (currentMemoryUsage > this.integratedLargestEvaluationMemory) {
-        this.integratedLargestEvaluationMemory = currentMemoryUsage;
-      }
-
-      if (this.statsLoopIterations > this.integratedLargestEvaluationIterations) {
-        this.integratedLargestEvaluationIterations = this.statsLoopIterations;
-      }
-
-      this.integratedCumulativeMemory += currentMemoryUsage;
-      this.integratedCumulativeIterations += this.statsLoopIterations;
-      this.integratedCumulativeFunctionCalls += this.statsFunctionCalls;
-      this.integratedCumulativeCpuTime += cpuTimeMs;
-
-      if (this.integratedHistorySize > 0) {
-        this.integratedHistory.push({
-          timestamp: new Date(),
-          memoryBytes: currentMemoryUsage,
-          iterations: this.statsLoopIterations,
-          functionCalls: this.statsFunctionCalls,
-          evaluationNumber: this.integratedEvaluationNumber,
-        });
-
-        if (this.integratedHistory.length > this.integratedHistorySize) {
-          this.integratedHistory.shift();
-        }
-      }
-
-      this.checkIntegratedLimits();
+      this.integratedResourceTracker.endEvaluation(
+        currentMemoryUsage,
+        this.statsLoopIterations,
+        this.statsFunctionCalls,
+        cpuTimeMs,
+      );
     }
 
     // Always clean up per-call globals after execution.
@@ -3485,16 +3439,14 @@ export class Interpreter {
     };
   }
 
-  private checkIntegratedLimits(): void {
-    const stats = this.getResourceStats();
-
-    for (const key of Object.keys(stats.limitStatus) as (keyof ResourceLimits)[]) {
-      const status = stats.limitStatus[key];
-      if (status && status.used >= status.limit) {
-        this.integratedExhaustedLimit = key;
-        return;
-      }
+  private requireIntegratedResourceTracker(): ResourceTracker {
+    if (!this.integratedResourceTracking || this.integratedResourceTracker === null) {
+      throw new InterpreterError(
+        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
+      );
     }
+
+    return this.integratedResourceTracker;
   }
 
   /**
@@ -3514,58 +3466,7 @@ export class Interpreter {
    * ```
    */
   getResourceStats(): ResourceStats {
-    if (!this.integratedResourceTracking) {
-      throw new InterpreterError(
-        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
-      );
-    }
-
-    const limitStatus: ResourceStats["limitStatus"] = {};
-
-    for (const key of Object.keys(this.integratedLimits) as (keyof ResourceLimits)[]) {
-      const limit = this.integratedLimits[key];
-      if (limit === undefined) continue;
-
-      let used = 0;
-      switch (key) {
-        case "maxTotalMemory":
-          used = this.integratedCumulativeMemory;
-          break;
-        case "maxTotalIterations":
-          used = this.integratedCumulativeIterations;
-          break;
-        case "maxFunctionCalls":
-          used = this.integratedCumulativeFunctionCalls;
-          break;
-        case "maxCpuTime":
-          used = this.integratedCumulativeCpuTime;
-          break;
-        case "maxEvaluations":
-          used = this.integratedEvaluationNumber;
-          break;
-      }
-
-      limitStatus[key] = {
-        used,
-        limit,
-        remaining: Math.max(0, limit - used),
-      };
-    }
-
-    return {
-      memoryBytes: this.integratedCumulativeMemory,
-      iterations: this.integratedCumulativeIterations,
-      functionCalls: this.integratedCumulativeFunctionCalls,
-      cpuTimeMs: this.integratedCumulativeCpuTime,
-      evaluations: this.integratedEvaluationNumber,
-      peakMemoryBytes: this.integratedPeakMemory,
-      largestEvaluation: {
-        memory: this.integratedLargestEvaluationMemory,
-        iterations: this.integratedLargestEvaluationIterations,
-      },
-      isExhausted: this.integratedExhaustedLimit !== null,
-      limitStatus,
-    };
+    return this.requireIntegratedResourceTracker().getStats();
   }
 
   /**
@@ -3583,22 +3484,7 @@ export class Interpreter {
    * ```
    */
   resetResourceStats(): void {
-    if (!this.integratedResourceTracking) {
-      throw new InterpreterError(
-        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
-      );
-    }
-
-    this.integratedCumulativeMemory = 0;
-    this.integratedCumulativeIterations = 0;
-    this.integratedCumulativeFunctionCalls = 0;
-    this.integratedCumulativeCpuTime = 0;
-    this.integratedPeakMemory = 0;
-    this.integratedLargestEvaluationMemory = 0;
-    this.integratedLargestEvaluationIterations = 0;
-    this.integratedExhaustedLimit = null;
-    this.integratedHistory = [];
-    this.integratedEvaluationNumber = 0;
+    this.requireIntegratedResourceTracker().reset();
   }
 
   /**
@@ -3618,13 +3504,7 @@ export class Interpreter {
    * ```
    */
   getResourceHistory(): ResourceHistoryEntry[] {
-    if (!this.integratedResourceTracking) {
-      throw new InterpreterError(
-        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
-      );
-    }
-
-    return [...this.integratedHistory];
+    return this.requireIntegratedResourceTracker().getHistory();
   }
 
   /**
@@ -3642,13 +3522,7 @@ export class Interpreter {
    * ```
    */
   setResourceLimit(key: keyof ResourceLimits, value: number): void {
-    if (!this.integratedResourceTracking) {
-      throw new InterpreterError(
-        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
-      );
-    }
-
-    this.integratedLimits[key] = value;
+    this.requireIntegratedResourceTracker().setLimit(key, value);
   }
 
   /**
@@ -3667,13 +3541,7 @@ export class Interpreter {
    * ```
    */
   getResourceLimit(key: keyof ResourceLimits): number | undefined {
-    if (!this.integratedResourceTracking) {
-      throw new InterpreterError(
-        "Resource tracking is not enabled. Create Interpreter with { resourceTracking: true }.",
-      );
-    }
-
-    return this.integratedLimits[key];
+    return this.requireIntegratedResourceTracker().getLimit(key);
   }
 
   /**

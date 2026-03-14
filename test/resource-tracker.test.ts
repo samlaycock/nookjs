@@ -350,6 +350,67 @@ describe("Resource Tracking", () => {
           expect(result).toBe(2);
         });
 
+        test("should match standalone ResourceTracker stats and history semantics", () => {
+          const interpreter = new Interpreter({
+            ...ES2022,
+            resourceTracking: true,
+          });
+          const tracker = new ResourceTracker();
+
+          interpreter.setResourceLimit("maxEvaluations", 10);
+          interpreter.setResourceLimit("maxTotalIterations", 1000);
+          tracker.setLimit("maxEvaluations", 10);
+          tracker.setLimit("maxTotalIterations", 1000);
+
+          const originalNow = Object.getOwnPropertyDescriptor(performance, "now");
+          let currentTime = 0;
+
+          Object.defineProperty(performance, "now", {
+            configurable: true,
+            value: () => {
+              const value = currentTime;
+              currentTime += 5;
+              return value;
+            },
+          });
+
+          try {
+            for (const code of [
+              "let sum = 0; for (let i = 0; i < 10; i++) { sum += i; }",
+              `
+                function double(value) { return value * 2; }
+                double(2);
+                double(4);
+              `,
+            ]) {
+              tracker.beginEvaluation();
+              interpreter.evaluate(code);
+
+              const history = interpreter.getResourceHistory();
+              const latestEntry = history[history.length - 1];
+              if (!latestEntry) {
+                throw new Error("Expected resource history entry after evaluation");
+              }
+
+              tracker.endEvaluation(
+                latestEntry.memoryBytes,
+                latestEntry.iterations,
+                latestEntry.functionCalls,
+                5,
+              );
+            }
+          } finally {
+            if (originalNow) {
+              Object.defineProperty(performance, "now", originalNow);
+            }
+          }
+
+          expect(interpreter.getResourceStats()).toEqual(tracker.getStats());
+          expect(
+            interpreter.getResourceHistory().map(({ timestamp: _timestamp, ...entry }) => entry),
+          ).toEqual(tracker.getHistory().map(({ timestamp: _timestamp, ...entry }) => entry));
+        });
+
         test("should work with async evaluation", async () => {
           const interpreter = new Interpreter({
             ...ES2022,
