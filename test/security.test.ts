@@ -525,6 +525,19 @@ describe("Security", () => {
           `);
         }).toThrow("Symbol 'Symbol(Symbol.toStringTag)' is not allowed for security reasons");
       });
+
+      it("should block dangerous symbol access in update expressions", () => {
+        const sym = Symbol.toPrimitive;
+        const interpreter = new Interpreter({
+          globals: { sym },
+        });
+        expect(() => {
+          interpreter.evaluate(`
+            const obj = { [sym]: 0 };
+            obj[sym]++;
+          `);
+        }).toThrow("Symbol 'Symbol(Symbol.toPrimitive)' is not allowed for security reasons");
+      });
     });
 
     describe("host function bypass prevention", () => {
