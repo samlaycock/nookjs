@@ -7,17 +7,15 @@ const FUZZ_SEED_ENV_KEY = "NOOK_FUZZ_SEED";
 
 type FuzzHarness = ReturnType<typeof createFuzzHarness>;
 
-const resolveFuzzSeed = (): number => {
-  const configuredSeed = Bun.env[FUZZ_SEED_ENV_KEY];
-
+const resolveFuzzSeed = (configuredSeed = Bun.env[FUZZ_SEED_ENV_KEY]): number => {
   if (configuredSeed === undefined) {
     return DEFAULT_FUZZ_SEED;
   }
 
   const parsedSeed = Number.parseInt(configuredSeed, 10);
-  if (!Number.isSafeInteger(parsedSeed)) {
+  if (!Number.isSafeInteger(parsedSeed) || parsedSeed < 0) {
     throw new Error(
-      `Expected ${FUZZ_SEED_ENV_KEY} to be a safe integer, received "${configuredSeed}"`,
+      `Expected ${FUZZ_SEED_ENV_KEY} to be a non-negative safe integer, received "${configuredSeed}"`,
     );
   }
 
@@ -103,6 +101,8 @@ const fuzzIt = (name: string, fn: () => void) =>
         `Fuzz test "${name}" failed. Replay with ${FUZZ_SEED_ENV_KEY}=${baseFuzzSeed} (case seed ${caseSeed}).`,
         { cause: error },
       );
+    } finally {
+      activeFuzzHarness = null;
     }
   });
 
@@ -145,6 +145,12 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
 
         expect(firstSequence).toEqual(secondSequence);
       });
+
+      it("should reject negative configured seeds", () => {
+        expect(() => resolveFuzzSeed("-1")).toThrow(
+          `Expected ${FUZZ_SEED_ENV_KEY} to be a non-negative safe integer, received "-1"`,
+        );
+      });
     });
 
     const getFuzzHarness = (): FuzzHarness => {
@@ -172,6 +178,12 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
 
     // Helper to pick random element from array
     const randomElement = <T>(arr: T[]): T => getFuzzHarness().randomElement(arr);
+
+    it("should reject fuzz helper access outside a seeded test", () => {
+      expect(() => randomInt(0, 1)).toThrow(
+        "Fuzz harness accessed before test seed initialization",
+      );
+    });
 
     // ============================================================================
     // SPREAD AND REST OPERATORS FUZZING
