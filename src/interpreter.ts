@@ -6391,6 +6391,9 @@ export class Interpreter {
       const property = memberExpr.computed
         ? this.evaluateComputedPropertyKey(memberExpr.property as ESTree.Expression)
         : (memberExpr.property as ESTree.Identifier).name;
+      if (memberExpr.computed) {
+        this.validateDynamicPropertyKey(property);
+      }
 
       const currentValue = object[property];
 
