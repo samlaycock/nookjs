@@ -6394,8 +6394,18 @@ export class Interpreter {
       if (memberExpr.computed) {
         this.validateDynamicPropertyKey(property);
       }
+      const instanceClass = this.getInstanceClass(object);
 
-      const currentValue = object[property];
+      const currentValue =
+        object instanceof ClassValue
+          ? this.accessClassStaticMember(object, memberExpr)
+          : instanceClass
+            ? this.getInstanceProperty(
+                object as Record<string | symbol, any>,
+                instanceClass,
+                property,
+              )
+            : object[property];
 
       const [newValue, returnValue] = this.applyUpdateOperator(
         node.operator,
@@ -6403,6 +6413,19 @@ export class Interpreter {
         node.prefix,
       );
 
+      if (object instanceof ClassValue) {
+        this.assignClassStaticMember(object, property, newValue);
+        return returnValue;
+      }
+      if (instanceClass) {
+        this.assignInstanceProperty(
+          object as Record<string | symbol, any>,
+          instanceClass,
+          property,
+          newValue,
+        );
+        return returnValue;
+      }
       object[property] = newValue;
       return returnValue;
     }
