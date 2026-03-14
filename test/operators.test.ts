@@ -1676,6 +1676,22 @@ describe("Operators", () => {
           `);
           expect(result).toBe(2);
         });
+
+        it("should support class static updates for string and symbol keys", () => {
+          const interpreter = new Interpreter(ES2024);
+          const result = interpreter.evaluate(`
+            const key = Symbol("count");
+            class Counter {
+              static count = 1;
+              static [key] = 2;
+            }
+
+            const first = Counter.count++;
+            const second = ++Counter[key];
+            [first, Counter.count, second, Counter[key]];
+          `);
+          expect(result).toEqual([1, 2, 3, 3]);
+        });
       });
 
       describe("Nested member expressions", () => {
