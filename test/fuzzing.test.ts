@@ -2,6 +2,110 @@ import { describe, it, expect } from "bun:test";
 
 import { Interpreter } from "../src/interpreter";
 
+const DEFAULT_FUZZ_SEED = 123_456_789;
+const FUZZ_SEED_ENV_KEY = "NOOK_FUZZ_SEED";
+
+type FuzzHarness = ReturnType<typeof createFuzzHarness>;
+
+const resolveFuzzSeed = (): number => {
+  const configuredSeed = Bun.env[FUZZ_SEED_ENV_KEY];
+
+  if (configuredSeed === undefined) {
+    return DEFAULT_FUZZ_SEED;
+  }
+
+  const parsedSeed = Number.parseInt(configuredSeed, 10);
+  if (!Number.isSafeInteger(parsedSeed)) {
+    throw new Error(
+      `Expected ${FUZZ_SEED_ENV_KEY} to be a safe integer, received "${configuredSeed}"`,
+    );
+  }
+
+  return parsedSeed >>> 0;
+};
+
+const hashFuzzLabel = (label: string): number => {
+  let hash = 2_166_136_261;
+
+  for (const char of label) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16_777_619);
+  }
+
+  return hash >>> 0;
+};
+
+const createFuzzHarness = (seed: number) => {
+  let state = seed >>> 0;
+
+  const next = () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+
+  const randomInt = (min: number, max: number) => {
+    const lower = Math.ceil(Math.min(min, max));
+    const upper = Math.floor(Math.max(min, max));
+    return Math.floor(next() * (upper - lower + 1)) + lower;
+  };
+
+  const randomBool = () => next() > 0.5;
+
+  const randomString = (length?: number) => {
+    const len = length ?? randomInt(0, 10);
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    return Array.from({ length: len }, () => chars[randomInt(0, chars.length - 1)]).join("");
+  };
+
+  const randomArray = (length?: number) => {
+    const len = length ?? randomInt(0, 10);
+    return Array.from({ length: len }, () => randomInt(-100, 100));
+  };
+
+  const randomObject = (keyCount?: number) => {
+    const count = keyCount ?? randomInt(0, 10);
+    const obj: Record<string, any> = {};
+
+    for (let i = 0; i < count; i++) {
+      obj[`key${i}`] = randomInt(-100, 100);
+    }
+
+    return obj;
+  };
+
+  const randomElement = <T>(arr: T[]): T => arr[randomInt(0, arr.length - 1)]!;
+
+  return {
+    randomInt,
+    randomBool,
+    randomString,
+    randomArray,
+    randomObject,
+    randomElement,
+  };
+};
+
+const baseFuzzSeed = resolveFuzzSeed();
+let activeFuzzHarness: FuzzHarness | null = null;
+
+const fuzzIt = (name: string, fn: () => void) =>
+  it(`${name} [seed=${baseFuzzSeed}]`, () => {
+    const caseSeed = hashFuzzLabel(`${baseFuzzSeed}:${name}`);
+    activeFuzzHarness = createFuzzHarness(caseSeed);
+
+    try {
+      fn();
+    } catch (error) {
+      throw new Error(
+        `Fuzz test "${name}" failed. Replay with ${FUZZ_SEED_ENV_KEY}=${baseFuzzSeed} (case seed ${caseSeed}).`,
+        { cause: error },
+      );
+    }
+  });
+
 /**
  * Comprehensive fuzzing test suite for the JavaScript interpreter
  * Tests randomly generated code to discover edge cases and potential bugs
@@ -18,38 +122,56 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     // HELPER FUNCTIONS
     // ============================================================================
 
+    describe("Seeded Fuzz Harness", () => {
+      fuzzIt("should replay the same generated values for the same seed", () => {
+        const first = createFuzzHarness(12_345);
+        const second = createFuzzHarness(12_345);
+
+        const firstSequence = {
+          ints: Array.from({ length: 5 }, () => first.randomInt(-100, 100)),
+          bools: Array.from({ length: 5 }, () => first.randomBool()),
+          strings: Array.from({ length: 3 }, () => first.randomString()),
+          arrays: Array.from({ length: 3 }, () => first.randomArray()),
+          object: first.randomObject(4),
+        };
+
+        const secondSequence = {
+          ints: Array.from({ length: 5 }, () => second.randomInt(-100, 100)),
+          bools: Array.from({ length: 5 }, () => second.randomBool()),
+          strings: Array.from({ length: 3 }, () => second.randomString()),
+          arrays: Array.from({ length: 3 }, () => second.randomArray()),
+          object: second.randomObject(4),
+        };
+
+        expect(firstSequence).toEqual(secondSequence);
+      });
+    });
+
+    const getFuzzHarness = (): FuzzHarness => {
+      if (activeFuzzHarness === null) {
+        throw new Error("Fuzz harness accessed before test seed initialization");
+      }
+
+      return activeFuzzHarness;
+    };
+
     // Helper to generate random integers
-    const randomInt = (min: number, max: number) =>
-      Math.floor(Math.random() * (max - min + 1)) + min;
+    const randomInt = (min: number, max: number) => getFuzzHarness().randomInt(min, max);
 
     // Helper to generate random booleans
-    const randomBool = () => Math.random() > 0.5;
+    const randomBool = () => getFuzzHarness().randomBool();
 
     // Helper to generate random strings
-    const randomString = (length?: number) => {
-      const len = length ?? randomInt(0, 10);
-      const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-      return Array.from({ length: len }, () => chars[randomInt(0, chars.length - 1)]).join("");
-    };
+    const randomString = (length?: number) => getFuzzHarness().randomString(length);
 
     // Helper to generate random arrays
-    const randomArray = (length?: number) => {
-      const len = length ?? randomInt(0, 10);
-      return Array.from({ length: len }, () => randomInt(-100, 100));
-    };
+    const randomArray = (length?: number) => getFuzzHarness().randomArray(length);
 
     // Helper to generate random objects
-    const randomObject = (keyCount?: number) => {
-      const count = keyCount ?? randomInt(0, 10);
-      const obj: Record<string, any> = {};
-      for (let i = 0; i < count; i++) {
-        obj[`key${i}`] = randomInt(-100, 100);
-      }
-      return obj;
-    };
+    const randomObject = (keyCount?: number) => getFuzzHarness().randomObject(keyCount);
 
     // Helper to pick random element from array
-    const randomElement = <T>(arr: T[]): T => arr[randomInt(0, arr.length - 1)]!;
+    const randomElement = <T>(arr: T[]): T => getFuzzHarness().randomElement(arr);
 
     // ============================================================================
     // SPREAD AND REST OPERATORS FUZZING
@@ -57,7 +179,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
 
     describe("Spread and Rest Operators", () => {
       describe("Array Spread Fuzzing", () => {
-        it("should handle random nested array spreads", () => {
+        fuzzIt("should handle random nested array spreads", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const depth = randomInt(1, 3);
@@ -76,7 +198,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle random mix of spreads and elements", () => {
+        fuzzIt("should handle random mix of spreads and elements", () => {
           for (let i = 0; i < 100; i++) {
             const interpreter = new Interpreter();
             const elementCount = randomInt(1, 10);
@@ -84,7 +206,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
             const elements: string[] = [];
 
             for (let j = 0; j < elementCount; j++) {
-              if (Math.random() > 0.5) {
+              if (randomBool()) {
                 elements.push("...arr");
               } else {
                 elements.push(String(randomInt(-100, 100)));
@@ -97,7 +219,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle spreading random length arrays", () => {
+        fuzzIt("should handle spreading random length arrays", () => {
           for (let i = 0; i < 100; i++) {
             const interpreter = new Interpreter();
             const arr = randomArray();
@@ -107,7 +229,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle multiple random arrays spread together", () => {
+        fuzzIt("should handle multiple random arrays spread together", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const arrayCount = randomInt(2, 5);
@@ -130,7 +252,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
       });
 
       describe("Object Spread Fuzzing", () => {
-        it("should handle random nested object spreads", () => {
+        fuzzIt("should handle random nested object spreads", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const depth = randomInt(1, 3);
@@ -149,7 +271,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle random mix of spreads and properties", () => {
+        fuzzIt("should handle random mix of spreads and properties", () => {
           for (let i = 0; i < 100; i++) {
             const interpreter = new Interpreter();
             const propCount = randomInt(1, 8);
@@ -157,7 +279,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
             const props: string[] = [];
 
             for (let j = 0; j < propCount; j++) {
-              if (Math.random() > 0.5) {
+              if (randomBool()) {
                 props.push("...obj");
               } else {
                 props.push(`p${j}: ${randomInt(-100, 100)}`);
@@ -171,7 +293,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle spreading random objects", () => {
+        fuzzIt("should handle spreading random objects", () => {
           for (let i = 0; i < 100; i++) {
             const interpreter = new Interpreter();
             const obj = randomObject();
@@ -181,7 +303,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle random property overrides", () => {
+        fuzzIt("should handle random property overrides", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const key = `key${randomInt(0, 5)}`;
@@ -196,7 +318,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
       });
 
       describe("Call Spread Fuzzing", () => {
-        it("should handle random number of spread arguments", () => {
+        fuzzIt("should handle random number of spread arguments", () => {
           for (let i = 0; i < 100; i++) {
             const interpreter = new Interpreter();
             const argCount = randomInt(0, 10);
@@ -214,7 +336,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle random mix of spread and regular arguments", () => {
+        fuzzIt("should handle random mix of spread and regular arguments", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const spreadCount = randomInt(1, 4);
@@ -245,7 +367,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle spreading into functions with varying parameter counts", () => {
+        fuzzIt("should handle spreading into functions with varying parameter counts", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const paramCount = randomInt(0, 5);
@@ -268,7 +390,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
       });
 
       describe("Array Rest Fuzzing", () => {
-        it("should handle rest at random positions", () => {
+        fuzzIt("should handle rest at random positions", () => {
           for (let i = 0; i < 100; i++) {
             const interpreter = new Interpreter();
             const totalLength = randomInt(5, 15);
@@ -290,7 +412,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle rest with random length arrays", () => {
+        fuzzIt("should handle rest with random length arrays", () => {
           for (let i = 0; i < 100; i++) {
             const interpreter = new Interpreter();
             const arr = randomArray();
@@ -304,7 +426,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle multiple destructuring patterns with rest", () => {
+        fuzzIt("should handle multiple destructuring patterns with rest", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const arr1 = randomArray(randomInt(3, 10));
@@ -323,7 +445,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
       });
 
       describe("Object Rest Fuzzing", () => {
-        it("should handle rest with random number of extracted properties", () => {
+        fuzzIt("should handle rest with random number of extracted properties", () => {
           for (let i = 0; i < 100; i++) {
             const interpreter = new Interpreter();
             const obj = randomObject(randomInt(3, 10));
@@ -348,7 +470,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle rest with random objects", () => {
+        fuzzIt("should handle rest with random objects", () => {
           for (let i = 0; i < 100; i++) {
             const interpreter = new Interpreter();
             const obj = randomObject();
@@ -365,7 +487,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
       });
 
       describe("Rest Parameters Fuzzing", () => {
-        it("should handle random number of arguments with rest", () => {
+        fuzzIt("should handle random number of arguments with rest", () => {
           for (let i = 0; i < 100; i++) {
             const interpreter = new Interpreter();
             const argCount = randomInt(0, 15);
@@ -383,7 +505,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle random mix of regular and rest parameters", () => {
+        fuzzIt("should handle random mix of regular and rest parameters", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const regularCount = randomInt(0, 5);
@@ -406,7 +528,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle deeply nested function calls with rest", () => {
+        fuzzIt("should handle deeply nested function calls with rest", () => {
           for (let i = 0; i < 30; i++) {
             const interpreter = new Interpreter();
             const depth = randomInt(2, 5);
@@ -432,7 +554,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
       });
 
       describe("Combined Spread/Rest Operations", () => {
-        it("should handle random combinations of spread and rest", () => {
+        fuzzIt("should handle random combinations of spread and rest", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const arr = randomArray(randomInt(5, 15));
@@ -451,7 +573,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle random spread/rest with object and array mixing", () => {
+        fuzzIt("should handle random spread/rest with object and array mixing", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const arr = randomArray(randomInt(3, 8));
@@ -473,7 +595,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle random destructuring with immediate spread", () => {
+        fuzzIt("should handle random destructuring with immediate spread", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const arr = randomArray(randomInt(5, 12));
@@ -491,7 +613,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
       });
 
       describe("Spread/Rest Edge Cases", () => {
-        it("should handle empty spread/rest repeatedly", () => {
+        fuzzIt("should handle empty spread/rest repeatedly", () => {
           for (let i = 0; i < 50; i++) {
             const interpreter = new Interpreter();
             const code = `
@@ -504,7 +626,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           }
         });
 
-        it("should handle very long spread chains", () => {
+        fuzzIt("should handle very long spread chains", () => {
           const interpreter = new Interpreter();
           const chainLength = 50;
           let code = "const arr = [1];\n";
@@ -514,7 +636,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
           expect(result).toEqual(Array(chainLength).fill(1));
         });
 
-        it("should handle large arrays with spread/rest", () => {
+        fuzzIt("should handle large arrays with spread/rest", () => {
           const interpreter = new Interpreter();
           const largeArray = randomArray(1000);
 
@@ -535,7 +657,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     // ============================================================================
 
     describe("Arithmetic Operations", () => {
-      it("should handle random arithmetic expressions", () => {
+      fuzzIt("should handle random arithmetic expressions", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const a = randomInt(-1000, 1000);
@@ -555,7 +677,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random complex arithmetic chains", () => {
+      fuzzIt("should handle random complex arithmetic chains", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const length = randomInt(3, 8);
@@ -581,7 +703,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random modulo operations", () => {
+      fuzzIt("should handle random modulo operations", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const a = randomInt(-1000, 1000);
@@ -593,7 +715,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random exponentiation via multiplication", () => {
+      fuzzIt("should handle random exponentiation via multiplication", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const base = randomInt(-10, 10);
@@ -614,7 +736,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Comparison Operations", () => {
-      it("should handle random comparisons", () => {
+      fuzzIt("should handle random comparisons", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const a = randomInt(-100, 100);
@@ -629,7 +751,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random equality checks with different types", () => {
+      fuzzIt("should handle random equality checks with different types", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const values = [randomInt(-100, 100), `"${randomString(5)}"`, randomBool(), "null"];
@@ -644,7 +766,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random chained comparisons", () => {
+      fuzzIt("should handle random chained comparisons", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const a = randomInt(0, 100);
@@ -659,7 +781,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Logical Operations", () => {
-      it("should handle random logical AND/OR", () => {
+      fuzzIt("should handle random logical AND/OR", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const a = randomBool();
@@ -674,7 +796,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random logical NOT", () => {
+      fuzzIt("should handle random logical NOT", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const value = randomBool();
@@ -685,7 +807,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random complex logical expressions", () => {
+      fuzzIt("should handle random complex logical expressions", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const a = randomBool();
@@ -700,7 +822,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Variable Operations", () => {
-      it("should handle random variable declarations and access", () => {
+      fuzzIt("should handle random variable declarations and access", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const varName = `var${randomInt(0, 1000)}`;
@@ -715,7 +837,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random variable reassignments", () => {
+      fuzzIt("should handle random variable reassignments", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const val1 = randomInt(-100, 100);
@@ -731,7 +853,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random multiple variable declarations", () => {
+      fuzzIt("should handle random multiple variable declarations", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const varCount = randomInt(2, 10);
@@ -754,7 +876,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Array Operations", () => {
-      it("should handle random array access", () => {
+      fuzzIt("should handle random array access", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const arr = randomArray(randomInt(1, 20));
@@ -769,7 +891,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random array mutations", () => {
+      fuzzIt("should handle random array mutations", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const arr = randomArray(5);
@@ -786,7 +908,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random array pushes", () => {
+      fuzzIt("should handle random array pushes", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const arr = randomArray(3);
@@ -806,7 +928,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random array slicing", () => {
+      fuzzIt("should handle random array slicing", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const arr = randomArray(randomInt(5, 15));
@@ -824,7 +946,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Object Operations", () => {
-      it("should handle random object property access", () => {
+      fuzzIt("should handle random object property access", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const obj = randomObject(randomInt(1, 10));
@@ -840,7 +962,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random computed property access", () => {
+      fuzzIt("should handle random computed property access", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const obj = randomObject(randomInt(1, 10));
@@ -856,7 +978,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random property assignments", () => {
+      fuzzIt("should handle random property assignments", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const obj = randomObject(3);
@@ -875,7 +997,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Function Operations", () => {
-      it("should handle random function calls", () => {
+      fuzzIt("should handle random function calls", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const a = randomInt(-100, 100);
@@ -892,7 +1014,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random recursive calls", () => {
+      fuzzIt("should handle random recursive calls", () => {
         for (let i = 0; i < 30; i++) {
           const interpreter = new Interpreter();
           const n = randomInt(0, 10);
@@ -916,7 +1038,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random arrow functions", () => {
+      fuzzIt("should handle random arrow functions", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const a = randomInt(-100, 100);
@@ -931,7 +1053,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random closures", () => {
+      fuzzIt("should handle random closures", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const outer = randomInt(-100, 100);
@@ -953,7 +1075,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Control Flow", () => {
-      it("should handle random if statements", () => {
+      fuzzIt("should handle random if statements", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const condition = randomBool();
@@ -972,7 +1094,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random ternary operators", () => {
+      fuzzIt("should handle random ternary operators", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const condition = randomBool();
@@ -985,7 +1107,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random while loops", () => {
+      fuzzIt("should handle random while loops", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const iterations = randomInt(0, 10);
@@ -1004,7 +1126,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random for loops", () => {
+      fuzzIt("should handle random for loops", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const iterations = randomInt(0, 10);
@@ -1026,7 +1148,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random break statements", () => {
+      fuzzIt("should handle random break statements", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const breakAt = randomInt(1, 10);
@@ -1044,7 +1166,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random continue statements", () => {
+      fuzzIt("should handle random continue statements", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const skipVal = randomInt(0, 9);
@@ -1070,7 +1192,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("String Operations", () => {
-      it("should handle random string concatenation", () => {
+      fuzzIt("should handle random string concatenation", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const str1 = randomString(5);
@@ -1082,7 +1204,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random string charAt operations", () => {
+      fuzzIt("should handle random string charAt operations", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const length = randomInt(1, 10);
@@ -1101,7 +1223,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random string length", () => {
+      fuzzIt("should handle random string length", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const str = randomString();
@@ -1114,7 +1236,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Template Literals", () => {
-      it("should handle random template literal expressions", () => {
+      fuzzIt("should handle random template literal expressions", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const val1 = randomInt(-100, 100);
@@ -1126,7 +1248,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random multi-expression templates", () => {
+      fuzzIt("should handle random multi-expression templates", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const a = randomInt(-100, 100);
@@ -1141,7 +1263,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Destructuring", () => {
-      it("should handle random array destructuring", () => {
+      fuzzIt("should handle random array destructuring", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const arr = randomArray(randomInt(2, 10));
@@ -1155,7 +1277,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random object destructuring", () => {
+      fuzzIt("should handle random object destructuring", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const obj = {
@@ -1172,7 +1294,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random nested destructuring", () => {
+      fuzzIt("should handle random nested destructuring", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const inner = randomArray(2);
@@ -1189,7 +1311,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Try-Catch", () => {
-      it("should handle random error catching", () => {
+      fuzzIt("should handle random error catching", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const shouldThrow = randomBool();
@@ -1209,7 +1331,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random finally blocks", () => {
+      fuzzIt("should handle random finally blocks", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const val = randomInt(-100, 100);
@@ -1230,7 +1352,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Complex Scenarios", () => {
-      it("should handle random mixed operations", () => {
+      fuzzIt("should handle random mixed operations", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const a = randomInt(-50, 50);
@@ -1250,7 +1372,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random data transformations", () => {
+      fuzzIt("should handle random data transformations", () => {
         for (let i = 0; i < 30; i++) {
           const interpreter = new Interpreter();
           const arr = randomArray(randomInt(5, 10));
@@ -1265,7 +1387,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random filtering operations", () => {
+      fuzzIt("should handle random filtering operations", () => {
         for (let i = 0; i < 30; i++) {
           const interpreter = new Interpreter();
           const arr = randomArray(randomInt(5, 10));
@@ -1281,7 +1403,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random reduce operations", () => {
+      fuzzIt("should handle random reduce operations", () => {
         for (let i = 0; i < 30; i++) {
           const interpreter = new Interpreter();
           const arr = randomArray(randomInt(3, 8));
@@ -1297,7 +1419,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random object transformations", () => {
+      fuzzIt("should handle random object transformations", () => {
         for (let i = 0; i < 30; i++) {
           const interpreter = new Interpreter();
           const obj = randomObject(randomInt(3, 6));
@@ -1325,7 +1447,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Edge Cases and Stress Testing", () => {
-      it("should handle deeply nested function calls", () => {
+      fuzzIt("should handle deeply nested function calls", () => {
         for (let i = 0; i < 20; i++) {
           const interpreter = new Interpreter();
           const depth = randomInt(5, 15);
@@ -1344,7 +1466,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle large array operations", () => {
+      fuzzIt("should handle large array operations", () => {
         for (let i = 0; i < 10; i++) {
           const interpreter = new Interpreter();
           const size = randomInt(100, 500);
@@ -1362,7 +1484,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random variable scoping", () => {
+      fuzzIt("should handle random variable scoping", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const outer = randomInt(-100, 100);
@@ -1380,7 +1502,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random hoisting scenarios", () => {
+      fuzzIt("should handle random hoisting scenarios", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const val = randomInt(-100, 100);
@@ -1397,7 +1519,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random method chaining", () => {
+      fuzzIt("should handle random method chaining", () => {
         for (let i = 0; i < 30; i++) {
           const interpreter = new Interpreter();
           const arr = randomArray(randomInt(5, 10));
@@ -1419,7 +1541,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle deep nesting stress test", () => {
+      fuzzIt("should handle deep nesting stress test", () => {
         const interpreter = new Interpreter();
         const depth = 10;
         let code = "";
@@ -1442,7 +1564,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         expect(result).toEqual(args);
       });
 
-      it("should handle spread/rest in loops", () => {
+      fuzzIt("should handle spread/rest in loops", () => {
         const interpreter = new Interpreter();
         const iterations = 10;
 
@@ -1465,7 +1587,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Type Coercion", () => {
-      it("should handle random number to string coercion", () => {
+      fuzzIt("should handle random number to string coercion", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const num = randomInt(-1000, 1000);
@@ -1477,7 +1599,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random boolean coercion in conditions", () => {
+      fuzzIt("should handle random boolean coercion in conditions", () => {
         for (let i = 0; i < 50; i++) {
           const interpreter = new Interpreter();
           const values = [0, 1, "", "hello", null];
@@ -1500,7 +1622,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     });
 
     describe("Nullish and Undefined", () => {
-      it("should handle random null checks", () => {
+      fuzzIt("should handle random null checks", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const isNull = randomBool();
@@ -1515,7 +1637,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         }
       });
 
-      it("should handle random undefined checks", () => {
+      fuzzIt("should handle random undefined checks", () => {
         for (let i = 0; i < 100; i++) {
           const interpreter = new Interpreter();
           const isDefined = randomBool();
