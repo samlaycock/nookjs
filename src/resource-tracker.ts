@@ -130,6 +130,10 @@ export class ResourceTracker {
     return this.exhaustedLimit;
   }
 
+  getCumulativeCpuTime(): number {
+    return this.cumulativeCpuTime;
+  }
+
   reset(): void {
     this.cumulativeMemory = 0;
     this.cumulativeIterations = 0;
