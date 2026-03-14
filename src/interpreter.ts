@@ -2990,7 +2990,7 @@ export class Interpreter {
     }
 
     if (maxCpuTime !== undefined) {
-      const cpuTimeMs = (tracker?.getStats().cpuTimeMs ?? 0) + this.getCurrentEvaluationCpuTime();
+      const cpuTimeMs = (tracker?.getCumulativeCpuTime() ?? 0) + this.getCurrentEvaluationCpuTime();
       if (cpuTimeMs >= maxCpuTime) {
         throw new ResourceExhaustedError("maxCpuTime", cpuTimeMs, maxCpuTime);
       }
