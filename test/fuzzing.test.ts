@@ -13,8 +13,14 @@ const resolveFuzzSeed = (configuredSeed = Bun.env[FUZZ_SEED_ENV_KEY]): number =>
     return DEFAULT_FUZZ_SEED;
   }
 
-  const parsedSeed = Number.parseInt(configuredSeed, 10);
-  if (!Number.isSafeInteger(parsedSeed) || parsedSeed < 0 || parsedSeed > MAX_FUZZ_SEED) {
+  const normalizedSeed = configuredSeed.trim();
+  const parsedSeed = Number(normalizedSeed);
+  if (
+    !Number.isSafeInteger(parsedSeed) ||
+    String(parsedSeed) !== normalizedSeed ||
+    parsedSeed < 0 ||
+    parsedSeed > MAX_FUZZ_SEED
+  ) {
     throw new Error(
       `Expected ${FUZZ_SEED_ENV_KEY} to be a non-negative integer in [0, ${MAX_FUZZ_SEED}], received "${configuredSeed}"`,
     );
@@ -137,7 +143,7 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
     // ============================================================================
 
     describe("Seeded Fuzz Harness", () => {
-      fuzzIt("should replay the same generated values for the same seed", () => {
+      it("should replay the same generated values for the same seed", () => {
         const first = createFuzzHarness(12_345);
         const second = createFuzzHarness(12_345);
 
@@ -169,6 +175,12 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
       it("should reject configured seeds above the uint32 range", () => {
         expect(() => resolveFuzzSeed("4294967296")).toThrow(
           `Expected ${FUZZ_SEED_ENV_KEY} to be a non-negative integer in [0, ${MAX_FUZZ_SEED}], received "4294967296"`,
+        );
+      });
+
+      it("should reject configured seeds with trailing non-digit characters", () => {
+        expect(() => resolveFuzzSeed("5abc")).toThrow(
+          `Expected ${FUZZ_SEED_ENV_KEY} to be a non-negative integer in [0, ${MAX_FUZZ_SEED}], received "5abc"`,
         );
       });
 
