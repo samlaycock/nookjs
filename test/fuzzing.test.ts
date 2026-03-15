@@ -34,6 +34,15 @@ const hashFuzzLabel = (label: string): number => {
   return hash >>> 0;
 };
 
+const withFuzzReplayMessage = (error: unknown, replayMessage: string): Error => {
+  if (error instanceof Error) {
+    error.message = `${error.message}\n${replayMessage}`;
+    return error;
+  }
+
+  return new Error(replayMessage, { cause: error });
+};
+
 const createFuzzHarness = (seed: number) => {
   let state = seed >>> 0;
 
@@ -75,7 +84,13 @@ const createFuzzHarness = (seed: number) => {
     return obj;
   };
 
-  const randomElement = <T>(arr: T[]): T => arr[randomInt(0, arr.length - 1)]!;
+  const randomElement = <T>(arr: T[]): T => {
+    if (arr.length === 0) {
+      throw new Error("randomElement called with an empty array");
+    }
+
+    return arr[randomInt(0, arr.length - 1)]!;
+  };
 
   return {
     randomInt,
@@ -93,15 +108,13 @@ let activeFuzzHarness: FuzzHarness | null = null;
 const fuzzIt = (name: string, fn: () => void) =>
   it(`${name} [seed=${baseFuzzSeed}]`, () => {
     const caseSeed = hashFuzzLabel(`${baseFuzzSeed}:${name}`);
+    const replayMessage = `Replay with ${FUZZ_SEED_ENV_KEY}=${baseFuzzSeed} (case seed ${caseSeed}).`;
     activeFuzzHarness = createFuzzHarness(caseSeed);
 
     try {
       fn();
     } catch (error) {
-      throw new Error(
-        `Fuzz test "${name}" failed. Replay with ${FUZZ_SEED_ENV_KEY}=${baseFuzzSeed} (case seed ${caseSeed}).`,
-        { cause: error },
-      );
+      throw withFuzzReplayMessage(error, replayMessage);
     } finally {
       activeFuzzHarness = null;
     }
@@ -157,6 +170,27 @@ describe("Interpreter - Comprehensive Fuzzing", () => {
         expect(() => resolveFuzzSeed("4294967296")).toThrow(
           `Expected ${FUZZ_SEED_ENV_KEY} to be a non-negative integer in [0, ${MAX_FUZZ_SEED}], received "4294967296"`,
         );
+      });
+
+      it("should append replay instructions without replacing thrown errors", () => {
+        const original = new Error("expected 1 to equal 2");
+        const annotated = withFuzzReplayMessage(original, "Replay with NOOK_FUZZ_SEED=1.");
+
+        expect(annotated).toBe(original);
+        expect(annotated.message).toBe("expected 1 to equal 2\nReplay with NOOK_FUZZ_SEED=1.");
+      });
+
+      it("should wrap non-error throws with replay instructions", () => {
+        const annotated = withFuzzReplayMessage("boom", "Replay with NOOK_FUZZ_SEED=1.");
+
+        expect(annotated.message).toBe("Replay with NOOK_FUZZ_SEED=1.");
+        expect(annotated.cause).toBe("boom");
+      });
+
+      it("should reject randomElement calls with empty arrays", () => {
+        const harness = createFuzzHarness(12_345);
+
+        expect(() => harness.randomElement([])).toThrow("randomElement called with an empty array");
       });
     });
 
