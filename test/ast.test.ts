@@ -161,6 +161,43 @@ describe("AST", () => {
         expect(id.type).toBe("Identifier");
       });
 
+      it("parses unicode identifiers", () => {
+        const ast = parseModule("const cafe = caf\u00e9 + \u03c0;");
+        const declaration = ast.body[0] as ESTree.VariableDeclaration;
+        const declarator = declaration.declarations[0];
+        expect(declarator).toBeDefined();
+        if (!declarator) {
+          throw new Error("Expected a variable declarator");
+        }
+        expect(declarator.id.type).toBe("Identifier");
+        expect((declarator.id as ESTree.Identifier).name).toBe("cafe");
+
+        const init = declarator.init as ESTree.BinaryExpression;
+        expect(init.left.type).toBe("Identifier");
+        expect((init.left as ESTree.Identifier).name).toBe("caf\u00e9");
+        expect(init.right.type).toBe("Identifier");
+        expect((init.right as ESTree.Identifier).name).toBe("\u03c0");
+      });
+
+      it("parses unicode escape sequences inside identifiers", () => {
+        const ast = parseModule("const caf\\u00e9 = 1; caf\\u{00e9} + \\u{03c0};");
+        const declaration = ast.body[0] as ESTree.VariableDeclaration;
+        const declarator = declaration.declarations[0];
+        expect(declarator).toBeDefined();
+        if (!declarator) {
+          throw new Error("Expected a variable declarator");
+        }
+        expect(declarator.id.type).toBe("Identifier");
+        expect((declarator.id as ESTree.Identifier).name).toBe("caf\u00e9");
+
+        const expression = (ast.body[1] as ESTree.ExpressionStatement)
+          .expression as ESTree.BinaryExpression;
+        expect(expression.left.type).toBe("Identifier");
+        expect((expression.left as ESTree.Identifier).name).toBe("caf\u00e9");
+        expect(expression.right.type).toBe("Identifier");
+        expect((expression.right as ESTree.Identifier).name).toBe("\u03c0");
+      });
+
       it("decodes hex and unicode escapes in string literals", () => {
         const hex = parseFirstExpression('"\\x41";');
         expect((hex as ESTree.Literal).value).toBe("A");
