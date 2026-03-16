@@ -198,6 +198,15 @@ describe("AST", () => {
         expect((expression.right as ESTree.Identifier).name).toBe("\u03c0");
       });
 
+      it("treats escaped keywords as identifiers", () => {
+        const expression = parseFirstExpression("\\u0069\\u0066(true);");
+        expect(expression.type).toBe("CallExpression");
+
+        const callee = (expression as ESTree.CallExpression).callee;
+        expect(callee.type).toBe("Identifier");
+        expect((callee as ESTree.Identifier).name).toBe("if");
+      });
+
       it("decodes hex and unicode escapes in string literals", () => {
         const hex = parseFirstExpression('"\\x41";');
         expect((hex as ESTree.Literal).value).toBe("A");
