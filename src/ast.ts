@@ -630,6 +630,7 @@ export class ParseError extends Error {
 class Tokenizer {
   private readonly input: string;
   private index = 0;
+  private lastIdentifierHadEscape = false;
   private currentType: TokenType = TOKEN.EOF;
   private currentValue = "";
   private currentLineBreakBefore = false;
@@ -1012,7 +1013,8 @@ class Tokenizer {
 
     if (isAsciiIdentifierStart(code) || code === 92 || code > 127) {
       const ident = this.readIdentifier();
-      const type: TokenType = isKeyword(ident) ? TOKEN.Keyword : TOKEN.Identifier;
+      const type: TokenType =
+        !this.lastIdentifierHadEscape && isKeyword(ident) ? TOKEN.Keyword : TOKEN.Identifier;
       this.setToken(setCurrent, type, ident, lineBreakBefore);
       this.recordToken(start);
       return;
@@ -1177,6 +1179,7 @@ class Tokenizer {
   }
 
   private readIdentifier(): string {
+    this.lastIdentifierHadEscape = false;
     const start = this.index;
     const input = this.input;
     const length = input.length;
@@ -1254,6 +1257,7 @@ class Tokenizer {
     if (this.input.charCodeAt(start + 1) !== 117) {
       throw new ParseError("Invalid identifier escape sequence");
     }
+    this.lastIdentifierHadEscape = true;
     this.index += 2;
     return this.readUnicodeEscapeSequence(start).cooked;
   }
