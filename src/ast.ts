@@ -534,6 +534,15 @@ const TOKEN = {
 
 type TokenType = (typeof TOKEN)[keyof typeof TOKEN];
 
+const IDENTIFIER_START_REGEX = /^[$_\p{ID_Start}]$/u;
+const IDENTIFIER_CONTINUE_REGEX = /^[$_\u200c\u200d\p{ID_Continue}]$/u;
+
+const isAsciiIdentifierStart = (code: number): boolean =>
+  (code >= 97 && code <= 122) || (code >= 65 && code <= 90) || code === 95 || code === 36;
+
+const isAsciiIdentifierContinue = (code: number): boolean =>
+  isAsciiIdentifierStart(code) || (code >= 48 && code <= 57);
+
 const isKeyword = (value: string): boolean => {
   switch (value) {
     case "let":
@@ -1001,9 +1010,7 @@ class Tokenizer {
 
     const code = input.charCodeAt(this.index);
 
-    const isAlpha =
-      (code >= 97 && code <= 122) || (code >= 65 && code <= 90) || code === 95 || code === 36;
-    if (isAlpha) {
+    if (isAsciiIdentifierStart(code) || code === 92 || code > 127) {
       const ident = this.readIdentifier();
       const type: TokenType = isKeyword(ident) ? TOKEN.Keyword : TOKEN.Identifier;
       this.setToken(setCurrent, type, ident, lineBreakBefore);
@@ -1013,12 +1020,7 @@ class Tokenizer {
 
     if (code === 35) {
       const nextCode = input.charCodeAt(this.index + 1);
-      const nextIsAlpha =
-        (nextCode >= 97 && nextCode <= 122) ||
-        (nextCode >= 65 && nextCode <= 90) ||
-        nextCode === 95 ||
-        nextCode === 36;
-      if (nextIsAlpha) {
+      if (isAsciiIdentifierStart(nextCode) || nextCode === 92 || nextCode > 127) {
         this.index += 1;
         const name = this.readIdentifier();
         this.setToken(setCurrent, TOKEN.PrivateIdentifier, name, lineBreakBefore);
@@ -1178,19 +1180,92 @@ class Tokenizer {
     const start = this.index;
     const input = this.input;
     const length = input.length;
-    // ASCII identifier scan: [$A-Za-z_][$0-9A-Za-z_]*
-    let index = this.index + 1;
-    while (index < length) {
-      const code = input.charCodeAt(index);
-      const isAlpha =
-        (code >= 97 && code <= 122) || (code >= 65 && code <= 90) || code === 95 || code === 36;
-      if (!isAlpha && (code < 48 || code > 57)) {
+    const firstCode = input.charCodeAt(start);
+    if (isAsciiIdentifierStart(firstCode)) {
+      let index = start + 1;
+      while (index < length) {
+        const code = input.charCodeAt(index);
+        if (isAsciiIdentifierContinue(code)) {
+          index += 1;
+          continue;
+        }
+        if (code === 92 || code > 127) {
+          this.index = index;
+          return this.readIdentifierSlow(start, input.slice(start, index));
+        }
         break;
       }
-      index += 1;
+      this.index = index;
+      return input.slice(start, index);
     }
-    this.index = index;
-    return input.slice(start, index);
+
+    return this.readIdentifierSlow(start);
+  }
+
+  private readIdentifierSlow(start: number, prefix = ""): string {
+    const input = this.input;
+    const valueStart = prefix.length === 0;
+    let value = prefix;
+    value += this.readIdentifierChar(valueStart);
+
+    while (this.index < input.length) {
+      const code = input.charCodeAt(this.index);
+      if (isAsciiIdentifierContinue(code)) {
+        const asciiStart = this.index;
+        this.index += 1;
+        while (
+          this.index < input.length &&
+          isAsciiIdentifierContinue(input.charCodeAt(this.index))
+        ) {
+          this.index += 1;
+        }
+        value += input.slice(asciiStart, this.index);
+        continue;
+      }
+      if (code === 92 || code > 127) {
+        value += this.readIdentifierChar(false);
+        continue;
+      }
+      break;
+    }
+
+    if (value.length === 0) {
+      throw new ParseError("Invalid identifier starting at " + start);
+    }
+
+    return value;
+  }
+
+  private readIdentifierChar(isStart: boolean): string {
+    const code = this.input.charCodeAt(this.index);
+    const value =
+      code === 92 ? this.readIdentifierEscapeSequence() : this.readIdentifierCodePointCharacter();
+    const isValid = isStart
+      ? IDENTIFIER_START_REGEX.test(value)
+      : IDENTIFIER_CONTINUE_REGEX.test(value);
+    if (!isValid) {
+      throw new ParseError("Invalid identifier character");
+    }
+    return value;
+  }
+
+  private readIdentifierEscapeSequence(): string {
+    const start = this.index;
+    if (this.input.charCodeAt(start + 1) !== 117) {
+      throw new ParseError("Invalid identifier escape sequence");
+    }
+    this.index += 2;
+    return this.readUnicodeEscapeSequence(start).cooked;
+  }
+
+  private readIdentifierCodePointCharacter(): string {
+    const value = this.input.codePointAt(this.index);
+    if (value === undefined) {
+      throw new ParseError("Unexpected end of input");
+    }
+    const character = String.fromCodePoint(value);
+    this.index += character.length;
+    return character;
   }
 
   private readNumber(): string {
