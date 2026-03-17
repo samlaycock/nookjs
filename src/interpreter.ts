@@ -8463,6 +8463,24 @@ export class Interpreter {
   }
 
   private buildArrayMethod(arr: any[], methodName: string): HostFunctionValue | null {
+    const hasIndex = (index: number): boolean => index in arr;
+    const findNextPresentIndex = (startIndex: number, length: number): number => {
+      for (let i = startIndex; i < length; i++) {
+        if (hasIndex(i)) {
+          return i;
+        }
+      }
+      return -1;
+    };
+    const findPreviousPresentIndex = (startIndex: number): number => {
+      for (let i = startIndex; i >= 0; i--) {
+        if (hasIndex(i)) {
+          return i;
+        }
+      }
+      return -1;
+    };
+
     switch (methodName) {
       // Mutation methods
       case "push":
@@ -8526,11 +8544,16 @@ export class Interpreter {
       case "map":
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
+            const length = arr.length;
             const result: any[] = [];
-            for (let i = 0; i < arr.length; i++) {
+            result.length = length;
+            for (let i = 0; i < length; i++) {
+              if (!hasIndex(i)) {
+                continue;
+              }
               // Call the callback with (element, index, array)
               const value = this.callCallback(callback, undefined, [arr[i], i, arr]);
-              result.push(value);
+              result[i] = value;
             }
             return result;
           },
@@ -8543,8 +8566,12 @@ export class Interpreter {
       case "filter":
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
+            const length = arr.length;
             const result: any[] = [];
-            for (let i = 0; i < arr.length; i++) {
+            for (let i = 0; i < length; i++) {
+              if (!hasIndex(i)) {
+                continue;
+              }
               const shouldInclude = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (shouldInclude) {
                 result.push(arr[i]);
@@ -8560,20 +8587,26 @@ export class Interpreter {
 
       case "reduce":
         return this.createHostFunction(
-          (callback: FunctionValue | Function, initialValue?: any) => {
-            let accumulator = initialValue;
+          (callback: FunctionValue | Function, ...rest: any[]) => {
+            const length = arr.length;
+            const hasInitialValue = rest.length > 0;
+            let accumulator = rest[0];
             let startIndex = 0;
 
             // If no initial value, use first element as accumulator
-            if (initialValue === undefined) {
-              if (arr.length === 0) {
+            if (!hasInitialValue) {
+              const firstPresentIndex = findNextPresentIndex(0, length);
+              if (firstPresentIndex === -1) {
                 throw new InterpreterError("Reduce of empty array with no initial value");
               }
-              accumulator = arr[0];
-              startIndex = 1;
+              accumulator = arr[firstPresentIndex];
+              startIndex = firstPresentIndex + 1;
             }
 
-            for (let i = startIndex; i < arr.length; i++) {
+            for (let i = startIndex; i < length; i++) {
+              if (!hasIndex(i)) {
+                continue;
+              }
               accumulator = this.callCallback(callback, undefined, [accumulator, arr[i], i, arr]);
             }
             return accumulator;
@@ -8621,7 +8654,11 @@ export class Interpreter {
       case "every":
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
-            for (let i = 0; i < arr.length; i++) {
+            const length = arr.length;
+            for (let i = 0; i < length; i++) {
+              if (!hasIndex(i)) {
+                continue;
+              }
               const result = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (!result) {
                 return false;
@@ -8638,7 +8675,11 @@ export class Interpreter {
       case "some":
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
-            for (let i = 0; i < arr.length; i++) {
+            const length = arr.length;
+            for (let i = 0; i < length; i++) {
+              if (!hasIndex(i)) {
+                continue;
+              }
               const result = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (result) {
                 return true;
@@ -8655,7 +8696,11 @@ export class Interpreter {
       case "forEach":
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
-            for (let i = 0; i < arr.length; i++) {
+            const length = arr.length;
+            for (let i = 0; i < length; i++) {
+              if (!hasIndex(i)) {
+                continue;
+              }
               this.callCallback(callback, undefined, [arr[i], i, arr]);
             }
             return undefined;
@@ -8689,11 +8734,19 @@ export class Interpreter {
       case "flatMap":
         return this.createHostFunction(
           (callback: FunctionValue | Function) => {
+            const length = arr.length;
             const result: any[] = [];
-            for (let i = 0; i < arr.length; i++) {
+            for (let i = 0; i < length; i++) {
+              if (!hasIndex(i)) {
+                continue;
+              }
               const mapped = this.callCallback(callback, undefined, [arr[i], i, arr]);
               if (Array.isArray(mapped)) {
-                result.push(...mapped);
+                for (let j = 0; j < mapped.length; j++) {
+                  if (j in mapped) {
+                    result.push(mapped[j]);
+                  }
+                }
               } else {
                 result.push(mapped);
               }
@@ -8745,19 +8798,24 @@ export class Interpreter {
 
       case "reduceRight":
         return this.createHostFunction(
-          (callback: FunctionValue | Function, initialValue?: any) => {
-            let accumulator = initialValue;
+          (callback: FunctionValue | Function, ...rest: any[]) => {
+            const hasInitialValue = rest.length > 0;
+            let accumulator = rest[0];
             let startIndex = arr.length - 1;
 
-            if (initialValue === undefined) {
-              if (arr.length === 0) {
+            if (!hasInitialValue) {
+              const lastPresentIndex = findPreviousPresentIndex(arr.length - 1);
+              if (lastPresentIndex === -1) {
                 throw new InterpreterError("Reduce of empty array with no initial value");
               }
-              accumulator = arr[arr.length - 1];
-              startIndex = arr.length - 2;
+              accumulator = arr[lastPresentIndex];
+              startIndex = lastPresentIndex - 1;
             }
 
             for (let i = startIndex; i >= 0; i--) {
+              if (!hasIndex(i)) {
+                continue;
+              }
               accumulator = this.callCallback(callback, undefined, [accumulator, arr[i], i, arr]);
             }
             return accumulator;
