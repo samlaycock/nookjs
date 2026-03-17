@@ -990,14 +990,28 @@ describe("Arrays", () => {
           expect(result).toEqual([1, 2, 3]);
         });
 
-        it("should preserve holes in sparse arrays", () => {
+        it("should preserve constructor-created holes in sparse arrays", () => {
+          const interpreter = new Interpreter({ globals: { sparse: Array(3) } });
+          const result = interpreter.evaluate(`
+                    let calls = 0;
+                    let mapped = sparse.map(() => {
+                      calls++;
+                      return 1;
+                    });
+                    [calls, mapped.length, 0 in mapped, 1 in mapped, 2 in mapped]
+                  `);
+          expect(result).toEqual([0, 3, false, false, false]);
+        });
+
+        it("should preserve deleted holes in sparse arrays", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
-                    let arr = [1, , 3];
+                    let arr = [1, 2, 3];
+                    delete arr[1];
                     let mapped = arr.map(x => x * 2);
                     [mapped.length, 1 in mapped, mapped[0], mapped[2]]
                   `);
-          expect(result).toEqual([3, true, 2, 6]);
+          expect(result).toEqual([3, false, 2, 6]);
         });
       });
 
@@ -1032,7 +1046,8 @@ describe("Arrays", () => {
         it("should skip holes in sparse arrays", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
-                    let arr = [1, , 3];
+                    let arr = [1, 2, 3];
+                    delete arr[1];
                     let visited = [];
                     arr.filter((val, idx) => {
                       visited.push(idx);
@@ -1040,7 +1055,7 @@ describe("Arrays", () => {
                     });
                     visited
                   `);
-          expect(result).toEqual([0, 1, 2]);
+          expect(result).toEqual([0, 2]);
         });
 
         it("should filter truthy values", () => {
@@ -1126,7 +1141,8 @@ describe("Arrays", () => {
         it("should skip holes in sparse arrays", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
-                    let arr = [1, , 3];
+                    let arr = [1, 2, 3];
+                    delete arr[1];
                     let visited = [];
                     arr.reduce((acc, val, idx) => {
                       visited.push(idx);
@@ -1134,7 +1150,15 @@ describe("Arrays", () => {
                     }, 0);
                     visited
                   `);
-          expect(result).toEqual([0, 1, 2]);
+          expect(result).toEqual([0, 2]);
+        });
+
+        it("should use the first present element in sparse arrays without an initial value", () => {
+          const sparse = Array(3);
+          sparse[2] = 3;
+          const interpreter = new Interpreter({ globals: { sparse } });
+          const result = interpreter.evaluate(`sparse.reduce((acc, val) => acc + val)`);
+          expect(result).toBe(3);
         });
       });
 
@@ -1169,7 +1193,8 @@ describe("Arrays", () => {
         it("should skip holes in sparse arrays", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
-                    let arr = [1, , 3];
+                    let arr = [1, 2, 3];
+                    delete arr[1];
                     let visited = [];
                     arr.every((val, idx) => {
                       visited.push(idx);
@@ -1177,7 +1202,7 @@ describe("Arrays", () => {
                     });
                     visited
                   `);
-          expect(result).toEqual([0, 1, 2]);
+          expect(result).toEqual([0, 2]);
         });
       });
 
@@ -1212,7 +1237,8 @@ describe("Arrays", () => {
         it("should skip holes in sparse arrays", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
-                    let arr = [1, , 3];
+                    let arr = [1, 2, 3];
+                    delete arr[1];
                     let visited = [];
                     arr.some((val, idx) => {
                       visited.push(idx);
@@ -1220,7 +1246,7 @@ describe("Arrays", () => {
                     });
                     visited
                   `);
-          expect(result).toEqual([0, 1, 2]);
+          expect(result).toEqual([0, 2]);
         });
       });
 
@@ -1360,6 +1386,14 @@ describe("Arrays", () => {
                   `);
           expect(result).toBe(5);
         });
+
+        it("should use the last present element in sparse arrays without an initial value", () => {
+          const sparse = Array(3);
+          sparse[0] = 1;
+          const interpreter = new Interpreter({ globals: { sparse } });
+          const result = interpreter.evaluate(`sparse.reduceRight((acc, val) => acc + val)`);
+          expect(result).toBe(1);
+        });
       });
 
       describe("forEach", () => {
@@ -1392,6 +1426,18 @@ describe("Arrays", () => {
                     arr.forEach(x => x);
                   `);
           expect(result).toBeUndefined();
+        });
+
+        it("should skip constructor-created holes", () => {
+          const interpreter = new Interpreter({ globals: { sparse: Array(3) } });
+          const result = interpreter.evaluate(`
+                    let calls = 0;
+                    sparse.forEach(() => {
+                      calls++;
+                    });
+                    calls;
+                  `);
+          expect(result).toBe(0);
         });
       });
 
@@ -1784,6 +1830,21 @@ describe("Arrays", () => {
                     arr.flatMap(x => x * 10);
                   `);
           expect(result).toEqual([10, 20, 30]);
+        });
+
+        it("should skip deleted holes and holes in returned arrays", () => {
+          const interpreter = new Interpreter(ES2024);
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2, 3];
+                    delete arr[1];
+                    const visited = [];
+                    const mapped = arr.flatMap((value, index) => {
+                      visited.push(index);
+                      return index === 0 ? Array(2) : [value];
+                    });
+                    [visited, mapped];
+                  `);
+          expect(result).toEqual([[0, 2], [3]]);
         });
       });
     });
