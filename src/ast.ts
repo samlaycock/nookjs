@@ -1232,10 +1232,6 @@ class Tokenizer {
       break;
     }
 
-    if (value.length === 0) {
-      throw new ParseError("Invalid identifier starting at " + start);
-    }
-
     return value;
   }
 
