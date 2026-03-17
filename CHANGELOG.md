@@ -1,5 +1,56 @@
 # nookjs
 
+## 0.6.0
+
+### Minor Changes
+
+- 190f68b: Add an optional `authorize()` module resolver hook so cached imports can skip repeated `resolve()` work without bypassing importer-aware access control.
+
+  - Re-check authorization on every import when `authorize()` is provided, including cache hits.
+  - Reuse cached module records for repeated imports from the same resolution context instead of re-running `resolve()`.
+  - Document how to split module loading and authorization logic while preserving the existing `resolve()` fallback behavior.
+
+- bda2adb: Make `createSandbox()` enable strict evaluation isolation by default so reusable sandboxes serialize sync, async, and module evaluations unless callers explicitly opt out.
+
+  - Default `strictEvaluationIsolation` to `true` in the simplified sandbox API while still allowing `false` for advanced concurrency use cases.
+  - Add regression coverage for overlapping `runSync()` with pending `run()` and `runModule()` calls on shared sandboxes.
+  - Document the safe-by-default concurrency behavior and the explicit opt-out.
+
+- 1e1dd19: Reject `AbortSignal` in synchronous `evaluate()` and `runSync()` calls instead of silently ignoring it.
+
+  - Throw a clear sync-only error when `signal` is provided to `Interpreter.evaluate()`.
+  - Reject `signal` in `createSandbox().runSync()` to match the existing async-only `timeoutMs` behavior.
+  - Update tests and docs to make async-only cancellation guarantees explicit.
+
+### Patch Changes
+
+- 03d0c2d: Preserve module introspection metadata when multiple authorized specifiers resolve to the same cached module path.
+
+  - Register every successfully resolved specifier before returning an existing cached module record.
+  - Add regression coverage for `isModuleCached()`, `getLoadedModuleSpecifiers()`, `getModuleMetadata()`, and `getModuleExportsBySpecifier()` when aliased specifiers share a canonical path.
+
+- 2132a1a: Unify interpreter-integrated resource tracking with the exported `ResourceTracker` so both APIs share the same accounting, history, and exhaustion semantics.
+- 4e174c3: Enforce integrated `maxCpuTime` limits during evaluation so a single run cannot materially overshoot the configured wall-clock budget before resource exhaustion is reported.
+- 4d6f9ab: Add parser and interpreter support for ergonomic brand checks with private fields (`#field in obj`).
+
+  - Parse `PrivateIdentifier` as the left-hand side of `in` expressions while rejecting invalid uses like standalone `#field` expressions.
+  - Evaluate private-brand checks against the current class' private instance/static members in sync and async interpreter paths.
+  - Add regression coverage for AST parsing and runtime behavior of private `in` checks.
+
+- d1d6958: Make the fuzzing suite deterministic and replayable with explicit seeds.
+
+  - Replace direct `Math.random()` usage in the fuzz tests with a seeded PRNG.
+  - Derive a stable case seed for each fuzz test from a shared `NOOK_FUZZ_SEED` base value.
+  - Include the base seed in fuzz test names and failure messages so CI failures can be replayed locally.
+
+- c20158b: Expand the AST parser's identifier tokenizer to accept Unicode identifier characters and `\u` escape sequences, including mixed ASCII/Unicode names that previously failed during lexing.
+- fa21d42: Preserve safe symbol-keyed property semantics for sandbox-created class members, update expressions, and computed destructuring while continuing to block dangerous well-known symbols.
+- 2235c31: Align the top-level README limitation notes with the parser and module features that already ship.
+
+  - Document leading hashbang stripping and type-only import/export erasure as supported behavior.
+  - Document dynamic `import()`, partial `import.meta`, and live bindings as supported module features.
+  - Reframe the remaining module caveats around the still-approximate parts of native ESM semantics.
+
 ## 0.5.1
 
 ### Patch Changes
