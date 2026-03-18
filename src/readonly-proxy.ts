@@ -153,7 +153,10 @@ export function unwrapForNative(value: unknown, securityOptions?: SecurityOption
 
   // Unwrap ArrayBuffer and SharedArrayBuffer for native compatibility.
   // Raw buffer instances are needed for constructors and host APIs that perform brand checks.
-  if (target instanceof ArrayBuffer || target instanceof SharedArrayBuffer) {
+  if (
+    target instanceof ArrayBuffer ||
+    (typeof SharedArrayBuffer !== "undefined" && target instanceof SharedArrayBuffer)
+  ) {
     return target;
   }
 
