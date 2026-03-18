@@ -4031,24 +4031,32 @@ describe("Control Flow", () => {
           expect(result).toBe(3);
         });
 
-        test("throws for a break targeting an undefined label in async evaluation", () => {
-          return expect(
-            interpreter.evaluateAsync(`
+        test("throws for a break targeting an undefined label in async evaluation", async () => {
+          try {
+            await interpreter.evaluateAsync(`
               while (true) {
                 break missing;
               }
-            `),
-          ).rejects.toThrow("Undefined label 'missing'");
+            `);
+            throw new Error("Expected evaluateAsync() to reject for an undefined label");
+          } catch (error) {
+            expect(error).toBeInstanceOf(InterpreterError);
+            expect((error as Error).message).toBe("Undefined label 'missing'");
+          }
         });
 
-        test("throws for a continue targeting an undefined label in async evaluation", () => {
-          return expect(
-            interpreter.evaluateAsync(`
+        test("throws for a continue targeting an undefined label in async evaluation", async () => {
+          try {
+            await interpreter.evaluateAsync(`
               while (true) {
                 continue missing;
               }
-            `),
-          ).rejects.toThrow("Undefined label 'missing'");
+            `);
+            throw new Error("Expected evaluateAsync() to reject for an undefined label");
+          } catch (error) {
+            expect(error).toBeInstanceOf(InterpreterError);
+            expect((error as Error).message).toBe("Undefined label 'missing'");
+          }
         });
       });
     });
