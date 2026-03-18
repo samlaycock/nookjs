@@ -3101,6 +3101,65 @@ describe("Control Flow", () => {
     });
 
     describe("Break and Continue", () => {
+      describe("Illegal top-level control flow", () => {
+        it("should throw for return outside a function in evaluate", () => {
+          const interpreter = new Interpreter();
+
+          expect(() => interpreter.evaluate("return 1;")).toThrow(InterpreterError);
+          expect(() => interpreter.evaluate("return 1;")).toThrow("Illegal return statement");
+        });
+
+        it("should throw for break outside a loop in evaluate", () => {
+          const interpreter = new Interpreter();
+
+          expect(() => interpreter.evaluate("break;")).toThrow(InterpreterError);
+          expect(() => interpreter.evaluate("break;")).toThrow("Illegal break statement");
+        });
+
+        it("should throw for continue outside a loop in evaluate", () => {
+          const interpreter = new Interpreter();
+
+          expect(() => interpreter.evaluate("continue;")).toThrow(InterpreterError);
+          expect(() => interpreter.evaluate("continue;")).toThrow("Illegal continue statement");
+        });
+
+        it("should throw for return outside a function in evaluateAsync", async () => {
+          const interpreter = new Interpreter();
+
+          try {
+            await interpreter.evaluateAsync("return 1;");
+            throw new Error("Expected evaluateAsync() to reject for top-level return");
+          } catch (error) {
+            expect(error).toBeInstanceOf(InterpreterError);
+            expect((error as Error).message).toBe("Illegal return statement");
+          }
+        });
+
+        it("should throw for break outside a loop in evaluateAsync", async () => {
+          const interpreter = new Interpreter();
+
+          try {
+            await interpreter.evaluateAsync("break;");
+            throw new Error("Expected evaluateAsync() to reject for top-level break");
+          } catch (error) {
+            expect(error).toBeInstanceOf(InterpreterError);
+            expect((error as Error).message).toBe("Illegal break statement");
+          }
+        });
+
+        it("should throw for continue outside a loop in evaluateAsync", async () => {
+          const interpreter = new Interpreter();
+
+          try {
+            await interpreter.evaluateAsync("continue;");
+            throw new Error("Expected evaluateAsync() to reject for top-level continue");
+          } catch (error) {
+            expect(error).toBeInstanceOf(InterpreterError);
+            expect((error as Error).message).toBe("Illegal continue statement");
+          }
+        });
+      });
+
       describe("Break in while loops", () => {
         it("should break out of while loop", () => {
           const interpreter = new Interpreter();

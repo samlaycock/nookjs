@@ -11,4 +11,5 @@ Skips to the next loop iteration.
 
 ## Gotchas
 
+- `continue` outside a loop throws `InterpreterError("Illegal continue statement")`.
 - Labeled continues are fully supported. See [LABELED_STATEMENT.md](./LABELED_STATEMENT.md) for details.

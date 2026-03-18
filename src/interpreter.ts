@@ -3837,7 +3837,7 @@ export class Interpreter {
           const prevEnv = this.environment;
           this.environment = moduleEnv;
           try {
-            await this.evaluateNodeAsync(statement);
+            this.finalizeProgramControlFlow(await this.evaluateNodeAsync(statement));
           } finally {
             this.environment = prevEnv;
           }
@@ -4794,7 +4794,7 @@ export class Interpreter {
       }
       result = this.evaluateNode(statement);
     }
-    return result;
+    return this.finalizeProgramControlFlow(result);
   }
 
   private evaluateLiteral(node: ESTree.Literal): any {
@@ -5986,9 +5986,28 @@ export class Interpreter {
     this.exitCallStack();
   }
 
+  private finalizeProgramControlFlow(result: any): any {
+    if (isControlFlowKind(result, "return")) {
+      throw new InterpreterError("Illegal return statement");
+    }
+    if (isControlFlowKind(result, "break")) {
+      throw new InterpreterError("Illegal break statement");
+    }
+    if (isControlFlowKind(result, "continue")) {
+      throw new InterpreterError("Illegal continue statement");
+    }
+    return result;
+  }
+
   private unwrapReturnSignal(result: any): any {
     if (isControlFlowKind(result, "return")) {
       return result.value;
+    }
+    if (isControlFlowKind(result, "break")) {
+      throw new InterpreterError("Illegal break statement");
+    }
+    if (isControlFlowKind(result, "continue")) {
+      throw new InterpreterError("Illegal continue statement");
     }
     return undefined;
   }
@@ -9360,7 +9379,7 @@ export class Interpreter {
       }
       result = await this.evaluateNodeAsync(statement);
     }
-    return result;
+    return this.finalizeProgramControlFlow(result);
   }
 
   private async evaluateBinaryExpressionAsync(node: ESTree.BinaryExpression): Promise<any> {
