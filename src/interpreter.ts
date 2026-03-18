@@ -6068,9 +6068,13 @@ export class Interpreter {
   /**
    * Executes a host function constructor (synchronous).
    */
-  private executeHostConstructor(constructor: HostFunctionValue, args: any[]): any {
+  private executeHostConstructor(
+    constructor: HostFunctionValue,
+    args: any[],
+    isAsync: boolean,
+  ): any {
     try {
-      const wrappedArgs = constructor.skipArgWrapping ? args : this.wrapArgsForHost(args, false);
+      const wrappedArgs = constructor.skipArgWrapping ? args : this.wrapArgsForHost(args, isAsync);
       const result = Reflect.construct(constructor.hostFunc, wrappedArgs);
       return ReadOnlyProxy.wrap(result, constructor.name, this.securityOptions);
     } catch (error: any) {
@@ -8208,8 +8212,7 @@ export class Interpreter {
 
     if (constructor instanceof HostFunctionValue) {
       // Host function constructor
-      const wrappedArgs = this.wrapArgsForHost(args, false);
-      result = this.executeHostConstructor(constructor, wrappedArgs);
+      result = this.executeHostConstructor(constructor, args, false);
     } else {
       // Sandbox function constructor
       const callee = constructor as FunctionValue;
@@ -9652,8 +9655,7 @@ export class Interpreter {
 
     if (constructor instanceof HostFunctionValue) {
       // Host function constructor
-      const wrappedArgs = this.wrapArgsForHost(args, true);
-      result = this.executeHostConstructor(constructor, wrappedArgs);
+      result = this.executeHostConstructor(constructor, args, true);
     } else {
       // Sandbox function constructor
       const callee = constructor as FunctionValue;
