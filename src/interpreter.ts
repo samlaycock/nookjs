@@ -5933,13 +5933,15 @@ export class Interpreter {
       if (arg instanceof FunctionValue) {
         // Wrap sandbox function as a callable native function
         if (isAsync || arg.isAsync) {
-          wrappedArgs[i] = async (...hostArgs: any[]) => {
-            return await this.executeSandboxFunctionAsync(arg, hostArgs, undefined);
-          };
+          wrappedArgs[i] = ((interpreter: Interpreter, callback: FunctionValue) =>
+            async function (this: any, ...hostArgs: any[]) {
+              return await interpreter.executeSandboxFunctionAsync(callback, hostArgs, this);
+            })(this, arg);
         } else {
-          wrappedArgs[i] = (...hostArgs: any[]) => {
-            return this.executeSandboxFunction(arg, hostArgs, undefined);
-          };
+          wrappedArgs[i] = ((interpreter: Interpreter, callback: FunctionValue) =>
+            function (this: any, ...hostArgs: any[]) {
+              return interpreter.executeSandboxFunction(callback, hostArgs, this);
+            })(this, arg);
         }
       } else {
         // Unwrap proxied TypedArrays/ArrayBuffers for native method compatibility
