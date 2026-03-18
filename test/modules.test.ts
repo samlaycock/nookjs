@@ -2364,6 +2364,22 @@ describe("Module System", () => {
       );
       expect(result.result).toBe("ab");
     });
+
+    test("should throw when a cyclic named import is read before initialization", async () => {
+      const files = new Map([
+        ["a.js", `import { b } from "b.js"; export const a = b;`],
+        ["b.js", `import { a } from "a.js"; export const b = a;`],
+      ]);
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver: createResolver(files) },
+      });
+
+      expect(
+        interpreter.evaluateModuleAsync(`import { a } from "a.js"; export { a };`, {
+          path: "main.js",
+        }),
+      ).rejects.toThrow("before initialization");
+    });
   });
 
   // ============================================================================

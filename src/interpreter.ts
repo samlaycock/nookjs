@@ -3951,9 +3951,29 @@ export class Interpreter {
   ): void {
     for (const exportName of this.collectStaticExportNames(ast)) {
       if (!(exportName in moduleRecord.exports)) {
-        moduleRecord.exports[exportName] = undefined;
+        this.defineUninitializedModuleExport(moduleRecord.exports, exportName);
       }
     }
+  }
+
+  private defineUninitializedModuleExport(exports: Record<string, any>, exportName: string): void {
+    let initialized = false;
+    let value: any;
+
+    Object.defineProperty(exports, exportName, {
+      configurable: true,
+      enumerable: true,
+      get: () => {
+        if (!initialized) {
+          throw new InterpreterError(`Cannot access '${exportName}' before initialization`);
+        }
+        return value;
+      },
+      set: (nextValue: any) => {
+        initialized = true;
+        value = nextValue;
+      },
+    });
   }
 
   private defineLiveExport(
