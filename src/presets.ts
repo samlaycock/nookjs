@@ -1,5 +1,11 @@
 import type { InterpreterOptions, LanguageFeature } from "./interpreter";
 
+import {
+  ESNEXT_ECMA_VERSION,
+  applyMergedEcmaPresetVersion,
+  attachEcmaPresetVersion,
+} from "./ecmascript-builtins";
+
 /**
  * Preset configurations for different ECMAScript versions.
  *
@@ -39,75 +45,78 @@ import type { InterpreterOptions, LanguageFeature } from "./interpreter";
  * - for-of loops (ES2015)
  * - async/await (ES2017)
  */
-export const ES5: InterpreterOptions = {
-  featureControl: {
-    mode: "whitelist",
-    features: [
-      // Control flow
-      "IfStatement",
-      "WhileStatement",
-      "DoWhileStatement",
-      "ForStatement",
-      "ForInStatement",
-      "SwitchStatement",
-      "TryCatchStatement",
+export const ES5: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    featureControl: {
+      mode: "whitelist",
+      features: [
+        // Control flow
+        "IfStatement",
+        "WhileStatement",
+        "DoWhileStatement",
+        "ForStatement",
+        "ForInStatement",
+        "SwitchStatement",
+        "TryCatchStatement",
 
-      // Functions
-      "FunctionDeclarations",
-      "FunctionExpressions",
-      "CallExpression",
-      "NewExpression",
-      "ReturnStatement",
+        // Functions
+        "FunctionDeclarations",
+        "FunctionExpressions",
+        "CallExpression",
+        "NewExpression",
+        "ReturnStatement",
 
-      // Variables (only var in ES5)
-      "VariableDeclarations",
+        // Variables (only var in ES5)
+        "VariableDeclarations",
 
-      // Expressions
-      "BinaryOperators",
-      "UnaryOperators",
-      "LogicalOperators",
-      "UpdateExpression",
-      "ConditionalExpression",
-      "MemberExpression",
-      "ThisExpression",
+        // Expressions
+        "BinaryOperators",
+        "UnaryOperators",
+        "LogicalOperators",
+        "UpdateExpression",
+        "ConditionalExpression",
+        "MemberExpression",
+        "ThisExpression",
 
-      // Literals and data structures
-      "ObjectLiterals",
-      "ArrayLiterals",
+        // Literals and data structures
+        "ObjectLiterals",
+        "ArrayLiterals",
 
-      // Control statements
-      "BreakStatement",
-      "ContinueStatement",
-      "ThrowStatement",
-    ],
+        // Control statements
+        "BreakStatement",
+        "ContinueStatement",
+        "ThrowStatement",
+      ],
+    },
+    globals: {
+      // ES5 globals
+      Array,
+      Object,
+      String,
+      Number,
+      Boolean,
+      Date,
+      Math,
+      JSON,
+      Error,
+      TypeError,
+      ReferenceError,
+      SyntaxError,
+      RangeError,
+      URIError,
+      EvalError,
+      parseInt,
+      parseFloat,
+      isNaN,
+      isFinite,
+      encodeURI,
+      encodeURIComponent,
+      decodeURI,
+      decodeURIComponent,
+    },
   },
-  globals: {
-    // ES5 globals
-    Array,
-    Object,
-    String,
-    Number,
-    Boolean,
-    Date,
-    Math,
-    JSON,
-    Error,
-    TypeError,
-    ReferenceError,
-    SyntaxError,
-    RangeError,
-    URIError,
-    EvalError,
-    parseInt,
-    parseFloat,
-    isNaN,
-    isFinite,
-    encodeURI,
-    encodeURIComponent,
-    decodeURI,
-    decodeURIComponent,
-  },
-};
+  5,
+);
 
 /**
  * ES6 / ES2015 (ECMAScript 2015) - June 2015
@@ -128,39 +137,42 @@ export const ES5: InterpreterOptions = {
  * - Modules (not applicable to interpreter)
  * - Generators
  */
-export const ES2015: InterpreterOptions = {
-  featureControl: {
-    mode: "whitelist",
-    features: [
-      // All ES5 features
-      ...(ES5.featureControl!.features as LanguageFeature[]),
+export const ES2015: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    featureControl: {
+      mode: "whitelist",
+      features: [
+        // All ES5 features
+        ...(ES5.featureControl!.features as LanguageFeature[]),
 
-      // ES2015 additions
-      "LetConst",
-      "ArrowFunctions",
-      "TemplateLiterals",
-      "Destructuring",
-      "SpreadOperator",
-      "RestParameters",
-      "ForOfStatement",
-      "DefaultParameters",
-      "Generators",
-      "YieldExpression",
-      "Classes",
-    ],
+        // ES2015 additions
+        "LetConst",
+        "ArrowFunctions",
+        "TemplateLiterals",
+        "Destructuring",
+        "SpreadOperator",
+        "RestParameters",
+        "ForOfStatement",
+        "DefaultParameters",
+        "Generators",
+        "YieldExpression",
+        "Classes",
+      ],
+    },
+    globals: {
+      // ES5 globals
+      ...ES5.globals,
+      // ES6 additions
+      Promise,
+      Symbol,
+      Map,
+      Set,
+      WeakMap,
+      WeakSet,
+    },
   },
-  globals: {
-    // ES5 globals
-    ...ES5.globals,
-    // ES6 additions
-    Promise,
-    Symbol,
-    Map,
-    Set,
-    WeakMap,
-    WeakSet,
-  },
-};
+  2015,
+);
 
 /**
  * ES6 alias for ES2015
@@ -179,13 +191,16 @@ export const ES6 = ES2015;
  * all other binary operators from ES5. To strictly enforce ES2016 semantics,
  * you would need to use a custom validator to check for ** usage.
  */
-export const ES2016: InterpreterOptions = {
-  ...ES2015,
-  globals: {
-    ...ES2015.globals,
-    // ES2016 additions (Array.prototype.includes is on the prototype)
+export const ES2016: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    ...ES2015,
+    globals: {
+      ...ES2015.globals,
+      // ES2016 additions (Array.prototype.includes is on the prototype)
+    },
   },
-};
+  2016,
+);
 
 /**
  * ES2017 (ECMAScript 2017) - June 2017
@@ -196,21 +211,24 @@ export const ES2016: InterpreterOptions = {
  * - String padding methods (on prototype)
  * - Shared memory and atomics (available via BufferAPI addon)
  */
-export const ES2017: InterpreterOptions = {
-  featureControl: {
-    mode: "whitelist",
-    features: [
-      // All ES2016 features
-      ...(ES2016.featureControl!.features as LanguageFeature[]),
-      // ES2017 additions
-      "AsyncAwait",
-    ],
+export const ES2017: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    featureControl: {
+      mode: "whitelist",
+      features: [
+        // All ES2016 features
+        ...(ES2016.featureControl!.features as LanguageFeature[]),
+        // ES2017 additions
+        "AsyncAwait",
+      ],
+    },
+    globals: {
+      ...ES2016.globals,
+      // ES2017 additions (Object.values/entries are on Object prototype)
+    },
   },
-  globals: {
-    ...ES2016.globals,
-    // ES2017 additions (Object.values/entries are on Object prototype)
-  },
-};
+  2017,
+);
 
 /**
  * ES2018 (ECMAScript 2018) - June 2018
@@ -221,13 +239,16 @@ export const ES2017: InterpreterOptions = {
  * - Promise.finally() (on prototype)
  * - RegExp improvements (on prototype)
  */
-export const ES2018: InterpreterOptions = {
-  ...ES2017,
-  featureControl: {
-    mode: "whitelist" as const,
-    features: [...(ES2017.featureControl!.features as LanguageFeature[]), "AsyncGenerators"],
+export const ES2018: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    ...ES2017,
+    featureControl: {
+      mode: "whitelist" as const,
+      features: [...(ES2017.featureControl!.features as LanguageFeature[]), "AsyncGenerators"],
+    },
   },
-};
+  2018,
+);
 
 /**
  * ES2019 (ECMAScript 2019) - June 2019
@@ -239,10 +260,13 @@ export const ES2018: InterpreterOptions = {
  * - Optional catch binding (parser-level, automatically supported)
  * - Symbol.description (on Symbol prototype)
  */
-export const ES2019: InterpreterOptions = {
-  ...ES2018,
-  // No new language features at interpreter level
-};
+export const ES2019: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    ...ES2018,
+    // No new language features at interpreter level
+  },
+  2019,
+);
 
 /**
  * ES2020 (ECMAScript 2020) - June 2020
@@ -257,24 +281,27 @@ export const ES2019: InterpreterOptions = {
  *
  * Note: Nullish coalescing is included under LogicalOperators in all presets.
  */
-export const ES2020: InterpreterOptions = {
-  ...ES2019,
-  featureControl: {
-    mode: "whitelist" as const,
-    features: [
-      ...(ES2019.featureControl!.features as LanguageFeature[]),
-      "OptionalChaining",
-      "BigIntLiteral",
-      "DynamicImport",
-    ],
+export const ES2020: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    ...ES2019,
+    featureControl: {
+      mode: "whitelist" as const,
+      features: [
+        ...(ES2019.featureControl!.features as LanguageFeature[]),
+        "OptionalChaining",
+        "BigIntLiteral",
+        "DynamicImport",
+      ],
+    },
+    globals: {
+      ...ES2019.globals,
+      // ES2020 additions
+      BigInt,
+      globalThis: typeof globalThis !== "undefined" ? globalThis : global,
+    },
   },
-  globals: {
-    ...ES2019.globals,
-    // ES2020 additions
-    BigInt,
-    globalThis: typeof globalThis !== "undefined" ? globalThis : global,
-  },
-};
+  2020,
+);
 
 /**
  * ES2021 (ECMAScript 2021) - June 2021
@@ -287,20 +314,23 @@ export const ES2020: InterpreterOptions = {
  * - Logical assignment operators (||=, &&=, ??=)
  * - Numeric separators (parser-level, automatically supported)
  */
-export const ES2021: InterpreterOptions = {
-  ...ES2020,
-  featureControl: {
-    mode: "whitelist" as const,
-    features: [...(ES2020.featureControl!.features as LanguageFeature[]), "LogicalAssignment"],
+export const ES2021: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    ...ES2020,
+    featureControl: {
+      mode: "whitelist" as const,
+      features: [...(ES2020.featureControl!.features as LanguageFeature[]), "LogicalAssignment"],
+    },
+    globals: {
+      ...ES2020.globals,
+      // ES2021 additions
+      WeakRef: typeof WeakRef !== "undefined" ? WeakRef : undefined,
+      FinalizationRegistry:
+        typeof FinalizationRegistry !== "undefined" ? FinalizationRegistry : undefined,
+    },
   },
-  globals: {
-    ...ES2020.globals,
-    // ES2021 additions
-    WeakRef: typeof WeakRef !== "undefined" ? WeakRef : undefined,
-    FinalizationRegistry:
-      typeof FinalizationRegistry !== "undefined" ? FinalizationRegistry : undefined,
-  },
-};
+  2021,
+);
 
 /**
  * ES2022 (ECMAScript 2022) - June 2022
@@ -315,18 +345,21 @@ export const ES2021: InterpreterOptions = {
  * - Object.hasOwn() (on Object)
  * - Error.cause (on Error)
  */
-export const ES2022: InterpreterOptions = {
-  ...ES2021,
-  featureControl: {
-    mode: "whitelist" as const,
-    features: [
-      ...(ES2021.featureControl!.features as LanguageFeature[]),
-      "ClassFields",
-      "PrivateFields",
-      "StaticBlocks",
-    ],
+export const ES2022: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    ...ES2021,
+    featureControl: {
+      mode: "whitelist" as const,
+      features: [
+        ...(ES2021.featureControl!.features as LanguageFeature[]),
+        "ClassFields",
+        "PrivateFields",
+        "StaticBlocks",
+      ],
+    },
   },
-};
+  2022,
+);
 
 /**
  * ES2023 (ECMAScript 2023) - June 2023
@@ -337,10 +370,13 @@ export const ES2022: InterpreterOptions = {
  * - Hashbang grammar (parser-level, automatically supported)
  * - Symbols as WeakMap keys (runtime behavior)
  */
-export const ES2023: InterpreterOptions = {
-  ...ES2022,
-  // No new language features at interpreter level
-};
+export const ES2023: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    ...ES2022,
+    // No new language features at interpreter level
+  },
+  2023,
+);
 
 /**
  * ES2024 (ECMAScript 2024) - June 2024
@@ -351,10 +387,13 @@ export const ES2023: InterpreterOptions = {
  * - ArrayBuffer transfer methods (on ArrayBuffer)
  * - RegExp v flag (on RegExp)
  */
-export const ES2024: InterpreterOptions = {
-  ...ES2023,
-  // No new language features at interpreter level
-};
+export const ES2024: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    ...ES2023,
+    // No new language features at interpreter level
+  },
+  2024,
+);
 
 /**
  * ESNext - Latest features
@@ -362,13 +401,16 @@ export const ES2024: InterpreterOptions = {
  * Includes all features currently supported by the interpreter,
  * regardless of standardization status.
  */
-export const ESNext: InterpreterOptions = {
-  // No feature control - allow everything
-  globals: {
-    ...ES2024.globals,
-    // Add any experimental globals here
+export const ESNext: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    // No feature control - allow everything
+    globals: {
+      ...ES2024.globals,
+      // Add any experimental globals here
+    },
   },
-};
+  ESNEXT_ECMA_VERSION,
+);
 
 /**
  * Helper to get all available preset names
@@ -447,6 +489,7 @@ export function preset(
   ...presets: (InterpreterOptions | Partial<InterpreterOptions>)[]
 ): InterpreterOptions {
   const result: InterpreterOptions = {};
+  applyMergedEcmaPresetVersion(result, presets);
 
   for (const p of presets) {
     // Merge globals

@@ -4,7 +4,12 @@ import { Interpreter } from "../src/interpreter";
 import {
   preset,
   ES5,
+  ES2015,
+  ES2020,
+  ES2021,
   ES2022,
+  ES2023,
+  ES2024,
   FetchAPI,
   ConsoleAPI,
   TimersAPI,
@@ -464,6 +469,48 @@ describe("Presets", () => {
           [err.name, err.message]
         `);
         expect(result).toEqual(["TypeError", "test error"]);
+      });
+    });
+
+    describe("ECMAScript preset built-in gating", () => {
+      it("should hide later-era APIs from older presets", () => {
+        const es5 = new Interpreter(ES5);
+        const es2015 = new Interpreter(ES2015);
+        const es2020 = new Interpreter(ES2020);
+        const es2021 = new Interpreter(ES2021);
+        const es2022 = new Interpreter(ES2022);
+        const es2023 = new Interpreter(ES2023);
+        const es2024 = new Interpreter(ES2024);
+
+        expect(es5.evaluate("typeof Array.from")).toBe("undefined");
+        expect(es5.evaluate("typeof [1, 2, 3].includes")).toBe("undefined");
+        expect(es5.evaluate("typeof [3, 1, 2].toSorted")).toBe("undefined");
+        expect(es5.evaluate('typeof "foo".replaceAll')).toBe("undefined");
+        expect(es5.evaluate("typeof Number.isInteger")).toBe("undefined");
+        expect(es5.evaluate("typeof Math.trunc")).toBe("undefined");
+        expect(es5.evaluate("typeof Object.groupBy")).toBe("undefined");
+
+        expect(es2015.evaluate("typeof Array.from")).toBe("function");
+        expect(es2015.evaluate("typeof [1, 2, 3].includes")).toBe("undefined");
+        expect(es2015.evaluate("typeof Promise.any")).toBe("undefined");
+        expect(es2015.evaluate("typeof Object.values")).toBe("undefined");
+
+        expect(es2020.evaluate('typeof "foo".replaceAll')).toBe("undefined");
+        expect(es2020.evaluate("typeof Promise.any")).toBe("undefined");
+        expect(es2020.evaluate("typeof Promise.withResolvers")).toBe("undefined");
+
+        expect(es2021.evaluate('typeof "foo".replaceAll')).toBe("function");
+        expect(es2021.evaluate("typeof Promise.any")).toBe("function");
+        expect(es2021.evaluate("typeof Object.hasOwn")).toBe("undefined");
+
+        expect(es2022.evaluate("typeof Object.hasOwn")).toBe("function");
+        expect(es2022.evaluate("typeof [1, 2, 3].findLast")).toBe("undefined");
+
+        expect(es2023.evaluate("typeof [1, 2, 3].findLast")).toBe("function");
+        expect(es2023.evaluate("typeof Promise.withResolvers")).toBe("undefined");
+
+        expect(es2024.evaluate("typeof Promise.withResolvers")).toBe("function");
+        expect(es2024.evaluate("typeof Object.groupBy")).toBe("function");
       });
     });
 

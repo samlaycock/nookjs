@@ -20,6 +20,12 @@ import type { NativeUnwrapAllowlistEntry } from "./readonly-proxy";
 
 import { parseModule, parseScript } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
+import {
+  getEcmaPresetVersion,
+  isEcmaBuiltinStaticPropertyAvailable,
+  isEcmaBuiltinInstancePropertyAvailable,
+  type EcmaPresetVersion,
+} from "./ecmascript-builtins";
 import { InterpreterError, SecurityError, ErrorCode } from "./errors";
 import { ModuleSystem } from "./modules";
 import { ReadOnlyProxy, PROXY_TARGET, sanitizeErrorStack, unwrapForNative } from "./readonly-proxy";
@@ -1756,6 +1762,7 @@ export class HostFunctionValue {
     public rethrowErrors: boolean = false,
     public skipArgWrapping: boolean = false, // When true, FunctionValue args are passed through without wrapping
     public securityOptions?: SecurityOptions,
+    public ecmaVersion?: EcmaPresetVersion,
   ) {
     // Return a Proxy that blocks dangerous property access on host functions
     // while allowing access to static methods (e.g., Promise.resolve, Array.isArray)
@@ -1795,6 +1802,16 @@ export class HostFunctionValue {
         // This includes both own properties and inherited ones (e.g., Uint8Array.from
         // which is inherited from %TypedArray%)
         // e.g., Promise.resolve, Array.isArray, Object.keys, Uint8Array.from
+        if (
+          !isEcmaBuiltinStaticPropertyAvailable(
+            target.name,
+            target.hostFunc,
+            prop,
+            target.ecmaVersion,
+          )
+        ) {
+          return undefined;
+        }
         if (prop in target.hostFunc) {
           const val = (target.hostFunc as any)[prop];
           // For function properties (static methods), bind them to the parent
@@ -1810,12 +1827,18 @@ export class HostFunctionValue {
               bound,
               `${target.name}.${String(prop)}`,
               target.securityOptions,
+              target.ecmaVersion,
             );
             target.staticMethodCache.set(prop, { original: val, wrapped });
             return wrapped;
           }
           // Wrap non-function values through ReadOnlyProxy for security
-          return ReadOnlyProxy.wrap(val, `${target.name}.${String(prop)}`, target.securityOptions);
+          return ReadOnlyProxy.wrap(
+            val,
+            `${target.name}.${String(prop)}`,
+            target.securityOptions,
+            target.ecmaVersion,
+          );
         }
 
         // Block all other property access for security
@@ -1842,6 +1865,16 @@ export class HostFunctionValue {
         if (isDangerousProperty(prop)) {
           return false;
         }
+        if (
+          !isEcmaBuiltinStaticPropertyAvailable(
+            target.name,
+            target.hostFunc,
+            prop,
+            target.ecmaVersion,
+          )
+        ) {
+          return false;
+        }
         // Check for both own and inherited properties (e.g., Uint8Array.from)
         return prop in target.hostFunc;
       },
@@ -1849,7 +1882,14 @@ export class HostFunctionValue {
       ownKeys(target) {
         // Only expose own properties of the underlying function, not internal properties
         const funcKeys = Object.getOwnPropertyNames(target.hostFunc).filter(
-          (key) => !isDangerousProperty(key),
+          (key) =>
+            !isDangerousProperty(key) &&
+            isEcmaBuiltinStaticPropertyAvailable(
+              target.name,
+              target.hostFunc,
+              key,
+              target.ecmaVersion,
+            ),
         );
         return funcKeys;
       },
@@ -1865,6 +1905,16 @@ export class HostFunctionValue {
           return undefined;
         }
         if (isDangerousProperty(prop)) {
+          return undefined;
+        }
+        if (
+          !isEcmaBuiltinStaticPropertyAvailable(
+            target.name,
+            target.hostFunc,
+            prop,
+            target.ecmaVersion,
+          )
+        ) {
           return undefined;
         }
         if (Object.prototype.hasOwnProperty.call(target.hostFunc, prop)) {
@@ -2601,6 +2651,7 @@ export class Interpreter {
   private moduleImportMetaStack: any[] = [];
   private strictEvaluationIsolation: boolean;
   private numericSemantics: NumericSemantics;
+  private ecmaPresetVersion?: EcmaPresetVersion;
   private queuedEvaluations = 0;
   private nodeHandlers: Record<
     string,
@@ -2615,6 +2666,7 @@ export class Interpreter {
     this.constructorFeatureSet = this.constructorFeatureControl
       ? new Set(this.constructorFeatureControl.features)
       : undefined;
+    this.ecmaPresetVersion = getEcmaPresetVersion(options);
 
     // Initialize security options with defaults (both true for maximum security)
     this.securityOptions = {
@@ -2878,7 +2930,12 @@ export class Interpreter {
       // - Functions become HostFunctionValue (via proxy)
       // - Objects get read-only protection and recursive wrapping
       // - Primitives pass through unchanged
-      const wrappedValue = ReadOnlyProxy.wrap(value, key, this.securityOptions);
+      const gatedValue = ReadOnlyProxy.wrap(
+        value,
+        key,
+        this.securityOptions,
+        this.ecmaPresetVersion,
+      );
 
       if (this.environment.has(key)) {
         // Variable already exists - decide whether to override
@@ -2889,7 +2946,7 @@ export class Interpreter {
             overriddenConstructorGlobals!.set(key, this.environment.get(key));
           }
           // Try to force update the global (only works for injected globals, not user variables)
-          const wasUpdated = this.environment.forceSet(key, wrappedValue, true);
+          const wasUpdated = this.environment.forceSet(key, gatedValue, true);
           if (wasUpdated && trackKeys) {
             perCallGlobalKeys!.add(key);
           }
@@ -2897,7 +2954,7 @@ export class Interpreter {
         // If not allowOverride, skip this variable (don't overwrite user code variables)
       } else {
         // Variable doesn't exist yet - declare it as const and mark as global
-        this.environment.declare(key, wrappedValue, "const", true);
+        this.environment.declare(key, gatedValue, "const", true);
         if (trackKeys) {
           perCallGlobalKeys!.add(key);
         }
@@ -8463,6 +8520,7 @@ export class Interpreter {
       rethrowErrors,
       skipArgWrapping,
       this.securityOptions,
+      this.ecmaPresetVersion,
     );
   }
 
@@ -9241,6 +9299,37 @@ export class Interpreter {
     return value;
   }
 
+  private isBuiltinInstancePropertyAvailable(object: any, property: string): boolean {
+    if (Array.isArray(object)) {
+      if (Object.prototype.hasOwnProperty.call(object, property)) {
+        return true;
+      }
+      return isEcmaBuiltinInstancePropertyAvailable(
+        "Array.prototype",
+        property,
+        this.ecmaPresetVersion,
+      );
+    }
+
+    if (typeof object === "string") {
+      return isEcmaBuiltinInstancePropertyAvailable(
+        "String.prototype",
+        property,
+        this.ecmaPresetVersion,
+      );
+    }
+
+    if (object instanceof Promise) {
+      return isEcmaBuiltinInstancePropertyAvailable(
+        "Promise.prototype",
+        property,
+        this.ecmaPresetVersion,
+      );
+    }
+
+    return true;
+  }
+
   private resolveSymbolPropertyAccess(object: any, property: symbol): any {
     this.validateSymbolProperty(property);
     if (this.isReadOnlyProxyObject(object)) {
@@ -9292,6 +9381,10 @@ export class Interpreter {
     const length = this.getLengthProperty(object, property);
     if (length !== null) {
       return length;
+    }
+
+    if (!this.isBuiltinInstancePropertyAvailable(object, property)) {
+      return undefined;
     }
 
     // Handle generator methods (next, return, throw)

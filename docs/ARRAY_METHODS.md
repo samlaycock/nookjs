@@ -2,7 +2,7 @@
 
 The interpreter exposes `Array.prototype` methods via explicit wrappers for callback-aware
 methods and native delegation for the rest. These methods are automatically available on arrays
-in all presets.
+when the active preset includes the ECMAScript edition that introduced them.
 
 ## Supported Methods by ECMAScript Version
 
@@ -20,7 +20,6 @@ in all presets.
 | `join()`        | Joins elements as string          | `[1,2].join(',')` → `"1,2"`                         |
 | `indexOf()`     | Finds first index                 | `[1,2,1].indexOf(1)` → `0`                          |
 | `lastIndexOf()` | Finds last index                  | `[1,2,1].lastIndexOf(1)` → `2`                      |
-| `includes()`    | Checks if value exists            | `[1,2].includes(2)` → `true`                        |
 | `reverse()`     | Reverses in place                 | `[1,2].reverse()` → `[2,1]`                         |
 | `sort()`        | Sorts in place                    | `[2,1].sort()` → `[1,2]`                            |
 | `map()`         | Maps each element                 | `[1,2].map(x => x*2)` → `[2,4]`                     |
@@ -30,13 +29,24 @@ in all presets.
 | `forEach()`     | Executes for each                 | `[1,2].forEach(x => console.log(x))`                |
 | `every()`       | Tests all elements                | `[1,2,3].every(x => x>0)` → `true`                  |
 | `some()`        | Tests some elements               | `[1,2,3].some(x => x>2)` → `true`                   |
-| `find()`        | Finds first match                 | `[1,2,3].find(x => x>1)` → `2`                      |
-| `findIndex()`   | Finds first index                 | `[1,2,3].findIndex(x => x>1)` → `1`                 |
-| `copyWithin()`  | Copies within array               | `[1,2,3,4].copyWithin(0,2)` → `[3,4,3,4]`           |
-| `fill()`        | Fills with value                  | `[1,2,3].fill(0)` → `[0,0,0]`                       |
-| `entries()`     | Returns iterator                  | `[1,2].entries().next().value` → `[0,1]`            |
-| `keys()`        | Returns keys iterator             | `[1,2].keys().next().value` → `0`                   |
-| `values()`      | Returns values iterator           | `[1,2].values().next().value` → `1`                 |
+
+### ES2015+ Additions
+
+| Method         | Description             | Example                                   |
+| -------------- | ----------------------- | ----------------------------------------- |
+| `copyWithin()` | Copies within array     | `[1,2,3,4].copyWithin(0,2)` → `[3,4,3,4]` |
+| `entries()`    | Returns iterator        | `[1,2].entries().next().value` → `[0,1]`  |
+| `fill()`       | Fills with value        | `[1,2,3].fill(0)` → `[0,0,0]`             |
+| `find()`       | Finds first match       | `[1,2,3].find(x => x>1)` → `2`            |
+| `findIndex()`  | Finds first index       | `[1,2,3].findIndex(x => x>1)` → `1`       |
+| `keys()`       | Returns keys iterator   | `[1,2].keys().next().value` → `0`         |
+| `values()`     | Returns values iterator | `[1,2].values().next().value` → `1`       |
+
+### ES2016+ Additions
+
+| Method       | Description            | Example                      |
+| ------------ | ---------------------- | ---------------------------- |
+| `includes()` | Checks if value exists | `[1,2].includes(2)` → `true` |
 
 ### ES2019+ Additions
 
@@ -119,4 +129,5 @@ The `at()` method supports negative indices similar to Python:
 
 ## Availability
 
-All Array.prototype methods are available in all presets that include the `Array` global (ES5 and above). Methods introduced in later ECMAScript versions are automatically available when running in those preset contexts.
+Array methods are gated by the active ECMAScript preset. If a method was standardized after the
+selected preset, reading it returns `undefined` instead of leaking the host runtime's latest API.
