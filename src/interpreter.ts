@@ -6012,10 +6012,10 @@ export class Interpreter {
       throw new InterpreterError("Illegal return statement");
     }
     if (isControlFlowKind(result, "break")) {
-      throw new InterpreterError("Illegal break statement");
+      this.throwInvalidBreakOrContinue(result);
     }
     if (isControlFlowKind(result, "continue")) {
-      throw new InterpreterError("Illegal continue statement");
+      this.throwInvalidBreakOrContinue(result);
     }
     return result;
   }
@@ -6025,12 +6025,24 @@ export class Interpreter {
       return result.value;
     }
     if (isControlFlowKind(result, "break")) {
-      throw new InterpreterError("Illegal break statement");
+      this.throwInvalidBreakOrContinue(result);
     }
     if (isControlFlowKind(result, "continue")) {
-      throw new InterpreterError("Illegal continue statement");
+      this.throwInvalidBreakOrContinue(result);
     }
     return undefined;
+  }
+
+  private throwInvalidBreakOrContinue(result: ControlFlowSignal): never {
+    if (result.label !== null) {
+      throw new InterpreterError(`Undefined label '${result.label}'`);
+    }
+
+    if (result.kind === "break") {
+      throw new InterpreterError("Illegal break statement");
+    }
+
+    throw new InterpreterError("Illegal continue statement");
   }
 
   /**
