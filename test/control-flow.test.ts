@@ -3863,6 +3863,16 @@ describe("Control Flow", () => {
           `);
           expect(result).toBe(10); // 5 iterations of outer * 2 iterations of inner
         });
+
+        test("throws for a break targeting an undefined label", () => {
+          expect(() =>
+            interpreter.evaluate(`
+              while (true) {
+                break missing;
+              }
+            `),
+          ).toThrow("Undefined label 'missing'");
+        });
       });
 
       describe("Labeled continue", () => {
@@ -3910,6 +3920,16 @@ describe("Control Flow", () => {
             result;
           `);
           expect(result).toBe(12); // 3 * (5 - 1 skip) = 12
+        });
+
+        test("throws for a continue targeting an undefined label", () => {
+          expect(() =>
+            interpreter.evaluate(`
+              while (true) {
+                continue missing;
+              }
+            `),
+          ).toThrow("Undefined label 'missing'");
         });
       });
 
@@ -4009,6 +4029,26 @@ describe("Control Flow", () => {
             result;
           `);
           expect(result).toBe(3);
+        });
+
+        test("throws for a break targeting an undefined label in async evaluation", () => {
+          return expect(
+            interpreter.evaluateAsync(`
+              while (true) {
+                break missing;
+              }
+            `),
+          ).rejects.toThrow("Undefined label 'missing'");
+        });
+
+        test("throws for a continue targeting an undefined label in async evaluation", () => {
+          return expect(
+            interpreter.evaluateAsync(`
+              while (true) {
+                continue missing;
+              }
+            `),
+          ).rejects.toThrow("Undefined label 'missing'");
         });
       });
     });
