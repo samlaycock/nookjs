@@ -188,6 +188,19 @@ describe("Collections", () => {
         expect(result).toEqual(["a1", "b2"]);
       });
 
+      it("should honor thisArg in forEach callbacks", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const ctx = { sum: 0 };
+          const map = new Map([[1, 2]]);
+          map.forEach(function (value, key) {
+            this.sum += value + key;
+          }, ctx);
+          ctx.sum;
+        `);
+        expect(result).toBe(3);
+      });
+
       it("should expose keys, values, and entries iterators", () => {
         const interpreter = new Interpreter(ES2015);
         const result = interpreter.evaluate(`
@@ -337,6 +350,19 @@ describe("Collections", () => {
           values;
         `);
         expect(result).toEqual([2, 4, 6]);
+      });
+
+      it("should honor thisArg in forEach callbacks", () => {
+        const interpreter = new Interpreter(ES2015);
+        const result = interpreter.evaluate(`
+          const ctx = { total: 0 };
+          const set = new Set([1, 2, 3]);
+          set.forEach(function (value, key) {
+            this.total += value + key;
+          }, ctx);
+          ctx.total;
+        `);
+        expect(result).toBe(12);
       });
 
       it("should expose values and entries iterators", () => {
