@@ -1026,42 +1026,45 @@ export const NodeJS: InterpreterOptions = preset(
  * `);
  * ```
  */
-export const Minimal: InterpreterOptions = {
-  ...ES2024,
-  globals: {
-    // Only the most basic globals
-    Array,
-    Object,
-    String,
-    Number,
-    Boolean,
-    Date,
-    Math,
-    JSON,
-    Error,
-    TypeError,
-    ReferenceError,
-    SyntaxError,
-    RangeError,
-    URIError,
-    EvalError,
-    parseInt,
-    parseFloat,
-    isNaN,
-    isFinite,
-    encodeURI,
-    encodeURIComponent,
-    decodeURI,
-    decodeURIComponent,
-    // ES6+ basics
-    Promise,
-    Symbol,
-    Map,
-    Set,
-    WeakMap,
-    WeakSet,
-    BigInt,
-    // ES2020+
-    globalThis: typeof globalThis !== "undefined" ? globalThis : global,
+export const Minimal: InterpreterOptions = attachEcmaPresetVersion(
+  {
+    ...ES2024,
+    globals: {
+      // Only the most basic globals
+      Array,
+      Object,
+      String,
+      Number,
+      Boolean,
+      Date,
+      Math,
+      JSON,
+      Error,
+      TypeError,
+      ReferenceError,
+      SyntaxError,
+      RangeError,
+      URIError,
+      EvalError,
+      parseInt,
+      parseFloat,
+      isNaN,
+      isFinite,
+      encodeURI,
+      encodeURIComponent,
+      decodeURI,
+      decodeURIComponent,
+      // ES6+ basics
+      Promise,
+      Symbol,
+      Map,
+      Set,
+      WeakMap,
+      WeakSet,
+      BigInt,
+      // ES2020+
+      globalThis: typeof globalThis !== "undefined" ? globalThis : global,
+    },
   },
-};
+  2024,
+);

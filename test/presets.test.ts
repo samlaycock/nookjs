@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 
+import { attachEcmaPresetVersion, getEcmaPresetVersion } from "../src/ecmascript-builtins";
 import { Interpreter } from "../src/interpreter";
 import {
   preset,
@@ -10,6 +11,7 @@ import {
   ES2022,
   ES2023,
   ES2024,
+  Minimal,
   FetchAPI,
   ConsoleAPI,
   TimersAPI,
@@ -511,6 +513,24 @@ describe("Presets", () => {
 
         expect(es2024.evaluate("typeof Promise.withResolvers")).toBe("function");
         expect(es2024.evaluate("typeof Object.groupBy")).toBe("function");
+      });
+
+      it("should preserve version gating for the Minimal preset", () => {
+        const interpreter = new Interpreter(Minimal);
+
+        expect(getEcmaPresetVersion(Minimal)).toBe(2024);
+        expect(interpreter.evaluate("typeof [1, 2, 3].findLast")).toBe("function");
+        expect(interpreter.evaluate("typeof Promise.withResolvers")).toBe("function");
+        expect(interpreter.evaluate("typeof Object.groupBy")).toBe("function");
+      });
+
+      it("should gate Promise core statics for custom pre-ES2015 version tags", () => {
+        const interpreter = new Interpreter(attachEcmaPresetVersion({}, 5));
+
+        expect(interpreter.evaluate("typeof Promise.resolve")).toBe("undefined");
+        expect(interpreter.evaluate("typeof Promise.reject")).toBe("undefined");
+        expect(interpreter.evaluate("typeof Promise.all")).toBe("undefined");
+        expect(interpreter.evaluate("typeof Promise.race")).toBe("undefined");
       });
     });
 
