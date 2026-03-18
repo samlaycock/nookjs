@@ -2046,6 +2046,133 @@ describe("Arrays", () => {
       });
     });
 
+    describe("callback thisArg", () => {
+      const callbackThisArgCases = [
+        {
+          methodName: "map",
+          expression: `
+            const ctx = { multiplier: 3 };
+            [1, 2].map(function (value) {
+              return value * this.multiplier;
+            }, ctx);
+          `,
+          expected: [3, 6],
+        },
+        {
+          methodName: "filter",
+          expression: `
+            const ctx = { min: 1 };
+            [1, 2, 3].filter(function (value) {
+              return value > this.min;
+            }, ctx);
+          `,
+          expected: [2, 3],
+        },
+        {
+          methodName: "every",
+          expression: `
+            const ctx = { min: 0 };
+            [1, 2, 3].every(function (value) {
+              return value > this.min;
+            }, ctx);
+          `,
+          expected: true,
+        },
+        {
+          methodName: "some",
+          expression: `
+            const ctx = { min: 2 };
+            [1, 2, 3].some(function (value) {
+              return value > this.min;
+            }, ctx);
+          `,
+          expected: true,
+        },
+        {
+          methodName: "forEach",
+          expression: `
+            const ctx = { total: 0 };
+            [1, 2, 3].forEach(function (value) {
+              this.total += value;
+            }, ctx);
+            ctx.total;
+          `,
+          expected: 6,
+        },
+        {
+          methodName: "find",
+          expression: `
+            const ctx = { min: 2 };
+            [1, 2, 3].find(function (value) {
+              return value > this.min;
+            }, ctx);
+          `,
+          expected: 3,
+        },
+        {
+          methodName: "findIndex",
+          expression: `
+            const ctx = { min: 1 };
+            [1, 2, 3].findIndex(function (value) {
+              return value > this.min;
+            }, ctx);
+          `,
+          expected: 1,
+        },
+        {
+          methodName: "flatMap",
+          expression: `
+            const ctx = { multiplier: 3 };
+            [1, 2].flatMap(function (value) {
+              return [value, value * this.multiplier];
+            }, ctx);
+          `,
+          expected: [1, 3, 2, 6],
+        },
+        {
+          methodName: "findLast",
+          expression: `
+            const ctx = { max: 3 };
+            [1, 2, 3, 4].findLast(function (value) {
+              return value < this.max;
+            }, ctx);
+          `,
+          expected: 2,
+        },
+        {
+          methodName: "findLastIndex",
+          expression: `
+            const ctx = { max: 3 };
+            [1, 2, 3, 4].findLastIndex(function (value) {
+              return value < this.max;
+            }, ctx);
+          `,
+          expected: 1,
+        },
+      ];
+
+      for (const { methodName, expression, expected } of callbackThisArgCases) {
+        it(`should honor thisArg for ${methodName}`, () => {
+          expect(interpreter.evaluate(expression)).toEqual(expected);
+        });
+      }
+
+      it("should preserve lexical this for arrow callbacks when thisArg is provided", () => {
+        expect(
+          interpreter.evaluate(`
+            const tracker = {
+              multiplier: 10,
+              mapValues() {
+                const ctx = { multiplier: 99 };
+                return [1, 2].map((value) => value * this.multiplier, ctx);
+              }
+            };
+            tracker.mapValues();
+          `),
+        ).toEqual([10, 20]);
+      });
+    });
+
     describe("Array.prototype.toReversed", () => {
       it("should return reversed array without modifying original", () => {
         expect(

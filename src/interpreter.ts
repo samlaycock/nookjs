@@ -8545,7 +8545,7 @@ export class Interpreter {
       // Higher-order methods - these need special handling to evaluate sandbox functions
       case "map":
         return this.createHostFunction(
-          (callback: FunctionValue | Function) => {
+          (callback: FunctionValue | Function, thisArg?: any) => {
             const length = arr.length;
             const result: any[] = [];
             result.length = length;
@@ -8554,7 +8554,7 @@ export class Interpreter {
                 continue;
               }
               // Call the callback with (element, index, array)
-              const value = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              const value = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               result[i] = value;
             }
             return result;
@@ -8567,14 +8567,14 @@ export class Interpreter {
 
       case "filter":
         return this.createHostFunction(
-          (callback: FunctionValue | Function) => {
+          (callback: FunctionValue | Function, thisArg?: any) => {
             const length = arr.length;
             const result: any[] = [];
             for (let i = 0; i < length; i++) {
               if (!hasIndex(i)) {
                 continue;
               }
-              const shouldInclude = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              const shouldInclude = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               if (shouldInclude) {
                 result.push(arr[i]);
               }
@@ -8621,9 +8621,9 @@ export class Interpreter {
 
       case "find":
         return this.createHostFunction(
-          (callback: FunctionValue | Function) => {
+          (callback: FunctionValue | Function, thisArg?: any) => {
             for (let i = 0; i < arr.length; i++) {
-              const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              const matches = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               if (matches) {
                 return arr[i];
               }
@@ -8638,9 +8638,9 @@ export class Interpreter {
 
       case "findIndex":
         return this.createHostFunction(
-          (callback: FunctionValue | Function) => {
+          (callback: FunctionValue | Function, thisArg?: any) => {
             for (let i = 0; i < arr.length; i++) {
-              const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              const matches = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               if (matches) {
                 return i;
               }
@@ -8655,13 +8655,13 @@ export class Interpreter {
 
       case "every":
         return this.createHostFunction(
-          (callback: FunctionValue | Function) => {
+          (callback: FunctionValue | Function, thisArg?: any) => {
             const length = arr.length;
             for (let i = 0; i < length; i++) {
               if (!hasIndex(i)) {
                 continue;
               }
-              const result = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              const result = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               if (!result) {
                 return false;
               }
@@ -8676,13 +8676,13 @@ export class Interpreter {
 
       case "some":
         return this.createHostFunction(
-          (callback: FunctionValue | Function) => {
+          (callback: FunctionValue | Function, thisArg?: any) => {
             const length = arr.length;
             for (let i = 0; i < length; i++) {
               if (!hasIndex(i)) {
                 continue;
               }
-              const result = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              const result = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               if (result) {
                 return true;
               }
@@ -8697,13 +8697,13 @@ export class Interpreter {
 
       case "forEach":
         return this.createHostFunction(
-          (callback: FunctionValue | Function) => {
+          (callback: FunctionValue | Function, thisArg?: any) => {
             const length = arr.length;
             for (let i = 0; i < length; i++) {
               if (!hasIndex(i)) {
                 continue;
               }
-              this.callCallback(callback, undefined, [arr[i], i, arr]);
+              this.callCallback(callback, thisArg, [arr[i], i, arr]);
             }
             return undefined;
           },
@@ -8735,14 +8735,14 @@ export class Interpreter {
 
       case "flatMap":
         return this.createHostFunction(
-          (callback: FunctionValue | Function) => {
+          (callback: FunctionValue | Function, thisArg?: any) => {
             const length = arr.length;
             const result: any[] = [];
             for (let i = 0; i < length; i++) {
               if (!hasIndex(i)) {
                 continue;
               }
-              const mapped = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              const mapped = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               if (Array.isArray(mapped)) {
                 for (let j = 0; j < mapped.length; j++) {
                   if (j in mapped) {
@@ -8766,9 +8766,9 @@ export class Interpreter {
 
       case "findLast":
         return this.createHostFunction(
-          (callback: FunctionValue | Function) => {
+          (callback: FunctionValue | Function, thisArg?: any) => {
             for (let i = arr.length - 1; i >= 0; i--) {
-              const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              const matches = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               if (matches) {
                 return arr[i];
               }
@@ -8783,9 +8783,9 @@ export class Interpreter {
 
       case "findLastIndex":
         return this.createHostFunction(
-          (callback: FunctionValue | Function) => {
+          (callback: FunctionValue | Function, thisArg?: any) => {
             for (let i = arr.length - 1; i >= 0; i--) {
-              const matches = this.callCallback(callback, undefined, [arr[i], i, arr]);
+              const matches = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               if (matches) {
                 return i;
               }
@@ -9172,45 +9172,12 @@ export class Interpreter {
 
   private callCallback(callback: FunctionValue | Function, thisValue: any, args: any[]): any {
     if (callback instanceof FunctionValue) {
-      return this.callSandboxFunction(callback, thisValue, args);
+      return this.executeSandboxFunction(callback, args, thisValue);
     }
     if (typeof callback === "function") {
       return callback.apply(thisValue, args);
     }
     throw new InterpreterError("Callback must be a function");
-  }
-
-  /**
-   * Helper to call a sandbox function (used by array methods)
-   */
-  private callSandboxFunction(func: FunctionValue, thisValue: any, args: any[]): any {
-    // Save and restore environment
-    const previousEnvironment = this.environment;
-    this.environment = new Environment(func.closure, thisValue, true);
-
-    try {
-      // Bind parameters
-      for (let i = 0; i < func.params.length && i < args.length; i++) {
-        if (func.destructuredParams.has(i)) {
-          const pattern = func.destructuredParams.get(i)!;
-          this.destructurePattern(pattern, args[i], true, "let");
-        } else {
-          this.environment.declare(func.params[i]!, args[i], "let");
-        }
-      }
-
-      // Execute function body
-      const result = this.evaluateNode(func.body);
-
-      // Unwrap return value
-      if (isControlFlowKind(result, "return")) {
-        return result.value;
-      }
-
-      return undefined;
-    } finally {
-      this.environment = previousEnvironment;
-    }
   }
 
   private evaluateArrayExpression(node: ESTree.ArrayExpression): any {
