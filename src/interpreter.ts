@@ -8622,7 +8622,8 @@ export class Interpreter {
       case "find":
         return this.createHostFunction(
           (callback: FunctionValue | Function, thisArg?: any) => {
-            for (let i = 0; i < arr.length; i++) {
+            const length = arr.length;
+            for (let i = 0; i < length; i++) {
               const matches = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               if (matches) {
                 return arr[i];
@@ -8639,7 +8640,8 @@ export class Interpreter {
       case "findIndex":
         return this.createHostFunction(
           (callback: FunctionValue | Function, thisArg?: any) => {
-            for (let i = 0; i < arr.length; i++) {
+            const length = arr.length;
+            for (let i = 0; i < length; i++) {
               const matches = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               if (matches) {
                 return i;
