@@ -88,6 +88,13 @@ for (const [index, value] of [1, 2].entries()) {
 }
 ```
 
+### Callback `thisArg`
+
+Callback-based methods that accept an optional `thisArg`, including `map()`, `filter()`,
+`every()`, `some()`, `forEach()`, `find()`, `findIndex()`, `findLast()`, `findLastIndex()`,
+and `flatMap()`, honor that binding for classic functions. Arrow functions still keep lexical
+`this`, matching native JavaScript.
+
 ### findLast / findLastIndex Behavior
 
 These methods iterate from the end of the array:
