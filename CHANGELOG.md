@@ -1,5 +1,27 @@
 # nookjs
 
+## 0.6.1
+
+### Patch Changes
+
+- 72191f0: Honor `thisArg` for callback-based array helpers, including `map`, `filter`, `every`, `some`,
+  `forEach`, `find`, `findIndex`, `findLast`, `findLastIndex`, and `flatMap`, while preserving
+  lexical `this` for arrow callbacks.
+- 26e7a70: Reject illegal top-level `return`, `break`, and `continue` statements with native-style `InterpreterError`s instead of leaking internal control-flow markers.
+- 2f97720: Add regression coverage for `reduce` and `reduceRight` accumulator selection with explicit
+  `undefined` initial values and all-hole sparse arrays.
+- 5fe452d: Fix callback-based array helpers so sparse arrays skip holes like native JavaScript for `map`, `filter`, `every`, `some`, `forEach`, `flatMap`, `reduce`, and `reduceRight`.
+- 62fa53e: Add `Atomics` to `BufferAPI` alongside `SharedArrayBuffer`, and unwrap shared buffers for native constructors so shared-memory views work correctly inside the sandbox.
+- accc2ef: Throw an initialization error for cyclic ES module reads that access named exports before those bindings are initialized.
+- e88478d: Honor `thisArg` when sandbox callbacks are passed to delegated `Map.prototype.forEach`
+  and `Set.prototype.forEach`.
+- cea7db6: Cache primitive method wrappers so repeated reads preserve identity for explicit string helpers and delegated primitive prototype methods.
+- ef99daf: Snapshot the initial length for `Array.prototype.find` and `Array.prototype.findIndex` so
+  callback-based iteration ignores elements appended during traversal, and add regression coverage
+  for mutation during `map`, `filter`, `forEach`, `find`, and `findIndex`.
+- c52e883: Throw `Undefined label '…'` when labeled `break` or `continue` targets a label that does not
+  exist, instead of surfacing the generic illegal control-flow error.
+
 ## 0.6.0
 
 ### Minor Changes
