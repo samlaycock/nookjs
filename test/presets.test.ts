@@ -510,9 +510,12 @@ describe("Presets", () => {
 
         expect(es2023.evaluate("typeof [1, 2, 3].findLast")).toBe("function");
         expect(es2023.evaluate("typeof Promise.withResolvers")).toBe("undefined");
+        expect(es2023.evaluate('typeof "ok".isWellFormed')).toBe("undefined");
 
         expect(es2024.evaluate("typeof Promise.withResolvers")).toBe("function");
         expect(es2024.evaluate("typeof Object.groupBy")).toBe("function");
+        expect(es2024.evaluate('typeof "ok".isWellFormed')).toBe("function");
+        expect(es2024.evaluate('typeof "ok".toWellFormed')).toBe("function");
       });
 
       it("should preserve version gating for the Minimal preset", () => {
@@ -525,8 +528,9 @@ describe("Presets", () => {
       });
 
       it("should gate Promise core statics for custom pre-ES2015 version tags", () => {
-        const interpreter = new Interpreter(attachEcmaPresetVersion({}, 5));
+        const interpreter = new Interpreter(attachEcmaPresetVersion({ globals: { Promise } }, 5));
 
+        expect(interpreter.evaluate("typeof Promise")).toBe("function");
         expect(interpreter.evaluate("typeof Promise.resolve")).toBe("undefined");
         expect(interpreter.evaluate("typeof Promise.reject")).toBe("undefined");
         expect(interpreter.evaluate("typeof Promise.all")).toBe("undefined");
