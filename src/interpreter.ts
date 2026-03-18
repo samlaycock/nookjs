@@ -9220,8 +9220,8 @@ export class Interpreter {
 
     for (const element of node.elements) {
       if (element === null) {
-        // Sparse array element (e.g., [1, , 3])
-        elements.push(undefined);
+        // Sparse array element (e.g., [1, , 3]) should create a real hole.
+        elements.length += 1;
       } else if (element.type === "SpreadElement") {
         // Spread element: [...arr] - expand array into individual elements
         if (!this.isFeatureEnabled("SpreadOperator")) {
@@ -11311,7 +11311,7 @@ export class Interpreter {
 
     for (const element of node.elements) {
       if (element === null) {
-        elements.push(undefined);
+        elements.length += 1;
       } else if (element.type === "SpreadElement") {
         // Spread element: [...arr] - expand array into individual elements
         const spreadValue = await this.evaluateNodeAsync(

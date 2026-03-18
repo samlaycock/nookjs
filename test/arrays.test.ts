@@ -54,6 +54,14 @@ describe("Arrays", () => {
             `;
         expect(interpreter.evaluate(code)).toEqual([1, 2, 3]);
       });
+
+      test("sparse array literal preserves holes", () => {
+        const result = interpreter.evaluate(`
+              let arr = [1, , 3];
+              [arr.length, 1 in arr, arr[1]]
+            `);
+        expect(result).toEqual([3, false, undefined]);
+      });
     });
 
     describe("Array indexing", () => {
@@ -1003,6 +1011,20 @@ describe("Arrays", () => {
           expect(result).toEqual([0, 3, false, false, false]);
         });
 
+        it("should preserve literal holes in sparse arrays", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    let calls = 0;
+                    let arr = [1, , 3];
+                    let mapped = arr.map((x) => {
+                      calls++;
+                      return x * 2;
+                    });
+                    [calls, 1 in arr, mapped.length, 1 in mapped, mapped[0], mapped[2]]
+                  `);
+          expect(result).toEqual([2, false, 3, false, 2, 6]);
+        });
+
         it("should preserve deleted holes in sparse arrays", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -1290,6 +1312,20 @@ describe("Arrays", () => {
                     arr.map(x => x * 2)
                   `);
           expect(result).toEqual([2, 4, 6]);
+        });
+
+        it("should preserve literal holes with evaluateAsync", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(`
+                    let calls = 0;
+                    let arr = [1, , 3];
+                    let mapped = arr.map((x) => {
+                      calls++;
+                      return x * 2;
+                    });
+                    [calls, 1 in arr, mapped.length, 1 in mapped, mapped[0], mapped[2]]
+                  `);
+          expect(result).toEqual([2, false, 3, false, 2, 6]);
         });
 
         it("should work in async functions", async () => {
