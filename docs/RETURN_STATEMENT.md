@@ -11,4 +11,4 @@ Returns a value from a function.
 
 ## Gotchas
 
-- `return` outside a function is not meaningful and yields a wrapper value.
+- `return` outside a function throws `InterpreterError("Illegal return statement")`.
