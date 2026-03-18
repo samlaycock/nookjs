@@ -1,6 +1,7 @@
 # Object Methods
 
-The interpreter provides support for various `Object` static methods through the global `Object` constructor. These methods are automatically available in all presets.
+The interpreter provides support for various `Object` static methods through the global `Object`
+constructor. Availability is gated by the active ECMAScript preset.
 
 ## Supported Methods
 

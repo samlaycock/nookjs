@@ -99,6 +99,10 @@ const opts = preset(ES2022, {
 
 These presets configure the interpreter for specific ECMAScript versions by whitelisting appropriate language features and providing era-appropriate globals.
 
+When you use an ES preset, NookJS also hides standard-library statics and prototype methods that
+were added after that edition. For example, `ES5` does not expose `Array.from()` or
+`String.prototype.replaceAll()`, and `ES2020` does not expose `Promise.withResolvers()`.
+
 | Preset           | Year | Key Features                                                                                         |
 | ---------------- | ---- | ---------------------------------------------------------------------------------------------------- |
 | `ES5`            | 2009 | var, functions, basic control flow                                                                   |

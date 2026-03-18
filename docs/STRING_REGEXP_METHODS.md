@@ -1,7 +1,7 @@
 # String.prototype RegExp Methods
 
 The interpreter supports regex-related `String.prototype` methods via native delegation.
-Availability depends on the host runtime, and methods are exposed on string instances.
+Availability depends on the active ECMAScript preset, and methods are exposed on string instances.
 
 ## Supported Methods
 
@@ -125,7 +125,9 @@ When using replacement functions with `replace()`, the arguments are passed corr
 
 ## Availability
 
-These methods are available in all presets that include the `String` global (ES5 and above). The methods are on `String.prototype`, so they're automatically available on any string value.
+These methods are gated by the active ECMAScript preset. For example, `matchAll()` is available
+in `ES2020+` presets and `replaceAll()` is available in `ES2021+` presets. Older presets return
+`undefined` for methods that were standardized later.
 
 ## Compatibility
 

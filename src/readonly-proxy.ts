@@ -1,4 +1,8 @@
 import { isDangerousProperty } from "./constants";
+import {
+  isEcmaBuiltinStaticPropertyAvailable,
+  type EcmaPresetVersion,
+} from "./ecmascript-builtins";
 import { InterpreterError, HostFunctionValue, FunctionValue, ClassValue } from "./interpreter";
 
 /**
@@ -397,7 +401,12 @@ export class ReadOnlyProxy {
    * @param securityOptions - Security options for this specific wrapping instance
    * @returns Proxied value that's safe to use in sandbox
    */
-  static wrap(value: any, name: string, securityOptions?: SecurityOptions): any {
+  static wrap(
+    value: any,
+    name: string,
+    securityOptions?: SecurityOptions,
+    ecmaVersion?: EcmaPresetVersion,
+  ): any {
     // Use provided options, fall back to global for backwards compatibility
     const effectiveOptions = securityOptions ?? globalSecurityOptions;
 
@@ -449,6 +458,7 @@ export class ReadOnlyProxy {
         false,
         false,
         securityOptions,
+        ecmaVersion,
       );
       functionWrapperCache.set(value, wrappedFunction);
       return wrappedFunction;
@@ -508,7 +518,7 @@ export class ReadOnlyProxy {
             }
             // For all other objects, return the wrapped object itself
             // This is the standard Object.prototype.valueOf behavior
-            return ReadOnlyProxy.wrap(target, name, securityOptions);
+            return ReadOnlyProxy.wrap(target, name, securityOptions, ecmaVersion);
           };
         }
 
@@ -524,6 +534,10 @@ export class ReadOnlyProxy {
         // Block dangerous properties that could break out of sandbox
         if (isDangerousProperty(prop)) {
           throw new InterpreterError(`Cannot access ${String(prop)} on global '${name}'`);
+        }
+
+        if (!isEcmaBuiltinStaticPropertyAvailable(name, target, prop, ecmaVersion)) {
+          return undefined;
         }
 
         // Get the actual value
@@ -551,6 +565,7 @@ export class ReadOnlyProxy {
             false,
             false,
             securityOptions,
+            ecmaVersion,
           );
           methodWrapperCache.set(prop, { fn: val, wrapper: wrappedMethod });
           return wrappedMethod;
@@ -558,7 +573,7 @@ export class ReadOnlyProxy {
 
         // If it's an object (including arrays), recursively wrap it
         if (typeof val === "object" && val !== null) {
-          return ReadOnlyProxy.wrap(val, `${name}.${String(prop)}`, securityOptions);
+          return ReadOnlyProxy.wrap(val, `${name}.${String(prop)}`, securityOptions, ecmaVersion);
         }
 
         // Primitives and undefined pass through
@@ -615,6 +630,9 @@ export class ReadOnlyProxy {
         if (isDangerousProperty(prop)) {
           return undefined;
         }
+        if (!isEcmaBuiltinStaticPropertyAvailable(name, target, prop, ecmaVersion)) {
+          return undefined;
+        }
         return Reflect.getOwnPropertyDescriptor(target, prop);
       },
 
@@ -624,6 +642,9 @@ export class ReadOnlyProxy {
         if (isDangerousProperty(prop)) {
           return false;
         }
+        if (!isEcmaBuiltinStaticPropertyAvailable(name, target, prop, ecmaVersion)) {
+          return false;
+        }
         return Reflect.has(target, prop);
       },
 
@@ -631,7 +652,11 @@ export class ReadOnlyProxy {
       ownKeys(target) {
         const keys = Reflect.ownKeys(target);
         // Filter out dangerous properties
-        return keys.filter((key) => !isDangerousProperty(key));
+        return keys.filter(
+          (key) =>
+            !isDangerousProperty(key) &&
+            isEcmaBuiltinStaticPropertyAvailable(name, target, key, ecmaVersion),
+        );
       },
     });
     objectProxyCache.set(value, proxy);
