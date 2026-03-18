@@ -97,6 +97,7 @@ By default, only a conservative built-in set is unwrapped for host-call compatib
 
 - TypedArrays
 - `ArrayBuffer`
+- `SharedArrayBuffer`
 - timer objects used by `clearTimeout` / `clearInterval`
 
 You can opt into additional branded types when required by host APIs that perform strict brand checks. Supported entries:
@@ -203,6 +204,11 @@ This prevents host objects from leaking sensitive data through custom `valueOf` 
 
 TypedArrays (e.g., `Uint8Array`, `Int32Array`) and `ArrayBuffer` instances have special security handling to balance usability with sandbox protection.
 
+If you also expose `BufferAPI`, the sandbox can receive `SharedArrayBuffer` and `Atomics` when the
+host runtime supports them. That is useful for shared-memory coordination, but it also means
+shared-memory-backed views can be mutated and synchronized across the sandbox boundary if your
+embedder shares those objects with host code or other sandboxes.
+
 #### Element Mutation is Allowed
 
 Unlike other host objects which are fully read-only, TypedArrays allow **element mutation via numeric indices**. This enables common patterns like:
@@ -238,7 +244,10 @@ await sandbox.run(`
 
 #### Unwrapped for Native Methods
 
-When TypedArrays or `ArrayBuffer` instances are passed to host functions, they are **automatically unwrapped** from their `ReadOnlyProxy` wrapper. This is necessary because native methods like `TextDecoder.decode()` require actual TypedArray instances, not Proxy objects.
+When TypedArrays, `ArrayBuffer`, or `SharedArrayBuffer` instances are passed to host functions or
+constructors, they are **automatically unwrapped** from their `ReadOnlyProxy` wrapper. This is
+necessary because native methods like `TextDecoder.decode()` and constructors like
+`new Int32Array(sharedBuffer)` require actual built-in instances, not Proxy objects.
 
 Additional branded objects can be unwrapped only when explicitly configured with `security.nativeUnwrapAllowlist`.
 
@@ -268,6 +277,21 @@ await sandbox.run(`
 2. **TypedArrays are value containers** - Unlike objects with methods that could be exploited, TypedArrays are essentially byte buffers with no dangerous capabilities.
 3. **No new data exposed** - The `ReadOnlyProxy` wraps the same underlying `ArrayBuffer`. Unwrapping doesn't expose new data, just removes the proxy layer.
 4. **Narrow scope** - Only TypedArrays and ArrayBuffers receive this special handling, not arbitrary objects.
+
+### SharedArrayBuffer and Atomics Increase Coordination Power
+
+`SharedArrayBuffer` becomes materially more powerful once `Atomics` is available alongside it.
+With `BufferAPI`, sandbox code can coordinate through shared memory instead of only reading or
+writing buffer contents.
+
+Security tradeoff:
+
+- If the embedder shares a `SharedArrayBuffer` with sandbox code, sandbox and host code can observe
+  and synchronize mutations to the same underlying memory.
+- This does not create a sandbox escape by itself, but it does create a higher-bandwidth
+  coordination channel than plain `ArrayBuffer`.
+- Only expose `BufferAPI` when your embedding model is comfortable with shared mutable memory, or
+  avoid passing shared-memory-backed views across trust boundaries.
 
 **If you need stronger isolation:**
 

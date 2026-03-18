@@ -194,7 +194,7 @@ export const ES2016: InterpreterOptions = {
  * - async/await
  * - Object.values() / Object.entries() (via globals)
  * - String padding methods (on prototype)
- * - Shared memory and atomics (not applicable)
+ * - Shared memory and atomics (available via BufferAPI addon)
  */
 export const ES2017: InterpreterOptions = {
   featureControl: {
@@ -690,7 +690,8 @@ export const IntlAPI: InterpreterOptions = {
 /**
  * Buffer API addon preset.
  *
- * Provides access to binary data handling with ArrayBuffer, DataView, and typed arrays.
+ * Provides access to binary data handling with ArrayBuffer, SharedArrayBuffer, Atomics,
+ * DataView, and typed arrays.
  *
  * @example
  * ```typescript
@@ -706,6 +707,7 @@ export const IntlAPI: InterpreterOptions = {
 export const BufferAPI: InterpreterOptions = {
   globals: {
     ArrayBuffer,
+    Atomics: typeof Atomics !== "undefined" ? Atomics : undefined,
     SharedArrayBuffer: typeof SharedArrayBuffer !== "undefined" ? SharedArrayBuffer : undefined,
     DataView,
     // Typed arrays

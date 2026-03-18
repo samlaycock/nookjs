@@ -324,6 +324,15 @@ describe("Presets", () => {
           expect(BufferAPI.globals?.Float64Array).toBe(Float64Array);
         });
 
+        it("should provide Atomics when the host runtime supports shared memory", () => {
+          if (typeof Atomics === "undefined") {
+            expect(BufferAPI.globals?.Atomics).toBeUndefined();
+            return;
+          }
+
+          expect(BufferAPI.globals?.Atomics).toBe(Atomics);
+        });
+
         it("should work with interpreter - ArrayBuffer", async () => {
           const interpreter = new Interpreter(preset(ES2022, BufferAPI));
 
@@ -342,6 +351,23 @@ describe("Presets", () => {
             arr.length
           `);
           expect(result).toBe(5);
+        });
+
+        it("should support Atomics operations on SharedArrayBuffer-backed views", async () => {
+          if (typeof Atomics === "undefined" || typeof SharedArrayBuffer === "undefined") {
+            return;
+          }
+
+          const interpreter = new Interpreter(preset(ES2022, BufferAPI));
+
+          const result = await interpreter.evaluateAsync(`
+            const buffer = new SharedArrayBuffer(4);
+            const view = new Int32Array(buffer);
+            const previous = Atomics.add(view, 0, 3);
+            [previous, Atomics.load(view, 0)]
+          `);
+
+          expect(result).toEqual([0, 3]);
         });
       });
 

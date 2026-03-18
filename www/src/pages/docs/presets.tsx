@@ -343,10 +343,12 @@ sandbox.runSync(\`
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">
             <h3 className="text-lg font-medium text-neutral-100 mb-2">BufferAPI</h3>
             <p className="text-neutral-400 text-sm mb-3">
-              Provides binary data handling with ArrayBuffer, DataView, and typed arrays.
+              Provides binary data handling with ArrayBuffer, SharedArrayBuffer, Atomics, DataView,
+              and typed arrays.
             </p>
             <p className="text-neutral-500 text-xs mb-3">
-              Includes: ArrayBuffer, DataView, Int8Array, Uint8Array, Float32Array, etc.
+              Includes: ArrayBuffer, SharedArrayBuffer, Atomics, DataView, Int8Array, Uint8Array,
+              Float32Array, etc.
             </p>
             <CodeBlock
               code={`const sandbox = createSandbox({
@@ -361,6 +363,11 @@ sandbox.runSync(\`
   const arr = new Uint8Array(buffer);
 \`);`}
             />
+            <p className="text-neutral-500 text-xs mt-3">
+              Shared memory is only exposed when the host runtime provides both APIs. If you pass
+              shared-memory-backed views across the sandbox boundary, treat them as mutable shared
+              state.
+            </p>
           </div>
 
           <div className="p-4 bg-neutral-900 border border-neutral-800 rounded">

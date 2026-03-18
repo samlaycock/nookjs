@@ -117,7 +117,7 @@ function shouldUnwrapAllowlistedTarget(
  * ReadOnlyProxy-wrapped values ONLY for types that require raw-instance
  * compatibility:
  * - TypedArrays: Required for TextDecoder.decode() and similar APIs
- * - ArrayBuffer: Required for typed array constructors
+ * - ArrayBuffer / SharedArrayBuffer: Required for typed array constructors
  * - Timeout: Required for clearTimeout/clearInterval to work with timer IDs
  *
  * SECURITY: All other proxy types (plain objects, class instances, etc.)
@@ -151,9 +151,9 @@ export function unwrapForNative(value: unknown, securityOptions?: SecurityOption
     return target;
   }
 
-  // Unwrap ArrayBuffer for native method compatibility.
-  // ArrayBuffer is needed for compatibility with APIs that expect raw buffers.
-  if (target instanceof ArrayBuffer) {
+  // Unwrap ArrayBuffer and SharedArrayBuffer for native compatibility.
+  // Raw buffer instances are needed for constructors and host APIs that perform brand checks.
+  if (target instanceof ArrayBuffer || target instanceof SharedArrayBuffer) {
     return target;
   }
 
