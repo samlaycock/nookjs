@@ -11,6 +11,16 @@ describe("Native Method Delegation", () => {
         expect(result).toBe(true);
       });
 
+      it("should bound primitive string method cache growth", () => {
+        const interpreter = new Interpreter();
+
+        for (let index = 0; index <= 300; index += 1) {
+          interpreter.evaluate(`"value-${index}".trim === "value-${index}".trim`);
+        }
+
+        expect((interpreter as any).primitiveMethodCache.string.size).toBeLessThanOrEqual(256);
+      });
+
       it("should support replaceAll", () => {
         const interpreter = new Interpreter();
         const result = interpreter.evaluate(`"aabbcc".replaceAll("b", "x")`);
