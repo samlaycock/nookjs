@@ -5,6 +5,12 @@ import { Interpreter } from "../src/interpreter";
 describe("Native Method Delegation", () => {
   describe("API", () => {
     describe("String methods (delegated)", () => {
+      it("should preserve identity for repeated explicit string method reads", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`"x".trim === "x".trim`);
+        expect(result).toBe(true);
+      });
+
       it("should support replaceAll", () => {
         const interpreter = new Interpreter();
         const result = interpreter.evaluate(`"aabbcc".replaceAll("b", "x")`);
@@ -67,6 +73,12 @@ describe("Native Method Delegation", () => {
     });
 
     describe("Other primitives (delegated)", () => {
+      it("should preserve identity for repeated delegated primitive method reads", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`(123.456).toFixed === (123.456).toFixed`);
+        expect(result).toBe(true);
+      });
+
       it("should support number prototype methods", () => {
         const interpreter = new Interpreter();
         const result = interpreter.evaluate(`(123.456).toFixed(1)`);

@@ -139,6 +139,19 @@ interface ClassFieldInitializer {
   isPrivate: boolean;
 }
 
+interface CachedHostFunctionWrapper {
+  readonly fn: Function | null;
+  readonly wrapper: HostFunctionValue;
+}
+
+interface PrimitiveMethodCaches {
+  readonly string: Map<string, Map<string, CachedHostFunctionWrapper>>;
+  readonly number: Map<number, Map<string, CachedHostFunctionWrapper>>;
+  readonly boolean: Map<boolean, Map<string, CachedHostFunctionWrapper>>;
+  readonly bigint: Map<bigint, Map<string, CachedHostFunctionWrapper>>;
+  readonly symbol: Map<symbol, Map<string, CachedHostFunctionWrapper>>;
+}
+
 /**
  * Represents a class defined in the sandbox (interpreted JavaScript)
  * Stores the class's constructor, methods, static members, and parent class
@@ -2554,6 +2567,13 @@ export class Interpreter {
     new WeakMap();
   private asyncGeneratorMethodCache: WeakMap<AsyncGeneratorValue, Map<string, HostFunctionValue>> =
     new WeakMap();
+  private primitiveMethodCache: PrimitiveMethodCaches = {
+    string: new Map(),
+    number: new Map(),
+    boolean: new Map(),
+    bigint: new Map(),
+    symbol: new Map(),
+  };
   private thisInitStack: boolean[] = [];
   private constructorStack: ClassValue[] = [];
 
@@ -8535,6 +8555,52 @@ export class Interpreter {
     }
   }
 
+  private getPrimitiveMethodEntries(
+    value: string | number | boolean | bigint | symbol,
+  ): Map<string, CachedHostFunctionWrapper> {
+    let cacheByProperty: Map<string, CachedHostFunctionWrapper> | undefined;
+
+    switch (typeof value) {
+      case "string":
+        cacheByProperty = this.primitiveMethodCache.string.get(value);
+        if (!cacheByProperty) {
+          cacheByProperty = new Map();
+          this.primitiveMethodCache.string.set(value, cacheByProperty);
+        }
+        return cacheByProperty;
+      case "number":
+        cacheByProperty = this.primitiveMethodCache.number.get(value);
+        if (!cacheByProperty) {
+          cacheByProperty = new Map();
+          this.primitiveMethodCache.number.set(value, cacheByProperty);
+        }
+        return cacheByProperty;
+      case "boolean":
+        cacheByProperty = this.primitiveMethodCache.boolean.get(value);
+        if (!cacheByProperty) {
+          cacheByProperty = new Map();
+          this.primitiveMethodCache.boolean.set(value, cacheByProperty);
+        }
+        return cacheByProperty;
+      case "bigint":
+        cacheByProperty = this.primitiveMethodCache.bigint.get(value);
+        if (!cacheByProperty) {
+          cacheByProperty = new Map();
+          this.primitiveMethodCache.bigint.set(value, cacheByProperty);
+        }
+        return cacheByProperty;
+      case "symbol":
+        cacheByProperty = this.primitiveMethodCache.symbol.get(value);
+        if (!cacheByProperty) {
+          cacheByProperty = new Map();
+          this.primitiveMethodCache.symbol.set(value, cacheByProperty);
+        }
+        return cacheByProperty;
+      default:
+        throw new InterpreterError("Primitive method cache requires a primitive value");
+    }
+  }
+
   private buildArrayMethod(arr: any[], methodName: string): HostFunctionValue | null {
     const hasIndex = (index: number): boolean => index in arr;
     const findNextPresentIndex = (startIndex: number, length: number): number => {
@@ -8943,6 +9009,20 @@ export class Interpreter {
    * Returns null if the method is not supported
    */
   private getStringMethod(str: string, methodName: string): HostFunctionValue | null {
+    const cache = this.getPrimitiveMethodEntries(str);
+    const cached = cache.get(methodName);
+    if (cached) {
+      return cached.wrapper;
+    }
+
+    const method = this.buildStringMethod(str, methodName);
+    if (method) {
+      cache.set(methodName, { fn: null, wrapper: method });
+    }
+    return method;
+  }
+
+  private buildStringMethod(str: string, methodName: string): HostFunctionValue | null {
     switch (methodName) {
       // Extraction methods
       case "substring":
@@ -9130,6 +9210,22 @@ export class Interpreter {
   private getNativePropertyValue(object: any, property: string): any {
     const value = (object as any)[property];
     if (typeof value === "function") {
+      if (this.isPrimitiveValue(object)) {
+        const cache = this.getPrimitiveMethodEntries(object);
+        const cached = cache.get(property);
+        if (cached && cached.fn === value) {
+          return cached.wrapper;
+        }
+
+        const wrapper = this.createHostFunction(
+          (...args: any[]) => value.apply(object, args),
+          property,
+          false,
+        );
+        cache.set(property, { fn: value, wrapper });
+        return wrapper;
+      }
+
       return this.createHostFunction(
         (...args: any[]) => value.apply(object, args),
         property,
