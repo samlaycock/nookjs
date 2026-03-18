@@ -1035,6 +1035,24 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual([3, false, 2, 6]);
         });
+
+        it("should ignore elements appended during iteration", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2];
+                    const mapped = arr.map((value, index, source) => {
+                      if (index === 0) {
+                        source.push(3);
+                      }
+                      return value * 2;
+                    });
+                    [mapped, arr]
+                  `);
+          expect(result).toEqual([
+            [2, 4],
+            [1, 2, 3],
+          ]);
+        });
       });
 
       describe("filter", () => {
@@ -1096,6 +1114,24 @@ describe("Arrays", () => {
                     arr.filter(item => item.active)
                   `);
           expect(result).toEqual([{ active: true }, { active: true }]);
+        });
+
+        it("should ignore elements appended during iteration", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2];
+                    const filtered = arr.filter((value, index, source) => {
+                      if (index === 0) {
+                        source.push(3);
+                      }
+                      return true;
+                    });
+                    [filtered, arr]
+                  `);
+          expect(result).toEqual([
+            [1, 2],
+            [1, 2, 3],
+          ]);
         });
       });
 
@@ -1475,6 +1511,22 @@ describe("Arrays", () => {
                   `);
           expect(result).toBe(0);
         });
+
+        it("should ignore elements appended during iteration", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2];
+                    let calls = 0;
+                    arr.forEach((value, index, source) => {
+                      calls++;
+                      if (index === 0) {
+                        source.push(3);
+                      }
+                    });
+                    [calls, arr]
+                  `);
+          expect(result).toEqual([2, [1, 2, 3]]);
+        });
       });
 
       describe("splice", () => {
@@ -1671,6 +1723,23 @@ describe("Arrays", () => {
                   `);
           expect(result).toEqual({ id: 2, name: "Bob" });
         });
+
+        it("should ignore elements appended during iteration", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2];
+                    let calls = 0;
+                    const found = arr.find((value, index, source) => {
+                      calls++;
+                      if (index === 0) {
+                        source.push(3);
+                      }
+                      return value === 3;
+                    });
+                    [found, calls, arr]
+                  `);
+          expect(result).toEqual([undefined, 2, [1, 2, 3]]);
+        });
       });
 
       describe("findIndex", () => {
@@ -1690,6 +1759,23 @@ describe("Arrays", () => {
                     arr.findIndex(x => x > 10)
                   `);
           expect(result).toBe(-1);
+        });
+
+        it("should ignore elements appended during iteration", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2];
+                    let calls = 0;
+                    const foundIndex = arr.findIndex((value, index, source) => {
+                      calls++;
+                      if (index === 0) {
+                        source.push(3);
+                      }
+                      return value === 3;
+                    });
+                    [foundIndex, calls, arr]
+                  `);
+          expect(result).toEqual([-1, 2, [1, 2, 3]]);
         });
       });
     });
