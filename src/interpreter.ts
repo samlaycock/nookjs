@@ -6070,7 +6070,8 @@ export class Interpreter {
    */
   private executeHostConstructor(constructor: HostFunctionValue, args: any[]): any {
     try {
-      const result = Reflect.construct(constructor.hostFunc, args);
+      const wrappedArgs = constructor.skipArgWrapping ? args : this.wrapArgsForHost(args, false);
+      const result = Reflect.construct(constructor.hostFunc, wrappedArgs);
       return ReadOnlyProxy.wrap(result, constructor.name, this.securityOptions);
     } catch (error: any) {
       throw new InterpreterError(

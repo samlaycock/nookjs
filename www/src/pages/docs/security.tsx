@@ -426,6 +426,17 @@ sandbox.runSync(\`
               <code className="text-amber-400 bg-neutral-800 px-1 rounded">ArrayBuffer</code>{" "}
               instances have special security handling to balance usability with sandbox protection.
             </p>
+            <p className="text-neutral-300 mb-4">
+              If you expose{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">BufferAPI</code>, the
+              sandbox can also receive{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">SharedArrayBuffer</code>{" "}
+              and <code className="text-amber-400 bg-neutral-800 px-1 rounded">Atomics</code> when
+              the host runtime supports them. That enables useful shared-memory coordination, but it
+              also means shared-memory-backed views can be mutated and synchronized across the
+              sandbox boundary if your embedder shares those objects with host code or other
+              sandboxes.
+            </p>
 
             <h4 className="text-lg font-medium text-neutral-200 mb-2 mt-6">
               Element Mutation is Allowed
@@ -463,7 +474,11 @@ sandbox.runSync(\`
               <code className="text-amber-400 bg-neutral-800 px-1 rounded">
                 TextDecoder.decode()
               </code>{" "}
-              require actual TypedArray instances, not Proxy objects.
+              and constructors like{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+                new Int32Array(sharedBuffer)
+              </code>{" "}
+              require actual built-in instances, not Proxy objects.
             </p>
             <CodeBlock
               code={`const sandbox = createSandbox({ env: "es2024" });
@@ -509,6 +524,47 @@ sandbox.runSync(\`
                 </li>
               </ul>
             </div>
+
+            <h4 className="text-lg font-medium text-neutral-200 mb-2 mt-6">
+              SharedArrayBuffer and Atomics Increase Coordination Power
+            </h4>
+            <p className="text-neutral-300 mb-4">
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">SharedArrayBuffer</code>{" "}
+              becomes materially more powerful once{" "}
+              <code className="text-amber-400 bg-neutral-800 px-1 rounded">Atomics</code> is
+              available alongside it. Sandbox code can then coordinate through shared memory instead
+              of only reading and writing buffer contents.
+            </p>
+            <ul className="space-y-2 text-neutral-400 text-sm">
+              <li className="flex gap-3">
+                <span className="text-amber-500">&#9632;</span>
+                <span>
+                  If the embedder shares a{" "}
+                  <code className="text-amber-400 bg-neutral-800 px-1 rounded">
+                    SharedArrayBuffer
+                  </code>{" "}
+                  with sandbox code, sandbox and host code can observe and synchronize mutations to
+                  the same underlying memory.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-amber-500">&#9632;</span>
+                <span>
+                  This does not create a sandbox escape by itself, but it does create a
+                  higher-bandwidth coordination channel than plain{" "}
+                  <code className="text-amber-400 bg-neutral-800 px-1 rounded">ArrayBuffer</code>.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-amber-500">&#9632;</span>
+                <span>
+                  Only expose{" "}
+                  <code className="text-amber-400 bg-neutral-800 px-1 rounded">BufferAPI</code> when
+                  your embedding model is comfortable with shared mutable memory, or avoid passing
+                  shared-memory-backed views across trust boundaries.
+                </span>
+              </li>
+            </ul>
           </div>
 
           <div>
