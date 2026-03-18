@@ -2374,7 +2374,7 @@ describe("Module System", () => {
         modules: { enabled: true, resolver: createResolver(files) },
       });
 
-      expect(
+      await expect(
         interpreter.evaluateModuleAsync(`import { a } from "a.js"; export { a };`, {
           path: "main.js",
         }),
