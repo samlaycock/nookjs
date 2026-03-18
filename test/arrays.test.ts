@@ -1218,6 +1218,32 @@ describe("Arrays", () => {
           const result = interpreter.evaluate(`sparse.reduce((acc, val) => acc + val)`);
           expect(result).toBe(3);
         });
+
+        it("should treat an explicit undefined initial value as provided", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2];
+                    arr.reduce((acc, val, index) => {
+                      if (index === 0) {
+                        return [acc === undefined, val, index].join(":");
+                      }
+                      return acc + "|" + [val, index].join(":");
+                    }, undefined);
+                  `);
+          expect(result).toBe("true:1:0|2:1");
+        });
+
+        it("should throw for all-hole sparse arrays without an initial value", () => {
+          const interpreter = new Interpreter({
+            security: { hideHostErrorMessages: false },
+          });
+          expect(() => {
+            interpreter.evaluate(`
+                      const arr = [, ,];
+                      arr.reduce((acc, val) => acc + val);
+                    `);
+          }).toThrow("Reduce of empty array with no initial value");
+        });
       });
 
       describe("every", () => {
@@ -1465,6 +1491,32 @@ describe("Arrays", () => {
           const interpreter = new Interpreter({ globals: { sparse } });
           const result = interpreter.evaluate(`sparse.reduceRight((acc, val) => acc + val)`);
           expect(result).toBe(1);
+        });
+
+        it("should treat an explicit undefined initial value as provided", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+                    const arr = [1, 2];
+                    arr.reduceRight((acc, val, index) => {
+                      if (index === 1) {
+                        return [acc === undefined, val, index].join(":");
+                      }
+                      return acc + "|" + [val, index].join(":");
+                    }, undefined);
+                  `);
+          expect(result).toBe("true:2:1|1:0");
+        });
+
+        it("should throw for all-hole sparse arrays without an initial value", () => {
+          const interpreter = new Interpreter({
+            security: { hideHostErrorMessages: false },
+          });
+          expect(() => {
+            interpreter.evaluate(`
+                      const arr = [, ,];
+                      arr.reduceRight((acc, val) => acc + val);
+                    `);
+          }).toThrow("Reduce of empty array with no initial value");
         });
       });
 
