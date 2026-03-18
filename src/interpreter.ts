@@ -144,13 +144,22 @@ interface CachedHostFunctionWrapper {
   readonly wrapper: HostFunctionValue;
 }
 
+type PrimitiveMethodCacheKey = string | number | boolean | bigint | symbol;
+
+type PrimitiveMethodCache<K extends PrimitiveMethodCacheKey> = Map<
+  K,
+  Map<string, CachedHostFunctionWrapper>
+>;
+
 interface PrimitiveMethodCaches {
-  readonly string: Map<string, Map<string, CachedHostFunctionWrapper>>;
-  readonly number: Map<number, Map<string, CachedHostFunctionWrapper>>;
-  readonly boolean: Map<boolean, Map<string, CachedHostFunctionWrapper>>;
-  readonly bigint: Map<bigint, Map<string, CachedHostFunctionWrapper>>;
-  readonly symbol: Map<symbol, Map<string, CachedHostFunctionWrapper>>;
+  readonly string: PrimitiveMethodCache<string>;
+  readonly number: PrimitiveMethodCache<number>;
+  readonly boolean: PrimitiveMethodCache<boolean>;
+  readonly bigint: PrimitiveMethodCache<bigint>;
+  readonly symbol: PrimitiveMethodCache<symbol>;
 }
+
+const MAX_PRIMITIVE_METHOD_CACHE_ENTRIES = 256;
 
 /**
  * Represents a class defined in the sandbox (interpreted JavaScript)
@@ -8558,47 +8567,44 @@ export class Interpreter {
   private getPrimitiveMethodEntries(
     value: string | number | boolean | bigint | symbol,
   ): Map<string, CachedHostFunctionWrapper> {
-    let cacheByProperty: Map<string, CachedHostFunctionWrapper> | undefined;
-
     switch (typeof value) {
       case "string":
-        cacheByProperty = this.primitiveMethodCache.string.get(value);
-        if (!cacheByProperty) {
-          cacheByProperty = new Map();
-          this.primitiveMethodCache.string.set(value, cacheByProperty);
-        }
-        return cacheByProperty;
+        return this.getOrCreatePrimitiveMethodEntries(this.primitiveMethodCache.string, value);
       case "number":
-        cacheByProperty = this.primitiveMethodCache.number.get(value);
-        if (!cacheByProperty) {
-          cacheByProperty = new Map();
-          this.primitiveMethodCache.number.set(value, cacheByProperty);
-        }
-        return cacheByProperty;
+        return this.getOrCreatePrimitiveMethodEntries(this.primitiveMethodCache.number, value);
       case "boolean":
-        cacheByProperty = this.primitiveMethodCache.boolean.get(value);
-        if (!cacheByProperty) {
-          cacheByProperty = new Map();
-          this.primitiveMethodCache.boolean.set(value, cacheByProperty);
-        }
-        return cacheByProperty;
+        return this.getOrCreatePrimitiveMethodEntries(this.primitiveMethodCache.boolean, value);
       case "bigint":
-        cacheByProperty = this.primitiveMethodCache.bigint.get(value);
-        if (!cacheByProperty) {
-          cacheByProperty = new Map();
-          this.primitiveMethodCache.bigint.set(value, cacheByProperty);
-        }
-        return cacheByProperty;
+        return this.getOrCreatePrimitiveMethodEntries(this.primitiveMethodCache.bigint, value);
       case "symbol":
-        cacheByProperty = this.primitiveMethodCache.symbol.get(value);
-        if (!cacheByProperty) {
-          cacheByProperty = new Map();
-          this.primitiveMethodCache.symbol.set(value, cacheByProperty);
-        }
-        return cacheByProperty;
+        return this.getOrCreatePrimitiveMethodEntries(this.primitiveMethodCache.symbol, value);
       default:
         throw new InterpreterError("Primitive method cache requires a primitive value");
     }
+  }
+
+  private getOrCreatePrimitiveMethodEntries<K extends PrimitiveMethodCacheKey>(
+    cache: PrimitiveMethodCache<K>,
+    value: K,
+  ): Map<string, CachedHostFunctionWrapper> {
+    const existingEntries = cache.get(value);
+    if (existingEntries) {
+      // Refresh insertion order so eviction keeps the most recently used primitive caches.
+      cache.delete(value);
+      cache.set(value, existingEntries);
+      return existingEntries;
+    }
+
+    if (cache.size >= MAX_PRIMITIVE_METHOD_CACHE_ENTRIES) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        cache.delete(oldestKey);
+      }
+    }
+
+    const entries = new Map<string, CachedHostFunctionWrapper>();
+    cache.set(value, entries);
+    return entries;
   }
 
   private buildArrayMethod(arr: any[], methodName: string): HostFunctionValue | null {
