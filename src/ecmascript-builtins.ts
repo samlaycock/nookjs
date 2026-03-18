@@ -109,10 +109,10 @@ const STATIC_PROPERTY_MIN_VERSION: Record<string, Record<string, EcmaPresetVersi
     groupBy: ES2024,
   },
   Promise: {
-    all: ES5,
-    race: ES5,
-    reject: ES5,
-    resolve: ES5,
+    all: ES2015,
+    race: ES2015,
+    reject: ES2015,
+    resolve: ES2015,
     allSettled: ES2020,
     any: ES2021,
     withResolvers: ES2024,
@@ -169,8 +169,8 @@ const INSTANCE_PROPERTY_MIN_VERSION: Record<string, Record<string, EcmaPresetVer
     with: ES2023,
   },
   "Promise.prototype": {
-    [PROMISE_THEN]: ES5,
-    catch: ES5,
+    [PROMISE_THEN]: ES2015,
+    catch: ES2015,
     finally: ES2018,
   },
   "String.prototype": {
@@ -267,10 +267,7 @@ export function isEcmaBuiltinStaticPropertyAvailable(
   if (!isVersionedAccess(version) || typeof property !== "string") {
     return true;
   }
-  if (version === undefined) {
-    return true;
-  }
-  const effectiveVersion = version;
+  const effectiveVersion = version as EcmaPresetVersion;
   if (!isBuiltinRootIdentity(rootName, target)) {
     return true;
   }
@@ -296,10 +293,7 @@ export function isEcmaBuiltinInstancePropertyAvailable(
   if (!isVersionedAccess(version) || typeof property !== "string") {
     return true;
   }
-  if (version === undefined) {
-    return true;
-  }
-  const effectiveVersion = version;
+  const effectiveVersion = version as EcmaPresetVersion;
 
   const propertyVersions = INSTANCE_PROPERTY_MIN_VERSION[kind];
   if (!propertyVersions) {
