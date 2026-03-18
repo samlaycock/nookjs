@@ -4793,8 +4793,9 @@ export class Interpreter {
         continue;
       }
       result = this.evaluateNode(statement);
+      this.finalizeProgramControlFlow(result);
     }
-    return this.finalizeProgramControlFlow(result);
+    return result;
   }
 
   private evaluateLiteral(node: ESTree.Literal): any {
@@ -7085,6 +7086,9 @@ export class Interpreter {
         this.currentLoopLabel = myLabel;
         return controlFlow.value;
       }
+      if (isControlFlowKind(result, "continue")) {
+        result = undefined;
+      }
       // Continue to next iteration (for continue signal or normal result)
     }
 
@@ -7114,6 +7118,9 @@ export class Interpreter {
       if (controlFlow.shouldReturn) {
         this.currentLoopLabel = myLabel;
         return controlFlow.value;
+      }
+      if (isControlFlowKind(result, "continue")) {
+        result = undefined;
       }
       // Continue to next iteration (for continue signal or normal result)
     } while (this.evaluateNode(node.test));
@@ -7184,6 +7191,9 @@ export class Interpreter {
           result.label !== myLabel
         ) {
           return result;
+        }
+        if (isControlFlowKind(result, "continue")) {
+          result = undefined;
         }
 
         // Execute update expression (e.g., i++)
@@ -7327,6 +7337,9 @@ export class Interpreter {
           }
           return result;
         }
+        if (isControlFlowKind(result, "continue")) {
+          result = undefined;
+        }
         // continue signal (unlabeled or targeting this loop) just continues to the next iteration
       }
 
@@ -7407,6 +7420,9 @@ export class Interpreter {
         const controlFlow = this.handleLoopControlFlow(result, myLabel);
         if (controlFlow.shouldReturn) {
           return controlFlow.value;
+        }
+        if (isControlFlowKind(result, "continue")) {
+          result = undefined;
         }
       }
 
@@ -9378,8 +9394,9 @@ export class Interpreter {
         continue;
       }
       result = await this.evaluateNodeAsync(statement);
+      this.finalizeProgramControlFlow(result);
     }
-    return this.finalizeProgramControlFlow(result);
+    return result;
   }
 
   private async evaluateBinaryExpressionAsync(node: ESTree.BinaryExpression): Promise<any> {
@@ -10389,6 +10406,9 @@ export class Interpreter {
         this.currentLoopLabel = myLabel;
         return controlFlow.value;
       }
+      if (isControlFlowKind(result, "continue")) {
+        result = undefined;
+      }
       // Continue to next iteration (for continue signal or normal result)
     }
 
@@ -10418,6 +10438,9 @@ export class Interpreter {
       if (controlFlow.shouldReturn) {
         this.currentLoopLabel = myLabel;
         return controlFlow.value;
+      }
+      if (isControlFlowKind(result, "continue")) {
+        result = undefined;
       }
       // Continue to next iteration (for continue signal or normal result)
     } while (await this.evaluateNodeAsync(node.test));
@@ -10477,6 +10500,9 @@ export class Interpreter {
           result.label !== myLabel
         ) {
           return result;
+        }
+        if (isControlFlowKind(result, "continue")) {
+          result = undefined;
         }
 
         // Execute update expression (e.g., i++)
@@ -10611,6 +10637,9 @@ export class Interpreter {
           }
           return result;
         }
+        if (isControlFlowKind(result, "continue")) {
+          result = undefined;
+        }
         // continue signal (unlabeled or targeting this loop) just continues to the next iteration
       }
 
@@ -10685,6 +10714,9 @@ export class Interpreter {
         const controlFlow = this.handleLoopControlFlow(result, myLabel);
         if (controlFlow.shouldReturn) {
           return controlFlow.value;
+        }
+        if (isControlFlowKind(result, "continue")) {
+          result = undefined;
         }
       }
 
