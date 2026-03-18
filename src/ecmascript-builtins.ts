@@ -207,6 +207,8 @@ const INSTANCE_PROPERTY_MIN_VERSION: Record<string, Record<string, EcmaPresetVer
     matchAll: ES2020,
     replaceAll: ES2021,
     at: ES2022,
+    isWellFormed: ES2024,
+    toWellFormed: ES2024,
   },
 };
 
