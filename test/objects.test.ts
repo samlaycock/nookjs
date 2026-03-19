@@ -840,6 +840,15 @@ describe("Objects", () => {
           expect(interpreter.evaluate("Object.keys({ a: 1, b: 2 })")).toEqual(["a", "b"]);
         });
 
+        it("should return a mutable sandbox array", () => {
+          const result = interpreter.evaluate(`
+            const keys = Object.keys({ a: 1 });
+            keys.push("b");
+            keys;
+          `);
+          expect(result).toEqual(["a", "b"]);
+        });
+
         it("should return empty array for empty object", () => {
           expect(interpreter.evaluate("Object.keys({})")).toEqual([]);
         });
@@ -1787,6 +1796,20 @@ describe("Objects", () => {
       it("should handle empty arrays", () => {
         const result = interpreter.evaluate("Object.groupBy([], x => x)");
         expect(result).toEqual({});
+      });
+
+      it("should return mutable sandbox-owned groups", () => {
+        const result = interpreter.evaluate(`
+              const grouped = Object.groupBy([1, 2, 3], x => x % 2);
+              grouped["1"].push(5);
+              grouped.extra = [7];
+              grouped;
+            `);
+        expect(result).toEqual({
+          "0": [2],
+          "1": [1, 3, 5],
+          extra: [7],
+        });
       });
 
       it("should work with number keys converted to strings", () => {

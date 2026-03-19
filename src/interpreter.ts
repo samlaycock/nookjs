@@ -2621,6 +2621,7 @@ export class Interpreter {
   // Track super binding context during class method execution
   private currentSuperBinding: SuperBinding | null = null;
   private instanceClassMap: WeakMap<object, ClassValue> = new WeakMap();
+  private sandboxOwnedContainers: WeakSet<object> = new WeakSet();
   private arrayMethodCache: WeakMap<any[], Map<string, HostFunctionValue>> = new WeakMap();
   private generatorMethodCache: WeakMap<GeneratorValue, Map<string, HostFunctionValue>> =
     new WeakMap();
@@ -5216,7 +5217,7 @@ export class Interpreter {
   public bindFunctionParameters(fn: FunctionValue, args: any[]): void {
     if (!fn.isArrowFunction && !fn.params.includes("arguments")) {
       // Non-arrow functions get their own arguments object.
-      this.environment.declare("arguments", args.slice(), "var");
+      this.environment.declare("arguments", this.markSandboxContainer(args.slice()), "var");
     }
 
     const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
@@ -5243,7 +5244,7 @@ export class Interpreter {
     // Bind rest parameter if present
     if (fn.restParamIndex !== null) {
       const restParamName = fn.params[fn.restParamIndex]!;
-      const restArgs = args.slice(fn.restParamIndex);
+      const restArgs = this.markSandboxContainer(args.slice(fn.restParamIndex));
       this.environment.declare(restParamName, restArgs, "let");
     }
   }
@@ -5255,7 +5256,7 @@ export class Interpreter {
   public async bindFunctionParametersAsync(fn: FunctionValue, args: any[]): Promise<void> {
     if (!fn.isArrowFunction && !fn.params.includes("arguments")) {
       // Non-arrow functions get their own arguments object.
-      this.environment.declare("arguments", args.slice(), "var");
+      this.environment.declare("arguments", this.markSandboxContainer(args.slice()), "var");
     }
 
     const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
@@ -5282,7 +5283,7 @@ export class Interpreter {
     // Bind rest parameter if present
     if (fn.restParamIndex !== null) {
       const restParamName = fn.params[fn.restParamIndex]!;
-      const restArgs = args.slice(fn.restParamIndex);
+      const restArgs = this.markSandboxContainer(args.slice(fn.restParamIndex));
       this.environment.declare(restParamName, restArgs, "let");
     }
   }
@@ -5753,6 +5754,118 @@ export class Interpreter {
       return false;
     }
     return value !== null && typeof value === "object" && Boolean((value as any)[PROXY_TARGET]);
+  }
+
+  private isPlainObjectLike(value: any): value is Record<string | symbol, any> {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return false;
+    }
+    if (this.instanceClassMap.has(value)) {
+      return false;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  private markSandboxContainer<T>(value: T): T {
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      (Array.isArray(value) || this.isPlainObjectLike(value))
+    ) {
+      this.sandboxOwnedContainers.add(value as object);
+    }
+    return value;
+  }
+
+  private wrapHostReturnValue(
+    value: any,
+    name: string,
+    seen: WeakMap<object, any> = new WeakMap(),
+  ): any {
+    if (value === null || value === undefined) {
+      return value;
+    }
+
+    if (typeof value !== "object" && typeof value !== "function") {
+      return value;
+    }
+
+    if (
+      this.isReadOnlyProxyObject(value) ||
+      this.instanceClassMap.has(value) ||
+      this.sandboxOwnedContainers.has(value)
+    ) {
+      return value;
+    }
+
+    if (typeof value === "object") {
+      const cachedValue = seen.get(value);
+      if (cachedValue !== undefined) {
+        return cachedValue;
+      }
+
+      if (Array.isArray(value)) {
+        const descriptors = Object.getOwnPropertyDescriptors(value);
+        const materialized: any[] = [];
+        seen.set(value, materialized);
+        this.markSandboxContainer(materialized);
+        materialized.length = value.length;
+
+        for (const key of Reflect.ownKeys(descriptors)) {
+          if (key === "length") {
+            continue;
+          }
+          if (typeof key === "string") {
+            validatePropertyName(key);
+          }
+          const descriptor = descriptors[key as keyof typeof descriptors];
+          if (!descriptor || !("value" in descriptor)) {
+            return ReadOnlyProxy.wrap(value, name, this.securityOptions);
+          }
+          Object.defineProperty(materialized, key, {
+            ...descriptor,
+            value: this.wrapHostReturnValue(descriptor.value, `${name}[${String(key)}]`, seen),
+          });
+        }
+        return materialized;
+      }
+
+      if (this.isPlainObjectLike(value)) {
+        const descriptors = Object.getOwnPropertyDescriptors(value);
+        for (const key of Reflect.ownKeys(descriptors)) {
+          const descriptor = descriptors[key as keyof typeof descriptors];
+          if (descriptor && ("get" in descriptor || "set" in descriptor)) {
+            return ReadOnlyProxy.wrap(value, name, this.securityOptions);
+          }
+        }
+
+        const materialized = Object.create(Object.getPrototypeOf(value)) as Record<
+          string | symbol,
+          any
+        >;
+        seen.set(value, materialized);
+        this.markSandboxContainer(materialized);
+
+        for (const key of Reflect.ownKeys(descriptors)) {
+          if (typeof key === "string") {
+            validatePropertyName(key);
+          }
+          const descriptor = descriptors[key as keyof typeof descriptors];
+          if (!descriptor || !("value" in descriptor)) {
+            continue;
+          }
+          Object.defineProperty(materialized, key, {
+            ...descriptor,
+            value: this.wrapHostReturnValue(descriptor.value, `${name}.${String(key)}`, seen),
+          });
+        }
+
+        return materialized;
+      }
+    }
+
+    return ReadOnlyProxy.wrap(value, name, this.securityOptions);
   }
 
   private isPrimitiveValue(value: any): boolean {
@@ -8029,7 +8142,7 @@ export class Interpreter {
         // Rest element: [...rest] - collect remaining array elements
         const restName = this.getRestElementName(element);
         // Collect all remaining elements from current position
-        const remainingValues = value.slice(i);
+        const remainingValues = this.markSandboxContainer(value.slice(i));
         this.bindDestructuredIdentifier(restName, remainingValues, declare, kind);
 
         // Rest must be last element, so we break
@@ -8119,7 +8232,7 @@ export class Interpreter {
     // Second pass: Handle rest element if present
     if (restElement) {
       const restName = this.getRestElementName(restElement);
-      const restObj: Record<string, any> = {};
+      const restObj: Record<string, any> = this.markSandboxContainer({});
 
       // Collect all non-destructured properties
       for (const [key, val] of Object.entries(value)) {
@@ -8278,7 +8391,7 @@ export class Interpreter {
       // Call the host function
       try {
         const result = callee.hostFunc(...wrappedArgs);
-        return ReadOnlyProxy.wrap(result, callee.name, this.securityOptions);
+        return this.wrapHostReturnValue(result, callee.name);
       } catch (error: any) {
         // If rethrowErrors is true, propagate the error directly (used by generator.throw())
         if (callee.rethrowErrors) {
@@ -9476,7 +9589,7 @@ export class Interpreter {
     // Track memory: estimate 16 bytes per array element
     this.trackMemory(elements.length * 16);
 
-    return elements;
+    return this.markSandboxContainer(elements);
   }
 
   private evaluateObjectExpression(node: ESTree.ObjectExpression): any {
@@ -9544,7 +9657,7 @@ export class Interpreter {
     const propertyCount = Object.keys(obj).length;
     this.trackMemory(64 + propertyCount * 32);
 
-    return obj;
+    return this.markSandboxContainer(obj);
   }
 
   /**
@@ -9820,9 +9933,9 @@ export class Interpreter {
         // If async host function, await the promise
         if (callee.isAsync) {
           const resolved = await result;
-          return ReadOnlyProxy.wrap(resolved, callee.name, this.securityOptions);
+          return this.wrapHostReturnValue(resolved, callee.name);
         }
-        const wrapped = ReadOnlyProxy.wrap(result, callee.name, this.securityOptions);
+        const wrapped = this.wrapHostReturnValue(result, callee.name);
         // Wrap Promise results in RawValue to prevent auto-awaiting by async/await
         // This preserves Promise identity for chaining (e.g., Promise.resolve(1).then(...))
         if (wrapped instanceof Promise) {
@@ -11299,7 +11412,7 @@ export class Interpreter {
         // Rest element: [...rest] - collect remaining array elements
         const restName = this.getRestElementName(element);
         // Collect all remaining elements from current position
-        const remainingValues = value.slice(i);
+        const remainingValues = this.markSandboxContainer(value.slice(i));
         this.bindDestructuredIdentifier(restName, remainingValues, declare, kind);
 
         // Rest must be last element, so we break
@@ -11383,7 +11496,7 @@ export class Interpreter {
     // Second pass: Handle rest element if present
     if (restElement) {
       const restName = this.getRestElementName(restElement);
-      const restObj: Record<string, any> = {};
+      const restObj: Record<string, any> = this.markSandboxContainer({});
 
       // Collect all non-destructured properties
       for (const [key, val] of Object.entries(value)) {
@@ -11584,7 +11697,7 @@ export class Interpreter {
     // Track memory: estimate 16 bytes per array element
     this.trackMemory(elements.length * 16);
 
-    return elements;
+    return this.markSandboxContainer(elements);
   }
 
   private async evaluateObjectExpressionAsync(node: ESTree.ObjectExpression): Promise<any> {
@@ -11650,7 +11763,7 @@ export class Interpreter {
     const propertyCount = Object.keys(obj).length;
     this.trackMemory(64 + propertyCount * 32);
 
-    return obj;
+    return this.markSandboxContainer(obj);
   }
 
   /**
