@@ -1713,6 +1713,24 @@ describe("Arrays", () => {
         expect(result).toEqual(["a", "b", "c"]);
       });
 
+      it("should return a mutable sandbox array from Array.from", () => {
+        const result = interpreter.evaluate(`
+          const arr = Array.from(new Set([1, 2]));
+          arr.push(3);
+          arr;
+        `);
+        expect(result).toEqual([1, 2, 3]);
+      });
+
+      it("should preserve nested sandbox value identity in Array.from results", () => {
+        const result = interpreter.evaluate(`
+          const item = { value: 1 };
+          const arr = Array.from([item]);
+          arr[0] === item;
+        `);
+        expect(result).toBe(true);
+      });
+
       it("should map values with Array.from mapping function", () => {
         const result = interpreter.evaluate("Array.from([1, 2, 3], x => x * 2)");
         expect(result).toEqual([2, 4, 6]);
