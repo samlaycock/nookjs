@@ -662,6 +662,37 @@ describe("Security", () => {
 
         expect(hostInstance.secret).toBe("CONFIDENTIAL");
       });
+
+      it("should keep shared host arrays with accessors behind the same read-only proxy", () => {
+        const shared = [1, 2];
+        Object.defineProperty(shared, "meta", {
+          get: () => "host-only",
+          enumerable: true,
+          configurable: true,
+        });
+
+        const interpreter = new Interpreter({
+          globals: {
+            getSharedAccessorArrayPair: () => ({
+              first: shared,
+              second: shared,
+            }),
+          },
+        });
+
+        const sameReference = interpreter.evaluate(`
+          const pair = getSharedAccessorArrayPair();
+          pair.first === pair.second;
+        `);
+        expect(sameReference).toBe(true);
+
+        expect(() => {
+          interpreter.evaluate(`
+            const pair = getSharedAccessorArrayPair();
+            pair.second.push(3);
+          `);
+        }).toThrow();
+      });
     });
 
     describe("edge cases", () => {

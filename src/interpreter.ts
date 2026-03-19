@@ -5778,6 +5778,20 @@ export class Interpreter {
     return value;
   }
 
+  private defineMaterializedDataProperty(
+    target: object,
+    key: PropertyKey,
+    descriptor: PropertyDescriptor,
+    value: any,
+  ): void {
+    Object.defineProperty(target, key, {
+      configurable: descriptor.configurable ?? false,
+      enumerable: descriptor.enumerable ?? false,
+      writable: descriptor.writable ?? false,
+      value,
+    });
+  }
+
   private wrapHostReturnValue(
     value: any,
     name: string,
@@ -5807,6 +5821,21 @@ export class Interpreter {
 
       if (Array.isArray(value)) {
         const descriptors = Object.getOwnPropertyDescriptors(value);
+        for (const key of Reflect.ownKeys(descriptors)) {
+          if (key === "length") {
+            continue;
+          }
+          if (typeof key === "string") {
+            validatePropertyName(key);
+          }
+          const descriptor = descriptors[key as keyof typeof descriptors] as
+            | PropertyDescriptor
+            | undefined;
+          if (!descriptor || !("value" in descriptor)) {
+            return ReadOnlyProxy.wrap(value, name, this.securityOptions);
+          }
+        }
+
         const materialized: any[] = [];
         seen.set(value, materialized);
         this.markSandboxContainer(materialized);
@@ -5816,17 +5845,13 @@ export class Interpreter {
           if (key === "length") {
             continue;
           }
-          if (typeof key === "string") {
-            validatePropertyName(key);
-          }
-          const descriptor = descriptors[key as keyof typeof descriptors];
-          if (!descriptor || !("value" in descriptor)) {
-            return ReadOnlyProxy.wrap(value, name, this.securityOptions);
-          }
-          Object.defineProperty(materialized, key, {
-            ...descriptor,
-            value: this.wrapHostReturnValue(descriptor.value, `${name}[${String(key)}]`, seen),
-          });
+          const descriptor = descriptors[key as keyof typeof descriptors] as PropertyDescriptor;
+          this.defineMaterializedDataProperty(
+            materialized,
+            key,
+            descriptor,
+            this.wrapHostReturnValue(descriptor.value, `${name}[${String(key)}]`, seen),
+          );
         }
         return materialized;
       }
@@ -5834,7 +5859,9 @@ export class Interpreter {
       if (this.isPlainObjectLike(value)) {
         const descriptors = Object.getOwnPropertyDescriptors(value);
         for (const key of Reflect.ownKeys(descriptors)) {
-          const descriptor = descriptors[key as keyof typeof descriptors];
+          const descriptor = descriptors[key as keyof typeof descriptors] as
+            | PropertyDescriptor
+            | undefined;
           if (descriptor && ("get" in descriptor || "set" in descriptor)) {
             return ReadOnlyProxy.wrap(value, name, this.securityOptions);
           }
@@ -5851,14 +5878,18 @@ export class Interpreter {
           if (typeof key === "string") {
             validatePropertyName(key);
           }
-          const descriptor = descriptors[key as keyof typeof descriptors];
+          const descriptor = descriptors[key as keyof typeof descriptors] as
+            | PropertyDescriptor
+            | undefined;
           if (!descriptor || !("value" in descriptor)) {
             continue;
           }
-          Object.defineProperty(materialized, key, {
-            ...descriptor,
-            value: this.wrapHostReturnValue(descriptor.value, `${name}.${String(key)}`, seen),
-          });
+          this.defineMaterializedDataProperty(
+            materialized,
+            key,
+            descriptor,
+            this.wrapHostReturnValue(descriptor.value, `${name}.${String(key)}`, seen),
+          );
         }
 
         return materialized;
