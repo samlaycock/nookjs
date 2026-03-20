@@ -5964,9 +5964,6 @@ export class Interpreter {
     // Convert string to number if it's a numeric string (for...in gives string indices)
     const index = typeof property === "string" ? Number(property) : property;
 
-    if (typeof index !== "number" || isNaN(index)) {
-      throw new InterpreterError("Array index must be a number");
-    }
     if (index < 0 || index >= arr.length) {
       return undefined; // JavaScript behavior for out-of-bounds
     }
@@ -5986,6 +5983,42 @@ export class Interpreter {
       return !isNaN(Number(property));
     }
     return false;
+  }
+
+  private normalizeArrayPropertyKey(property: any): number | string {
+    if (this.isArrayIndexProperty(property)) {
+      return typeof property === "string" ? Number(property) : property;
+    }
+
+    const propName = typeof property === "string" ? property : String(property);
+    validatePropertyName(propName);
+    return propName;
+  }
+
+  private accessArrayProperty(arr: any[], property: any): any {
+    const key = this.normalizeArrayPropertyKey(property);
+    if (typeof key === "number") {
+      return this.accessArrayElement(arr, key);
+    }
+    return this.resolveStringPropertyAccess(arr, key);
+  }
+
+  private assignArrayProperty(arr: any[], property: any, value: any): any {
+    const key = this.normalizeArrayPropertyKey(property);
+    (arr as any)[key] = value;
+    return value;
+  }
+
+  private updateArrayProperty(
+    arr: any[],
+    property: any,
+    computeNewValue: (currentValue: any) => any,
+  ): any {
+    const key = this.normalizeArrayPropertyKey(property);
+    const currentValue = (arr as any)[key];
+    const newValue = computeNewValue(currentValue);
+    (arr as any)[key] = newValue;
+    return newValue;
   }
 
   /**
@@ -6723,15 +6756,7 @@ export class Interpreter {
         }
 
         if (Array.isArray(object)) {
-          // Array element assignment: arr[i] = value
-          // Convert string to number if it's a numeric string (needed because for...in gives string indices)
-          const index = typeof property === "string" ? Number(property) : property;
-
-          if (typeof index !== "number" || isNaN(index)) {
-            throw new InterpreterError("Array index must be a number");
-          }
-          object[index] = value;
-          return value;
+          return this.assignArrayProperty(object, property, value);
         } else if (object instanceof ClassValue) {
           const propName = String(property);
           return this.assignClassStaticMember(object, propName, value);
@@ -6776,7 +6801,7 @@ export class Interpreter {
           );
         }
 
-        if (typeof object === "object" && object !== null && !Array.isArray(object)) {
+        if (typeof object === "object" && object !== null) {
           object[property] = value;
           return value;
         } else {
@@ -6868,21 +6893,22 @@ export class Interpreter {
                 throw new InterpreterError("Invalid property access");
               }
             } else {
-              const propName = Array.isArray(object)
-                ? typeof property === "string"
-                  ? Number(property)
-                  : property
-                : String(property);
-              if (!Array.isArray(object) && typeof object === "object") {
+              if (Array.isArray(object)) {
+                currentValue = this.accessArrayProperty(object, property);
+              } else {
+                const propName = String(property);
                 if (
-                  !this.shouldSkipPropertyValidation(object) ||
-                  this.shouldForcePropertyValidation(propName)
+                  typeof object === "object" &&
+                  (!this.shouldSkipPropertyValidation(object) ||
+                    this.shouldForcePropertyValidation(propName))
                 ) {
                   validatePropertyName(propName);
                 }
-                this.ensureNoPrototypeAccess(object, propName);
+                if (typeof object === "object") {
+                  this.ensureNoPrototypeAccess(object, propName);
+                }
+                currentValue = object[propName];
               }
-              currentValue = object[propName];
             }
           } else {
             if (memberExpr.property.type !== "Identifier") {
@@ -6981,11 +7007,7 @@ export class Interpreter {
           return newValue;
         }
         if (Array.isArray(object)) {
-          const index = typeof property === "string" ? Number(property) : property;
-          if (typeof index !== "number" || isNaN(index)) {
-            throw new InterpreterError("Array index must be a number");
-          }
-          object[index] = newValue;
+          return this.assignArrayProperty(object, property, newValue);
         } else if (object instanceof ClassValue) {
           const propName = String(property);
           return this.assignClassStaticMember(object, propName, newValue);
@@ -7141,14 +7163,7 @@ export class Interpreter {
         }
 
         if (Array.isArray(object)) {
-          const index = typeof property === "string" ? Number(property) : property;
-          if (typeof index !== "number" || isNaN(index)) {
-            throw new InterpreterError("Array index must be a number");
-          }
-          const currentValue = object[index];
-          const newValue = computeNewValue(currentValue);
-          object[index] = newValue;
-          return newValue;
+          return this.updateArrayProperty(object, property, computeNewValue);
         }
 
         if (object instanceof ClassValue) {
@@ -8617,10 +8632,7 @@ export class Interpreter {
         return this.resolveSymbolPropertyAccess(object, property);
       }
       if (Array.isArray(object)) {
-        if (this.isArrayIndexProperty(property)) {
-          return this.accessArrayElement(object, property);
-        }
-        throw new InterpreterError("Array index must be a number");
+        return this.accessArrayProperty(object, property);
       }
 
       if (object === null || object === undefined) {
@@ -10168,14 +10180,7 @@ export class Interpreter {
         }
 
         if (Array.isArray(object)) {
-          // Convert string to number if it's a numeric string (for...in gives string indices)
-          const index = typeof property === "string" ? Number(property) : property;
-
-          if (typeof index !== "number" || isNaN(index)) {
-            throw new InterpreterError("Array index must be a number");
-          }
-          object[index] = value;
-          return value;
+          return this.assignArrayProperty(object, property, value);
         } else if (object instanceof ClassValue) {
           const propName = String(property);
           return await this.assignClassStaticMemberAsync(object, propName, value);
@@ -10218,7 +10223,7 @@ export class Interpreter {
           );
         }
 
-        if (typeof object === "object" && object !== null && !Array.isArray(object)) {
+        if (typeof object === "object" && object !== null) {
           object[property] = value;
           return value;
         } else {
@@ -10305,21 +10310,22 @@ export class Interpreter {
                 throw new InterpreterError("Invalid property access");
               }
             } else {
-              const propName = Array.isArray(object)
-                ? typeof property === "string"
-                  ? Number(property)
-                  : property
-                : String(property);
-              if (!Array.isArray(object) && typeof object === "object") {
+              if (Array.isArray(object)) {
+                currentValue = this.accessArrayProperty(object, property);
+              } else {
+                const propName = String(property);
                 if (
-                  !this.shouldSkipPropertyValidation(object) ||
-                  this.shouldForcePropertyValidation(propName)
+                  typeof object === "object" &&
+                  (!this.shouldSkipPropertyValidation(object) ||
+                    this.shouldForcePropertyValidation(propName))
                 ) {
                   validatePropertyName(propName);
                 }
-                this.ensureNoPrototypeAccess(object, propName);
+                if (typeof object === "object") {
+                  this.ensureNoPrototypeAccess(object, propName);
+                }
+                currentValue = object[propName];
               }
-              currentValue = object[propName];
             }
           } else {
             if (memberExpr.property.type !== "Identifier") {
@@ -10417,11 +10423,7 @@ export class Interpreter {
           return newValue;
         }
         if (Array.isArray(object)) {
-          const index = typeof property === "string" ? Number(property) : property;
-          if (typeof index !== "number" || isNaN(index)) {
-            throw new InterpreterError("Array index must be a number");
-          }
-          object[index] = newValue;
+          return this.assignArrayProperty(object, property, newValue);
         } else if (object instanceof ClassValue) {
           const propName = String(property);
           return await this.assignClassStaticMemberAsync(object, propName, newValue);
@@ -10579,14 +10581,7 @@ export class Interpreter {
         }
 
         if (Array.isArray(object)) {
-          const index = typeof property === "string" ? Number(property) : property;
-          if (typeof index !== "number" || isNaN(index)) {
-            throw new InterpreterError("Array index must be a number");
-          }
-          const currentValue = object[index];
-          const newValue = computeNewValue(currentValue);
-          object[index] = newValue;
-          return newValue;
+          return this.updateArrayProperty(object, property, computeNewValue);
         }
 
         if (object instanceof ClassValue) {
@@ -11668,10 +11663,7 @@ export class Interpreter {
         return this.resolveSymbolPropertyAccess(object, property);
       }
       if (Array.isArray(object)) {
-        if (this.isArrayIndexProperty(property)) {
-          return this.accessArrayElement(object, property);
-        }
-        throw new InterpreterError("Array index must be a number");
+        return this.accessArrayProperty(object, property);
       }
 
       if (object === null || object === undefined) {

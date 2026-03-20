@@ -819,6 +819,29 @@ describe("Security", () => {
         expect(lockedObject.count).toBe(1);
       });
 
+      it("should allow writing named properties on materialized host arrays", () => {
+        const taggedArray: any = [1, 2];
+        taggedArray.tag = "host";
+
+        const interpreter = new Interpreter({
+          globals: {
+            getTaggedArray: () => taggedArray,
+          },
+        });
+
+        const result = interpreter.evaluate(`
+          const arr = getTaggedArray();
+          arr.tag = "sandbox";
+          arr["extra"] = 3;
+
+          [arr.tag, arr["extra"]];
+        `);
+
+        expect(result).toEqual(["sandbox", 3]);
+        expect(taggedArray.tag).toBe("host");
+        expect(taggedArray.extra).toBeUndefined();
+      });
+
       it("should preserve circular references when materializing host objects", () => {
         const circular: any = { count: 1 };
         circular.self = circular;
