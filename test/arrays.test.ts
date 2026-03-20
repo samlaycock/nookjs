@@ -217,6 +217,15 @@ describe("Arrays", () => {
             `;
         expect(interpreter.evaluate(code)).toBe(42);
       });
+
+      test("assign named property on array method results", () => {
+        const code = `
+              let arr = [1, 2, 3].slice(1);
+              arr.tag = 42;
+              arr.tag
+            `;
+        expect(interpreter.evaluate(code)).toBe(42);
+      });
     });
 
     describe("Arrays in loops", () => {
