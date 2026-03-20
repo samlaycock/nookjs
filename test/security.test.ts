@@ -692,6 +692,7 @@ describe("Security", () => {
             pair.second.push(3);
           `);
         }).toThrow();
+        expect(shared).toEqual([1, 2]);
       });
 
       it("should fall back to read-only proxies for host arrays with dangerous symbol keys", () => {
@@ -729,6 +730,46 @@ describe("Security", () => {
             obj.safe = 2;
           `);
         }).toThrow();
+      });
+
+      it("should materialize non-writable host data properties as writable sandbox properties", () => {
+        const lockedArray: any[] = [];
+        Object.defineProperty(lockedArray, "0", {
+          value: 1,
+          enumerable: true,
+          writable: false,
+          configurable: false,
+        });
+        lockedArray.length = 1;
+
+        const lockedObject: any = {};
+        Object.defineProperty(lockedObject, "count", {
+          value: 1,
+          enumerable: true,
+          writable: false,
+          configurable: false,
+        });
+
+        const interpreter = new Interpreter({
+          globals: {
+            getLockedArray: () => lockedArray,
+            getLockedObject: () => lockedObject,
+          },
+        });
+
+        const result = interpreter.evaluate(`
+          const arr = getLockedArray();
+          const obj = getLockedObject();
+
+          arr[0] = 2;
+          obj.count = 3;
+
+          [arr[0], obj.count];
+        `);
+
+        expect(result).toEqual([2, 3]);
+        expect(lockedArray[0]).toBe(1);
+        expect(lockedObject.count).toBe(1);
       });
     });
 
