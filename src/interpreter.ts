@@ -5825,8 +5825,8 @@ export class Interpreter {
           if (key === "length") {
             continue;
           }
-          if (typeof key === "string") {
-            validatePropertyName(key);
+          if ((typeof key === "string" || typeof key === "symbol") && isDangerousProperty(key)) {
+            return ReadOnlyProxy.wrap(value, name, this.securityOptions);
           }
           const descriptor = descriptors[key as keyof typeof descriptors] as
             | PropertyDescriptor
@@ -5859,6 +5859,9 @@ export class Interpreter {
       if (this.isPlainObjectLike(value)) {
         const descriptors = Object.getOwnPropertyDescriptors(value);
         for (const key of Reflect.ownKeys(descriptors)) {
+          if ((typeof key === "string" || typeof key === "symbol") && isDangerousProperty(key)) {
+            return ReadOnlyProxy.wrap(value, name, this.securityOptions);
+          }
           const descriptor = descriptors[key as keyof typeof descriptors] as
             | PropertyDescriptor
             | undefined;
@@ -5875,9 +5878,6 @@ export class Interpreter {
         this.markSandboxContainer(materialized);
 
         for (const key of Reflect.ownKeys(descriptors)) {
-          if (typeof key === "string") {
-            validatePropertyName(key);
-          }
           const descriptor = descriptors[key as keyof typeof descriptors] as
             | PropertyDescriptor
             | undefined;
