@@ -693,6 +693,43 @@ describe("Security", () => {
           `);
         }).toThrow();
       });
+
+      it("should fall back to read-only proxies for host arrays with dangerous symbol keys", () => {
+        const shared: any = [1, 2];
+        shared[Symbol.toPrimitive] = () => "coerced";
+
+        const interpreter = new Interpreter({
+          globals: {
+            getDangerousSymbolArray: () => shared,
+          },
+        });
+
+        expect(() => {
+          interpreter.evaluate(`
+            const arr = getDangerousSymbolArray();
+            arr.extra = 1;
+          `);
+        }).toThrow();
+      });
+
+      it("should fall back to read-only proxies for dangerous-keyed host objects", () => {
+        const interpreter = new Interpreter({
+          globals: {
+            getDangerousKeyObject: () => ({
+              toString: "host-label",
+              safe: 1,
+            }),
+          },
+        });
+
+        expect(interpreter.evaluate(`getDangerousKeyObject().safe`)).toBe(1);
+        expect(() => {
+          interpreter.evaluate(`
+            const obj = getDangerousKeyObject();
+            obj.safe = 2;
+          `);
+        }).toThrow();
+      });
     });
 
     describe("edge cases", () => {
