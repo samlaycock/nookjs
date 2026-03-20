@@ -199,6 +199,24 @@ describe("Arrays", () => {
             `;
         expect(interpreter.evaluate(code)).toBe(42);
       });
+
+      test("assign named property with dot notation", () => {
+        const code = `
+              let arr = [];
+              arr.tag = 42;
+              arr.tag
+            `;
+        expect(interpreter.evaluate(code)).toBe(42);
+      });
+
+      test("assign named property with computed notation", () => {
+        const code = `
+              let arr = [];
+              arr["tag"] = 42;
+              arr["tag"]
+            `;
+        expect(interpreter.evaluate(code)).toBe(42);
+      });
     });
 
     describe("Arrays in loops", () => {
@@ -487,12 +505,12 @@ describe("Arrays", () => {
     });
 
     describe("Error handling", () => {
-      test("non-number index throws", () => {
+      test("non-number index returns undefined", () => {
         const code = `
               let arr = [1, 2, 3];
               arr["hello"]
             `;
-        expect(() => interpreter.evaluate(code)).toThrow("Array index must be a number");
+        expect(interpreter.evaluate(code)).toBeUndefined();
       });
 
       test("assigning to non-array throws", () => {

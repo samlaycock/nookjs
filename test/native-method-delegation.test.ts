@@ -251,9 +251,7 @@ describe("Native Method Delegation", () => {
       it("should still use explicit methods via computed access", () => {
         const interpreter = new Interpreter();
         expect(interpreter.evaluate(`"hi"["split"]("i")`)).toEqual(["h", ""]);
-        expect(() => interpreter.evaluate(`[1,2,3]["map"](x => x * 2)`)).toThrow(
-          "Array index must be a number",
-        );
+        expect(interpreter.evaluate(`[1,2,3]["map"](x => x * 2)`)).toEqual([2, 4, 6]);
       });
     });
 
