@@ -710,12 +710,15 @@ describe("Security", () => {
 
         const originalWrap = originalWrapDescriptor.value as typeof ReadOnlyProxy.wrap;
         let sharedWrapCount = 0;
-        (ReadOnlyProxy as any).wrap = (...args: Parameters<typeof originalWrap>) => {
-          if (args[0] === shared) {
-            sharedWrapCount += 1;
-          }
-          return originalWrap(...args);
-        };
+        Object.defineProperty(ReadOnlyProxy, "wrap", {
+          ...originalWrapDescriptor,
+          value: (...args: Parameters<typeof originalWrap>) => {
+            if (args[0] === shared) {
+              sharedWrapCount += 1;
+            }
+            return originalWrap(...args);
+          },
+        });
 
         try {
           const interpreter = new Interpreter({
