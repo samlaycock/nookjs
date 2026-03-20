@@ -5792,6 +5792,16 @@ export class Interpreter {
     });
   }
 
+  private wrapHostFallbackValue(value: object, name: string, seen: WeakMap<object, any>): any {
+    if (seen.has(value)) {
+      return seen.get(value);
+    }
+
+    const wrapped = ReadOnlyProxy.wrap(value, name, this.securityOptions);
+    seen.set(value, wrapped);
+    return wrapped;
+  }
+
   private wrapHostReturnValue(
     value: any,
     name: string,
@@ -5813,26 +5823,27 @@ export class Interpreter {
       return value;
     }
 
-    if (typeof value === "object") {
-      const cachedValue = seen.get(value);
-      if (cachedValue !== undefined) {
-        return cachedValue;
+    if (typeof value === "object" || typeof value === "function") {
+      if (seen.has(value)) {
+        return seen.get(value);
       }
+    }
 
+    if (typeof value === "object") {
       if (Array.isArray(value)) {
         const descriptors = Object.getOwnPropertyDescriptors(value);
         for (const key of Reflect.ownKeys(descriptors)) {
           if (key === "length") {
             continue;
           }
-          if ((typeof key === "string" || typeof key === "symbol") && isDangerousProperty(key)) {
-            return ReadOnlyProxy.wrap(value, name, this.securityOptions);
+          if (isDangerousProperty(key)) {
+            return this.wrapHostFallbackValue(value, name, seen);
           }
           const descriptor = descriptors[key as keyof typeof descriptors] as
             | PropertyDescriptor
             | undefined;
           if (!descriptor || !("value" in descriptor)) {
-            return ReadOnlyProxy.wrap(value, name, this.securityOptions);
+            return this.wrapHostFallbackValue(value, name, seen);
           }
         }
 
@@ -5859,14 +5870,14 @@ export class Interpreter {
       if (this.isPlainObjectLike(value)) {
         const descriptors = Object.getOwnPropertyDescriptors(value);
         for (const key of Reflect.ownKeys(descriptors)) {
-          if ((typeof key === "string" || typeof key === "symbol") && isDangerousProperty(key)) {
-            return ReadOnlyProxy.wrap(value, name, this.securityOptions);
+          if (isDangerousProperty(key)) {
+            return this.wrapHostFallbackValue(value, name, seen);
           }
           const descriptor = descriptors[key as keyof typeof descriptors] as
             | PropertyDescriptor
             | undefined;
           if (descriptor && ("get" in descriptor || "set" in descriptor)) {
-            return ReadOnlyProxy.wrap(value, name, this.securityOptions);
+            return this.wrapHostFallbackValue(value, name, seen);
           }
         }
 
@@ -5896,7 +5907,7 @@ export class Interpreter {
       }
     }
 
-    return ReadOnlyProxy.wrap(value, name, this.securityOptions);
+    return this.wrapHostFallbackValue(value as object, name, seen);
   }
 
   private isPrimitiveValue(value: any): boolean {

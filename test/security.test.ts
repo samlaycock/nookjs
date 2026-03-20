@@ -695,6 +695,50 @@ describe("Security", () => {
         expect(shared).toEqual([1, 2]);
       });
 
+      it("should cache shared read-only fallbacks within one host return traversal", () => {
+        const shared = [1, 2];
+        Object.defineProperty(shared, "meta", {
+          get: () => "host-only",
+          enumerable: true,
+          configurable: true,
+        });
+
+        const originalWrapDescriptor = Object.getOwnPropertyDescriptor(ReadOnlyProxy, "wrap");
+        if (!originalWrapDescriptor) {
+          throw new Error("Expected ReadOnlyProxy.wrap descriptor");
+        }
+
+        const originalWrap = originalWrapDescriptor.value as typeof ReadOnlyProxy.wrap;
+        let sharedWrapCount = 0;
+        (ReadOnlyProxy as any).wrap = (...args: Parameters<typeof originalWrap>) => {
+          if (args[0] === shared) {
+            sharedWrapCount += 1;
+          }
+          return originalWrap(...args);
+        };
+
+        try {
+          const interpreter = new Interpreter({
+            globals: {
+              getSharedAccessorArrayPair: () => ({
+                first: shared,
+                second: shared,
+              }),
+            },
+          });
+
+          const sameReference = interpreter.evaluate(`
+            const pair = getSharedAccessorArrayPair();
+            pair.first === pair.second;
+          `);
+
+          expect(sameReference).toBe(true);
+          expect(sharedWrapCount).toBe(1);
+        } finally {
+          Object.defineProperty(ReadOnlyProxy, "wrap", originalWrapDescriptor);
+        }
+      });
+
       it("should fall back to read-only proxies for host arrays with dangerous symbol keys", () => {
         const shared: any = [1, 2];
         shared[Symbol.toPrimitive] = () => "coerced";
@@ -770,6 +814,28 @@ describe("Security", () => {
         expect(result).toEqual([2, 3]);
         expect(lockedArray[0]).toBe(1);
         expect(lockedObject.count).toBe(1);
+      });
+
+      it("should preserve circular references when materializing host objects", () => {
+        const circular: any = { count: 1 };
+        circular.self = circular;
+
+        const interpreter = new Interpreter({
+          globals: {
+            getCircularObject: () => circular,
+          },
+        });
+
+        const result = interpreter.evaluate(`
+          const obj = getCircularObject();
+          const sameReference = obj.self === obj;
+          obj.count = 2;
+
+          [sameReference, obj.count];
+        `);
+
+        expect(result).toEqual([true, 2]);
+        expect(circular.count).toBe(1);
       });
     });
 
