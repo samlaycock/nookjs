@@ -5785,9 +5785,9 @@ export class Interpreter {
     value: any,
   ): void {
     Object.defineProperty(target, key, {
-      configurable: descriptor.configurable ?? false,
+      configurable: true,
       enumerable: descriptor.enumerable ?? false,
-      writable: descriptor.writable ?? false,
+      writable: true,
       value,
     });
   }
