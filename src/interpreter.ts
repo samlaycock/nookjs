@@ -5986,6 +5986,9 @@ export class Interpreter {
   }
 
   private normalizeArrayPropertyKey(property: any): number | string {
+    if (typeof property === "symbol") {
+      throw new InterpreterError("Symbol keys are not allowed on arrays");
+    }
     if (this.isArrayIndexProperty(property)) {
       return typeof property === "string" ? Number(property) : property;
     }
@@ -5993,6 +5996,13 @@ export class Interpreter {
     const propName = typeof property === "string" ? property : String(property);
     validatePropertyName(propName);
     return propName;
+  }
+
+  private assertMutableArrayTarget(arr: any[]): void {
+    if (this.sandboxOwnedContainers.has(arr) || this.isReadOnlyProxyObject(arr)) {
+      return;
+    }
+    throw new InterpreterError("Cannot assign properties on host arrays");
   }
 
   private accessArrayProperty(arr: any[], property: any): any {
@@ -6004,6 +6014,7 @@ export class Interpreter {
   }
 
   private assignArrayProperty(arr: any[], property: any, value: any): any {
+    this.assertMutableArrayTarget(arr);
     const key = this.normalizeArrayPropertyKey(property);
     (arr as any)[key] = value;
     return value;
@@ -6014,6 +6025,7 @@ export class Interpreter {
     property: any,
     computeNewValue: (currentValue: any) => any,
   ): any {
+    this.assertMutableArrayTarget(arr);
     const key = this.normalizeArrayPropertyKey(property);
     const currentValue = (arr as any)[key];
     const newValue = computeNewValue(currentValue);
