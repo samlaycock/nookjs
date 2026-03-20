@@ -5823,10 +5823,8 @@ export class Interpreter {
       return value;
     }
 
-    if (typeof value === "object" || typeof value === "function") {
-      if (seen.has(value)) {
-        return seen.get(value);
-      }
+    if (seen.has(value)) {
+      return seen.get(value);
     }
 
     if (typeof value === "object") {
