@@ -5794,6 +5794,7 @@ export class Interpreter {
 
   private wrapHostFallbackValue(value: object, name: string, seen: WeakMap<object, any>): any {
     if (seen.has(value)) {
+      // Cached fallbacks keep the label from their first encounter.
       return seen.get(value);
     }
 
@@ -5827,82 +5828,80 @@ export class Interpreter {
       return seen.get(value);
     }
 
-    if (typeof value === "object") {
-      if (Array.isArray(value)) {
-        const descriptors = Object.getOwnPropertyDescriptors(value);
-        for (const key of Reflect.ownKeys(descriptors)) {
-          if (key === "length") {
-            continue;
-          }
-          if (isDangerousProperty(key)) {
-            return this.wrapHostFallbackValue(value, name, seen);
-          }
-          const descriptor = descriptors[key as keyof typeof descriptors] as
-            | PropertyDescriptor
-            | undefined;
-          if (!descriptor || !("value" in descriptor)) {
-            return this.wrapHostFallbackValue(value, name, seen);
-          }
+    if (Array.isArray(value)) {
+      const descriptors = Object.getOwnPropertyDescriptors(value);
+      for (const key of Reflect.ownKeys(descriptors)) {
+        if (key === "length") {
+          continue;
         }
-
-        const materialized: any[] = [];
-        seen.set(value, materialized);
-        this.markSandboxContainer(materialized);
-        materialized.length = value.length;
-
-        for (const key of Reflect.ownKeys(descriptors)) {
-          if (key === "length") {
-            continue;
-          }
-          const descriptor = descriptors[key as keyof typeof descriptors] as PropertyDescriptor;
-          this.defineMaterializedDataProperty(
-            materialized,
-            key,
-            descriptor,
-            this.wrapHostReturnValue(descriptor.value, `${name}[${String(key)}]`, seen),
-          );
+        if (isDangerousProperty(key)) {
+          return this.wrapHostFallbackValue(value, name, seen);
         }
-        return materialized;
+        const descriptor = descriptors[key as keyof typeof descriptors] as
+          | PropertyDescriptor
+          | undefined;
+        if (!descriptor || !("value" in descriptor)) {
+          return this.wrapHostFallbackValue(value, name, seen);
+        }
       }
 
-      if (this.isPlainObjectLike(value)) {
-        const descriptors = Object.getOwnPropertyDescriptors(value);
-        for (const key of Reflect.ownKeys(descriptors)) {
-          if (isDangerousProperty(key)) {
-            return this.wrapHostFallbackValue(value, name, seen);
-          }
-          const descriptor = descriptors[key as keyof typeof descriptors] as
-            | PropertyDescriptor
-            | undefined;
-          if (descriptor && ("get" in descriptor || "set" in descriptor)) {
-            return this.wrapHostFallbackValue(value, name, seen);
-          }
+      const materialized: any[] = [];
+      seen.set(value, materialized);
+      this.markSandboxContainer(materialized);
+      materialized.length = value.length;
+
+      for (const key of Reflect.ownKeys(descriptors)) {
+        if (key === "length") {
+          continue;
         }
-
-        const materialized = Object.create(Object.getPrototypeOf(value)) as Record<
-          string | symbol,
-          any
-        >;
-        seen.set(value, materialized);
-        this.markSandboxContainer(materialized);
-
-        for (const key of Reflect.ownKeys(descriptors)) {
-          const descriptor = descriptors[key as keyof typeof descriptors] as
-            | PropertyDescriptor
-            | undefined;
-          if (!descriptor || !("value" in descriptor)) {
-            continue;
-          }
-          this.defineMaterializedDataProperty(
-            materialized,
-            key,
-            descriptor,
-            this.wrapHostReturnValue(descriptor.value, `${name}.${String(key)}`, seen),
-          );
-        }
-
-        return materialized;
+        const descriptor = descriptors[key as keyof typeof descriptors] as PropertyDescriptor;
+        this.defineMaterializedDataProperty(
+          materialized,
+          key,
+          descriptor,
+          this.wrapHostReturnValue(descriptor.value, `${name}[${String(key)}]`, seen),
+        );
       }
+      return materialized;
+    }
+
+    if (typeof value === "object" && this.isPlainObjectLike(value)) {
+      const descriptors = Object.getOwnPropertyDescriptors(value);
+      for (const key of Reflect.ownKeys(descriptors)) {
+        if (isDangerousProperty(key)) {
+          return this.wrapHostFallbackValue(value, name, seen);
+        }
+        const descriptor = descriptors[key as keyof typeof descriptors] as
+          | PropertyDescriptor
+          | undefined;
+        if (descriptor && ("get" in descriptor || "set" in descriptor)) {
+          return this.wrapHostFallbackValue(value, name, seen);
+        }
+      }
+
+      const materialized = Object.create(Object.getPrototypeOf(value)) as Record<
+        string | symbol,
+        any
+      >;
+      seen.set(value, materialized);
+      this.markSandboxContainer(materialized);
+
+      for (const key of Reflect.ownKeys(descriptors)) {
+        const descriptor = descriptors[key as keyof typeof descriptors] as
+          | PropertyDescriptor
+          | undefined;
+        if (!descriptor || !("value" in descriptor)) {
+          continue;
+        }
+        this.defineMaterializedDataProperty(
+          materialized,
+          key,
+          descriptor,
+          this.wrapHostReturnValue(descriptor.value, `${name}.${String(key)}`, seen),
+        );
+      }
+
+      return materialized;
     }
 
     return this.wrapHostFallbackValue(value as object, name, seen);
