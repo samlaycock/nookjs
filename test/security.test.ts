@@ -842,6 +842,46 @@ describe("Security", () => {
         expect(taggedArray.extra).toBeUndefined();
       });
 
+      it("should preserve materialized host array metadata that collides with array method names", () => {
+        const annotatedArray: any = [1, 2];
+        annotatedArray.map = "host-map";
+
+        const interpreter = new Interpreter({
+          globals: {
+            getAnnotatedArray: () => annotatedArray,
+          },
+        });
+
+        const result = interpreter.evaluate(`
+          const arr = getAnnotatedArray();
+          const before = [arr.map, arr["map"]];
+          arr.map = "sandbox-map";
+
+          [before[0], before[1], arr.map, arr["map"]];
+        `);
+
+        expect(result).toEqual(["host-map", "host-map", "sandbox-map", "sandbox-map"]);
+        expect(annotatedArray.map).toBe("host-map");
+      });
+
+      it("should materialize plain host objects with a null prototype", () => {
+        const hostObject = { count: 1 };
+
+        const interpreter = new Interpreter({
+          globals: {
+            getPlainObject: () => hostObject,
+          },
+        });
+
+        const result = interpreter.evaluate(`getPlainObject()`);
+
+        expect(result.count).toBe(1);
+        expect(result.toString).toBeUndefined();
+        expect(result.hasOwnProperty).toBeUndefined();
+        expect(Object.getPrototypeOf(result)).toBeNull();
+        expect(Object.getPrototypeOf(hostObject)).toBe(Object.prototype);
+      });
+
       it("should preserve circular references when materializing host objects", () => {
         const circular: any = { count: 1 };
         circular.self = circular;
