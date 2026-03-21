@@ -2,6 +2,218 @@ import type { ESTree } from "./ast";
 
 const MAX_RESOLVED_PATH_CONTEXT_CACHE_SIZE = 1024;
 
+interface ResolutionContextCacheNode {
+  children: Map<string, ResolutionContextCacheNode>;
+  entry?: ResolutionContextCacheEntry;
+}
+
+interface ResolutionContextCacheEntry {
+  importer: string | null;
+  importerChain: readonly string[];
+  node: ResolutionContextCacheNode;
+  path: string;
+  specifier: string;
+}
+
+function createResolutionContextCacheNode(): ResolutionContextCacheNode {
+  return { children: new Map() };
+}
+
+/**
+ * Structured resolution-context cache keyed by specifier, importer, and importer chain.
+ * This avoids per-lookup serialization while retaining bounded LRU-style eviction.
+ */
+class ResolutionContextPathCache {
+  private readonly bySpecifier: Map<string, Map<string | null, ResolutionContextCacheNode>> =
+    new Map();
+  private readonly lruEntries: Set<ResolutionContextCacheEntry> = new Set();
+  private readonly maxSize: number;
+
+  constructor(maxSize: number) {
+    this.maxSize = maxSize;
+  }
+
+  get size(): number {
+    return this.lruEntries.size;
+  }
+
+  clear(): void {
+    this.bySpecifier.clear();
+    this.lruEntries.clear();
+  }
+
+  delete(specifier: string, importer: string | null, importerChain: readonly string[]): void {
+    const entry = this.getEntry(specifier, importer, importerChain);
+    if (!entry) {
+      return;
+    }
+
+    this.deleteEntry(entry);
+  }
+
+  get(
+    specifier: string,
+    importer: string | null,
+    importerChain: readonly string[],
+  ): string | undefined {
+    const entry = this.getEntry(specifier, importer, importerChain);
+    if (!entry) {
+      return undefined;
+    }
+
+    this.touchEntry(entry);
+    return entry.path;
+  }
+
+  set(
+    specifier: string,
+    importer: string | null,
+    importerChain: readonly string[],
+    path: string,
+  ): void {
+    const node = this.getOrCreateLeafNode(specifier, importer, importerChain);
+    const existingEntry = node.entry;
+    if (existingEntry) {
+      existingEntry.importerChain = importerChain;
+      existingEntry.path = path;
+      this.touchEntry(existingEntry);
+      return;
+    }
+
+    const entry: ResolutionContextCacheEntry = {
+      importer,
+      importerChain,
+      node,
+      path,
+      specifier,
+    };
+    node.entry = entry;
+    this.lruEntries.add(entry);
+
+    if (this.lruEntries.size > this.maxSize) {
+      const oldestEntry = this.lruEntries.values().next().value;
+      if (oldestEntry) {
+        this.deleteEntry(oldestEntry);
+      }
+    }
+  }
+
+  private deleteEntry(entry: ResolutionContextCacheEntry): void {
+    entry.node.entry = undefined;
+    this.lruEntries.delete(entry);
+    this.pruneEmptyNodes(entry.specifier, entry.importer, entry.importerChain);
+  }
+
+  private getEntry(
+    specifier: string,
+    importer: string | null,
+    importerChain: readonly string[],
+  ): ResolutionContextCacheEntry | undefined {
+    const importerNodes = this.bySpecifier.get(specifier);
+    if (!importerNodes) {
+      return undefined;
+    }
+
+    const rootNode = importerNodes.get(importer);
+    if (!rootNode) {
+      return undefined;
+    }
+
+    const leafNode = this.getLeafNode(rootNode, importerChain);
+    return leafNode?.entry;
+  }
+
+  private getLeafNode(
+    rootNode: ResolutionContextCacheNode,
+    importerChain: readonly string[],
+  ): ResolutionContextCacheNode | undefined {
+    let currentNode: ResolutionContextCacheNode | undefined = rootNode;
+    for (const segment of importerChain) {
+      currentNode = currentNode.children.get(segment);
+      if (!currentNode) {
+        return undefined;
+      }
+    }
+    return currentNode;
+  }
+
+  private getOrCreateLeafNode(
+    specifier: string,
+    importer: string | null,
+    importerChain: readonly string[],
+  ): ResolutionContextCacheNode {
+    const importerNodes = this.bySpecifier.get(specifier) ?? new Map();
+    if (!this.bySpecifier.has(specifier)) {
+      this.bySpecifier.set(specifier, importerNodes);
+    }
+
+    const rootNode = importerNodes.get(importer) ?? createResolutionContextCacheNode();
+    if (!importerNodes.has(importer)) {
+      importerNodes.set(importer, rootNode);
+    }
+
+    let currentNode = rootNode;
+    for (const segment of importerChain) {
+      const nextNode = currentNode.children.get(segment) ?? createResolutionContextCacheNode();
+      if (!currentNode.children.has(segment)) {
+        currentNode.children.set(segment, nextNode);
+      }
+      currentNode = nextNode;
+    }
+
+    return currentNode;
+  }
+
+  private pruneEmptyNodes(
+    specifier: string,
+    importer: string | null,
+    importerChain: readonly string[],
+  ): void {
+    const importerNodes = this.bySpecifier.get(specifier);
+    if (!importerNodes) {
+      return;
+    }
+
+    const rootNode = importerNodes.get(importer);
+    if (!rootNode) {
+      return;
+    }
+
+    const visitedNodes: ResolutionContextCacheNode[] = [rootNode];
+    let currentNode: ResolutionContextCacheNode | undefined = rootNode;
+    for (const segment of importerChain) {
+      currentNode = currentNode.children.get(segment);
+      if (!currentNode) {
+        return;
+      }
+      visitedNodes.push(currentNode);
+    }
+
+    for (let index = importerChain.length; index > 0; index -= 1) {
+      const node = visitedNodes[index]!;
+      if (node.entry || node.children.size > 0) {
+        return;
+      }
+
+      const parentNode = visitedNodes[index - 1]!;
+      const segment = importerChain[index - 1]!;
+      parentNode.children.delete(segment);
+    }
+
+    if (!rootNode.entry && rootNode.children.size === 0) {
+      importerNodes.delete(importer);
+      if (importerNodes.size === 0) {
+        this.bySpecifier.delete(specifier);
+      }
+    }
+  }
+
+  private touchEntry(entry: ResolutionContextCacheEntry): void {
+    this.lruEntries.delete(entry);
+    this.lruEntries.add(entry);
+  }
+}
+
 export type ModuleSource =
   | { type: "source"; code: string; path: string }
   | { type: "ast"; ast: ESTree.Program; path: string }
@@ -155,7 +367,9 @@ export class ModuleSystem {
   // Secondary index: specifier -> path (for specifier-based lookups)
   private specifierToPath: Map<string, string> = new Map();
   // Context-specific index for reusing cached module paths without re-running resolve()
-  private resolvedPathByContext: Map<string, string> = new Map();
+  private resolvedPathByContext = new ResolutionContextPathCache(
+    MAX_RESOLVED_PATH_CONTEXT_CACHE_SIZE,
+  );
   private options: ModuleOptions;
   // Track depth per evaluation context using a stack (fixes shared depth counter)
   private evaluationStack: string[] = [];
@@ -199,38 +413,29 @@ export class ModuleSystem {
     return this.evaluationStack.length;
   }
 
-  private getResolutionContextKey(
+  private getResolvedPathForContext(
     specifier: string,
     importer: string | null,
     importerChain: readonly string[],
-  ): string {
-    return JSON.stringify([specifier, importer, importerChain]);
+  ): string | undefined {
+    return this.resolvedPathByContext.get(specifier, importer, importerChain);
   }
 
-  private getResolvedPathForContext(resolutionContextKey: string): string | undefined {
-    const cachedPath = this.resolvedPathByContext.get(resolutionContextKey);
-    if (cachedPath === undefined) {
-      return undefined;
-    }
-
-    // Keep hot resolution contexts alive while bounding growth overall.
-    this.resolvedPathByContext.delete(resolutionContextKey);
-    this.resolvedPathByContext.set(resolutionContextKey, cachedPath);
-    return cachedPath;
+  private cacheResolvedPathForContext(
+    specifier: string,
+    importer: string | null,
+    importerChain: readonly string[],
+    path: string,
+  ): void {
+    this.resolvedPathByContext.set(specifier, importer, importerChain, path);
   }
 
-  private cacheResolvedPathForContext(resolutionContextKey: string, path: string): void {
-    if (this.resolvedPathByContext.has(resolutionContextKey)) {
-      this.resolvedPathByContext.delete(resolutionContextKey);
-    }
-    this.resolvedPathByContext.set(resolutionContextKey, path);
-
-    if (this.resolvedPathByContext.size > MAX_RESOLVED_PATH_CONTEXT_CACHE_SIZE) {
-      const oldestResolutionContextKey = this.resolvedPathByContext.keys().next().value;
-      if (oldestResolutionContextKey !== undefined) {
-        this.resolvedPathByContext.delete(oldestResolutionContextKey);
-      }
-    }
+  private deleteResolvedPathForContext(
+    specifier: string,
+    importer: string | null,
+    importerChain: readonly string[],
+  ): void {
+    this.resolvedPathByContext.delete(specifier, importer, importerChain);
   }
 
   async resolveModule(specifier: string, importer: string | null): Promise<ModuleRecord | null> {
@@ -260,14 +465,13 @@ export class ModuleSystem {
         importer,
         importerChain: this.getImporterChain(),
       };
-      const resolutionContextKey = this.getResolutionContextKey(
-        specifier,
-        importer,
-        context.importerChain,
-      );
 
       if (this.options.cache && this.options.resolver.authorize) {
-        const cachedPath = this.getResolvedPathForContext(resolutionContextKey);
+        const cachedPath = this.getResolvedPathForContext(
+          specifier,
+          importer,
+          context.importerChain,
+        );
         if (cachedPath !== undefined) {
           const existingByPath = this.cacheByPath.get(cachedPath);
           if (existingByPath) {
@@ -285,7 +489,7 @@ export class ModuleSystem {
             return existingByPath;
           }
 
-          this.resolvedPathByContext.delete(resolutionContextKey);
+          this.deleteResolvedPathForContext(specifier, importer, context.importerChain);
         }
       }
 
@@ -316,7 +520,7 @@ export class ModuleSystem {
 
         const existingByPath = this.cacheByPath.get(source.path);
         if (existingByPath) {
-          this.cacheResolvedPathForContext(resolutionContextKey, source.path);
+          this.cacheResolvedPathForContext(specifier, importer, context.importerChain, source.path);
           // If already initialized, return cached exports
           if (existingByPath.status === "initialized") {
             return existingByPath;
@@ -353,7 +557,7 @@ export class ModuleSystem {
 
       if (this.options.cache) {
         this.cacheByPath.set(source.path, record);
-        this.cacheResolvedPathForContext(resolutionContextKey, source.path);
+        this.cacheResolvedPathForContext(specifier, importer, context.importerChain, source.path);
       }
 
       if (source.type === "namespace") {
