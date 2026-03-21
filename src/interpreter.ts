@@ -28,7 +28,13 @@ import {
 } from "./ecmascript-builtins";
 import { InterpreterError, SecurityError, ErrorCode } from "./errors";
 import { ModuleSystem } from "./modules";
-import { ReadOnlyProxy, PROXY_TARGET, sanitizeErrorStack, unwrapForNative } from "./readonly-proxy";
+import {
+  ReadOnlyProxy,
+  PROXY_NAME,
+  PROXY_TARGET,
+  sanitizeErrorStack,
+  unwrapForNative,
+} from "./readonly-proxy";
 import { ResourceExhaustedError, ResourceTracker } from "./resource-tracker";
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -5879,10 +5885,7 @@ export class Interpreter {
         }
       }
 
-      const materialized = Object.create(Object.getPrototypeOf(value)) as Record<
-        string | symbol,
-        any
-      >;
+      const materialized = Object.create(null) as Record<string | symbol, any>;
       seen.set(value, materialized);
       this.markSandboxContainer(materialized);
 
@@ -6001,14 +6004,15 @@ export class Interpreter {
     return propName;
   }
 
-  private assertMutableArrayTarget(arr: any[]): void {
+  private assertMutableArrayTarget(arr: any[], key: number | string): void {
     if (this.sandboxOwnedContainers.has(arr)) {
       return;
     }
     if (this.isReadOnlyProxyObject(arr)) {
-      // ReadOnlyProxy arrays are not mutable; allow the write attempt to reach the
-      // proxy so its own set trap enforces the read-only error.
-      return;
+      const proxyName = (arr as any)[PROXY_NAME] ?? "global";
+      throw new InterpreterError(
+        `Cannot modify property '${String(key)}' on global '${proxyName}' (read-only)`,
+      );
     }
     throw new InterpreterError("Cannot assign properties on host arrays");
   }
@@ -6022,8 +6026,8 @@ export class Interpreter {
   }
 
   private assignArrayProperty(arr: any[], property: any, value: any): any {
-    this.assertMutableArrayTarget(arr);
     const key = this.normalizeArrayPropertyKey(property);
+    this.assertMutableArrayTarget(arr, key);
     (arr as any)[key] = value;
     return value;
   }
@@ -6033,8 +6037,8 @@ export class Interpreter {
     property: any,
     computeNewValue: (currentValue: any) => any,
   ): any {
-    this.assertMutableArrayTarget(arr);
     const key = this.normalizeArrayPropertyKey(property);
+    this.assertMutableArrayTarget(arr, key);
     const currentValue = (arr as any)[key];
     const newValue = computeNewValue(currentValue);
     (arr as any)[key] = newValue;
@@ -9625,6 +9629,9 @@ export class Interpreter {
 
     // Handle array method overrides
     if (Array.isArray(object)) {
+      if (Object.prototype.hasOwnProperty.call(object, property)) {
+        return (object as any)[property];
+      }
       const arrayMethod = this.getArrayMethod(object, property);
       if (arrayMethod) {
         return arrayMethod;

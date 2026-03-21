@@ -11,6 +11,7 @@ import { InterpreterError, HostFunctionValue, FunctionValue, ClassValue } from "
  * the real prototype chain of the wrapped object.
  */
 export const PROXY_TARGET = Symbol("ReadOnlyProxy.target");
+export const PROXY_NAME = Symbol("ReadOnlyProxy.name");
 
 /**
  * TypedArray constructors that need unwrapping when passed to native methods.
@@ -479,6 +480,9 @@ export class ReadOnlyProxy {
         // Allow retrieving the underlying target for instanceof checks
         if (prop === PROXY_TARGET) {
           return target;
+        }
+        if (prop === PROXY_NAME) {
+          return name;
         }
 
         if (prop === Symbol.iterator || prop === Symbol.asyncIterator) {
