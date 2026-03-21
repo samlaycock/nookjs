@@ -74,7 +74,6 @@ class ResolutionContextPathCache {
     const node = this.getOrCreateLeafNode(specifier, importer, importerChain);
     const existingEntry = node.entry;
     if (existingEntry) {
-      existingEntry.importerChain = importerChain;
       existingEntry.path = path;
       this.touchEntry(existingEntry);
       return;
@@ -142,20 +141,23 @@ class ResolutionContextPathCache {
     importer: string | null,
     importerChain: readonly string[],
   ): ResolutionContextCacheNode {
-    const importerNodes = this.bySpecifier.get(specifier) ?? new Map();
-    if (!this.bySpecifier.has(specifier)) {
+    let importerNodes = this.bySpecifier.get(specifier);
+    if (!importerNodes) {
+      importerNodes = new Map();
       this.bySpecifier.set(specifier, importerNodes);
     }
 
-    const rootNode = importerNodes.get(importer) ?? createResolutionContextCacheNode();
-    if (!importerNodes.has(importer)) {
+    let rootNode = importerNodes.get(importer);
+    if (!rootNode) {
+      rootNode = createResolutionContextCacheNode();
       importerNodes.set(importer, rootNode);
     }
 
     let currentNode = rootNode;
     for (const segment of importerChain) {
-      const nextNode = currentNode.children.get(segment) ?? createResolutionContextCacheNode();
-      if (!currentNode.children.has(segment)) {
+      let nextNode = currentNode.children.get(segment);
+      if (!nextNode) {
+        nextNode = createResolutionContextCacheNode();
         currentNode.children.set(segment, nextNode);
       }
       currentNode = nextNode;
