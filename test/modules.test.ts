@@ -4193,7 +4193,7 @@ describe("Module System", () => {
       });
       const internalModuleSystem = moduleSystem as unknown as {
         cacheByPath: Map<string, unknown>;
-        resolvedPathByContext: Map<string, string>;
+        resolvedPathByContext: { size: number };
       };
 
       const pendingResolution = moduleSystem.resolveModule("./shared", "main.js");
@@ -4231,7 +4231,7 @@ describe("Module System", () => {
         },
       });
       const internalModuleSystem = moduleSystem as unknown as {
-        resolvedPathByContext: Map<string, string>;
+        resolvedPathByContext: { size: number };
       };
 
       for (let index = 0; index < 1100; index++) {
@@ -4239,6 +4239,63 @@ describe("Module System", () => {
       }
 
       expect(internalModuleSystem.resolvedPathByContext.size).toBeLessThanOrEqual(1024);
+    });
+
+    test("should avoid JSON stringification when caching resolution contexts", async () => {
+      let resolveCount = 0;
+      const moduleSystem = new ModuleSystem({
+        enabled: true,
+        cache: true,
+        resolver: {
+          resolve(specifier) {
+            if (specifier !== "./shared") {
+              return null;
+            }
+            resolveCount += 1;
+            return {
+              type: "namespace",
+              exports: { value: 1 },
+              path: "/shared.js",
+            };
+          },
+          authorize() {
+            return true;
+          },
+        },
+      });
+
+      for (const segment of ["entry.js", "a.js", "b.js", "c.js", "d.js"]) {
+        moduleSystem.pushEvaluation(segment);
+      }
+
+      const originalStringify = JSON.stringify;
+      const callOriginalStringify = originalStringify as (
+        value: any,
+        replacer?: any,
+        space?: string | number,
+      ) => string;
+      let resolutionContextStringifyCount = 0;
+      JSON.stringify = ((value, replacer, space) => {
+        if (
+          Array.isArray(value) &&
+          value[0] === "./shared" &&
+          value[1] === "main.js" &&
+          Array.isArray(value[2])
+        ) {
+          resolutionContextStringifyCount += 1;
+        }
+        return callOriginalStringify(value, replacer, space);
+      }) as typeof JSON.stringify;
+
+      try {
+        await moduleSystem.resolveModule("./shared", "main.js");
+        await moduleSystem.resolveModule("./shared", "main.js");
+      } finally {
+        JSON.stringify = originalStringify;
+      }
+
+      expect(resolveCount).toBe(1);
+      expect(resolutionContextStringifyCount).toBe(0);
     });
 
     test("should handle path aliasing correctly for allowed imports", async () => {
