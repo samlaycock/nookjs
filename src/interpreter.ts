@@ -5871,7 +5871,7 @@ export class Interpreter {
       return materialized;
     }
 
-    if (typeof value === "object" && this.isPlainObjectLike(value)) {
+    if (this.isPlainObjectLike(value)) {
       const descriptors = Object.getOwnPropertyDescriptors(value);
       for (const key of Reflect.ownKeys(descriptors)) {
         if (isDangerousProperty(key)) {
@@ -5980,10 +5980,16 @@ export class Interpreter {
    */
   private isArrayIndexProperty(property: any): boolean {
     if (typeof property === "number") {
-      return !isNaN(property);
+      return Number.isInteger(property) && property >= 0 && property <= 4294967294;
     }
     if (typeof property === "string") {
-      return !isNaN(Number(property));
+      const numericValue = Number(property);
+      return (
+        Number.isInteger(numericValue) &&
+        numericValue >= 0 &&
+        numericValue <= 4294967294 &&
+        String(numericValue) === property
+      );
     }
     return false;
   }
@@ -6039,7 +6045,10 @@ export class Interpreter {
   ): any {
     const key = this.normalizeArrayPropertyKey(property);
     this.assertMutableArrayTarget(arr, key);
-    const currentValue = (arr as any)[key];
+    const currentValue =
+      typeof key === "number"
+        ? this.accessArrayElement(arr, key)
+        : this.resolveStringPropertyAccess(arr, key);
     const newValue = computeNewValue(currentValue);
     (arr as any)[key] = newValue;
     return newValue;

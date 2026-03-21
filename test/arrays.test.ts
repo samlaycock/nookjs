@@ -522,6 +522,28 @@ describe("Arrays", () => {
         expect(interpreter.evaluate(code)).toBeUndefined();
       });
 
+      test("treat invalid numeric indices as named properties", () => {
+        const code = `
+              let arr = [];
+              arr[Infinity] = 1;
+              arr[-1] = 2;
+              arr[1.5] = 3;
+
+              [arr[Infinity], arr[-1], arr[1.5]]
+            `;
+        expect(interpreter.evaluate(code)).toEqual([1, 2, 3]);
+      });
+
+      test("treat non-canonical numeric-looking string keys as named properties", () => {
+        const code = `
+              let arr = [];
+              arr["01"] = 4;
+
+              [arr["01"], arr[1]]
+            `;
+        expect(interpreter.evaluate(code)).toEqual([4, undefined]);
+      });
+
       test("reject object-valued computed keys for array access", () => {
         const code = `
               let arr = [];
