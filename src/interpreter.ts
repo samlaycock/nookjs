@@ -5989,6 +5989,9 @@ export class Interpreter {
     if (typeof property === "symbol") {
       throw new InterpreterError("Symbol keys are not allowed on arrays");
     }
+    if ((typeof property === "object" && property !== null) || typeof property === "function") {
+      throw new InterpreterError("Array property keys must be primitive values");
+    }
     if (this.isArrayIndexProperty(property)) {
       return typeof property === "string" ? Number(property) : property;
     }
@@ -5999,7 +6002,12 @@ export class Interpreter {
   }
 
   private assertMutableArrayTarget(arr: any[]): void {
-    if (this.sandboxOwnedContainers.has(arr) || this.isReadOnlyProxyObject(arr)) {
+    if (this.sandboxOwnedContainers.has(arr)) {
+      return;
+    }
+    if (this.isReadOnlyProxyObject(arr)) {
+      // ReadOnlyProxy arrays are not mutable; allow the write attempt to reach the
+      // proxy so its own set trap enforces the read-only error.
       return;
     }
     throw new InterpreterError("Cannot assign properties on host arrays");
@@ -6598,6 +6606,21 @@ export class Interpreter {
     if (node.argument.type === "MemberExpression") {
       const memberExpr = node.argument as ESTree.MemberExpression;
       const object = this.evaluateNode(memberExpr.object);
+
+      if (Array.isArray(object)) {
+        const property = memberExpr.computed
+          ? this.evaluateNode(memberExpr.property as ESTree.Expression)
+          : (memberExpr.property as ESTree.Identifier).name;
+        const currentValue = this.accessArrayProperty(object, property);
+        const [newValue, returnValue] = this.applyUpdateOperator(
+          node.operator,
+          currentValue,
+          node.prefix,
+        );
+        this.assignArrayProperty(object, property, newValue);
+        return returnValue;
+      }
+
       const property = memberExpr.computed
         ? this.evaluateComputedPropertyKey(memberExpr.property as ESTree.Expression)
         : (memberExpr.property as ESTree.Identifier).name;
@@ -6745,7 +6768,12 @@ export class Interpreter {
 
       if (memberExpr.computed) {
         // Computed property: arr[index] = value or obj["key"] = value
-        const property = this.evaluateComputedPropertyKey(memberExpr.property as ESTree.Expression);
+        const rawProperty = this.evaluateNode(memberExpr.property as ESTree.Expression);
+        if (Array.isArray(object)) {
+          return this.assignArrayProperty(object, rawProperty, value);
+        }
+
+        const property = this.toPropertyKey(rawProperty);
         const instanceClass = this.getInstanceClass(object);
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
@@ -6767,9 +6795,7 @@ export class Interpreter {
           throw new InterpreterError("Assignment target is not an array or object");
         }
 
-        if (Array.isArray(object)) {
-          return this.assignArrayProperty(object, property, value);
-        } else if (object instanceof ClassValue) {
+        if (object instanceof ClassValue) {
           const propName = String(property);
           return this.assignClassStaticMember(object, propName, value);
         } else if (instanceClass) {
@@ -7002,7 +7028,12 @@ export class Interpreter {
       }
 
       if (memberExpr.computed) {
-        const property = this.evaluateComputedPropertyKey(memberExpr.property as ESTree.Expression);
+        const rawProperty = this.evaluateNode(memberExpr.property as ESTree.Expression);
+        if (Array.isArray(object)) {
+          return this.assignArrayProperty(object, rawProperty, newValue);
+        }
+
+        const property = this.toPropertyKey(rawProperty);
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
           if (object instanceof ClassValue) {
@@ -7022,9 +7053,7 @@ export class Interpreter {
           }
           return newValue;
         }
-        if (Array.isArray(object)) {
-          return this.assignArrayProperty(object, property, newValue);
-        } else if (object instanceof ClassValue) {
+        if (object instanceof ClassValue) {
           const propName = String(property);
           return this.assignClassStaticMember(object, propName, newValue);
         } else {
@@ -7058,6 +7087,9 @@ export class Interpreter {
             property,
             newValue,
           );
+        }
+        if (Array.isArray(object)) {
+          return this.assignArrayProperty(object, property, newValue);
         }
         object[property] = newValue;
       }
@@ -7145,7 +7177,13 @@ export class Interpreter {
 
       if (memberExpr.computed) {
         // Computed property: arr[i] += 1 or obj["key"] += 1
-        const property = this.evaluateComputedPropertyKey(memberExpr.property as ESTree.Expression);
+        const rawProperty = this.evaluateNode(memberExpr.property as ESTree.Expression);
+
+        if (Array.isArray(object)) {
+          return this.updateArrayProperty(object, rawProperty, computeNewValue);
+        }
+
+        const property = this.toPropertyKey(rawProperty);
 
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
@@ -7176,10 +7214,6 @@ export class Interpreter {
             return newValue;
           }
           throw new InterpreterError("Invalid assignment target");
-        }
-
-        if (Array.isArray(object)) {
-          return this.updateArrayProperty(object, property, computeNewValue);
         }
 
         if (object instanceof ClassValue) {
@@ -7242,6 +7276,10 @@ export class Interpreter {
             property,
             newValue,
           );
+        }
+
+        if (Array.isArray(object)) {
+          return this.updateArrayProperty(object, property, computeNewValue);
         }
 
         const currentValue = object[property];
@@ -10171,9 +10209,12 @@ export class Interpreter {
       }
 
       if (memberExpr.computed) {
-        const property = await this.evaluateComputedPropertyKeyAsync(
-          memberExpr.property as ESTree.Expression,
-        );
+        const rawProperty = await this.evaluateNodeAsync(memberExpr.property as ESTree.Expression);
+        if (Array.isArray(object)) {
+          return this.assignArrayProperty(object, rawProperty, value);
+        }
+
+        const property = this.toPropertyKey(rawProperty);
         const instanceClass = this.getInstanceClass(object);
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
@@ -10195,9 +10236,7 @@ export class Interpreter {
           throw new InterpreterError("Assignment target is not an array or object");
         }
 
-        if (Array.isArray(object)) {
-          return this.assignArrayProperty(object, property, value);
-        } else if (object instanceof ClassValue) {
+        if (object instanceof ClassValue) {
           const propName = String(property);
           return await this.assignClassStaticMemberAsync(object, propName, value);
         } else if (instanceClass) {
@@ -10420,9 +10459,12 @@ export class Interpreter {
       }
 
       if (memberExpr.computed) {
-        const property = await this.evaluateComputedPropertyKeyAsync(
-          memberExpr.property as ESTree.Expression,
-        );
+        const rawProperty = await this.evaluateNodeAsync(memberExpr.property as ESTree.Expression);
+        if (Array.isArray(object)) {
+          return this.assignArrayProperty(object, rawProperty, newValue);
+        }
+
+        const property = this.toPropertyKey(rawProperty);
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
           if (object instanceof ClassValue) {
@@ -10442,9 +10484,7 @@ export class Interpreter {
           }
           return newValue;
         }
-        if (Array.isArray(object)) {
-          return this.assignArrayProperty(object, property, newValue);
-        } else if (object instanceof ClassValue) {
+        if (object instanceof ClassValue) {
           const propName = String(property);
           return await this.assignClassStaticMemberAsync(object, propName, newValue);
         } else {
@@ -10478,6 +10518,9 @@ export class Interpreter {
             property,
             newValue,
           );
+        }
+        if (Array.isArray(object)) {
+          return this.assignArrayProperty(object, property, newValue);
         }
         object[property] = newValue;
       }
@@ -10565,9 +10608,13 @@ export class Interpreter {
 
       if (memberExpr.computed) {
         // Computed property: arr[i] += 1 or obj["key"] += 1
-        const property = await this.evaluateComputedPropertyKeyAsync(
-          memberExpr.property as ESTree.Expression,
-        );
+        const rawProperty = await this.evaluateNodeAsync(memberExpr.property as ESTree.Expression);
+
+        if (Array.isArray(object)) {
+          return this.updateArrayProperty(object, rawProperty, computeNewValue);
+        }
+
+        const property = this.toPropertyKey(rawProperty);
 
         if (typeof property === "symbol") {
           this.validateSymbolProperty(property);
@@ -10598,10 +10645,6 @@ export class Interpreter {
             return newValue;
           }
           throw new InterpreterError("Invalid assignment target");
-        }
-
-        if (Array.isArray(object)) {
-          return this.updateArrayProperty(object, property, computeNewValue);
         }
 
         if (object instanceof ClassValue) {
@@ -10664,6 +10707,10 @@ export class Interpreter {
             property,
             newValue,
           );
+        }
+
+        if (Array.isArray(object)) {
+          return this.updateArrayProperty(object, property, computeNewValue);
         }
 
         const currentValue = object[property];
