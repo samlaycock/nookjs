@@ -113,11 +113,17 @@ describe("Injected Globals", () => {
           globals: { arr },
         });
 
-        const result = expect(interpreter.evaluateAsync("arr.extra = 10")).rejects.toThrow(
-          "Cannot modify property 'extra' on global 'arr'",
-        );
+        try {
+          await interpreter.evaluateAsync("arr.extra = 10");
+          expect.unreachable("Expected evaluateAsync() to reject named global-array writes");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain(
+            "Cannot modify property 'extra' on global 'arr'",
+          );
+        }
+
         expect((arr as Array<number> & { extra?: number }).extra).toBeUndefined();
-        return result;
       });
 
       it("should work with boolean globals", () => {
