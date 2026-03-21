@@ -6813,6 +6813,10 @@ export class Interpreter {
           );
         }
 
+        if (Array.isArray(object)) {
+          return this.assignArrayProperty(object, property, value);
+        }
+
         if (typeof object === "object" && object !== null) {
           object[property] = value;
           return value;
@@ -10233,6 +10237,10 @@ export class Interpreter {
             property,
             value,
           );
+        }
+
+        if (Array.isArray(object)) {
+          return this.assignArrayProperty(object, property, value);
         }
 
         if (typeof object === "object" && object !== null) {

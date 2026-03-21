@@ -95,6 +95,31 @@ describe("Injected Globals", () => {
         }).toThrow("Cannot modify property '0' on global 'arr'");
       });
 
+      it("should block modifying named properties of global arrays (read-only)", () => {
+        const arr = [1, 2, 3];
+        const interpreter = new Interpreter({
+          globals: { arr },
+        });
+
+        expect(() => {
+          interpreter.evaluate("arr.extra = 10");
+        }).toThrow("Cannot modify property 'extra' on global 'arr'");
+        expect((arr as Array<number> & { extra?: number }).extra).toBeUndefined();
+      });
+
+      it("should block modifying named properties of global arrays in evaluateAsync() (read-only)", async () => {
+        const arr = [1, 2, 3];
+        const interpreter = new Interpreter({
+          globals: { arr },
+        });
+
+        const result = expect(interpreter.evaluateAsync("arr.extra = 10")).rejects.toThrow(
+          "Cannot modify property 'extra' on global 'arr'",
+        );
+        expect((arr as Array<number> & { extra?: number }).extra).toBeUndefined();
+        return result;
+      });
+
       it("should work with boolean globals", () => {
         const interpreter = new Interpreter({
           globals: {
