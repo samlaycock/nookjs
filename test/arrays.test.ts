@@ -522,6 +522,46 @@ describe("Arrays", () => {
         expect(interpreter.evaluate(code)).toBeUndefined();
       });
 
+      test("reject object-valued computed keys for array access", () => {
+        const code = `
+              let arr = [];
+              let key = {};
+              arr[key]
+            `;
+        expect(() => interpreter.evaluate(code)).toThrow(
+          "Array property keys must be primitive values",
+        );
+      });
+
+      test("reject object-valued computed keys for array assignment", () => {
+        const code = `
+              let arr = [];
+              let key = {};
+              arr[key] = 42
+            `;
+        expect(() => interpreter.evaluate(code)).toThrow(
+          "Array property keys must be primitive values",
+        );
+      });
+
+      test("reject object-valued computed keys for array assignment in evaluateAsync", async () => {
+        const code = `
+              let arr = [];
+              let key = {};
+              arr[key] = 42
+            `;
+
+        try {
+          await interpreter.evaluateAsync(code);
+          expect.unreachable("Expected evaluateAsync() to reject object-valued array keys");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain(
+            "Array property keys must be primitive values",
+          );
+        }
+      });
+
       test("assigning to non-array throws", () => {
         const code = `
               let x = 5;
