@@ -345,6 +345,35 @@ describe("AST", () => {
         expect(cls.body.body.some((node) => node.type === "PropertyDefinition")).toBe(true);
       });
 
+      it("strips generic parameter lists on functions, classes, and methods", () => {
+        const ast = parseModule(`
+          function id<T>(x: T): T { return x; }
+
+          class Box<T> {
+            value: T;
+
+            constructor(value: T) {
+              this.value = value;
+            }
+
+            get<U>(fallback: U): T | U {
+              return this.value ?? fallback;
+            }
+          }
+        `);
+
+        expect(ast.body[0]?.type).toBe("FunctionDeclaration");
+        const fn = ast.body[0] as ESTree.FunctionDeclaration;
+        expect(fn.params).toHaveLength(1);
+        expect(fn.params[0]?.type).toBe("Identifier");
+
+        expect(ast.body[1]?.type).toBe("ClassDeclaration");
+        const cls = ast.body[1] as ESTree.ClassDeclaration;
+        expect(cls.body.body).toHaveLength(3);
+        expect(cls.body.body[1]?.type).toBe("MethodDefinition");
+        expect(cls.body.body[2]?.type).toBe("MethodDefinition");
+      });
+
       it("drops type and interface declarations", () => {
         const ast = parseModule("type Foo = { a: number }; interface Bar { b: string } let x = 1;");
         expect(ast.body.length).toBe(1);
@@ -404,6 +433,29 @@ describe("AST", () => {
         expect((importDecl.specifiers[0] as ESTree.NamedImportSpecifier).imported.name).toBe(
           "value",
         );
+      });
+
+      it("preserves runtime behavior when stripping generic parameter lists", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+          function id<T>(x: T): T { return x; }
+
+          class Box<T> {
+            value: T;
+
+            constructor(value: T) {
+              this.value = value;
+            }
+
+            get<U>(fallback: U): T | U {
+              return this.value ?? fallback;
+            }
+          }
+
+          [id(1), new Box(2).get(3)];
+        `);
+
+        expect(result).toEqual([1, 2]);
       });
     });
 

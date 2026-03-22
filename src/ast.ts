@@ -616,6 +616,8 @@ const STOP_TOKEN = {
   ClassField: 8,
   Assertion: 9,
   Arrow: 10,
+  ParamsStart: 11,
+  ClassSignature: 12,
 } as const;
 
 type StopToken = (typeof STOP_TOKEN)[keyof typeof STOP_TOKEN];
@@ -2273,6 +2275,7 @@ class Parser {
       : this.currentType === TOKEN.Identifier
         ? this.parseIdentifier()
         : null;
+    this.consumeGenericParameterList(STOP_TOKEN.ParamsStart);
     const { params, body } = this.parseFunctionParamsAndBody(asyncFlag, generator);
     return { id, params, body, asyncFlag, generator };
   }
@@ -2358,6 +2361,7 @@ class Parser {
   } {
     this.expectKeyword("class");
     const id = this.currentType === TOKEN.Identifier ? this.parseIdentifier() : null;
+    this.consumeGenericParameterList(STOP_TOKEN.ClassSignature);
     const superClass =
       this.currentType === TOKEN.Keyword && this.currentValue === "extends"
         ? (this.next(), this.parseExpression())
@@ -2476,6 +2480,7 @@ class Parser {
       this.next();
       // Definite assignment assertion (TypeScript).
     }
+    this.consumeGenericParameterList(STOP_TOKEN.ParamsStart);
 
     if (this.currentType === TOKEN.Punctuator && this.currentValue === "(") {
       const func = this.parseMethodFunction(asyncFlag, generator);
@@ -3135,6 +3140,12 @@ class Parser {
     return expression;
   }
 
+  private consumeGenericParameterList(stopTokens: StopToken): void {
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "<") {
+      this.skipType(stopTokens);
+    }
+  }
+
   private consumeTypeScriptModifiers(): void {
     while (this.isTypeScriptModifier()) {
       this.next();
@@ -3192,6 +3203,10 @@ class Parser {
           return value === "," || value === ";" || value === ")" || value === "]" || value === "}";
         case STOP_TOKEN.Arrow:
           return value === "=>";
+        case STOP_TOKEN.ParamsStart:
+          return value === "(";
+        case STOP_TOKEN.ClassSignature:
+          return value === "{" || value === "extends" || value === "implements";
         default:
           return false;
       }
