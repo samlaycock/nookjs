@@ -3206,7 +3206,7 @@ class Parser {
         case STOP_TOKEN.ParamsStart:
           return value === "(";
         case STOP_TOKEN.ClassSignature:
-          return value === "{" || value === "extends" || value === "implements";
+          return value === "{" || value === "extends";
         default:
           return false;
       }
