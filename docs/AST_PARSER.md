@@ -22,6 +22,7 @@ This interpreter ships with a zero-dependency JavaScript parser implemented in `
 
 Type syntax is parsed and discarded so runtime behavior matches plain JavaScript. This covers:
 
+- Generic parameter lists on functions, classes, and methods
 - Variable/parameter/property annotations and function return types
 - `as` assertions
 - Optional (`?`) and definite assignment (`!`) markers
