@@ -27,6 +27,7 @@ Type syntax is parsed and discarded so runtime behavior matches plain JavaScript
 - `as` assertions and `satisfies` expressions
 - Optional (`?`) and definite assignment (`!`) markers
 - `implements` clauses
+- Ambient `declare` declarations
 - `type` and `interface` declarations (parsed and dropped)
 - Type-only module syntax (`import type`, `export type`, and mixed `type` specifiers)
 

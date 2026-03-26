@@ -418,6 +418,7 @@ Supported (stripped):
 - Variable/parameter/property type annotations
 - Function return types
 - `as` assertions
+- Ambient `declare` declarations
 - `type` and `interface` declarations
 
 ## FAQ
@@ -457,7 +458,8 @@ feature-by-feature behavior and gotchas.
 ### What TypeScript does it support?
 
 NookJS strips TypeScript-style annotations/comments and executes the resulting JavaScript.
-Supported stripping includes annotations, return types, `as`, and `type/interface` declarations.
+Supported stripping includes annotations, return types, `as`, ambient `declare`, and
+`type/interface` declarations.
 
 Not supported as TypeScript input:
 
