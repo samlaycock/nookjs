@@ -3168,10 +3168,10 @@ class Parser {
   }
 
   private consumeTypeAssertions(expression: ESTree.Expression): ESTree.Expression {
-    if (this.currentType !== TOKEN.Identifier || this.currentValue !== "as") {
+    if (!this.isTypeAssertionOperator()) {
       return expression;
     }
-    while (this.currentType === TOKEN.Identifier && this.currentValue === "as") {
+    while (this.isTypeAssertionOperator()) {
       this.next();
       this.skipType(STOP_TOKEN.Assertion);
       if (this.currentType !== TOKEN.Identifier) {
@@ -3185,6 +3185,13 @@ class Parser {
     if (this.currentType === TOKEN.Punctuator && this.currentValue === "<") {
       this.skipType(stopTokens);
     }
+  }
+
+  private isTypeAssertionOperator(): boolean {
+    if (this.currentType !== TOKEN.Identifier) {
+      return false;
+    }
+    return this.currentValue === "as" || this.currentValue === "satisfies";
   }
 
   private consumeTypeScriptModifiers(): void {

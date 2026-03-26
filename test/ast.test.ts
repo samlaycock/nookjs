@@ -333,6 +333,14 @@ describe("AST", () => {
         expect(init.type).toBe("ArrowFunctionExpression");
       });
 
+      it("strips satisfies expressions", () => {
+        const ast = parseModule("const x = { a: 1 } satisfies { a: number }; x.a;");
+
+        expect(ast.body).toHaveLength(2);
+        expect(ast.body[0]?.type).toBe("VariableDeclaration");
+        expect(ast.body[1]?.type).toBe("ExpressionStatement");
+      });
+
       it("parses class fields with modifiers and implements clauses", () => {
         const stmt = parseFirstStatement(`
         class Box implements Sized {
@@ -456,6 +464,16 @@ describe("AST", () => {
         `);
 
         expect(result).toEqual([1, 2]);
+      });
+
+      it("preserves runtime behavior when stripping satisfies expressions", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+          const x = { a: 1 } satisfies { a: number };
+          x.a;
+        `);
+
+        expect(result).toBe(1);
       });
     });
 
