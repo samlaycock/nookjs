@@ -826,6 +826,12 @@ describe("Strings", () => {
           expect(result).toEqual(["aundefinedb"]);
         });
 
+        it("should coerce null separator to the string null", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`"nullxnull".split(null)`);
+          expect(result).toEqual(["", "x", ""]);
+        });
+
         it("should split by space", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
