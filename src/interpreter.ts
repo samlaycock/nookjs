@@ -9446,9 +9446,12 @@ export class Interpreter {
       // Transformation methods
       case "split":
         return this.createHostFunction(
-          (separator?: string | null, limit?: number) => {
-            if (separator === null || separator === undefined) {
+          (separator?: string | RegExp | null, limit?: number) => {
+            if (separator === undefined) {
               return [str];
+            }
+            if (separator === null) {
+              return str.split("null", limit);
             }
             return str.split(separator, limit);
           },
