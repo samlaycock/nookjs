@@ -1704,6 +1704,11 @@ class Parser {
       return this.parseBlockStatement();
     }
     if (type === TOKEN.Identifier || type === TOKEN.Keyword) {
+      if (value === "declare" && this.isAmbientDeclarationStart()) {
+        this.parseAmbientDeclaration();
+        return null;
+      }
+
       if ((value === "type" || value === "interface") && this.isTypeOnlyStatementStart(value)) {
         this.parseTypeOnlyStatement(value);
         return null;
@@ -1910,6 +1915,103 @@ class Parser {
       return;
     }
     throw new ParseError("Interface declaration missing body");
+  }
+
+  private isAmbientDeclarationStart(): boolean {
+    if (
+      (this.currentType !== TOKEN.Identifier && this.currentType !== TOKEN.Keyword) ||
+      this.currentValue !== "declare"
+    ) {
+      return false;
+    }
+
+    const snapshot = this.snapshot();
+    try {
+      this.next();
+
+      if (this.currentType !== TOKEN.Identifier && this.currentType !== TOKEN.Keyword) {
+        return false;
+      }
+
+      const ambientKeyword = this.currentValue as string;
+      switch (ambientKeyword) {
+        case "async":
+          return (
+            this.tokenizer.peekType() === TOKEN.Keyword && this.tokenizer.peekValue() === "function"
+          );
+        case "function":
+        case "class":
+        case "let":
+        case "const":
+        case "var":
+          return true;
+        case "abstract":
+          return (
+            this.tokenizer.peekType() === TOKEN.Keyword && this.tokenizer.peekValue() === "class"
+          );
+        case "type":
+        case "interface":
+          return this.isTypeOnlyStatementStart(ambientKeyword);
+        default:
+          return this.getUnsupportedTypeScriptDeclarationKind() !== null;
+      }
+    } finally {
+      this.restore(snapshot);
+    }
+  }
+
+  private parseAmbientDeclaration(): void {
+    this.next(); // consume `declare`
+
+    if (this.currentType !== TOKEN.Identifier && this.currentType !== TOKEN.Keyword) {
+      throw new ParseError("Invalid ambient declaration");
+    }
+
+    const ambientKeyword = this.currentValue as string;
+    switch (ambientKeyword) {
+      case "async":
+        if (
+          this.tokenizer.peekType() === TOKEN.Keyword &&
+          this.tokenizer.peekValue() === "function"
+        ) {
+          this.parseFunctionDeclaration();
+          return;
+        }
+        break;
+      case "function":
+        this.parseFunctionDeclaration();
+        return;
+      case "class":
+        this.parseClassDeclaration();
+        return;
+      case "let":
+      case "const":
+      case "var":
+        this.parseVariableDeclaration(false);
+        return;
+      case "abstract":
+        this.next();
+        this.parseClassDeclaration();
+        return;
+      case "type":
+      case "interface":
+        if (this.isTypeOnlyStatementStart(ambientKeyword)) {
+          this.parseTypeOnlyStatement(ambientKeyword);
+          return;
+        }
+        break;
+      default:
+        break;
+    }
+
+    const unsupportedTypeScriptDeclaration = this.getUnsupportedTypeScriptDeclarationKind();
+    if (unsupportedTypeScriptDeclaration !== null) {
+      throw new ParseError(
+        `TypeScript '${unsupportedTypeScriptDeclaration}' declarations are not supported`,
+      );
+    }
+
+    throw new ParseError("Invalid ambient declaration");
   }
 
   private parseBlockStatement(): ESTree.BlockStatement {

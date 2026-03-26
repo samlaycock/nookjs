@@ -388,6 +388,27 @@ describe("AST", () => {
         expect(ast.body[0]?.type).toBe("VariableDeclaration");
       });
 
+      it("drops ambient declare declarations", () => {
+        const ast = parseModule(`
+          declare const foo: number;
+          declare function greet(name: string): string;
+          declare class Box {
+            value: number;
+          }
+          let x = 1;
+        `);
+
+        expect(ast.body).toHaveLength(1);
+        expect(ast.body[0]?.type).toBe("VariableDeclaration");
+      });
+
+      it("preserves labeled statements that start with declare", () => {
+        const statement = parseFirstStatement("declare: while(false){}");
+
+        expect(statement.type).toBe("LabeledStatement");
+        expect((statement as ESTree.LabeledStatement).label.name).toBe("declare");
+      });
+
       it("parses labeled statements that start with type/interface", () => {
         const typeLabel = parseFirstStatement("type: while(false){}");
         expect(typeLabel.type).toBe("LabeledStatement");
@@ -471,6 +492,16 @@ describe("AST", () => {
         const result = interpreter.evaluate(`
           const x = { a: 1 } satisfies { a: number };
           x.a;
+        `);
+
+        expect(result).toBe(1);
+      });
+
+      it("preserves runtime behavior when stripping ambient declare declarations", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+          declare const foo: number;
+          1;
         `);
 
         expect(result).toBe(1);
