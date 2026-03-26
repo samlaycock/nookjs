@@ -1708,6 +1708,13 @@ class Parser {
         this.parseTypeOnlyStatement(value);
         return null;
       }
+
+      const unsupportedTypeScriptDeclaration = this.getUnsupportedTypeScriptDeclarationKind();
+      if (unsupportedTypeScriptDeclaration !== null) {
+        throw new ParseError(
+          `TypeScript '${unsupportedTypeScriptDeclaration}' declarations are not supported`,
+        );
+      }
     }
     let result: ESTree.Statement | null = null;
     if (type === TOKEN.Keyword) {
@@ -1790,6 +1797,40 @@ class Parser {
 
   private parseStatementOrEmpty(): ESTree.Statement {
     return this.parseStatement() ?? { type: "EmptyStatement" };
+  }
+
+  private getUnsupportedTypeScriptDeclarationKind(): "enum" | "namespace" | null {
+    if (
+      (this.currentType !== TOKEN.Identifier && this.currentType !== TOKEN.Keyword) ||
+      (this.currentValue !== "enum" && this.currentValue !== "namespace")
+    ) {
+      return null;
+    }
+
+    const kind = this.currentValue as "enum" | "namespace";
+    const snapshot = this.snapshot();
+
+    try {
+      this.next();
+      this.parseIdentifier();
+
+      if (kind === "namespace") {
+        while (this.consumePunctuator(".")) {
+          this.parseIdentifier();
+        }
+      }
+
+      const currentType = this.currentType as TokenType;
+      const currentValue = this.currentValue as string;
+      return currentType === TOKEN.Punctuator && currentValue === "{" ? kind : null;
+    } catch (error) {
+      if (error instanceof ParseError) {
+        return null;
+      }
+      throw error;
+    } finally {
+      this.restore(snapshot);
+    }
   }
 
   private isTypeOnlyStatementStart(kind: "type" | "interface"): boolean {

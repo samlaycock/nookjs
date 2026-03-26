@@ -551,6 +551,18 @@ describe("AST", () => {
         expect(() => parseModule("continue label;")).not.toThrow();
       });
 
+      it("rejects unsupported TypeScript enum declarations", () => {
+        expect(() => parseScript("enum Color { Red, Blue }")).toThrow(
+          "TypeScript 'enum' declarations are not supported",
+        );
+      });
+
+      it("rejects unsupported TypeScript namespace declarations", () => {
+        expect(() => parseScript("namespace Foo { export const x = 1; }")).toThrow(
+          "TypeScript 'namespace' declarations are not supported",
+        );
+      });
+
       it("rejects private identifiers in object literals", () => {
         expect(() => parseModule("let obj = { #x: 1 };")).toThrow();
       });

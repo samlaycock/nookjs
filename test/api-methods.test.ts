@@ -112,6 +112,23 @@ describe("Interpreter", () => {
         expect(() => interpreter.parse("function () {}")).toThrow();
       });
 
+      it("should reject unsupported TypeScript enum and namespace declarations", () => {
+        const interpreter = new Interpreter();
+
+        expect(() => interpreter.parse("enum Color { Red, Blue }")).toThrow(
+          "TypeScript 'enum' declarations are not supported",
+        );
+        expect(() => interpreter.parse("namespace Foo { export const x = 1; }")).toThrow(
+          "TypeScript 'namespace' declarations are not supported",
+        );
+        expect(() => interpreter.evaluate("enum Color { Red, Blue }")).toThrow(
+          "TypeScript 'enum' declarations are not supported",
+        );
+        expect(() => interpreter.evaluate("namespace Foo { export const x = 1; }")).toThrow(
+          "TypeScript 'namespace' declarations are not supported",
+        );
+      });
+
       it("should parse without executing", () => {
         const interpreter = new Interpreter();
 
