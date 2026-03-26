@@ -1974,12 +1974,12 @@ class Parser {
           this.tokenizer.peekType() === TOKEN.Keyword &&
           this.tokenizer.peekValue() === "function"
         ) {
-          this.parseFunctionDeclaration();
+          this.parseAmbientFunctionDeclaration();
           return;
         }
         break;
       case "function":
-        this.parseFunctionDeclaration();
+        this.parseAmbientFunctionDeclaration();
         return;
       case "class":
         this.parseClassDeclaration();
@@ -2012,6 +2012,30 @@ class Parser {
     }
 
     throw new ParseError("Invalid ambient declaration");
+  }
+
+  private parseAmbientFunctionDeclaration(): void {
+    if (this.currentType === TOKEN.Keyword && this.currentValue === "async") {
+      this.next();
+    }
+
+    this.expectKeyword("function");
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "*") {
+      this.next();
+    }
+
+    this.parseIdentifier();
+    this.consumeGenericParameterList(STOP_TOKEN.ParamsStart);
+    this.expectPunctuator("(");
+    this.parseFunctionParams();
+    this.expectPunctuator(")");
+
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === ":") {
+      this.next();
+      this.skipType(STOP_TOKEN.Semicolon);
+    }
+
+    this.consumeSemicolon();
   }
 
   private parseBlockStatement(): ESTree.BlockStatement {

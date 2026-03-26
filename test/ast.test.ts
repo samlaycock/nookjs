@@ -391,10 +391,29 @@ describe("AST", () => {
       it("drops ambient declare declarations", () => {
         const ast = parseModule(`
           declare const foo: number;
-          declare function greet(name: string): string;
           declare class Box {
             value: number;
           }
+          let x = 1;
+        `);
+
+        expect(ast.body).toHaveLength(1);
+        expect(ast.body[0]?.type).toBe("VariableDeclaration");
+      });
+
+      it("drops standalone ambient declare function declarations", () => {
+        const ast = parseModule(`
+          declare function greet(name: string): string;
+          let x = 1;
+        `);
+
+        expect(ast.body).toHaveLength(1);
+        expect(ast.body[0]?.type).toBe("VariableDeclaration");
+      });
+
+      it("drops standalone ambient declare async function declarations", () => {
+        const ast = parseModule(`
+          declare async function greet(name: string): Promise<string>;
           let x = 1;
         `);
 
@@ -501,6 +520,8 @@ describe("AST", () => {
         const interpreter = new Interpreter();
         const result = interpreter.evaluate(`
           declare const foo: number;
+          declare function greet(name: string): string;
+          declare async function later(): Promise<void>;
           1;
         `);
 
