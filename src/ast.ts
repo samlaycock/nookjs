@@ -1982,7 +1982,7 @@ class Parser {
         this.parseAmbientFunctionDeclaration();
         return;
       case "class":
-        this.parseClassDeclaration();
+        this.parseAmbientClassDeclaration();
         return;
       case "let":
       case "const":
@@ -1991,7 +1991,7 @@ class Parser {
         return;
       case "abstract":
         this.next();
-        this.parseClassDeclaration();
+        this.parseAmbientClassDeclaration();
         return;
       case "type":
       case "interface":
@@ -2035,6 +2035,127 @@ class Parser {
       this.skipType(STOP_TOKEN.Semicolon);
     }
 
+    this.consumeSemicolon();
+  }
+
+  private parseAmbientClassDeclaration(): void {
+    this.expectKeyword("class");
+    if (this.currentType === TOKEN.Identifier) {
+      this.parseIdentifier();
+    }
+    this.consumeGenericParameterList(STOP_TOKEN.ClassSignature);
+
+    if (this.currentType === TOKEN.Keyword && this.currentValue === "extends") {
+      this.next();
+      this.parseExpression();
+    }
+
+    if (
+      (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+      this.currentValue === "implements"
+    ) {
+      this.next();
+      while (true) {
+        this.skipType(STOP_TOKEN.Implements);
+        if (!this.consumePunctuator(",")) {
+          break;
+        }
+      }
+    }
+
+    this.parseAmbientClassBody();
+  }
+
+  private parseAmbientClassBody(): void {
+    this.expectPunctuator("{");
+    while (this.currentType !== TOKEN.Punctuator || this.currentValue !== "}") {
+      if (this.currentType === TOKEN.Punctuator && this.currentValue === ";") {
+        this.next();
+        continue;
+      }
+      this.parseAmbientClassElement();
+    }
+    this.expectPunctuator("}");
+  }
+
+  private parseAmbientClassElement(): void {
+    let asyncFlag = false;
+
+    while (true) {
+      if (
+        (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+        this.currentValue === "static"
+      ) {
+        this.next();
+        continue;
+      }
+      if (this.isTypeScriptModifier()) {
+        this.next();
+        continue;
+      }
+      break;
+    }
+
+    if (
+      (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+      (this.currentValue === "get" || this.currentValue === "set")
+    ) {
+      const peekType = this.tokenizer.peekType();
+      const peekValue = this.tokenizer.peekValue();
+      const isAccessor =
+        peekType === TOKEN.Identifier ||
+        peekType === TOKEN.String ||
+        peekType === TOKEN.Number ||
+        peekType === TOKEN.Keyword ||
+        peekType === TOKEN.PrivateIdentifier ||
+        (peekType === TOKEN.Punctuator && peekValue === "[");
+      if (isAccessor) {
+        this.next();
+      }
+    } else if (this.currentType === TOKEN.Keyword && this.currentValue === "async") {
+      this.next();
+      asyncFlag = true;
+    }
+
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "*") {
+      this.next();
+    }
+
+    this.parsePropertyKey();
+
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "?") {
+      this.next();
+    }
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "!") {
+      this.next();
+    }
+    this.consumeGenericParameterList(STOP_TOKEN.ParamsStart);
+
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "(") {
+      this.next();
+      this.parseFunctionParams();
+      this.expectPunctuator(")");
+
+      const currentType = this.currentType as TokenType;
+      const currentValue = this.currentValue as string;
+      if (currentType === TOKEN.Punctuator && currentValue === ":") {
+        this.next();
+        this.skipType(STOP_TOKEN.Semicolon);
+      }
+
+      this.consumeSemicolon();
+      return;
+    }
+
+    if (asyncFlag) {
+      throw new ParseError("Invalid ambient class element");
+    }
+
+    this.consumeTypeAnnotation(STOP_TOKEN.ClassField);
+    if (this.currentType === TOKEN.Punctuator && this.currentValue === "=") {
+      this.next();
+      this.parseExpression();
+    }
     this.consumeSemicolon();
   }
 
