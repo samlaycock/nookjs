@@ -401,6 +401,22 @@ describe("AST", () => {
         expect(ast.body[0]?.type).toBe("VariableDeclaration");
       });
 
+      it("drops ambient declare classes with method signatures", () => {
+        const ast = parseModule(`
+          declare class Box {
+            constructor(value: number);
+            getValue(): number;
+            setValue(value: number): void;
+            get size(): number;
+            set size(value: number);
+          }
+          let x = 1;
+        `);
+
+        expect(ast.body).toHaveLength(1);
+        expect(ast.body[0]?.type).toBe("VariableDeclaration");
+      });
+
       it("drops standalone ambient declare function declarations", () => {
         const ast = parseModule(`
           declare function greet(name: string): string;
@@ -522,6 +538,10 @@ describe("AST", () => {
           declare const foo: number;
           declare function greet(name: string): string;
           declare async function later(): Promise<void>;
+          declare class Box {
+            constructor(value: number);
+            getValue(): number;
+          }
           1;
         `);
 
