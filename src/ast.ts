@@ -3603,7 +3603,7 @@ class Parser {
         case STOP_TOKEN.TypeAssertionEnd:
           return value === ">" || value === ">>" || value === ">>>";
         case STOP_TOKEN.MethodReturn:
-          return value === "{" || value === ";";
+          return value === ";";
         default:
           return false;
       }

@@ -403,6 +403,7 @@ describe("AST", () => {
           abstract class Base {
             abstract value(): number;
             abstract label: string;
+            abstract data(): { id: number };
             abstract get size(): number;
             abstract set size(value: number);
           }
@@ -593,18 +594,23 @@ describe("AST", () => {
         const result = interpreter.evaluate(`
           abstract class Base {
             abstract value(): number;
+            abstract data(): { id: number };
           }
 
           class Impl extends Base {
             value() {
               return 1;
             }
+
+            data() {
+              return { id: 1 };
+            }
           }
 
-          new Impl().value();
+          [new Impl().value(), new Impl().data().id];
         `);
 
-        expect(result).toBe(1);
+        expect(result).toEqual([1, 1]);
       });
 
       it("preserves runtime behavior when stripping satisfies expressions", () => {
