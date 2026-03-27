@@ -26,6 +26,7 @@ Type syntax is parsed and discarded so runtime behavior matches plain JavaScript
 - Variable/parameter/property annotations and function return types
 - `as` assertions and `satisfies` expressions
 - Optional (`?`) and definite assignment (`!`) markers
+- `abstract` class modifiers and runtime-less abstract members
 - `implements` clauses
 - Ambient `declare` declarations
 - `type` and `interface` declarations (parsed and dropped)

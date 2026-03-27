@@ -619,6 +619,7 @@ const STOP_TOKEN = {
   ParamsStart: 11,
   ClassSignature: 12,
   TypeAssertionEnd: 13,
+  MethodReturn: 14,
 } as const;
 
 type StopToken = (typeof STOP_TOKEN)[keyof typeof STOP_TOKEN];
@@ -1712,6 +1713,10 @@ class Parser {
       return this.parseBlockStatement();
     }
     if (type === TOKEN.Identifier || type === TOKEN.Keyword) {
+      if (value === "abstract" && this.isAbstractClassDeclarationStart()) {
+        return this.parseAbstractClassDeclaration();
+      }
+
       if (value === "declare" && this.isAmbientDeclarationStart()) {
         this.parseAmbientDeclaration();
         return null;
@@ -2576,10 +2581,41 @@ class Parser {
     return { id, params, body, asyncFlag, generator };
   }
 
+  private isAbstractClassDeclarationStart(): boolean {
+    if (
+      (this.currentType !== TOKEN.Identifier && this.currentType !== TOKEN.Keyword) ||
+      this.currentValue !== "abstract"
+    ) {
+      return false;
+    }
+
+    return this.tokenizer.peekType() === TOKEN.Keyword && this.tokenizer.peekValue() === "class";
+  }
+
+  private parseAbstractClassDeclaration(): ESTree.ClassDeclaration {
+    this.expectContextualKeyword("abstract");
+    return this.parseClassDeclaration();
+  }
+
   private parseFunctionParamsAndBody(
     asyncFlag: boolean,
     generator: boolean,
-  ): { params: ESTree.Pattern[]; body: ESTree.BlockStatement } {
+  ): { params: ESTree.Pattern[]; body: ESTree.BlockStatement };
+  private parseFunctionParamsAndBody(
+    asyncFlag: boolean,
+    generator: boolean,
+    allowSignatureOnly: true,
+  ): { params: ESTree.Pattern[]; body: ESTree.BlockStatement | null };
+  private parseFunctionParamsAndBody(
+    asyncFlag: boolean,
+    generator: boolean,
+    allowSignatureOnly: boolean,
+  ): { params: ESTree.Pattern[]; body: ESTree.BlockStatement | null };
+  private parseFunctionParamsAndBody(
+    asyncFlag: boolean,
+    generator: boolean,
+    allowSignatureOnly = false,
+  ): { params: ESTree.Pattern[]; body: ESTree.BlockStatement | null } {
     const prevFunction = this.inFunction;
     const prevGenerator = this.inGenerator;
     const prevAsync = this.inAsync;
@@ -2590,8 +2626,13 @@ class Parser {
     this.expectPunctuator("(");
     const params = this.parseFunctionParams();
     this.expectPunctuator(")");
-    this.consumeTypeAnnotation(STOP_TOKEN.ReturnBlock);
-    const body = this.parseBlockStatement();
+    this.consumeTypeAnnotation(
+      allowSignatureOnly ? STOP_TOKEN.MethodReturn : STOP_TOKEN.ReturnBlock,
+    );
+    const body =
+      allowSignatureOnly && this.currentType === TOKEN.Punctuator && this.currentValue === ";"
+        ? null
+        : this.parseBlockStatement();
 
     this.inFunction = prevFunction;
     this.inGenerator = prevGenerator;
@@ -2698,14 +2739,17 @@ class Parser {
         }
       }
       const element = this.parseClassElement();
-      elements.push(element);
+      if (element) {
+        elements.push(element);
+      }
     }
     this.expectPunctuator("}");
     return { type: "ClassBody", body: elements };
   }
 
-  private parseClassElement(): ESTree.MethodDefinition | ESTree.PropertyDefinition {
+  private parseClassElement(): ESTree.MethodDefinition | ESTree.PropertyDefinition | null {
     let isStatic = false;
+    let isAbstract = false;
     let asyncFlag = false;
     let generator = false;
     let kind: "method" | "get" | "set" | "constructor" = "method";
@@ -2725,6 +2769,9 @@ class Parser {
         continue;
       }
       if (this.isTypeScriptModifier()) {
+        if (this.currentValue === "abstract") {
+          isAbstract = true;
+        }
         this.next();
         continue;
       }
@@ -2779,7 +2826,11 @@ class Parser {
     this.consumeGenericParameterList(STOP_TOKEN.ParamsStart);
 
     if (this.currentType === TOKEN.Punctuator && this.currentValue === "(") {
-      const func = this.parseMethodFunction(asyncFlag, generator);
+      const func = this.parseMethodFunction(asyncFlag, generator, isAbstract);
+      if (func === null) {
+        this.consumeSemicolon();
+        return null;
+      }
       return {
         type: "MethodDefinition",
         key,
@@ -2796,6 +2847,9 @@ class Parser {
         ? (this.next(), this.parseExpression())
         : null;
     this.consumeSemicolon();
+    if (isAbstract && value === null) {
+      return null;
+    }
     return {
       type: "PropertyDefinition",
       key,
@@ -2805,8 +2859,30 @@ class Parser {
     };
   }
 
-  private parseMethodFunction(asyncFlag: boolean, generator: boolean): ESTree.FunctionExpression {
-    const { params, body } = this.parseFunctionParamsAndBody(asyncFlag, generator);
+  private parseMethodFunction(asyncFlag: boolean, generator: boolean): ESTree.FunctionExpression;
+  private parseMethodFunction(
+    asyncFlag: boolean,
+    generator: boolean,
+    allowSignatureOnly: true,
+  ): ESTree.FunctionExpression | null;
+  private parseMethodFunction(
+    asyncFlag: boolean,
+    generator: boolean,
+    allowSignatureOnly: boolean,
+  ): ESTree.FunctionExpression | null;
+  private parseMethodFunction(
+    asyncFlag: boolean,
+    generator: boolean,
+    allowSignatureOnly = false,
+  ): ESTree.FunctionExpression | null {
+    const { params, body } = this.parseFunctionParamsAndBody(
+      asyncFlag,
+      generator,
+      allowSignatureOnly,
+    );
+    if (body === null) {
+      return null;
+    }
     return {
       type: "FunctionExpression",
       id: null,
@@ -3029,6 +3105,10 @@ class Parser {
       }
     }
 
+    if (this.isAbstractClassDeclarationStart()) {
+      return this.parseExportClassDeclaration();
+    }
+
     if (this.currentType === TOKEN.Identifier) {
       return this.parseExportVariableOrFunction();
     }
@@ -3114,6 +3194,14 @@ class Parser {
   private parseExportDefaultDeclaration(): ESTree.ExportDefaultDeclaration {
     this.expectKeyword("default");
 
+    if (this.isAbstractClassDeclarationStart()) {
+      const cls = this.parseAbstractClassDeclaration();
+      return {
+        type: "ExportDefaultDeclaration",
+        declaration: cls,
+      };
+    }
+
     if (this.currentType === TOKEN.Keyword) {
       switch (this.currentValue) {
         case "async":
@@ -3177,7 +3265,9 @@ class Parser {
   }
 
   private parseExportClassDeclaration(): ESTree.ExportNamedDeclaration {
-    const cls = this.parseClassDeclaration();
+    const cls = this.isAbstractClassDeclarationStart()
+      ? this.parseAbstractClassDeclaration()
+      : this.parseClassDeclaration();
     return {
       type: "ExportNamedDeclaration",
       declaration: cls,
@@ -3512,6 +3602,8 @@ class Parser {
           return value === "{" || value === "extends";
         case STOP_TOKEN.TypeAssertionEnd:
           return value === ">" || value === ">>" || value === ">>>";
+        case STOP_TOKEN.MethodReturn:
+          return value === "{" || value === ";";
         default:
           return false;
       }

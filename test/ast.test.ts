@@ -398,6 +398,56 @@ describe("AST", () => {
         expect(cls.body.body[2]?.type).toBe("MethodDefinition");
       });
 
+      it("strips abstract modifiers and abstract members on classes", () => {
+        const ast = parseModule(`
+          abstract class Base {
+            abstract value(): number;
+            abstract label: string;
+            abstract get size(): number;
+            abstract set size(value: number);
+          }
+
+          class Impl extends Base {
+            value() { return 1; }
+            get size() { return 1; }
+            set size(value) {}
+          }
+        `);
+
+        expect(ast.body).toHaveLength(2);
+        expect(ast.body[0]?.type).toBe("ClassDeclaration");
+        const base = ast.body[0] as ESTree.ClassDeclaration;
+        expect(base.body.body).toHaveLength(0);
+
+        expect(ast.body[1]?.type).toBe("ClassDeclaration");
+        const impl = ast.body[1] as ESTree.ClassDeclaration;
+        expect(impl.body.body).toHaveLength(3);
+      });
+
+      it("strips abstract modifiers on exported classes", () => {
+        const ast = parseModule(`
+          export abstract class Base {
+            abstract value(): number;
+          }
+
+          export default abstract class Impl {
+            value() { return 1; }
+          }
+        `);
+
+        expect(ast.body).toHaveLength(2);
+        expect(ast.body[0]?.type).toBe("ExportNamedDeclaration");
+        const named = ast.body[0] as ESTree.ExportNamedDeclaration;
+        expect(named.declaration?.type).toBe("ClassDeclaration");
+        const base = named.declaration as ESTree.ClassDeclaration;
+        expect(base.body.body).toHaveLength(0);
+
+        expect(ast.body[1]?.type).toBe("ExportDefaultDeclaration");
+        const defaultExport = ast.body[1] as ESTree.ExportDefaultDeclaration;
+        const defaultDeclaration = defaultExport.declaration as ESTree.ClassDeclaration;
+        expect(defaultDeclaration.type).toBe("ClassDeclaration");
+      });
+
       it("drops type and interface declarations", () => {
         const ast = parseModule("type Foo = { a: number }; interface Bar { b: string } let x = 1;");
         expect(ast.body.length).toBe(1);
@@ -536,6 +586,25 @@ describe("AST", () => {
         `);
 
         expect(result).toEqual([1, 2]);
+      });
+
+      it("preserves runtime behavior when stripping abstract modifiers and members", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+          abstract class Base {
+            abstract value(): number;
+          }
+
+          class Impl extends Base {
+            value() {
+              return 1;
+            }
+          }
+
+          new Impl().value();
+        `);
+
+        expect(result).toBe(1);
       });
 
       it("preserves runtime behavior when stripping satisfies expressions", () => {
