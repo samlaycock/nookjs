@@ -1,5 +1,35 @@
 # nookjs
 
+## 0.6.2
+
+### Patch Changes
+
+- f7d8f05: Gate standard built-in statics and prototype methods by ECMAScript preset so older presets no
+  longer leak newer host runtime APIs like `Array.from()`, `Object.groupBy()`, and
+  `Promise.withResolvers()`.
+- ef3a7a2: Align `String.prototype.split(null)` with native JavaScript semantics by coercing `null` to the
+  string `"null"` while continuing to treat `undefined` as an omitted separator.
+- 7704d9b: Reject TypeScript `enum` and `namespace` declaration syntax during parsing so `parse()` and
+  `evaluate()` fail fast with a `ParseError` instead of degrading into confusing runtime identifier
+  errors.
+- cb6e31d: Strip TypeScript `satisfies` expressions during parsing so modern TS code like
+  `const x = { a: 1 } satisfies { a: number }` preserves JavaScript runtime behavior instead of
+  failing on an undefined `satisfies` identifier.
+- d761561: Strip ambient TypeScript `declare` declarations during parsing so strip-mode evaluation ignores
+  runtime-less declarations like `declare const foo: number;` instead of treating `declare` as an
+  undefined runtime identifier.
+- 6a4fc64: Strip TypeScript angle-bracket assertions in non-TSX code so expressions like `const x = <number>1;`
+  parse and evaluate as `1`, matching the existing strip-mode handling for `as` assertions.
+- 733684c: Strip TypeScript generic parameter lists on functions, classes, and class methods so strip-mode
+  parsing accepts common signatures like `function id<T>() {}` and `class Box<T> {}` without changing
+  runtime behavior.
+- fc42511: Strip TypeScript `abstract` class modifiers and runtime-less abstract class members so abstract
+  hierarchies parse in strip mode and execute like their plain JavaScript runtime equivalents.
+- e7f012c: Replace the module resolution context fast-path cache with a structured key cache so repeated authorized imports avoid JSON stringification overhead while preserving existing cache semantics and bounded growth.
+- 1c71afa: Materialize plain arrays and objects returned from host-backed built-ins into mutable
+  sandbox-owned containers while preserving nested sandbox identity and keeping host constructor
+  returns read-only.
+
 ## 0.6.1
 
 ### Patch Changes
