@@ -333,6 +333,22 @@ describe("AST", () => {
         expect(init.type).toBe("ArrowFunctionExpression");
       });
 
+      it("strips angle-bracket type assertions", () => {
+        const ast = parseModule("const x = <number>1; x;");
+
+        expect(ast.body).toHaveLength(2);
+        expect(ast.body[0]?.type).toBe("VariableDeclaration");
+        expect(ast.body[1]?.type).toBe("ExpressionStatement");
+      });
+
+      it("strips angle-bracket type assertions with nested generic closers", () => {
+        const ast = parseModule("const x = <Box<Result<number>>>1; x;");
+
+        expect(ast.body).toHaveLength(2);
+        expect(ast.body[0]?.type).toBe("VariableDeclaration");
+        expect(ast.body[1]?.type).toBe("ExpressionStatement");
+      });
+
       it("strips satisfies expressions", () => {
         const ast = parseModule("const x = { a: 1 } satisfies { a: number }; x.a;");
 
@@ -527,6 +543,26 @@ describe("AST", () => {
         const result = interpreter.evaluate(`
           const x = { a: 1 } satisfies { a: number };
           x.a;
+        `);
+
+        expect(result).toBe(1);
+      });
+
+      it("preserves runtime behavior when stripping angle-bracket type assertions", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+          const x = <number>1;
+          x;
+        `);
+
+        expect(result).toBe(1);
+      });
+
+      it("preserves runtime behavior when stripping nested generic angle-bracket assertions", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+          const x = <Box<Result<number>>>1;
+          x;
         `);
 
         expect(result).toBe(1);
