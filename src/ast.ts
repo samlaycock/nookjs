@@ -3598,6 +3598,8 @@ class Parser {
               continue;
             }
 
+            // TypeAssertionEnd returns before reaching this branch at depth 0, but other
+            // stop-token modes may still need to consume raw shift punctuators as type syntax.
             this.next();
             continue;
           }
@@ -3954,6 +3956,8 @@ class Parser {
       return;
     }
 
+    // Keep the extra closing angles as the current token so structurally invalid inputs like
+    // `<Foo>>(bar)` still fail on the leftover `>` instead of silently skipping it.
     this.tokenizer.replaceCurrentPunctuator(this.currentValue.slice(1));
     this.syncCurrent();
   }
