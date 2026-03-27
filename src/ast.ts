@@ -618,6 +618,7 @@ const STOP_TOKEN = {
   Arrow: 10,
   ParamsStart: 11,
   ClassSignature: 12,
+  TypeAssertionEnd: 13,
 } as const;
 
 type StopToken = (typeof STOP_TOKEN)[keyof typeof STOP_TOKEN];
@@ -692,6 +693,13 @@ class Tokenizer {
 
   currentLineBreakValue(): boolean {
     return this.currentLineBreakBefore;
+  }
+
+  replaceCurrentPunctuator(value: string): void {
+    if (this.currentType !== TOKEN.Punctuator) {
+      throw new Error("Current token is not a punctuator");
+    }
+    this.currentValue = value;
   }
 
   // Save enough lexer state to allow parser backtracking (e.g. arrow lookahead).
@@ -3502,6 +3510,8 @@ class Parser {
           return value === "(";
         case STOP_TOKEN.ClassSignature:
           return value === "{" || value === "extends";
+        case STOP_TOKEN.TypeAssertionEnd:
+          return value === ">" || value === ">>" || value === ">>>";
         default:
           return false;
       }
@@ -3571,6 +3581,26 @@ class Parser {
             }
             this.next();
             continue;
+          case ">>":
+          case ">>>": {
+            const closeCount = this.currentValue.length;
+            if (angleDepth >= closeCount) {
+              angleDepth -= closeCount;
+              this.next();
+              continue;
+            }
+
+            if (angleDepth > 0) {
+              const remaining = this.currentValue.slice(angleDepth);
+              angleDepth = 0;
+              this.tokenizer.replaceCurrentPunctuator(remaining);
+              this.syncCurrent();
+              continue;
+            }
+
+            this.next();
+            continue;
+          }
         }
       }
 
@@ -3830,6 +3860,9 @@ class Parser {
     const value = this.currentValue;
 
     if (type === TOKEN.Punctuator) {
+      if (value === "<") {
+        return this.parseAngleBracketTypeAssertion();
+      }
       if (value === "++" || value === "--") {
         this.next();
         const argument = this.parseUnaryExpression();
@@ -3896,6 +3929,33 @@ class Parser {
       };
     }
     return expression;
+  }
+
+  private parseAngleBracketTypeAssertion(): ESTree.Expression {
+    this.expectPunctuator("<");
+    this.skipType(STOP_TOKEN.TypeAssertionEnd);
+    if (
+      this.currentType !== TOKEN.Punctuator ||
+      (this.currentValue !== ">" && this.currentValue !== ">>" && this.currentValue !== ">>>")
+    ) {
+      throw new ParseError("Unterminated type assertion");
+    }
+    this.consumeAngleBracketPunctuator();
+    return this.parseUnaryExpression();
+  }
+
+  private consumeAngleBracketPunctuator(): void {
+    if (this.currentType !== TOKEN.Punctuator || !this.currentValue.startsWith(">")) {
+      throw new ParseError("Expected '>'");
+    }
+
+    if (this.currentValue === ">") {
+      this.next();
+      return;
+    }
+
+    this.tokenizer.replaceCurrentPunctuator(this.currentValue.slice(1));
+    this.syncCurrent();
   }
 
   // Builds member/call chains and wraps optional chains in ChainExpression.
