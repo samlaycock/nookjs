@@ -167,6 +167,13 @@ export class ResourceTracker {
         this.limits[this.exhaustedLimit] ?? 0,
       );
     }
+
+    const maxEvaluations = this.limits.maxEvaluations;
+    const nextEvaluationNumber = this.evaluationNumber + 1;
+    if (maxEvaluations !== undefined && nextEvaluationNumber > maxEvaluations) {
+      this.exhaustedLimit = "maxEvaluations";
+      throw new ResourceExhaustedError("maxEvaluations", nextEvaluationNumber, maxEvaluations);
+    }
   }
 
   endEvaluation(
