@@ -1,5 +1,12 @@
 # nookjs
 
+## 0.6.3
+
+### Patch Changes
+
+- 1259239: Enforce `maxEvaluations` before starting an evaluation so a limit of `0` blocks the first `evaluate()` call and evaluation budgets are applied exactly.
+- 28fce9e: Forward custom module resolver `authorize()` hooks through `createSandbox()` so sandbox module execution applies importer-aware access checks consistently with the lower-level interpreter API.
+
 ## 0.6.2
 
 ### Patch Changes
