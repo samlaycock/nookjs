@@ -172,6 +172,61 @@ describe("Simplified API", () => {
     expect(exports.result).toBe(42);
   });
 
+  it("runModule() should forward resolver authorize from sandbox options", async () => {
+    let authorizeCount = 0;
+    const sandbox = createSandbox({
+      env: "es2022",
+      modules: {
+        resolver: {
+          resolve(specifier) {
+            if (specifier !== "secret.js") {
+              return null;
+            }
+            return {
+              type: "source",
+              code: 'export const secret = "classified";',
+              path: "/modules/secret.js",
+            };
+          },
+          authorize(specifier, importer, resolvedPath) {
+            authorizeCount += 1;
+            return (
+              specifier === "secret.js" &&
+              importer === "/app/main.js" &&
+              resolvedPath === "/modules/secret.js"
+            );
+          },
+        },
+      },
+    });
+
+    const exports = await sandbox.runModule(
+      'import { secret } from "secret.js"; export const result = secret;',
+      { path: "/app/main.js" },
+    );
+
+    expect(exports.result).toBe("classified");
+    expect(authorizeCount).toBe(1);
+
+    const unauthorizedRun = sandbox.runModule(
+      'import { secret } from "secret.js"; export const result = secret;',
+      {
+        path: "/app/attacker.js",
+      },
+    );
+
+    await unauthorizedRun.then(
+      () => {
+        throw new Error("Expected unauthorized import to be rejected");
+      },
+      (error: unknown) => {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toContain("Cannot find module");
+      },
+    );
+    expect(authorizeCount).toBe(2);
+  });
+
   it("runModule() should forward resolver getImportMeta from sandbox options", async () => {
     const sandbox = createSandbox({
       env: "es2022",

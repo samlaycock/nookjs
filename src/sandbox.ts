@@ -424,6 +424,10 @@ const resolveModules = (modules?: SandboxModules): ModuleOptions | undefined => 
     onLoad: customResolver?.onLoad
       ? (specifier, path, exports) => customResolver.onLoad?.(specifier, path, exports)
       : undefined,
+    authorize: customResolver?.authorize
+      ? (specifier, importer, resolvedPath, context) =>
+          customResolver.authorize!(specifier, importer, resolvedPath, context)
+      : undefined,
     onError: customResolver?.onError
       ? (specifier, importer, error) => customResolver.onError?.(specifier, importer, error)
       : undefined,
