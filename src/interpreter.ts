@@ -15,7 +15,12 @@
 
 import type { ESTree, Location } from "./ast";
 import type { StackFrame } from "./errors";
-import type { ModuleOptions, ModuleMetadata, ModuleRecord } from "./modules";
+import type {
+  ModuleIntrospectionContext,
+  ModuleOptions,
+  ModuleMetadata,
+  ModuleRecord,
+} from "./modules";
 import type { NativeUnwrapAllowlistEntry } from "./readonly-proxy";
 
 import { parseModule, parseScript } from "./ast";
@@ -4151,11 +4156,11 @@ export class Interpreter {
         moduleRecord.importMeta,
         moduleRecord.exports,
       );
-      this.moduleSystem.setModuleExports(specifier, exports);
+      this.moduleSystem.setModuleExports(moduleRecord.path, exports);
       return exports;
     } catch (error) {
       const moduleError = error instanceof Error ? error : new Error(String(error));
-      this.moduleSystem.setModuleFailed(specifier, moduleError);
+      this.moduleSystem.setModuleFailed(moduleRecord.path, moduleError);
       throw error;
     }
   }
@@ -4447,6 +4452,7 @@ export class Interpreter {
    * Get the exports of a previously loaded module by its import specifier.
    *
    * @param specifier - The module specifier as used in import statements
+   * @param context - Optional importer context for specifiers that resolve differently by importer
    * @returns The module's exports, or undefined if not cached or not yet initialized
    *
    * @example
@@ -4458,8 +4464,11 @@ export class Interpreter {
    * const utilsExports = interpreter.getModuleExportsBySpecifier("./utils.js");
    * ```
    */
-  getModuleExportsBySpecifier(specifier: string): Record<string, any> | undefined {
-    return this.moduleSystem?.getModuleExportsBySpecifier(specifier);
+  getModuleExportsBySpecifier(
+    specifier: string,
+    context?: ModuleIntrospectionContext,
+  ): Record<string, any> | undefined {
+    return this.moduleSystem?.getModuleExportsBySpecifier(specifier, context);
   }
 
   /**
@@ -4483,10 +4492,11 @@ export class Interpreter {
    * Check if a module is cached by its import specifier.
    *
    * @param specifier - The module specifier as used in import statements
+   * @param context - Optional importer context for specifiers that resolve differently by importer
    * @returns true if the module has been resolved and cached
    */
-  isModuleCached(specifier: string): boolean {
-    return this.moduleSystem?.isModuleCached(specifier) ?? false;
+  isModuleCached(specifier: string, context?: ModuleIntrospectionContext): boolean {
+    return this.moduleSystem?.isModuleCached(specifier, context) ?? false;
   }
 
   /**
@@ -4521,6 +4531,7 @@ export class Interpreter {
    * Get metadata about a loaded module by its specifier.
    *
    * @param specifier - The module specifier as used in import statements
+   * @param context - Optional importer context for specifiers that resolve differently by importer
    * @returns Module metadata including path, status, and load time, or undefined if not cached
    *
    * @example
@@ -4532,8 +4543,11 @@ export class Interpreter {
    * }
    * ```
    */
-  getModuleMetadata(specifier: string): ModuleMetadata | undefined {
-    return this.moduleSystem?.getModuleMetadata(specifier);
+  getModuleMetadata(
+    specifier: string,
+    context?: ModuleIntrospectionContext,
+  ): ModuleMetadata | undefined {
+    return this.moduleSystem?.getModuleMetadata(specifier, context);
   }
 
   /**

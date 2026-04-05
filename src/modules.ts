@@ -243,6 +243,16 @@ export interface ModuleImportMetaContext {
 }
 
 /**
+ * Optional context for importer-aware module introspection.
+ */
+export interface ModuleIntrospectionContext {
+  /** The path of the module that imported the specifier, or null for entry point */
+  importer?: string | null;
+  /** Optional full importer chain when resolution depends on more than the importer alone */
+  importerChain?: readonly string[];
+}
+
+/**
  * Resolver interface for loading modules.
  *
  * Implementors control which modules can be loaded and how they are resolved.
@@ -366,8 +376,10 @@ function shallowCloneWithDescriptors<T extends object>(obj: T): T {
 export class ModuleSystem {
   // Cache by resolved path, not specifier (fixes cache key collision)
   private cacheByPath: Map<string, ModuleRecord> = new Map();
-  // Secondary index: specifier -> path (for specifier-based lookups)
-  private specifierToPath: Map<string, string> = new Map();
+  // Secondary index: specifier -> all resolved paths seen for that textual specifier.
+  private specifierToPaths: Map<string, Set<string>> = new Map();
+  // Importer-aware index used by public introspection when a specifier is context-sensitive.
+  private specifierToPathsByImporter: Map<string, Map<string | null, Set<string>>> = new Map();
   // Context-specific index for reusing cached module paths without re-running resolve()
   private resolvedPathByContext = new ResolutionContextPathCache(
     MAX_RESOLVED_PATH_CONTEXT_CACHE_SIZE,
@@ -440,6 +452,58 @@ export class ModuleSystem {
     this.resolvedPathByContext.delete(specifier, importer, importerChain);
   }
 
+  private registerSpecifierPath(specifier: string, importer: string | null, path: string): void {
+    let paths = this.specifierToPaths.get(specifier);
+    if (!paths) {
+      paths = new Set();
+      this.specifierToPaths.set(specifier, paths);
+    }
+    paths.add(path);
+
+    let pathsByImporter = this.specifierToPathsByImporter.get(specifier);
+    if (!pathsByImporter) {
+      pathsByImporter = new Map();
+      this.specifierToPathsByImporter.set(specifier, pathsByImporter);
+    }
+
+    let importerPaths = pathsByImporter.get(importer);
+    if (!importerPaths) {
+      importerPaths = new Set();
+      pathsByImporter.set(importer, importerPaths);
+    }
+    importerPaths.add(path);
+  }
+
+  private getUnambiguousPath(paths?: ReadonlySet<string>): string | undefined {
+    if (!paths || paths.size !== 1) {
+      return undefined;
+    }
+
+    return paths.values().next().value;
+  }
+
+  private getPathForSpecifier(
+    specifier: string,
+    context?: ModuleIntrospectionContext,
+  ): string | undefined {
+    if (context?.importerChain) {
+      return this.getResolvedPathForContext(
+        specifier,
+        context.importer ?? null,
+        context.importerChain,
+      );
+    }
+
+    if (context && Object.hasOwn(context, "importer")) {
+      const importerPaths = this.specifierToPathsByImporter
+        .get(specifier)
+        ?.get(context.importer ?? null);
+      return this.getUnambiguousPath(importerPaths);
+    }
+
+    return this.getUnambiguousPath(this.specifierToPaths.get(specifier));
+  }
+
   async resolveModule(specifier: string, importer: string | null): Promise<ModuleRecord | null> {
     if (!this.options.enabled) {
       throw new Error("Module system is not enabled");
@@ -487,7 +551,13 @@ export class ModuleSystem {
               return null;
             }
 
-            this.specifierToPath.set(specifier, cachedPath);
+            this.registerSpecifierPath(specifier, importer, cachedPath);
+            this.cacheResolvedPathForContext(
+              specifier,
+              importer,
+              context.importerChain,
+              cachedPath,
+            );
             return existingByPath;
           }
 
@@ -516,12 +586,11 @@ export class ModuleSystem {
       // Cache key is the resolved path (source.path), not the specifier,
       // to ensure cache entries are tied to the specific resolved module.
       if (this.options.cache) {
-        // Preserve all successfully authorized specifiers, even when they
-        // resolve to a module path that is already cached.
-        this.specifierToPath.set(specifier, source.path);
-
         const existingByPath = this.cacheByPath.get(source.path);
         if (existingByPath) {
+          // Preserve all successfully authorized specifiers, even when they
+          // resolve to a module path that is already cached.
+          this.registerSpecifierPath(specifier, importer, source.path);
           this.cacheResolvedPathForContext(specifier, importer, context.importerChain, source.path);
           // If already initialized, return cached exports
           if (existingByPath.status === "initialized") {
@@ -559,6 +628,7 @@ export class ModuleSystem {
 
       if (this.options.cache) {
         this.cacheByPath.set(source.path, record);
+        this.registerSpecifierPath(specifier, importer, source.path);
         this.cacheResolvedPathForContext(specifier, importer, context.importerChain, source.path);
       }
 
@@ -605,8 +675,11 @@ export class ModuleSystem {
   /**
    * Get module exports by specifier.
    */
-  getModuleExportsBySpecifier(specifier: string): Record<string, any> | undefined {
-    const path = this.specifierToPath.get(specifier);
+  getModuleExportsBySpecifier(
+    specifier: string,
+    context?: ModuleIntrospectionContext,
+  ): Record<string, any> | undefined {
+    const path = this.getPathForSpecifier(specifier, context);
     if (path) {
       return this.getModuleExports(path);
     }
@@ -620,31 +693,25 @@ export class ModuleSystem {
    * which provides mutation protection. We store them directly without additional
    * freezing since the proxy already blocks mutations.
    */
-  setModuleExports(specifier: string, exports: Record<string, any>): void {
-    const path = this.specifierToPath.get(specifier);
-    if (!path) return;
-
+  setModuleExports(path: string, exports: Record<string, any>): void {
     const record = this.cacheByPath.get(path);
     if (record) {
       // Exports are already protected by ReadOnlyProxy from evaluateModuleAstAsync
       record.exports = exports;
       record.status = "initialized";
-      this.options.resolver.onLoad?.(specifier, path, record.exports);
+      this.options.resolver.onLoad?.(record.specifier, path, record.exports);
     }
   }
 
   /**
    * Mark a module as failed.
    */
-  setModuleFailed(specifier: string, error: Error): void {
-    const path = this.specifierToPath.get(specifier);
-    if (!path) return;
-
+  setModuleFailed(path: string, error: Error): void {
     const record = this.cacheByPath.get(path);
     if (record) {
       record.status = "failed";
       record.error = error;
-      this.options.resolver.onError?.(specifier, null, error);
+      this.options.resolver.onError?.(record.specifier, null, error);
     }
   }
 
@@ -653,7 +720,8 @@ export class ModuleSystem {
    */
   clearCache(): void {
     this.cacheByPath.clear();
-    this.specifierToPath.clear();
+    this.specifierToPaths.clear();
+    this.specifierToPathsByImporter.clear();
     this.resolvedPathByContext.clear();
     this.evaluationStack = [];
   }
@@ -679,8 +747,8 @@ export class ModuleSystem {
   /**
    * Check if a module is cached (by specifier).
    */
-  isModuleCached(specifier: string): boolean {
-    return this.specifierToPath.has(specifier);
+  isModuleCached(specifier: string, context?: ModuleIntrospectionContext): boolean {
+    return this.getPathForSpecifier(specifier, context) !== undefined;
   }
 
   /**
@@ -701,14 +769,17 @@ export class ModuleSystem {
    * Get a list of all registered specifiers.
    */
   getLoadedSpecifiers(): string[] {
-    return Array.from(this.specifierToPath.keys());
+    return Array.from(this.specifierToPaths.keys());
   }
 
   /**
    * Get metadata about a loaded module.
    */
-  getModuleMetadata(specifier: string): ModuleMetadata | undefined {
-    const path = this.specifierToPath.get(specifier);
+  getModuleMetadata(
+    specifier: string,
+    context?: ModuleIntrospectionContext,
+  ): ModuleMetadata | undefined {
+    const path = this.getPathForSpecifier(specifier, context);
     if (!path) return undefined;
 
     const record = this.cacheByPath.get(path);
