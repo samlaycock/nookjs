@@ -3104,6 +3104,70 @@ describe("Module System", () => {
       expect(interpreter.getModuleExportsBySpecifier("./a.js")?.value).toBe(1);
     });
 
+    test("should require importer context when a specifier resolves to multiple paths", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier, importer) {
+          if (specifier === "a.js") {
+            return {
+              type: "source",
+              code: `import { value } from "./x"; export const a = value;`,
+              path: "/modules/a.js",
+            };
+          }
+          if (specifier === "b.js") {
+            return {
+              type: "source",
+              code: `import { value } from "./x"; export const b = value;`,
+              path: "/modules/b.js",
+            };
+          }
+          if (specifier === "./x" && importer === "/modules/a.js") {
+            return {
+              type: "source",
+              code: `export const value = "from-a";`,
+              path: "/modules/a/x.js",
+            };
+          }
+          if (specifier === "./x" && importer === "/modules/b.js") {
+            return {
+              type: "source",
+              code: `export const value = "from-b";`,
+              path: "/modules/b/x.js",
+            };
+          }
+          return null;
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        'import { a } from "a.js"; import { b } from "b.js"; export const values = [a, b];',
+        { path: "main.js" },
+      );
+
+      expect(result.values).toEqual(["from-a", "from-b"]);
+      expect(interpreter.isModuleCached("./x")).toBe(false);
+      expect(interpreter.getModuleMetadata("./x")).toBeUndefined();
+      expect(interpreter.getModuleExportsBySpecifier("./x")).toBeUndefined();
+      expect(interpreter.isModuleCached("./x", { importer: "/modules/a.js" })).toBe(true);
+      expect(interpreter.isModuleCached("./x", { importer: "/modules/b.js" })).toBe(true);
+      expect(interpreter.getModuleMetadata("./x", { importer: "/modules/a.js" })?.path).toBe(
+        "/modules/a/x.js",
+      );
+      expect(interpreter.getModuleMetadata("./x", { importer: "/modules/b.js" })?.path).toBe(
+        "/modules/b/x.js",
+      );
+      expect(
+        interpreter.getModuleExportsBySpecifier("./x", { importer: "/modules/a.js" })?.value,
+      ).toBe("from-a");
+      expect(
+        interpreter.getModuleExportsBySpecifier("./x", { importer: "/modules/b.js" })?.value,
+      ).toBe("from-b");
+    });
+
     test("should return undefined metadata for non-existent module", async () => {
       const resolver: ModuleResolver = {
         resolve() {

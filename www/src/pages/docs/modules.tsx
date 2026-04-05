@@ -390,6 +390,16 @@ const noCacheSandbox = createSandbox({
           </Link>{" "}
           for advanced control.
         </p>
+        <p className="text-neutral-300 mb-4">
+          Bare specifier lookups are only meaningful when that specifier maps to one cached module
+          path. If resolution depends on the importer, use path-based helpers or pass importer
+          context to the specifier-based methods.
+        </p>
+        <CodeBlock
+          code={`interpreter.getModuleMetadata("./x", { importer: "/modules/a.js" });
+interpreter.getModuleExportsBySpecifier("./x", { importer: "/modules/b.js" });
+interpreter.isModuleCached("./x", { importer: "/modules/a.js" });`}
+        />
       </section>
 
       <section className="mb-12">
