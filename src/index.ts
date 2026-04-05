@@ -61,6 +61,7 @@ export {
 } from "./sandbox";
 
 export type {
+  ModuleIntrospectionContext,
   ModuleResolver,
   ModuleResolverContext,
   ModuleOptions,

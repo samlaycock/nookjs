@@ -70,8 +70,13 @@ console.log(exports.result); // 3
 interpreter.isModuleCached("math.js");
 interpreter.getLoadedModuleSpecifiers();
 interpreter.getModuleMetadata("math.js");
+interpreter.getModuleMetadata("./x", { importer: "/modules/a.js" });
 interpreter.clearModuleCache();
 ```
+
+If a specifier resolves to different canonical paths depending on the importer, bare
+specifier-based lookups become ambiguous. In that case, use path-based helpers or pass
+`{ importer }` to the specifier-based methods.
 
 ## ResourceTracker (Standalone)
 

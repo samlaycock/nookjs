@@ -408,6 +408,20 @@ const sandbox = createSandbox({
 Module cache introspection and management are available on the internal `Interpreter` class.
 See [Internal Classes](INTERNAL_CLASSES.md) for details.
 
+Specifier-based introspection is only unambiguous when a specifier maps to exactly one cached
+path. If the same textual specifier resolves differently from different importers, bare
+specifier lookups return `undefined` or `false` and you should either:
+
+- use path-based introspection (`getModuleMetadataByPath()`, `getModuleExports()`,
+  `isModuleCachedByPath()`)
+- provide importer context to the specifier-based helpers
+
+```typescript
+interpreter.getModuleMetadata("./x", { importer: "/modules/a.js" });
+interpreter.getModuleExportsBySpecifier("./x", { importer: "/modules/b.js" });
+interpreter.isModuleCached("./x", { importer: "/modules/a.js" });
+```
+
 ## Lifecycle Hooks
 
 Monitor module loading with resolver hooks:
