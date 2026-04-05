@@ -153,19 +153,54 @@ describe("Resource Tracking", () => {
           }).toThrow(ResourceExhaustedError);
         });
 
-        test("should throw when maxEvaluations exceeded", () => {
+        test("should reject the first evaluation when maxEvaluations is 0", () => {
           const interpreter = new Interpreter({
             ...ES2022,
             resourceTracking: true,
           });
-          interpreter.setResourceLimit("maxEvaluations", 2);
+          interpreter.setResourceLimit("maxEvaluations", 0);
+
+          expect(() => {
+            interpreter.evaluate("1 + 1");
+          }).toThrow(ResourceExhaustedError);
+
+          const stats = interpreter.getResourceStats();
+          expect(stats.evaluations).toBe(0);
+          expect(stats.isExhausted).toBe(true);
+        });
+
+        test("should allow exactly one evaluation when maxEvaluations is 1", () => {
+          const interpreter = new Interpreter({
+            ...ES2022,
+            resourceTracking: true,
+          });
+          interpreter.setResourceLimit("maxEvaluations", 1);
+
+          expect(interpreter.evaluate("1 + 1")).toBe(2);
+
+          expect(() => {
+            interpreter.evaluate("2 + 2");
+          }).toThrow(ResourceExhaustedError);
+
+          expect(interpreter.getResourceStats().evaluations).toBe(1);
+        });
+
+        test("should allow evaluations up to the configured maxEvaluations budget", () => {
+          const interpreter = new Interpreter({
+            ...ES2022,
+            resourceTracking: true,
+          });
+          interpreter.setResourceLimit("maxEvaluations", 3);
 
           interpreter.evaluate("1 + 1");
           interpreter.evaluate("2 + 2");
+          interpreter.evaluate("3 + 3");
 
           expect(() => {
-            interpreter.evaluate("3 + 3");
+            interpreter.evaluate("4 + 4");
           }).toThrow(ResourceExhaustedError);
+
+          expect(interpreter.getResourceStats().evaluations).toBe(3);
         });
 
         test("should throw when maxFunctionCalls exceeded", () => {
