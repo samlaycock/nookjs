@@ -344,6 +344,7 @@ export interface ModuleMetadata {
 }
 
 export interface ModuleRecord {
+  importer: string | null;
   path: string;
   specifier: string;
   exports: Record<string, any>;
@@ -608,6 +609,7 @@ export class ModuleSystem {
       }
 
       const record: ModuleRecord = {
+        importer,
         path: source.path,
         specifier,
         exports: {},
@@ -711,7 +713,7 @@ export class ModuleSystem {
     if (record) {
       record.status = "failed";
       record.error = error;
-      this.options.resolver.onError?.(record.specifier, null, error);
+      this.options.resolver.onError?.(record.specifier, record.importer, error);
     }
   }
 

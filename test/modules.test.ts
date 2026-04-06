@@ -3240,6 +3240,67 @@ describe("Module System", () => {
       expect(badModuleEvaluations).toBe(1);
     });
 
+    test("should preserve importer attribution for failed module onError callbacks", async () => {
+      const errors: Array<{ specifier: string; importer: string | null; message: string }> = [];
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier === "dep.js") {
+            return {
+              type: "source",
+              code: `boom;`,
+              path: "/modules/dep.js",
+            };
+          }
+          if (specifier === "parent.js") {
+            return {
+              type: "source",
+              code: `import { value } from "dep.js"; export const parent = value;`,
+              path: "/modules/parent.js",
+            };
+          }
+          return null;
+        },
+        onError(specifier, importer, error) {
+          errors.push({
+            specifier,
+            importer,
+            message: error.message,
+          });
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      let thrownError: unknown;
+      try {
+        await interpreter.evaluateModuleAsync(
+          `import { parent } from "parent.js"; export { parent };`,
+          {
+            path: "main.js",
+          },
+        );
+      } catch (error) {
+        thrownError = error;
+      }
+
+      expect(thrownError).toBeDefined();
+      expect(thrownError).toBeInstanceOf(Error);
+      expect((thrownError as Error).message).toContain("Undefined variable 'boom'");
+
+      expect(errors).toEqual(
+        expect.arrayContaining([
+          {
+            specifier: "dep.js",
+            importer: "/modules/parent.js",
+            message: "Undefined variable 'boom'",
+          },
+        ]),
+      );
+    });
+
     test("should handle getLoadedModulePaths with multiple modules", async () => {
       const files = new Map([
         ["a.js", "export const a = 1;"],
