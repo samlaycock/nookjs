@@ -115,6 +115,13 @@ class ControlFlowSignal {
 // Reuse a single marker instance to avoid per-chain allocations.
 const OPTIONAL_CHAIN_SHORT_CIRCUIT = new ControlFlowSignal("optional-chain");
 
+const STEP_EVALUATION_FINALIZER =
+  typeof FinalizationRegistry === "undefined"
+    ? undefined
+    : new FinalizationRegistry<() => void>((cleanup) => {
+        cleanup();
+      });
+
 const isControlFlowSignal = (value: any): value is ControlFlowSignal =>
   value instanceof ControlFlowSignal;
 
@@ -2658,6 +2665,7 @@ export class Interpreter {
   // Integrated resource tracking state
   private integratedResourceTracking = false;
   private integratedResourceTracker: ResourceTracker | null = null;
+  private activeStepEvaluationCleanup?: () => void;
 
   private moduleSystem: ModuleSystem | null = null;
   private moduleImportMetaStack: any[] = [];
@@ -2706,6 +2714,10 @@ export class Interpreter {
 
   private getCurrentContext(): EvaluationContext | undefined {
     return this.evaluationContextStack[this.evaluationContextStack.length - 1];
+  }
+
+  private closeAbandonedStepEvaluation(): void {
+    this.activeStepEvaluationCleanup?.();
   }
 
   private getCurrentValidator(): ASTValidator | undefined {
@@ -3362,6 +3374,7 @@ export class Interpreter {
   }
 
   evaluate(input: string | ESTree.Program, options?: EvaluateOptions): any {
+    this.closeAbandonedStepEvaluation();
     const releaseMutex = this.acquireSyncEvaluationMutexIfNeeded();
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
     this.currentSourceCode = sourceCode;
@@ -3397,6 +3410,7 @@ export class Interpreter {
   }
 
   async evaluateAsync(input: string | ESTree.Program, options?: EvaluateOptions): Promise<any> {
+    this.closeAbandonedStepEvaluation();
     const releaseMutex = await this.acquireEvaluationMutex(options?.signal);
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
     this.currentSourceCode = sourceCode;
@@ -3648,7 +3662,8 @@ export class Interpreter {
    * This allows you to step through code execution one statement at a time,
    * inspecting the interpreter state at each step.
    *
-   * @param code - The JavaScript code to evaluate
+   * @param input - The JavaScript code or pre-parsed AST to evaluate
+   * @param options - Optional evaluation controls such as validators, globals, and limits
    * @returns A generator that yields ExecutionStep objects
    *
    * @example
@@ -3668,42 +3683,139 @@ export class Interpreter {
    * }
    * ```
    */
-  *evaluateSteps(code: string): Generator<ExecutionStep, void, void> {
-    const ast = this.parse(code);
-
-    // Reset statistics
-    this.statsNodeCount = 0;
-    this.statsFunctionCalls = 0;
-    this.statsLoopIterations = 0;
-    this.statsStartTime = performance.now();
-
+  evaluateSteps(
+    input: string | ESTree.Program,
+    options?: EvaluateOptions,
+  ): Generator<ExecutionStep, void, void> {
+    const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
+    const releaseMutex = this.acquireSyncEvaluationMutexIfNeeded();
+    const cleanupToken = {};
+    let ast: ESTree.Program | undefined;
+    let initialized = false;
+    let finalized = false;
+    let emittedCompletion = false;
+    let currentIndex = 0;
+    let pendingStatementExecution = false;
     let result: any;
+    let previousEnv: Environment | undefined;
+    let needsFreshScope = false;
 
-    for (const statement of ast.body) {
-      // Yield before executing each top-level statement
-      yield {
-        nodeType: statement.type,
-        line: statement.line,
-        done: false,
-      };
-
-      result = this.evaluateNode(statement);
-
-      // Handle control flow values
-      if (isControlFlowKind(result, "return")) {
-        result = result.value;
-        break;
+    const cleanup = () => {
+      if (finalized) {
+        return;
       }
-    }
-
-    this.statsEndTime = performance.now();
-
-    // Final step with the result
-    yield {
-      nodeType: "Program",
-      done: true,
-      result,
+      finalized = true;
+      if (this.activeStepEvaluationCleanup === cleanup) {
+        this.activeStepEvaluationCleanup = undefined;
+      }
+      STEP_EVALUATION_FINALIZER?.unregister(cleanupToken);
+      try {
+        if (initialized) {
+          if (needsFreshScope && previousEnv) {
+            this.environment = previousEnv;
+          }
+          this.endEvaluation(options);
+        }
+      } finally {
+        this.currentSourceCode = "";
+        this.callStack = [];
+        releaseMutex?.();
+      }
     };
+
+    const completeWithResult = (value: any): IteratorResult<ExecutionStep, void> => {
+      emittedCompletion = true;
+      cleanup();
+      return {
+        done: false,
+        value: {
+          nodeType: "Program",
+          done: true,
+          result: value,
+        },
+      };
+    };
+
+    const initialize = () => {
+      this.closeAbandonedStepEvaluation();
+      this.assertSyncSignalIsDisabled(options);
+      this.currentSourceCode = sourceCode;
+      this.callStack = [];
+      this.beginEvaluation(options);
+      initialized = true;
+      this.activeStepEvaluationCleanup = cleanup;
+      STEP_EVALUATION_FINALIZER?.register(stepIterator, cleanup, cleanupToken);
+      ast = this.parseAndValidate(input, options);
+      needsFreshScope = typeof input !== "string";
+      previousEnv = this.environment;
+      if (needsFreshScope) {
+        this.environment = new Environment(this.environment);
+      }
+    };
+
+    const stepIterator: Generator<ExecutionStep, void, void> = {
+      next: () => {
+        if (emittedCompletion) {
+          return { done: true, value: undefined };
+        }
+
+        try {
+          if (!initialized) {
+            initialize();
+            if ((ast?.body.length ?? 0) === 0) {
+              return completeWithResult(undefined);
+            }
+          }
+
+          if (pendingStatementExecution) {
+            const statement = ast!.body[currentIndex]!;
+            result = this.evaluateNode(statement);
+            pendingStatementExecution = false;
+
+            if (isControlFlowKind(result, "return")) {
+              return completeWithResult(result.value);
+            }
+
+            currentIndex++;
+            if (currentIndex >= ast!.body.length) {
+              return completeWithResult(result);
+            }
+          }
+
+          pendingStatementExecution = true;
+          const statement = ast!.body[currentIndex]!;
+          return {
+            done: false,
+            value: {
+              nodeType: statement.type,
+              line: statement.line,
+              done: false,
+            },
+          };
+        } catch (error) {
+          const enhancedError = this.enhanceError(error);
+          cleanup();
+          throw enhancedError;
+        }
+      },
+      return: () => {
+        emittedCompletion = true;
+        cleanup();
+        return { done: true, value: undefined };
+      },
+      throw: (error?: any) => {
+        cleanup();
+        throw error;
+      },
+      [Symbol.dispose]: () => {
+        cleanup();
+      },
+      [Symbol.iterator]() {
+        return this;
+      },
+    };
+
+    return stepIterator;
   }
 
   /**
@@ -3816,6 +3928,7 @@ export class Interpreter {
     code: string,
     options: ModuleEvaluateOptions,
   ): Promise<Record<string, any>> {
+    this.closeAbandonedStepEvaluation();
     const releaseMutex = await this.acquireEvaluationMutex(options.signal);
     if (!this.moduleSystem) {
       releaseMutex();

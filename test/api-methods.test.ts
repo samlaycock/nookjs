@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 
 import type { ExecutionStats, ExecutionStep } from "../src/interpreter";
 
-import { Interpreter } from "../src/interpreter";
+import { Interpreter, InterpreterError } from "../src/interpreter";
 
 describe("Interpreter", () => {
   describe("API", () => {
@@ -430,6 +430,109 @@ describe("Interpreter", () => {
         }
 
         expect(steps.length).toBe(2);
+      });
+
+      it("should apply validators before stepping", () => {
+        const interpreter = new Interpreter();
+        const stepper = interpreter.evaluateSteps("let x = 1;", {
+          validator: () => false,
+        });
+
+        expect(() => stepper.next()).toThrow("AST validation failed");
+      });
+
+      it("should apply per-evaluation limits while stepping", () => {
+        const interpreter = new Interpreter();
+        const stepper = interpreter.evaluateSteps(
+          `
+          for (let i = 0; i < 3; i++) {
+            i;
+          }
+        `,
+          { maxLoopIterations: 1 },
+        );
+
+        expect(() => Array.from(stepper)).toThrow("Maximum loop iterations exceeded");
+      });
+
+      it("should enhance errors with source metadata while stepping", () => {
+        const interpreter = new Interpreter();
+        const code = "missingValue + 1;";
+        const stepper = interpreter.evaluateSteps(code);
+
+        expect(() => {
+          Array.from(stepper);
+        }).toThrow(
+          expect.objectContaining({
+            sourceCode: code,
+            callStack: [],
+          }),
+        );
+      });
+
+      it("should use standard evaluation cleanup for early-terminated stepping", () => {
+        const interpreter = new Interpreter({ resourceTracking: true });
+
+        for (const _step of interpreter.evaluateSteps("temp;", { globals: { temp: 42 } })) {
+          break;
+        }
+
+        expect("temp" in interpreter.getScope()).toBe(false);
+        expect(interpreter.getResourceStats().evaluations).toBe(1);
+      });
+
+      it("should not start evaluation state before stepping begins", () => {
+        const interpreter = new Interpreter({ resourceTracking: true });
+
+        interpreter.evaluateSteps("temp;", { globals: { temp: 42 } });
+
+        expect("temp" in interpreter.getScope()).toBe(false);
+        expect(interpreter.getResourceStats().evaluations).toBe(0);
+      });
+
+      it("should clean up immediately after yielding the final completion step", () => {
+        const interpreter = new Interpreter({ resourceTracking: true });
+        const stepper = interpreter.evaluateSteps("temp;", { globals: { temp: 42 } });
+
+        expect(stepper.next().value).toMatchObject({
+          nodeType: "ExpressionStatement",
+          done: false,
+        });
+        expect(stepper.next().value).toMatchObject({
+          nodeType: "Program",
+          done: true,
+        });
+
+        expect("temp" in interpreter.getScope()).toBe(false);
+        expect(interpreter.getResourceStats().evaluations).toBe(1);
+      });
+
+      it("should clean up an abandoned step evaluation before a later evaluation starts", () => {
+        const interpreter = new Interpreter({ resourceTracking: true });
+        const stepper = interpreter.evaluateSteps("temp;", { globals: { temp: 42 } });
+
+        expect(stepper.next().value).toMatchObject({
+          nodeType: "ExpressionStatement",
+          done: false,
+        });
+        expect(interpreter.getScope().temp).toBe(42);
+
+        expect(interpreter.evaluate("1 + 1")).toBe(2);
+
+        expect("temp" in interpreter.getScope()).toBe(false);
+        expect(interpreter.getResourceStats().evaluations).toBe(2);
+      });
+
+      it("should preserve InterpreterError instances when enhancing step errors", () => {
+        const interpreter = new Interpreter();
+        const stepper = interpreter.evaluateSteps("unknownName;");
+
+        try {
+          Array.from(stepper);
+          throw new Error("expected stepper to throw");
+        } catch (error) {
+          expect(error).toBeInstanceOf(InterpreterError);
+        }
       });
     });
 
