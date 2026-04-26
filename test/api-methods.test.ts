@@ -481,6 +481,48 @@ describe("Interpreter", () => {
         expect(interpreter.getResourceStats().evaluations).toBe(1);
       });
 
+      it("should not start evaluation state before stepping begins", () => {
+        const interpreter = new Interpreter({ resourceTracking: true });
+
+        interpreter.evaluateSteps("temp;", { globals: { temp: 42 } });
+
+        expect("temp" in interpreter.getScope()).toBe(false);
+        expect(interpreter.getResourceStats().evaluations).toBe(0);
+      });
+
+      it("should clean up immediately after yielding the final completion step", () => {
+        const interpreter = new Interpreter({ resourceTracking: true });
+        const stepper = interpreter.evaluateSteps("temp;", { globals: { temp: 42 } });
+
+        expect(stepper.next().value).toMatchObject({
+          nodeType: "ExpressionStatement",
+          done: false,
+        });
+        expect(stepper.next().value).toMatchObject({
+          nodeType: "Program",
+          done: true,
+        });
+
+        expect("temp" in interpreter.getScope()).toBe(false);
+        expect(interpreter.getResourceStats().evaluations).toBe(1);
+      });
+
+      it("should clean up an abandoned step evaluation before a later evaluation starts", () => {
+        const interpreter = new Interpreter({ resourceTracking: true });
+        const stepper = interpreter.evaluateSteps("temp;", { globals: { temp: 42 } });
+
+        expect(stepper.next().value).toMatchObject({
+          nodeType: "ExpressionStatement",
+          done: false,
+        });
+        expect(interpreter.getScope().temp).toBe(42);
+
+        expect(interpreter.evaluate("1 + 1")).toBe(2);
+
+        expect("temp" in interpreter.getScope()).toBe(false);
+        expect(interpreter.getResourceStats().evaluations).toBe(2);
+      });
+
       it("should preserve InterpreterError instances when enhancing step errors", () => {
         const interpreter = new Interpreter();
         const stepper = interpreter.evaluateSteps("unknownName;");
