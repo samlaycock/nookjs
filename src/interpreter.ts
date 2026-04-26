@@ -3648,7 +3648,8 @@ export class Interpreter {
    * This allows you to step through code execution one statement at a time,
    * inspecting the interpreter state at each step.
    *
-   * @param code - The JavaScript code to evaluate
+   * @param input - The JavaScript code or pre-parsed AST to evaluate
+   * @param options - Optional evaluation controls such as validators, globals, and limits
    * @returns A generator that yields ExecutionStep objects
    *
    * @example
@@ -3668,42 +3669,66 @@ export class Interpreter {
    * }
    * ```
    */
-  *evaluateSteps(code: string): Generator<ExecutionStep, void, void> {
-    const ast = this.parse(code);
-
-    // Reset statistics
-    this.statsNodeCount = 0;
-    this.statsFunctionCalls = 0;
-    this.statsLoopIterations = 0;
-    this.statsStartTime = performance.now();
-
-    let result: any;
-
-    for (const statement of ast.body) {
-      // Yield before executing each top-level statement
-      yield {
-        nodeType: statement.type,
-        line: statement.line,
-        done: false,
-      };
-
-      result = this.evaluateNode(statement);
-
-      // Handle control flow values
-      if (isControlFlowKind(result, "return")) {
-        result = result.value;
-        break;
+  *evaluateSteps(
+    input: string | ESTree.Program,
+    options?: EvaluateOptions,
+  ): Generator<ExecutionStep, void, void> {
+    const releaseMutex = this.acquireSyncEvaluationMutexIfNeeded();
+    const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
+    this.currentSourceCode = sourceCode;
+    this.callStack = [];
+    let evaluationStarted = false;
+    try {
+      this.assertSyncSignalIsDisabled(options);
+      this.beginEvaluation(options);
+      evaluationStarted = true;
+      const ast = this.parseAndValidate(input, options);
+      const needsFreshScope = typeof input !== "string";
+      const previousEnv = this.environment;
+      if (needsFreshScope) {
+        this.environment = new Environment(this.environment);
       }
+      try {
+        let result: any;
+
+        for (const statement of ast.body) {
+          // Yield before executing each top-level statement.
+          yield {
+            nodeType: statement.type,
+            line: statement.line,
+            done: false,
+          };
+
+          result = this.evaluateNode(statement);
+
+          // Handle control flow values.
+          if (isControlFlowKind(result, "return")) {
+            result = result.value;
+            break;
+          }
+        }
+
+        // Final step with the result.
+        yield {
+          nodeType: "Program",
+          done: true,
+          result,
+        };
+      } finally {
+        if (needsFreshScope) {
+          this.environment = previousEnv;
+        }
+      }
+    } catch (error) {
+      throw this.enhanceError(error);
+    } finally {
+      if (evaluationStarted) {
+        this.endEvaluation(options);
+      }
+      this.currentSourceCode = "";
+      this.callStack = [];
+      releaseMutex?.();
     }
-
-    this.statsEndTime = performance.now();
-
-    // Final step with the result
-    yield {
-      nodeType: "Program",
-      done: true,
-      result,
-    };
   }
 
   /**
