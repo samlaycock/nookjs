@@ -3688,8 +3688,8 @@ export class Interpreter {
     options?: EvaluateOptions,
   ): Generator<ExecutionStep, void, void> {
     const sourceCode = typeof input === "string" ? input : "pre-parsed AST";
-    const releaseMutex = this.acquireSyncEvaluationMutexIfNeeded();
     const cleanupToken = {};
+    let releaseMutex: (() => void) | undefined;
     let ast: ESTree.Program | undefined;
     let initialized = false;
     let finalized = false;
@@ -3738,6 +3738,7 @@ export class Interpreter {
 
     const initialize = () => {
       this.closeAbandonedStepEvaluation();
+      releaseMutex = this.acquireSyncEvaluationMutexIfNeeded();
       this.assertSyncSignalIsDisabled(options);
       this.currentSourceCode = sourceCode;
       this.callStack = [];
