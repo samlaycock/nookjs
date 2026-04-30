@@ -4,6 +4,14 @@ import { Interpreter } from "../src/interpreter";
 import { createSandbox } from "../src/sandbox";
 
 describe("Strict Evaluation Isolation", () => {
+  it("should not leak strict-isolation mutex when a stepper is never iterated", () => {
+    const interpreter = new Interpreter({ strictEvaluationIsolation: true });
+
+    interpreter.evaluateSteps("1 + 1");
+
+    expect(interpreter.evaluate("1 + 1")).toBe(2);
+  });
+
   it("should block sync evaluate() while async evaluation is pending", async () => {
     const gateState: { release: () => void } = { release: () => {} };
     const gate = new Promise<void>((resolve) => {
