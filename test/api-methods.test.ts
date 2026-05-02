@@ -572,6 +572,56 @@ describe("Interpreter", () => {
         interpreter.evaluate("counter = 5;");
         expect(interpreter.getScope().counter).toBe(5);
       });
+
+      it("should resolve getter-backed module imports to their current values", async () => {
+        const capturedScopes: Array<Record<string, any>> = [];
+        const files = new Map<string, string>([
+          [
+            "counter.js",
+            `
+              export let value = 1;
+              export function setValue(next) {
+                value = next;
+              }
+            `,
+          ],
+        ]);
+
+        const interpreter = new Interpreter({
+          globals: {
+            captureScope() {
+              capturedScopes.push(interpreter.getScope());
+            },
+          },
+          modules: {
+            enabled: true,
+            resolver: {
+              resolve(specifier) {
+                const code = files.get(specifier);
+                if (!code) {
+                  return null;
+                }
+                return { type: "source", code, path: specifier };
+              },
+            },
+          },
+        });
+
+        await interpreter.evaluateModuleAsync(
+          `
+            import { value, setValue } from "counter.js";
+
+            captureScope();
+            setValue(2);
+            captureScope();
+          `,
+          { path: "main.js" },
+        );
+
+        expect(capturedScopes).toHaveLength(2);
+        expect(capturedScopes[0]?.value).toBe(1);
+        expect(capturedScopes[1]?.value).toBe(2);
+      });
     });
   });
 });

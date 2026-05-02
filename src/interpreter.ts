@@ -3845,7 +3845,7 @@ export class Interpreter {
         for (const [name, entry] of vars) {
           // Don't overwrite variables from inner scopes
           if (!(name in scope)) {
-            scope[name] = (entry as any).value;
+            scope[name] = entry.getter ? env.get(name) : entry.value;
           }
         }
       }
