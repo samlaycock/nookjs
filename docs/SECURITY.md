@@ -470,7 +470,7 @@ const sandbox = createSandbox({
   env: "es2022",
   limits: {
     total: {
-      memoryBytes: 100 * 1024 * 1024, // 100 MB
+      allocationBytes: 100 * 1024 * 1024, // 100 MB cumulative allocation budget
       iterations: 1_000_000, // 1M iterations
       functionCalls: 10_000, // 10K calls
       evaluations: 100, // 100 evaluations
@@ -491,6 +491,7 @@ const stats = sandbox.resources();
 console.log(stats);
 /*
 {
+  allocationBytes: 24576,
   memoryBytes: 24576,
   iterations: 10000,
   functionCalls: 3,
@@ -500,6 +501,7 @@ console.log(stats);
   largestEvaluation: { memory: 16384, iterations: 10000 },
   isExhausted: false,
   limitStatus: {
+    maxAllocationBytes: { used: 24576, limit: 104857600, remaining: 104833024 },
     maxTotalMemory: { used: 24576, limit: 104857600, remaining: 104833024 },
     maxTotalIterations: { used: 10000, limit: 1000000, remaining: 990000 },
     ...
@@ -517,7 +519,8 @@ internal `Interpreter` class. See [Internal Classes](INTERNAL_CLASSES.md).
 
 ```typescript
 type ResourceLimits = {
-  maxTotalMemory?: number; // bytes
+  maxAllocationBytes?: number; // bytes (cumulative allocation budget)
+  maxTotalMemory?: number; // legacy alias for maxAllocationBytes
   maxTotalIterations?: number; // loop iterations
   maxFunctionCalls?: number; // total function invocations
   maxCpuTime?: number; // milliseconds (best-effort wall-clock enforcement)
@@ -529,7 +532,8 @@ type ResourceLimits = {
 
 ```typescript
 type ResourceStats = {
-  memoryBytes: number; // current estimated memory
+  allocationBytes: number; // cumulative allocation estimate across evaluations
+  memoryBytes: number; // legacy alias for allocationBytes
   iterations: number; // total loop iterations
   functionCalls: number; // total function calls
   cpuTimeMs: number; // cumulative CPU time (best-effort)
@@ -549,6 +553,9 @@ type ResourceStats = {
   };
 };
 ```
+
+Integrated memory tracking is allocation-based. `memoryBytes` / `allocationBytes` do not represent a
+retained/live heap measurement after garbage collection or sandbox resets.
 
 ### Error Handling
 

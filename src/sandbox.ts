@@ -108,6 +108,7 @@ export interface RunLimits {
 }
 
 export interface TotalLimits {
+  readonly allocationBytes?: number;
   readonly memoryBytes?: number;
   readonly iterations?: number;
   readonly functionCalls?: number;
@@ -334,6 +335,7 @@ const hasTotalLimits = (limits?: TotalLimits): boolean => {
   }
 
   return (
+    limits.allocationBytes !== undefined ||
     limits.memoryBytes !== undefined ||
     limits.iterations !== undefined ||
     limits.functionCalls !== undefined ||
@@ -574,8 +576,17 @@ const applyTotalLimits = (interpreter: Interpreter, limits?: TotalLimits): void 
     return;
   }
 
-  if (limits.memoryBytes !== undefined) {
-    interpreter.setResourceLimit("maxTotalMemory", limits.memoryBytes);
+  if (
+    limits.allocationBytes !== undefined &&
+    limits.memoryBytes !== undefined &&
+    limits.allocationBytes !== limits.memoryBytes
+  ) {
+    throw new Error("limits.total.memoryBytes and limits.total.allocationBytes must match");
+  }
+
+  const allocationBytes = limits.allocationBytes ?? limits.memoryBytes;
+  if (allocationBytes !== undefined) {
+    interpreter.setResourceLimit("maxAllocationBytes", allocationBytes);
   }
   if (limits.iterations !== undefined) {
     interpreter.setResourceLimit("maxTotalIterations", limits.iterations);

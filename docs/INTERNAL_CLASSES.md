@@ -85,14 +85,14 @@ import { ResourceTracker } from "nookjs";
 
 const tracker = new ResourceTracker({
   limits: {
-    maxTotalMemory: 100 * 1024 * 1024,
+    maxAllocationBytes: 100 * 1024 * 1024,
     maxTotalIterations: 1_000_000,
   },
   historySize: 100,
 });
 
 const stats = tracker.getStats();
-console.log(stats.memoryBytes);
+console.log(stats.allocationBytes);
 ```
 
 ## Errors

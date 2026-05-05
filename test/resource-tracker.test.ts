@@ -31,6 +31,7 @@ describe("Resource Tracking", () => {
 
           const stats = interpreter.getResourceStats();
           expect(stats.evaluations).toBe(1);
+          expect(stats.allocationBytes).toBe(stats.memoryBytes);
         });
 
         test("should track cumulative loop iterations", () => {
@@ -290,6 +291,23 @@ describe("Resource Tracking", () => {
             used: 2,
             limit: 10,
             remaining: 8,
+          });
+        });
+
+        test("should allow explicit allocation budget aliases", () => {
+          const tracker = new ResourceTracker();
+          tracker.setLimit("maxAllocationBytes", 10);
+
+          tracker.beginEvaluation();
+          tracker.endEvaluation(6, 0, 0, 0);
+
+          const stats = tracker.getStats();
+          expect(stats.memoryBytes).toBe(6);
+          expect(stats.allocationBytes).toBe(6);
+          expect(stats.limitStatus.maxAllocationBytes).toEqual({
+            used: 6,
+            limit: 10,
+            remaining: 4,
           });
         });
       });

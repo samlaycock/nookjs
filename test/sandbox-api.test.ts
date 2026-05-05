@@ -610,6 +610,27 @@ describe("Simplified API", () => {
     expect(() => sandbox.runSync("2 + 2")).toThrow("Resource limit exceeded");
   });
 
+  it("should accept allocationBytes as the explicit cumulative memory budget alias", () => {
+    const sandbox = createSandbox({
+      env: "es2022",
+      limits: { total: { allocationBytes: 1_000_000 } },
+    });
+
+    sandbox.runSync("const obj = {}; for (let i = 0; i < 100; i++) obj['key' + i] = i;");
+
+    const resources = sandbox.resources();
+    expect(resources?.allocationBytes).toBe(resources?.memoryBytes);
+  });
+
+  it("should reject conflicting cumulative memory aliases", () => {
+    expect(() =>
+      createSandbox({
+        env: "es2022",
+        limits: { total: { memoryBytes: 1, allocationBytes: 2 } },
+      }),
+    ).toThrow("limits.total.memoryBytes and limits.total.allocationBytes must match");
+  });
+
   it("resources() should return undefined when tracking is disabled", () => {
     const sandbox = createSandbox({ env: "es2022" });
 

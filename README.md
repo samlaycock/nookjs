@@ -503,7 +503,7 @@ allowed (`myHostFunc(...)`), but dangerous/introspective function properties are
 Use multiple controls together:
 
 - Per-run limits (`loops`, `callDepth`, `memoryBytes`)
-- Total limits for cumulative usage (`limits.total`)
+- Total limits for cumulative usage (`limits.total`), including the explicit `allocationBytes` budget alias
 - Async timeout (`timeoutMs`)
 - Optional async cancellation (`AbortSignal`)
 
@@ -539,7 +539,8 @@ and can be disabled/configured.
 ### How can I inspect resource usage?
 
 Use `result: "full"` per call for execution stats, and `sandbox.resources()` for cumulative stats when
-resource tracking is enabled.
+resource tracking is enabled. For memory, `allocationBytes` is the explicit cumulative-allocation field;
+`memoryBytes` remains as a backwards-compatible alias.
 
 ## Limitations
 

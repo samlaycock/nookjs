@@ -2,6 +2,7 @@ import { InterpreterError } from "./errors";
 
 export type ResourceLimits = {
   maxTotalMemory?: number;
+  maxAllocationBytes?: number;
   maxTotalIterations?: number;
   maxFunctionCalls?: number;
   maxCpuTime?: number;
@@ -9,6 +10,7 @@ export type ResourceLimits = {
 };
 
 export type ResourceStats = {
+  allocationBytes: number;
   memoryBytes: number;
   iterations: number;
   functionCalls: number;
@@ -69,6 +71,7 @@ export class ResourceTracker {
   constructor(options?: { limits?: ResourceLimits; historySize?: number }) {
     if (options?.limits) {
       this.limits = { ...options.limits };
+      this.syncMemoryLimitAliases();
     }
     this.historySize = options?.historySize ?? 100;
   }
@@ -83,6 +86,7 @@ export class ResourceTracker {
       let used = 0;
       switch (key) {
         case "maxTotalMemory":
+        case "maxAllocationBytes":
           used = this.cumulativeMemory;
           break;
         case "maxTotalIterations":
@@ -107,6 +111,7 @@ export class ResourceTracker {
     }
 
     return {
+      allocationBytes: this.cumulativeMemory,
       memoryBytes: this.cumulativeMemory,
       iterations: this.cumulativeIterations,
       functionCalls: this.cumulativeFunctionCalls,
@@ -157,6 +162,7 @@ export class ResourceTracker {
 
   setLimit(key: keyof ResourceLimits, value: number): void {
     this.limits[key] = value;
+    this.syncMemoryLimitAliases();
   }
 
   beginEvaluation(): void {
@@ -227,6 +233,17 @@ export class ResourceTracker {
         this.exhaustedLimit = key;
         return;
       }
+    }
+  }
+
+  private syncMemoryLimitAliases(): void {
+    const allocationLimit = this.limits.maxAllocationBytes;
+    const totalMemoryLimit = this.limits.maxTotalMemory;
+
+    if (allocationLimit !== undefined) {
+      this.limits.maxTotalMemory = allocationLimit;
+    } else if (totalMemoryLimit !== undefined) {
+      this.limits.maxAllocationBytes = totalMemoryLimit;
     }
   }
 }

@@ -26,3 +26,12 @@ void ({} as AssertSandboxValue);
 void ({} as AssertSandboxFull);
 void ({} as AssertOneOffValue);
 void ({} as AssertOneOffFull);
+
+createSandbox({
+  env: "es2022",
+  limits: {
+    total: {
+      allocationBytes: 1024,
+    },
+  },
+});

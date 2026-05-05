@@ -2480,6 +2480,7 @@ export type ExecutionStats = {
  */
 export type ResourceLimits = {
   maxTotalMemory?: number;
+  maxAllocationBytes?: number;
   maxTotalIterations?: number;
   maxFunctionCalls?: number;
   maxCpuTime?: number;
@@ -2490,6 +2491,7 @@ export type ResourceLimits = {
  * Resource statistics from integrated tracking
  */
 export type ResourceStats = {
+  allocationBytes: number;
   memoryBytes: number;
   iterations: number;
   functionCalls: number;
