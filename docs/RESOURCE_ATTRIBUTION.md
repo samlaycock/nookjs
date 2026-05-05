@@ -22,7 +22,7 @@ const sandbox = createSandbox({
   limits: {
     total: {
       evaluations: 100,
-      memoryBytes: 50 * 1024 * 1024,
+      allocationBytes: 50 * 1024 * 1024,
     },
   },
 });
@@ -46,7 +46,7 @@ const sandbox = createSandbox({
   env: "es2022",
   limits: {
     total: {
-      memoryBytes: 100 * 1024 * 1024,
+      allocationBytes: 100 * 1024 * 1024,
       iterations: 1_000_000,
       functionCalls: 10_000,
       evaluations: 100,
@@ -64,7 +64,7 @@ try {
 }
 
 const stats = sandbox.resources();
-console.log(`Memory used: ${stats?.memoryBytes} bytes`);
+console.log(`Allocated bytes so far: ${stats?.allocationBytes} bytes`);
 ```
 
 For low-level resource APIs, see [Internal Classes](INTERNAL_CLASSES.md).
@@ -78,7 +78,7 @@ import { ResourceTracker, ResourceExhaustedError } from "nookjs";
 
 const tracker = new ResourceTracker({
   limits: {
-    maxTotalMemory: 100 * 1024 * 1024,
+    maxAllocationBytes: 100 * 1024 * 1024,
     maxTotalIterations: 1000000,
     maxFunctionCalls: 10000,
     maxCpuTime: 30000,
@@ -100,8 +100,8 @@ if (tracker.isExhausted()) {
 tracker.reset();
 
 // Get/set individual limits
-tracker.setLimit("maxTotalMemory", 200 * 1024 * 1024);
-const memLimit = tracker.getLimit("maxTotalMemory");
+tracker.setLimit("maxAllocationBytes", 200 * 1024 * 1024);
+const memLimit = tracker.getLimit("maxAllocationBytes");
 
 // Get evaluation history
 const history = tracker.getHistory();
@@ -115,7 +115,8 @@ const history = tracker.getHistory();
 
 ```typescript
 type ResourceLimits = {
-  maxTotalMemory?: number; // bytes (cumulative)
+  maxAllocationBytes?: number; // bytes (cumulative allocation budget)
+  maxTotalMemory?: number; // legacy alias for maxAllocationBytes
   maxTotalIterations?: number; // loop iterations (cumulative)
   maxFunctionCalls?: number; // function invocations (cumulative)
   maxCpuTime?: number; // milliseconds (best-effort wall-clock enforcement)
@@ -127,7 +128,8 @@ type ResourceLimits = {
 
 ```typescript
 type ResourceStats = {
-  memoryBytes: number; // current estimated memory
+  allocationBytes: number; // cumulative allocation estimate across evaluations
+  memoryBytes: number; // legacy alias for allocationBytes
   iterations: number; // total loop iterations
   functionCalls: number; // total function calls
   cpuTimeMs: number; // cumulative CPU time
@@ -147,6 +149,9 @@ type ResourceStats = {
   };
 };
 ```
+
+`memoryBytes` and `maxTotalMemory` remain available for compatibility, but they describe cumulative
+allocation accounting rather than retained/live memory. A retained-memory quota is not currently exposed.
 
 ### ResourceHistoryEntry
 
@@ -183,7 +188,7 @@ function createPluginSandbox(pluginId: string, memoryLimit: number) {
     globals: getPluginGlobals(pluginId),
     limits: {
       total: {
-        memoryBytes: memoryLimit,
+        allocationBytes: memoryLimit,
         evaluations: 1000,
       },
     },
@@ -197,7 +202,7 @@ const plugins = {
 
 await plugins.payment.run(paymentCode);
 const stats = plugins.payment.resources();
-console.log(`Payment plugin memory: ${stats?.memoryBytes} bytes`);
+console.log(`Payment plugin allocation budget used: ${stats?.allocationBytes} bytes`);
 ```
 
 ### Educational Platforms

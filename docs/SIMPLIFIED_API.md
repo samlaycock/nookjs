@@ -27,7 +27,7 @@ const sandbox = createSandbox({
   },
   limits: {
     perRun: { loops: 1_000_000, callDepth: 200 },
-    total: { memoryBytes: 50 * 1024 * 1024 },
+    total: { allocationBytes: 50 * 1024 * 1024 },
   },
   policy: { errors: "safe" },
 });
@@ -105,10 +105,14 @@ const sandbox = createSandbox({
   env: "es2022",
   limits: {
     perRun: { loops: 100_000, callDepth: 200, memoryBytes: 2_000_000 },
-    total: { evaluations: 100, memoryBytes: 50_000_000 },
+    total: { evaluations: 100, allocationBytes: 50_000_000 },
   },
 });
 ```
+
+`limits.total` tracks cumulative allocation estimates across evaluations, not retained/live memory.
+Use `allocationBytes` for the explicit name. `memoryBytes` remains supported as a backwards-compatible
+alias for the same cumulative budget.
 
 ### `timeoutMs`
 
