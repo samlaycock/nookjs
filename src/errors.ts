@@ -208,6 +208,21 @@ export class FeatureError extends InterpreterError {
   }
 }
 
+export class ExecutionAbortedError extends InterpreterError {
+  constructor(options?: {
+    line?: number;
+    column?: number;
+    endLine?: number;
+    endColumn?: number;
+    code?: ErrorCode;
+    sourceCode?: string;
+    callStack?: StackFrame[];
+  }) {
+    super("Execution aborted", options);
+    this.name = "ExecutionAbortedError";
+  }
+}
+
 export function getSourceLine(sourceCode: string, line: number): string | null {
   const lines = sourceCode.split("\n");
   if (line < 1 || line > lines.length) {

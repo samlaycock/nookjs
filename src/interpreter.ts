@@ -31,7 +31,7 @@ import {
   isEcmaBuiltinInstancePropertyAvailable,
   type EcmaPresetVersion,
 } from "./ecmascript-builtins";
-import { InterpreterError, SecurityError, ErrorCode } from "./errors";
+import { ExecutionAbortedError, InterpreterError, SecurityError, ErrorCode } from "./errors";
 import { ModuleSystem } from "./modules";
 import {
   ReadOnlyProxy,
@@ -2798,7 +2798,7 @@ export class Interpreter {
    */
   private async acquireEvaluationMutex(signal?: AbortSignal): Promise<() => void> {
     if (signal?.aborted) {
-      throw new InterpreterError("Execution aborted");
+      throw new ExecutionAbortedError();
     }
 
     const previousQueue = this.evaluationMutexQueue;
@@ -2824,7 +2824,7 @@ export class Interpreter {
       let onAbort: (() => void) | undefined;
       try {
         await new Promise<void>((resolve, reject) => {
-          onAbort = () => reject(new InterpreterError("Execution aborted"));
+          onAbort = () => reject(new ExecutionAbortedError());
           signal.addEventListener("abort", onAbort, { once: true });
           previousQueue.then(resolve, reject);
         });
@@ -3098,7 +3098,7 @@ export class Interpreter {
       }
     }
     if (abortSignal?.aborted) {
-      throw new InterpreterError("Execution aborted");
+      throw new ExecutionAbortedError();
     }
 
     if (maxCpuTime !== undefined) {
@@ -3124,10 +3124,7 @@ export class Interpreter {
   }
 
   private shouldRethrowExecutionControlError(error: unknown): boolean {
-    return (
-      error instanceof ResourceExhaustedError ||
-      (error instanceof InterpreterError && error.message === "Execution aborted")
-    );
+    return error instanceof ResourceExhaustedError || error instanceof ExecutionAbortedError;
   }
 
   /**
@@ -3445,7 +3442,7 @@ export class Interpreter {
       this.setCurrentAbortSignal(options?.signal);
       const abortSignal = this.getCurrentAbortSignal();
       if (abortSignal?.aborted) {
-        throw new InterpreterError("Execution aborted");
+        throw new ExecutionAbortedError();
       }
 
       const ast = this.parseAndValidate(input, options);
@@ -3970,7 +3967,7 @@ export class Interpreter {
       this.setCurrentAbortSignal(options.signal);
       const abortSignal = this.getCurrentAbortSignal();
       if (abortSignal?.aborted) {
-        throw new InterpreterError("Execution aborted");
+        throw new ExecutionAbortedError();
       }
 
       const ast = this.parseModuleAndValidate(code, options);
@@ -13956,5 +13953,5 @@ export class Interpreter {
   }
 }
 
-// Re-export InterpreterError for use in tests and public API
-export { InterpreterError };
+// Re-export interpreter-facing error types for use in tests and public API
+export { ExecutionAbortedError, InterpreterError };
