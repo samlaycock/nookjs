@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 
-import { InterpreterError } from "../src/errors";
+import { ExecutionAbortedError, InterpreterError } from "../src/errors";
 import { Interpreter } from "../src/interpreter";
 
 describe("Execution Control", () => {
@@ -512,6 +512,7 @@ describe("Execution Control", () => {
           });
           expect().fail("Expected error");
         } catch (e: any) {
+          expect(e).toBeInstanceOf(ExecutionAbortedError);
           expect(e.message).toBe("Execution aborted");
         }
 

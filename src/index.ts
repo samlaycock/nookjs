@@ -15,6 +15,7 @@ export type {
 } from "./interpreter";
 
 export {
+  ExecutionAbortedError,
   InterpreterError as InterpreterErrorBase,
   ParseError as ParseErrorBase,
   RuntimeError,
