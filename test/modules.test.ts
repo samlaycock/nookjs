@@ -314,7 +314,7 @@ describe("Module System", () => {
         { path: "main.js" },
       );
 
-      expect(resolveCount).toBe(2);
+      expect(resolveCount).toBe(1);
       expect(exports.values).toEqual([1, 1]);
     });
 
@@ -493,7 +493,7 @@ describe("Module System", () => {
   });
 
   describe("Module Cache", () => {
-    test("should cache resolved modules by path after authorization", async () => {
+    test("should cache resolved modules by path after first resolution", async () => {
       let resolveCount = 0;
 
       const resolver: ModuleResolver = {
@@ -517,7 +517,7 @@ describe("Module System", () => {
         { path: "main.js" },
       );
 
-      expect(resolveCount).toBe(2);
+      expect(resolveCount).toBe(1);
     });
 
     test("should clear module cache", async () => {
@@ -1947,7 +1947,7 @@ describe("Module System", () => {
         { path: "main.js" },
       );
 
-      expect(evalCount).toBe(2);
+      expect(evalCount).toBe(1);
     });
 
     test("should maintain module state across imports", async () => {
@@ -4134,7 +4134,7 @@ describe("Module System", () => {
       ).rejects.toThrow("Cannot find module");
     });
 
-    test("should allow same importer to re-import same specifier (cache works for same context)", async () => {
+    test("should reuse cached module path for same importer when authorize hook is not implemented", async () => {
       let resolveCount = 0;
       const resolver: ModuleResolver = {
         resolve(specifier) {
@@ -4159,7 +4159,7 @@ describe("Module System", () => {
         { path: "main.js" },
       );
 
-      expect(resolveCount).toBe(2);
+      expect(resolveCount).toBe(1);
     });
 
     test("should use authorize hook to avoid repeated resolution for cached imports", async () => {

@@ -523,17 +523,16 @@ export class ModuleSystem {
     }
 
     try {
-      // Build resolver context. Without authorize(), resolve() stays the first gate
-      // so importer-aware access control can remain embedded in resolver logic.
-      // With authorize(), we can reuse a cached resolved path for the same context
-      // while still re-checking authorization before returning cached records.
+      // Build resolver context. Cached resolved paths are keyed by full resolution
+      // context so the fast path only applies when the same specifier/importer chain
+      // has already been resolved successfully.
       const context: ModuleResolverContext = {
         specifier,
         importer,
         importerChain: this.getImporterChain(),
       };
 
-      if (this.options.cache && this.options.resolver.authorize) {
+      if (this.options.cache) {
         const cachedPath = this.getResolvedPathForContext(
           specifier,
           importer,
@@ -542,14 +541,16 @@ export class ModuleSystem {
         if (cachedPath !== undefined) {
           const existingByPath = this.cacheByPath.get(cachedPath);
           if (existingByPath) {
-            const isAuthorized = await this.options.resolver.authorize(
-              specifier,
-              importer,
-              cachedPath,
-              context,
-            );
-            if (!isAuthorized) {
-              return null;
+            if (this.options.resolver.authorize) {
+              const isAuthorized = await this.options.resolver.authorize(
+                specifier,
+                importer,
+                cachedPath,
+                context,
+              );
+              if (!isAuthorized) {
+                return null;
+              }
             }
 
             this.registerSpecifierPath(specifier, importer, cachedPath);
