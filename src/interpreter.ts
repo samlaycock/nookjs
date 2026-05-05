@@ -3082,18 +3082,20 @@ export class Interpreter {
    * Called at the start of each loop iteration and periodically during evaluation.
    * Only effective during async evaluation where the event loop can process signal changes.
    */
-  private checkExecutionLimits(): void {
+  private checkExecutionLimits(force = false): void {
     const abortSignal = this.getCurrentAbortSignal();
     const tracker = this.integratedResourceTracker;
     const maxCpuTime = tracker?.getLimit("maxCpuTime");
     if (!abortSignal && maxCpuTime === undefined) {
       return;
     }
-    // Reduce overhead by checking only every N nodes.
-    this.executionCheckCounter =
-      (this.executionCheckCounter + 1) & Interpreter.EXECUTION_CHECK_MASK;
-    if (this.executionCheckCounter !== 0) {
-      return;
+    if (!force) {
+      // Reduce overhead by checking only every N nodes.
+      this.executionCheckCounter =
+        (this.executionCheckCounter + 1) & Interpreter.EXECUTION_CHECK_MASK;
+      if (this.executionCheckCounter !== 0) {
+        return;
+      }
     }
     if (abortSignal?.aborted) {
       throw new InterpreterError("Execution aborted");
@@ -3105,6 +3107,27 @@ export class Interpreter {
         throw new ResourceExhaustedError("maxCpuTime", cpuTimeMs, maxCpuTime);
       }
     }
+  }
+
+  private withImmediateExecutionLimitCheck<T>(operation: () => T): T {
+    this.checkExecutionLimits(true);
+    const result = operation();
+    this.checkExecutionLimits(true);
+    return result;
+  }
+
+  private async withImmediateExecutionLimitCheckAsync<T>(operation: () => Promise<T>): Promise<T> {
+    this.checkExecutionLimits(true);
+    const result = await operation();
+    this.checkExecutionLimits(true);
+    return result;
+  }
+
+  private shouldRethrowExecutionControlError(error: unknown): boolean {
+    return (
+      error instanceof ResourceExhaustedError ||
+      (error instanceof InterpreterError && error.message === "Execution aborted")
+    );
   }
 
   /**
@@ -5334,10 +5357,14 @@ export class Interpreter {
         : this.executeSandboxFunction(tag, args, undefined);
     }
     if (tag instanceof HostFunctionValue) {
-      return tag.hostFunc(...args);
+      return isAsync
+        ? this.withImmediateExecutionLimitCheckAsync(async () => tag.hostFunc(...args))
+        : this.withImmediateExecutionLimitCheck(() => tag.hostFunc(...args));
     }
     if (typeof tag === "function") {
-      return tag(...args);
+      return isAsync
+        ? this.withImmediateExecutionLimitCheckAsync(async () => tag(...args))
+        : this.withImmediateExecutionLimitCheck(() => tag(...args));
     }
     throw new InterpreterError("Tag expression is not a function");
   }
@@ -6559,9 +6586,14 @@ export class Interpreter {
   ): any {
     try {
       const wrappedArgs = constructor.skipArgWrapping ? args : this.wrapArgsForHost(args, isAsync);
-      const result = Reflect.construct(constructor.hostFunc, wrappedArgs);
+      const result = this.withImmediateExecutionLimitCheck(() =>
+        Reflect.construct(constructor.hostFunc, wrappedArgs),
+      );
       return ReadOnlyProxy.wrap(result, constructor.name, this.securityOptions);
     } catch (error: any) {
+      if (this.shouldRethrowExecutionControlError(error)) {
+        throw error;
+      }
       throw new InterpreterError(
         this.formatHostError(`Constructor '${constructor.name}' threw error`, error),
       );
@@ -7742,7 +7774,7 @@ export class Interpreter {
 
       // Iterate using the iterator protocol
       while (true) {
-        const iterResult = iterator.next();
+        const iterResult = this.withImmediateExecutionLimitCheck(() => iterator.next());
         if (iterResult.done) {
           break;
         }
@@ -7791,7 +7823,7 @@ export class Interpreter {
         if (isControlFlowKind(result, "break")) {
           // Call iterator.return() to allow cleanup (e.g., finally blocks in generators)
           if (typeof iterator.return === "function") {
-            iterator.return();
+            this.withImmediateExecutionLimitCheck(() => iterator.return!());
           }
           // Labeled break targeting a different label - propagate
           if (result.label !== null && result.label !== myLabel) {
@@ -7802,7 +7834,7 @@ export class Interpreter {
         if (isControlFlowKind(result, "return")) {
           // Call iterator.return() to allow cleanup
           if (typeof iterator.return === "function") {
-            iterator.return();
+            this.withImmediateExecutionLimitCheck(() => iterator.return!());
           }
           return result;
         }
@@ -7813,7 +7845,7 @@ export class Interpreter {
           result.label !== myLabel
         ) {
           if (typeof iterator.return === "function") {
-            iterator.return();
+            this.withImmediateExecutionLimitCheck(() => iterator.return!());
           }
           return result;
         }
@@ -8639,9 +8671,12 @@ export class Interpreter {
 
       // Call the host function
       try {
-        const result = callee.hostFunc(...wrappedArgs);
+        const result = this.withImmediateExecutionLimitCheck(() => callee.hostFunc(...wrappedArgs));
         return this.wrapHostReturnValue(result, callee.name);
       } catch (error: any) {
+        if (this.shouldRethrowExecutionControlError(error)) {
+          throw error;
+        }
         // If rethrowErrors is true, propagate the error directly (used by generator.throw())
         if (callee.rethrowErrors) {
           throw error;
@@ -8655,7 +8690,9 @@ export class Interpreter {
     // Handle native JavaScript functions (e.g., bound class methods)
     if (typeof callee === "function") {
       const args = this.evaluateArguments(node.arguments);
-      return thisValue !== undefined ? callee.call(thisValue, ...args) : callee(...args);
+      return this.withImmediateExecutionLimitCheck(() =>
+        thisValue !== undefined ? callee.call(thisValue, ...args) : callee(...args),
+      );
     }
 
     if (callee instanceof ClassValue) {
@@ -9634,7 +9671,7 @@ export class Interpreter {
    * Wraps functions as HostFunctionValue so they can be called safely from the sandbox.
    */
   private getNativePropertyValue(object: any, property: string): any {
-    const value = (object as any)[property];
+    const value = this.withImmediateExecutionLimitCheck(() => (object as any)[property]);
     if (typeof value === "function") {
       if (this.isPrimitiveValue(object)) {
         const cache = this.getPrimitiveMethodEntries(object);
@@ -10181,12 +10218,14 @@ export class Interpreter {
       const wrappedArgs = callee.skipArgWrapping ? args : this.wrapArgsForHost(args, true);
 
       try {
-        const result = callee.hostFunc(...wrappedArgs);
         // If async host function, await the promise
         if (callee.isAsync) {
-          const resolved = await result;
+          const resolved = await this.withImmediateExecutionLimitCheckAsync(async () =>
+            callee.hostFunc(...wrappedArgs),
+          );
           return this.wrapHostReturnValue(resolved, callee.name);
         }
+        const result = this.withImmediateExecutionLimitCheck(() => callee.hostFunc(...wrappedArgs));
         const wrapped = this.wrapHostReturnValue(result, callee.name);
         // Wrap Promise results in RawValue to prevent auto-awaiting by async/await
         // This preserves Promise identity for chaining (e.g., Promise.resolve(1).then(...))
@@ -10195,6 +10234,9 @@ export class Interpreter {
         }
         return wrapped;
       } catch (error: any) {
+        if (this.shouldRethrowExecutionControlError(error)) {
+          throw error;
+        }
         // If rethrowErrors is true, propagate the error directly (used by generator.throw())
         if (callee.rethrowErrors) {
           throw error;
@@ -10209,8 +10251,9 @@ export class Interpreter {
     if (typeof callee === "function") {
       const args = await this.evaluateArgumentsAsync(node.arguments);
       const wrappedArgs = this.wrapArgsForHost(args, true);
-      const result =
-        thisValue !== undefined ? callee.call(thisValue, ...wrappedArgs) : callee(...wrappedArgs);
+      const result = this.withImmediateExecutionLimitCheck(() =>
+        thisValue !== undefined ? callee.call(thisValue, ...wrappedArgs) : callee(...wrappedArgs),
+      );
       // Wrap Promise results in RawValue to prevent auto-awaiting
       if (result instanceof Promise) {
         return new RawValue(result);
@@ -11143,8 +11186,10 @@ export class Interpreter {
       // Iterate using the iterator protocol
       while (true) {
         const iterResult = shouldAwait
-          ? await (iterator as AsyncIterator<any>).next()
-          : (iterator as Iterator<any>).next();
+          ? await this.withImmediateExecutionLimitCheckAsync(async () =>
+              (iterator as AsyncIterator<any>).next(),
+            )
+          : this.withImmediateExecutionLimitCheck(() => (iterator as Iterator<any>).next());
         if (iterResult.done) {
           break;
         }
@@ -11188,9 +11233,11 @@ export class Interpreter {
           // Call iterator.return() to allow cleanup (e.g., finally blocks in generators)
           if (typeof iterator.return === "function") {
             if (shouldAwait) {
-              await (iterator as AsyncIterator<any>).return?.();
+              await this.withImmediateExecutionLimitCheckAsync(async () =>
+                (iterator as AsyncIterator<any>).return?.(),
+              );
             } else {
-              (iterator as Iterator<any>).return?.();
+              this.withImmediateExecutionLimitCheck(() => (iterator as Iterator<any>).return?.());
             }
           }
           // Labeled break targeting a different label - propagate
@@ -11203,9 +11250,11 @@ export class Interpreter {
           // Call iterator.return() to allow cleanup
           if (typeof iterator.return === "function") {
             if (shouldAwait) {
-              await (iterator as AsyncIterator<any>).return?.();
+              await this.withImmediateExecutionLimitCheckAsync(async () =>
+                (iterator as AsyncIterator<any>).return?.(),
+              );
             } else {
-              (iterator as Iterator<any>).return?.();
+              this.withImmediateExecutionLimitCheck(() => (iterator as Iterator<any>).return?.());
             }
           }
           return result;
@@ -11218,9 +11267,11 @@ export class Interpreter {
         ) {
           if (typeof iterator.return === "function") {
             if (shouldAwait) {
-              await (iterator as AsyncIterator<any>).return?.();
+              await this.withImmediateExecutionLimitCheckAsync(async () =>
+                (iterator as AsyncIterator<any>).return?.(),
+              );
             } else {
-              (iterator as Iterator<any>).return?.();
+              this.withImmediateExecutionLimitCheck(() => (iterator as Iterator<any>).return?.());
             }
           }
           return result;

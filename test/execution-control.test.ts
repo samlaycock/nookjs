@@ -473,6 +473,31 @@ describe("Execution Control", () => {
         ).rejects.toThrow("Execution aborted");
       });
 
+      test("should abort immediately after a host call aborts the active signal", async () => {
+        const controller = new AbortController();
+        const interpreter = new Interpreter({
+          globals: {
+            abortNow: () => {
+              controller.abort();
+              return "aborted";
+            },
+          },
+        });
+
+        await expect(
+          interpreter.evaluateAsync(
+            `
+              async function run() {
+                abortNow();
+                return 1;
+              }
+              run()
+            `,
+            { signal: controller.signal },
+          ),
+        ).rejects.toThrow("Execution aborted");
+      });
+
       test("signal should be per-call", async () => {
         const interpreter = new Interpreter();
         const controller1 = new AbortController();
