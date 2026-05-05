@@ -137,6 +137,40 @@ describe("Resource Tracking", () => {
           }
         });
 
+        test("should abort within a single host call when maxCpuTime is exceeded", () => {
+          let currentTime = 0;
+          const interpreter = new Interpreter({
+            ...ES2022,
+            resourceTracking: true,
+            globals: {
+              burnCpuTime: () => {
+                currentTime += 20;
+                return "done";
+              },
+            },
+          });
+          interpreter.setResourceLimit("maxCpuTime", 15);
+
+          const originalNow = Object.getOwnPropertyDescriptor(performance, "now");
+
+          Object.defineProperty(performance, "now", {
+            configurable: true,
+            value: () => currentTime,
+          });
+
+          try {
+            expect(() => {
+              interpreter.evaluate(`
+                burnCpuTime();
+              `);
+            }).toThrow(ResourceExhaustedError);
+          } finally {
+            if (originalNow) {
+              Object.defineProperty(performance, "now", originalNow);
+            }
+          }
+        });
+
         test("should throw when maxTotalIterations exceeded", () => {
           const interpreter = new Interpreter({
             ...ES2022,
