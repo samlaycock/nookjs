@@ -58,6 +58,7 @@ export class ResourceTracker {
   private historySize: number;
   private history: ResourceHistoryEntry[] = [];
   private evaluationNumber = 0;
+  private preferredMemoryLimitKey: "maxAllocationBytes" | "maxTotalMemory" = "maxAllocationBytes";
 
   private cumulativeMemory = 0;
   private cumulativeIterations = 0;
@@ -70,8 +71,14 @@ export class ResourceTracker {
 
   constructor(options?: { limits?: ResourceLimits; historySize?: number }) {
     if (options?.limits) {
+      this.assertMemoryLimitAliasesMatch(
+        options.limits.maxAllocationBytes,
+        options.limits.maxTotalMemory,
+      );
       this.limits = { ...options.limits };
-      this.syncMemoryLimitAliases();
+      this.preferredMemoryLimitKey =
+        options.limits.maxAllocationBytes !== undefined ? "maxAllocationBytes" : "maxTotalMemory";
+      this.syncMemoryLimitAliases(this.preferredMemoryLimitKey);
     }
     this.historySize = options?.historySize ?? 100;
   }
@@ -162,7 +169,10 @@ export class ResourceTracker {
 
   setLimit(key: keyof ResourceLimits, value: number): void {
     this.limits[key] = value;
-    this.syncMemoryLimitAliases();
+    if (key === "maxAllocationBytes" || key === "maxTotalMemory") {
+      this.preferredMemoryLimitKey = key;
+      this.syncMemoryLimitAliases(key);
+    }
   }
 
   beginEvaluation(): void {
@@ -227,7 +237,19 @@ export class ResourceTracker {
   private checkLimits(): void {
     const stats = this.getStats();
 
+    const preferredMemoryLimitStatus = stats.limitStatus[this.preferredMemoryLimitKey];
+    if (
+      preferredMemoryLimitStatus &&
+      preferredMemoryLimitStatus.used >= preferredMemoryLimitStatus.limit
+    ) {
+      this.exhaustedLimit = this.preferredMemoryLimitKey;
+      return;
+    }
+
     for (const key of Object.keys(stats.limitStatus) as (keyof ResourceLimits)[]) {
+      if (key === "maxAllocationBytes" || key === "maxTotalMemory") {
+        continue;
+      }
       const status = stats.limitStatus[key];
       if (status && status.used >= status.limit) {
         this.exhaustedLimit = key;
@@ -236,14 +258,28 @@ export class ResourceTracker {
     }
   }
 
-  private syncMemoryLimitAliases(): void {
+  private syncMemoryLimitAliases(lastWritten?: "maxAllocationBytes" | "maxTotalMemory"): void {
     const allocationLimit = this.limits.maxAllocationBytes;
     const totalMemoryLimit = this.limits.maxTotalMemory;
 
-    if (allocationLimit !== undefined) {
+    if (lastWritten === "maxAllocationBytes" && allocationLimit !== undefined) {
+      this.limits.maxTotalMemory = allocationLimit;
+    } else if (lastWritten === "maxTotalMemory" && totalMemoryLimit !== undefined) {
+      this.limits.maxAllocationBytes = totalMemoryLimit;
+    } else if (allocationLimit !== undefined) {
       this.limits.maxTotalMemory = allocationLimit;
     } else if (totalMemoryLimit !== undefined) {
       this.limits.maxAllocationBytes = totalMemoryLimit;
+    }
+  }
+
+  private assertMemoryLimitAliasesMatch(allocationLimit?: number, totalMemoryLimit?: number): void {
+    if (
+      allocationLimit !== undefined &&
+      totalMemoryLimit !== undefined &&
+      allocationLimit !== totalMemoryLimit
+    ) {
+      throw new Error("maxAllocationBytes and maxTotalMemory must match");
     }
   }
 }
