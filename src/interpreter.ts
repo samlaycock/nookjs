@@ -3994,9 +3994,18 @@ export class Interpreter {
    * @param importMetaExtensions - Additional resolver-provided import.meta properties
    * @returns The module's exported values
    */
-  private createImportMetaUrl(path: string): string {
+  private createImportMetaUrl(path: string, resolverUrl?: unknown): string {
     if (/^[A-Za-z][A-Za-z\d+.-]*:/.test(path)) {
       return path;
+    }
+
+    // For relative paths, prefer a canonical URL provided by the resolver.
+    if (!path.startsWith("/") && typeof resolverUrl === "string") {
+      try {
+        return new URL(resolverUrl).href;
+      } catch {
+        // Fall through to default behavior
+      }
     }
 
     try {
@@ -4011,7 +4020,7 @@ export class Interpreter {
     importMetaExtensions?: Record<string, any>,
   ): Record<string, any> {
     const baseMeta: Record<string, any> = {
-      url: this.createImportMetaUrl(path),
+      url: this.createImportMetaUrl(path, importMetaExtensions?.url),
     };
 
     if (importMetaExtensions && typeof importMetaExtensions === "object") {
