@@ -310,6 +310,24 @@ describe("Resource Tracking", () => {
             remaining: 4,
           });
         });
+
+        test("should preserve the configured memory alias when the budget is exhausted", () => {
+          const allocationTracker = new ResourceTracker();
+          allocationTracker.setLimit("maxAllocationBytes", 5);
+
+          allocationTracker.beginEvaluation();
+          allocationTracker.endEvaluation(5, 0, 0, 0);
+
+          expect(allocationTracker.getExhaustedLimit()).toBe("maxAllocationBytes");
+
+          const totalMemoryTracker = new ResourceTracker();
+          totalMemoryTracker.setLimit("maxTotalMemory", 5);
+
+          totalMemoryTracker.beginEvaluation();
+          totalMemoryTracker.endEvaluation(5, 0, 0, 0);
+
+          expect(totalMemoryTracker.getExhaustedLimit()).toBe("maxTotalMemory");
+        });
       });
 
       describe("reset functionality", () => {
@@ -412,6 +430,20 @@ describe("Resource Tracking", () => {
           interpreter.setResourceLimit("maxTotalMemory", 2048);
 
           expect(interpreter.getResourceLimit("maxTotalMemory")).toBe(2048);
+        });
+
+        test("should let the last-written memory alias win", () => {
+          const tracker = new ResourceTracker();
+          tracker.setLimit("maxAllocationBytes", 100);
+          tracker.setLimit("maxTotalMemory", 200);
+
+          expect(tracker.getLimit("maxAllocationBytes")).toBe(200);
+          expect(tracker.getLimit("maxTotalMemory")).toBe(200);
+
+          tracker.setLimit("maxAllocationBytes", 300);
+
+          expect(tracker.getLimit("maxAllocationBytes")).toBe(300);
+          expect(tracker.getLimit("maxTotalMemory")).toBe(300);
         });
 
         test("should update limits after construction", () => {
@@ -622,6 +654,15 @@ describe("Resource Tracking", () => {
             limits: { maxEvaluations: 10 },
           });
           expect(tracker.getLimit("maxEvaluations")).toBe(10);
+        });
+
+        test("should reject conflicting memory limit aliases at construction", () => {
+          expect(
+            () =>
+              new ResourceTracker({
+                limits: { maxAllocationBytes: 100, maxTotalMemory: 200 },
+              }),
+          ).toThrow("maxAllocationBytes and maxTotalMemory must match");
         });
 
         test("should create tracker with history size", () => {
