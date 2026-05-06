@@ -4131,22 +4131,27 @@ export class Interpreter {
         if (statement.specifiers) {
           for (const specifier of statement.specifiers) {
             if (
-              (specifier.type === "ExportSpecifier" ||
-                specifier.type === "ExportDefaultSpecifier") &&
-              specifier.exported.type === "Identifier"
+              specifier.type === "ExportSpecifier" ||
+              specifier.type === "ExportDefaultSpecifier"
             ) {
-              exportNames.add(specifier.exported.name);
+              // ESTree types the exported name as Identifier, but parsers that
+              // implement ES2022 string export names may emit a Literal node.
+              // Cast defensively so both forms are captured.
+              const exportedNode = specifier.exported as ESTree.Identifier | ESTree.Literal;
+              const exportedName =
+                exportedNode.type === "Identifier" ? exportedNode.name : String(exportedNode.value);
+              exportNames.add(exportedName);
             }
           }
         }
       } else if (statement.type === "ExportDefaultDeclaration") {
         exportNames.add("default");
-      } else if (
-        statement.type === "ExportAllDeclaration" &&
-        statement.exported &&
-        statement.exported.type === "Identifier"
-      ) {
-        exportNames.add(statement.exported.name);
+      } else if (statement.type === "ExportAllDeclaration" && statement.exported) {
+        // Same defensive cast as above.
+        const exportedNode = statement.exported as ESTree.Identifier | ESTree.Literal;
+        const exportedName =
+          exportedNode.type === "Identifier" ? exportedNode.name : String(exportedNode.value);
+        exportNames.add(exportedName);
       }
     }
 
@@ -4268,10 +4273,10 @@ export class Interpreter {
   /**
    * Resolve a module specifier and return its exports, evaluating if needed.
    */
-  private async resolveModuleExports(
+  private async resolveModuleRecordWithExports(
     specifier: string,
     importerPath: string | null,
-  ): Promise<Record<string, any>> {
+  ): Promise<{ record: ModuleRecord; exports: Record<string, any> }> {
     if (!this.moduleSystem) {
       throw new InterpreterError("Module system is not enabled");
     }
@@ -4282,7 +4287,7 @@ export class Interpreter {
     }
 
     if (moduleRecord.status === "initialized") {
-      return moduleRecord.exports;
+      return { record: moduleRecord, exports: moduleRecord.exports };
     }
 
     if (moduleRecord.status === "failed") {
@@ -4292,7 +4297,7 @@ export class Interpreter {
     // Circular import: this module is already being evaluated in the active chain.
     // Reuse in-progress exports to avoid recursive re-entry and depth-limit failures.
     if (this.moduleSystem.getImporterChain().includes(moduleRecord.path)) {
-      return moduleRecord.exports;
+      return { record: moduleRecord, exports: moduleRecord.exports };
     }
 
     try {
@@ -4316,12 +4321,19 @@ export class Interpreter {
         moduleRecord.exports,
       );
       this.moduleSystem.setModuleExports(moduleRecord.path, exports);
-      return exports;
+      return { record: moduleRecord, exports };
     } catch (error) {
       const moduleError = error instanceof Error ? error : new Error(String(error));
       this.moduleSystem.setModuleFailed(moduleRecord.path, moduleError);
       throw error;
     }
+  }
+
+  private async resolveModuleExports(
+    specifier: string,
+    importerPath: string | null,
+  ): Promise<Record<string, any>> {
+    return (await this.resolveModuleRecordWithExports(specifier, importerPath)).exports;
   }
 
   private async evaluateImportDeclaration(
@@ -4551,7 +4563,8 @@ export class Interpreter {
     starExportOrigins: Map<string, StarExportOrigin>,
   ): Promise<void> {
     const specifier = (node.source as ESTree.Literal).value as string;
-    const sourceExports = await this.resolveModuleExports(specifier, currentPath);
+    const { record: sourceRecord, exports: sourceExports } =
+      await this.resolveModuleRecordWithExports(specifier, currentPath);
     const sourceExportsTarget = this.getModuleExportsTarget(sourceExports);
 
     // Handle "export * as namespace from 'module'"
@@ -4567,8 +4580,7 @@ export class Interpreter {
       // Per ESM spec, star re-exports that conflict (same name, different ultimate binding)
       // are ambiguous and must throw. Diamond dependencies (same name, same ultimate
       // binding reachable via multiple paths) are allowed.
-      const sourceRecord = await this.moduleSystem!.resolveModule(specifier, currentPath);
-      const sourcePath = sourceRecord?.path ?? specifier;
+      const sourcePath = sourceRecord.path;
       const sourceStarOrigins = this.moduleSystem!.getModuleStarExportOrigins(sourcePath);
 
       for (const key of Object.keys(sourceExports)) {
