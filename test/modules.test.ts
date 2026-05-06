@@ -4629,5 +4629,99 @@ describe("Module System", () => {
         ),
       ).rejects.toThrow("read-only");
     });
+
+    test("should use resolver-provided url for relative module paths", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "dep.js") {
+            return null;
+          }
+          return {
+            type: "source",
+            code: "export const url = import.meta.url;",
+            path: "dep.js",
+          };
+        },
+        getImportMeta({ path }) {
+          return {
+            url: `https://cdn.example.com/modules/${path}`,
+          };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(
+        `import { url } from "dep.js";
+        export { url };`,
+        { path: "/app/main.js" },
+      );
+
+      expect(exports.url).toBe("https://cdn.example.com/modules/dep.js");
+    });
+
+    test("should ignore resolver-provided url for absolute module paths", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "dep.js") {
+            return null;
+          }
+          return {
+            type: "source",
+            code: "export const url = import.meta.url;",
+            path: "/canonical/dep.js",
+          };
+        },
+        getImportMeta({ path }) {
+          return {
+            url: `https://cdn.example.com${path}`,
+          };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(
+        `import { url } from "dep.js";
+        export { url };`,
+        { path: "/app/main.js" },
+      );
+
+      expect(exports.url).toBe("file:///canonical/dep.js");
+    });
+
+    test("should fall back to file:// url when resolver-provided url is invalid for relative paths", async () => {
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          if (specifier !== "dep.js") {
+            return null;
+          }
+          return {
+            type: "source",
+            code: "export const url = import.meta.url;",
+            path: "dep.js",
+          };
+        },
+        getImportMeta() {
+          return { url: "not a valid url !!!" };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(
+        `import { url } from "dep.js";
+        export { url };`,
+        { path: "/app/main.js" },
+      );
+
+      expect(exports.url).toBe("file:///dep.js");
+    });
   });
 });
