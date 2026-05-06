@@ -584,9 +584,10 @@ const applyTotalLimits = (interpreter: Interpreter, limits?: TotalLimits): void 
     throw new Error("limits.total.memoryBytes and limits.total.allocationBytes must match");
   }
 
-  const allocationBytes = limits.allocationBytes ?? limits.memoryBytes;
-  if (allocationBytes !== undefined) {
-    interpreter.setResourceLimit("maxAllocationBytes", allocationBytes);
+  if (limits.allocationBytes !== undefined) {
+    interpreter.setResourceLimit("maxAllocationBytes", limits.allocationBytes);
+  } else if (limits.memoryBytes !== undefined) {
+    interpreter.setResourceLimit("maxTotalMemory", limits.memoryBytes);
   }
   if (limits.iterations !== undefined) {
     interpreter.setResourceLimit("maxTotalIterations", limits.iterations);
