@@ -1,5 +1,20 @@
 # nookjs
 
+## 0.6.3
+
+### Patch Changes
+
+- 44d6bd2: Throw on ambiguous `export *` conflicts instead of silently using first-wins semantics. When two `export * from` statements in the same module each provide the same binding name from different ultimate sources, an `InterpreterError` is now thrown to match standard ESM behaviour. Diamond-shaped re-export graphs (where the same binding is reachable via multiple paths but originates from a single module) continue to work without error, as they are not ambiguous per the ESM specification.
+- 5dd407f: Route `evaluateSteps()` through the standard evaluation lifecycle so stepping respects per-call validators, globals, and execution limits while preserving integrated resource tracking, cleanup, and normal error enhancement.
+- 8ac5aa2: Preserve importer-aware module introspection when the same specifier resolves to different cached paths, and require importer context for ambiguous specifier-based cache lookups.
+- 18ef2a2: Clarify cumulative memory tracking as an allocation budget and add explicit `allocationBytes` / `maxAllocationBytes` aliases while keeping the legacy memory names for compatibility.
+- 1259239: Enforce `maxEvaluations` before starting an evaluation so a limit of `0` blocks the first `evaluate()` call and evaluation budgets are applied exactly.
+- 28fce9e: Forward custom module resolver `authorize()` hooks through `createSandbox()` so sandbox module execution applies importer-aware access checks consistently with the lower-level interpreter API.
+- a49140c: Allow resolver's `getImportMeta` to provide a canonical `url` for relative module paths. When a resolver returns a relative `path` (e.g. `"dep.js"`) and its `getImportMeta` hook returns a `url` field containing a valid absolute URL, that URL is used as `import.meta.url` instead of the misleading `file:///dep.js` fallback. Absolute paths and URL-scheme paths retain their existing auto-generated URLs and are not affected.
+- 22315fc: Tighten `maxCpuTime` and async abort responsiveness around heavyweight delegated operations by forcing execution-limit checks before and after host/native calls, constructors, native property reads, tagged template invocation, and iterator delegation. Add regression coverage to ensure a single host call can no longer consume CPU budget or trip an `AbortSignal` without the active evaluation failing immediately.
+- a4d76b8: Fix `getScope()` so getter-backed bindings resolve through the normal environment read path, which makes scope inspection report the current value for module imports and other live bindings.
+- 480d9e0: Reuse cached module-path lookups for repeated imports from the same resolution context even when a module resolver does not implement `authorize()`. This removes redundant `resolve()` calls while preserving the existing per-import re-authorization behavior when `authorize()` is present.
+
 ## 0.6.2
 
 ### Patch Changes
