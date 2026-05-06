@@ -20,6 +20,7 @@ import type {
   ModuleOptions,
   ModuleMetadata,
   ModuleRecord,
+  StarExportOrigin,
 } from "./modules";
 import type { NativeUnwrapAllowlistEntry } from "./readonly-proxy";
 
@@ -4067,6 +4068,11 @@ export class Interpreter {
       const exports: Record<string, any> = targetExports ?? {};
       const moduleEnv = new Environment(this.environment);
 
+      // Pre-compute direct export names so star re-exports can detect conflicts correctly.
+      // A name with a direct export always wins and never causes ambiguity.
+      const directExportNames = this.collectStaticExportNames(ast);
+      const starExportOrigins = new Map<string, StarExportOrigin>();
+
       for (const statement of ast.body) {
         if (statement.type === "ImportDeclaration") {
           await this.evaluateImportDeclaration(statement, moduleEnv, path);
@@ -4075,7 +4081,14 @@ export class Interpreter {
         } else if (statement.type === "ExportDefaultDeclaration") {
           await this.evaluateExportDefaultDeclaration(statement, moduleEnv, exports);
         } else if (statement.type === "ExportAllDeclaration") {
-          await this.evaluateExportAllDeclaration(statement, moduleEnv, exports, path);
+          await this.evaluateExportAllDeclaration(
+            statement,
+            moduleEnv,
+            exports,
+            path,
+            directExportNames,
+            starExportOrigins,
+          );
         } else {
           const prevEnv = this.environment;
           this.environment = moduleEnv;
@@ -4087,6 +4100,7 @@ export class Interpreter {
         }
       }
 
+      this.moduleSystem.setModuleStarExportOrigins(path, starExportOrigins);
       return ReadOnlyProxy.wrap(exports, "module.exports", this.securityOptions);
     } finally {
       this.moduleImportMetaStack.pop();
@@ -4533,6 +4547,8 @@ export class Interpreter {
     moduleEnv: Environment,
     exports: Record<string, any>,
     currentPath: string,
+    directExportNames: Set<string>,
+    starExportOrigins: Map<string, StarExportOrigin>,
   ): Promise<void> {
     const specifier = (node.source as ESTree.Literal).value as string;
     const sourceExports = await this.resolveModuleExports(specifier, currentPath);
@@ -4547,16 +4563,43 @@ export class Interpreter {
         moduleEnv.declare(node.exported.name, namespace, "const");
       }
     } else {
-      // Handle "export * from 'module'" - re-export all named exports
-      // Note: For diamond dependencies, the same export may come from multiple paths
-      // We only add to exports (not moduleEnv) to avoid duplicate declaration errors
+      // Handle "export * from 'module'" - re-export all named exports.
+      // Per ESM spec, star re-exports that conflict (same name, different ultimate binding)
+      // are ambiguous and must throw. Diamond dependencies (same name, same ultimate
+      // binding reachable via multiple paths) are allowed.
+      const sourceRecord = await this.moduleSystem!.resolveModule(specifier, currentPath);
+      const sourcePath = sourceRecord?.path ?? specifier;
+      const sourceStarOrigins = this.moduleSystem!.getModuleStarExportOrigins(sourcePath);
+
       for (const key of Object.keys(sourceExports)) {
-        // Skip 'default' export per ES module spec
-        if (key !== "default") {
-          // Only add if not already exported (first one wins per ES spec)
-          if (!(key in exports)) {
-            this.defineLiveExport(exports, key, () => sourceExportsTarget[key]);
+        if (key === "default") continue;
+
+        // Direct exports always win; never count as a star-export conflict.
+        if (directExportNames.has(key)) continue;
+
+        // Determine the ultimate binding origin for this name.
+        // If the source module re-exported it via export *, use that origin.
+        // Otherwise the source module defines it directly, so it is its own origin.
+        const origin: StarExportOrigin = sourceStarOrigins?.get(key) ?? {
+          path: sourcePath,
+          name: key,
+        };
+
+        if (!(key in exports)) {
+          this.defineLiveExport(exports, key, () => sourceExportsTarget[key]);
+          starExportOrigins.set(key, origin);
+        } else {
+          const existingOrigin = starExportOrigins.get(key);
+          if (
+            existingOrigin &&
+            (existingOrigin.path !== origin.path || existingOrigin.name !== origin.name)
+          ) {
+            throw new InterpreterError(
+              `The requested module provides an ambiguous export '${key}'`,
+            );
           }
+          // Either same ultimate binding (diamond dep) or a direct export already owns
+          // this name — either way, skip silently.
         }
       }
     }

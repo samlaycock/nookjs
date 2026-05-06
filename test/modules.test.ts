@@ -3009,7 +3009,7 @@ describe("Module System", () => {
   // ============================================================================
 
   describe("Export * Conflict Handling", () => {
-    test("should use first export when same name comes from multiple sources", async () => {
+    test("should throw on ambiguous export when same name comes from multiple star sources", async () => {
       const files = new Map([
         ["first.js", "export const shared = 'first';"],
         ["second.js", "export const shared = 'second';"],
@@ -3028,15 +3028,40 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      const result = await interpreter.evaluateModuleAsync(
-        `import { shared } from "barrel.js"; export const value = shared;`,
-        { path: "main.js" },
-      );
-      // First export * wins
-      expect(result.value).toBe("first");
+      await expect(
+        interpreter.evaluateModuleAsync(
+          `import { shared } from "barrel.js"; export const value = shared;`,
+          { path: "main.js" },
+        ),
+      ).rejects.toThrow("ambiguous export 'shared'");
     });
 
-    test("should allow local export to override re-exported name", async () => {
+    test("should throw on ambiguous export from chained star re-exports", async () => {
+      const files = new Map([
+        ["a.js", "export const foo = 'a';"],
+        ["b.js", "export const foo = 'b';"],
+        ["mid.js", "export * from 'a.js'; export * from 'b.js';"],
+        ["top.js", "export * from 'mid.js';"],
+      ]);
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          const code = files.get(specifier);
+          if (!code) return null;
+          return { type: "source", code, path: specifier };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      await expect(
+        interpreter.evaluateModuleAsync(`import { foo } from "top.js";`, { path: "main.js" }),
+      ).rejects.toThrow("ambiguous export 'foo'");
+    });
+
+    test("should allow local export to override re-exported name without conflict", async () => {
       const files = new Map([
         ["source.js", "export const value = 'from-source';"],
         ["barrel.js", "export * from 'source.js'; export const value = 'local';"],
@@ -3058,8 +3083,86 @@ describe("Module System", () => {
         `import { value } from "barrel.js"; export const v = value;`,
         { path: "main.js" },
       );
-      // Local export should override re-exported
       expect(result.v).toBe("local");
+    });
+
+    test("should allow local export defined before star re-export to win without conflict", async () => {
+      const files = new Map([
+        ["source.js", "export const value = 'from-source';"],
+        ["barrel.js", "export const value = 'local'; export * from 'source.js';"],
+      ]);
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          const code = files.get(specifier);
+          if (!code) return null;
+          return { type: "source", code, path: specifier };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { value } from "barrel.js"; export const v = value;`,
+        { path: "main.js" },
+      );
+      expect(result.v).toBe("local");
+    });
+
+    test("should not throw for diamond dependency pattern (same binding via multiple paths)", async () => {
+      const files = new Map([
+        ["base.js", "export const BASE = 'base';"],
+        ["left.js", "export * from 'base.js'; export const LEFT = 'left';"],
+        ["right.js", "export * from 'base.js'; export const RIGHT = 'right';"],
+        ["top.js", "export * from 'left.js'; export * from 'right.js';"],
+      ]);
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          const code = files.get(specifier);
+          if (!code) return null;
+          return { type: "source", code, path: specifier };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { BASE, LEFT, RIGHT } from "top.js"; export const all = BASE + LEFT + RIGHT;`,
+        { path: "main.js" },
+      );
+      expect(result.all).toBe("baseleftright");
+    });
+
+    test("should not throw for name shared across two star exports when both originate from the same source", async () => {
+      const files = new Map([
+        ["origin.js", "export const x = 42;"],
+        ["re1.js", "export * from 'origin.js';"],
+        ["re2.js", "export * from 'origin.js';"],
+        ["barrel.js", "export * from 're1.js'; export * from 're2.js';"],
+      ]);
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          const code = files.get(specifier);
+          if (!code) return null;
+          return { type: "source", code, path: specifier };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        `import { x } from "barrel.js"; export const val = x;`,
+        { path: "main.js" },
+      );
+      expect(result.val).toBe(42);
     });
   });
 
