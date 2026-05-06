@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 
+import { ResourceExhaustedError } from "../src";
 import { createSandbox, parse, run } from "../src/sandbox";
 
 describe("Simplified API", () => {
@@ -629,6 +630,39 @@ describe("Simplified API", () => {
         limits: { total: { memoryBytes: 1, allocationBytes: 2 } },
       }),
     ).toThrow("limits.total.memoryBytes and limits.total.allocationBytes must match");
+  });
+
+  it("should preserve the legacy memory resourceType for memoryBytes total limits", () => {
+    const sandbox = createSandbox({
+      env: "es2022",
+      limits: { total: { memoryBytes: 1 } },
+    });
+
+    sandbox.runSync("const obj = { value: 1 }; obj;");
+
+    try {
+      sandbox.runSync("const second = { value: 2 }; second;");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResourceExhaustedError);
+      expect((error as ResourceExhaustedError).resourceType).toBe("maxTotalMemory");
+    }
+  });
+
+  it("should use the explicit allocation resourceType for allocationBytes total limits", () => {
+    const sandbox = createSandbox({
+      env: "es2022",
+      limits: { total: { allocationBytes: 1 } },
+    });
+
+    sandbox.runSync("const obj = { value: 1 }; obj;");
+
+    try {
+      sandbox.runSync("const second = { value: 2 }; second;");
+      expect.unreachable("Expected allocationBytes total limit to be exceeded");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResourceExhaustedError);
+      expect((error as ResourceExhaustedError).resourceType).toBe("maxAllocationBytes");
+    }
   });
 
   it("resources() should return undefined when tracking is disabled", () => {
