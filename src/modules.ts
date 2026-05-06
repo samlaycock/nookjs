@@ -343,6 +343,11 @@ export interface ModuleMetadata {
   error?: Error;
 }
 
+export interface StarExportOrigin {
+  path: string;
+  name: string;
+}
+
 export interface ModuleRecord {
   importer: string | null;
   path: string;
@@ -354,6 +359,7 @@ export interface ModuleRecord {
   source?: string;
   ast?: ESTree.Program;
   loadedAt: number;
+  starExportOrigins?: Map<string, StarExportOrigin>;
 }
 
 /**
@@ -704,6 +710,23 @@ export class ModuleSystem {
       record.status = "initialized";
       this.options.resolver.onLoad?.(record.specifier, path, record.exports);
     }
+  }
+
+  /**
+   * Store the star export binding origins for a module after evaluation.
+   */
+  setModuleStarExportOrigins(path: string, origins: Map<string, StarExportOrigin>): void {
+    const record = this.cacheByPath.get(path);
+    if (record) {
+      record.starExportOrigins = origins;
+    }
+  }
+
+  /**
+   * Get the star export binding origins for a module.
+   */
+  getModuleStarExportOrigins(path: string): Map<string, StarExportOrigin> | undefined {
+    return this.cacheByPath.get(path)?.starExportOrigins;
   }
 
   /**
