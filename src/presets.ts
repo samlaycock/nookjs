@@ -733,8 +733,9 @@ export const IntlAPI: InterpreterOptions = {
 /**
  * Buffer API addon preset.
  *
- * Provides access to binary data handling with ArrayBuffer, SharedArrayBuffer, Atomics,
- * DataView, and typed arrays.
+ * Provides access to binary data handling with ArrayBuffer, DataView, and typed arrays.
+ * SharedArrayBuffer and Atomics are intentionally excluded; use SharedMemoryAPI when
+ * shared-memory coordination is explicitly required.
  *
  * @example
  * ```typescript
@@ -750,8 +751,6 @@ export const IntlAPI: InterpreterOptions = {
 export const BufferAPI: InterpreterOptions = {
   globals: {
     ArrayBuffer,
-    Atomics: typeof Atomics !== "undefined" ? Atomics : undefined,
-    SharedArrayBuffer: typeof SharedArrayBuffer !== "undefined" ? SharedArrayBuffer : undefined,
     DataView,
     // Typed arrays
     Int8Array,
@@ -765,6 +764,29 @@ export const BufferAPI: InterpreterOptions = {
     Float64Array,
     BigInt64Array,
     BigUint64Array,
+  },
+};
+
+/**
+ * Shared memory API addon preset.
+ *
+ * Provides explicit opt-in access to SharedArrayBuffer and Atomics when the host runtime
+ * supports them. Combine with BufferAPI to construct typed array views over shared memory.
+ *
+ * @example
+ * ```typescript
+ * const interpreter = new Interpreter(preset(ES2022, BufferAPI, SharedMemoryAPI));
+ * interpreter.evaluate(`
+ *   const buffer = new SharedArrayBuffer(4);
+ *   const view = new Int32Array(buffer);
+ *   Atomics.store(view, 0, 42);
+ * `);
+ * ```
+ */
+export const SharedMemoryAPI: InterpreterOptions = {
+  globals: {
+    Atomics: typeof Atomics !== "undefined" ? Atomics : undefined,
+    SharedArrayBuffer: typeof SharedArrayBuffer !== "undefined" ? SharedArrayBuffer : undefined,
   },
 };
 

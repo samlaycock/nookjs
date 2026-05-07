@@ -38,6 +38,7 @@ import {
   NodeJS,
   PerformanceAPI,
   RegExpAPI,
+  SharedMemoryAPI,
   StreamsAPI,
   TextCodecAPI,
   TimersAPI,
@@ -88,6 +89,9 @@ export type SandboxApi =
   | "regex"
   | "intl"
   | "buffer"
+  | "sharedmemory"
+  | "shared-memory"
+  | "shared_memory"
   | "streams"
   | "blob"
   | "performance"
@@ -257,6 +261,9 @@ const API_PRESET_MAP: Record<string, InterpreterOptions> = {
   regex: RegExpAPI,
   intl: IntlAPI,
   buffer: BufferAPI,
+  sharedmemory: SharedMemoryAPI,
+  "shared-memory": SharedMemoryAPI,
+  shared_memory: SharedMemoryAPI,
   streams: StreamsAPI,
   blob: BlobAPI,
   performance: PerformanceAPI,

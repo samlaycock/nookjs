@@ -183,6 +183,13 @@ describe("Presets", () => {
           expect(interpreter.evaluate("typeof DataView")).toBe("function");
         });
 
+        it("should not include shared-memory APIs by default", () => {
+          const interpreter = new Interpreter(NodeJS);
+
+          expect(interpreter.evaluate("typeof SharedArrayBuffer")).toBe("undefined");
+          expect(interpreter.evaluate("typeof Atomics")).toBe("undefined");
+        });
+
         it("should include performance API", () => {
           const interpreter = new Interpreter(NodeJS);
 

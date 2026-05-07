@@ -148,20 +148,21 @@ ES2021+ presets add:
 
 Addon presets provide access to specific Web/Runtime APIs. They only add globals and don't modify feature control.
 
-| Preset           | Description             | Key Globals                                                             |
-| ---------------- | ----------------------- | ----------------------------------------------------------------------- |
-| `FetchAPI`       | HTTP requests           | `fetch`, `Request`, `Response`, `Headers`                               |
-| `ConsoleAPI`     | Logging                 | `console`                                                               |
-| `TimersAPI`      | Timers                  | `setTimeout`, `setInterval`                                             |
-| `TextCodecAPI`   | Text encoding/decoding  | `TextEncoder`, `TextDecoder`                                            |
-| `CryptoAPI`      | Cryptographic functions | `crypto`                                                                |
-| `RegExpAPI`      | Regular expressions     | `RegExp`                                                                |
-| `IntlAPI`        | Internationalization    | `Intl`                                                                  |
-| `BufferAPI`      | Binary data handling    | `ArrayBuffer`, `SharedArrayBuffer`, `Atomics`, `DataView`, typed arrays |
-| `StreamsAPI`     | Streaming data          | `ReadableStream`, `WritableStream`                                      |
-| `BlobAPI`        | Blob/File handling      | `Blob`, `File`                                                          |
-| `PerformanceAPI` | Performance measurement | `performance`                                                           |
-| `EventAPI`       | Custom events           | `Event`, `EventTarget`, `CustomEvent`                                   |
+| Preset            | Description             | Key Globals                               |
+| ----------------- | ----------------------- | ----------------------------------------- |
+| `FetchAPI`        | HTTP requests           | `fetch`, `Request`, `Response`, `Headers` |
+| `ConsoleAPI`      | Logging                 | `console`                                 |
+| `TimersAPI`       | Timers                  | `setTimeout`, `setInterval`               |
+| `TextCodecAPI`    | Text encoding/decoding  | `TextEncoder`, `TextDecoder`              |
+| `CryptoAPI`       | Cryptographic functions | `crypto`                                  |
+| `RegExpAPI`       | Regular expressions     | `RegExp`                                  |
+| `IntlAPI`         | Internationalization    | `Intl`                                    |
+| `BufferAPI`       | Binary data handling    | `ArrayBuffer`, `DataView`, typed arrays   |
+| `SharedMemoryAPI` | Shared-memory opt-in    | `SharedArrayBuffer`, `Atomics`            |
+| `StreamsAPI`      | Streaming data          | `ReadableStream`, `WritableStream`        |
+| `BlobAPI`         | Blob/File handling      | `Blob`, `File`                            |
+| `PerformanceAPI`  | Performance measurement | `performance`                             |
+| `EventAPI`        | Custom events           | `Event`, `EventTarget`, `CustomEvent`     |
 
 ### `FetchAPI`
 
@@ -282,8 +283,7 @@ await sandbox.run(`
 
 ### `BufferAPI`
 
-Provides binary data handling with `ArrayBuffer`, `SharedArrayBuffer`, `Atomics`, `DataView`,
-and typed arrays.
+Provides binary data handling with `ArrayBuffer`, `DataView`, and typed arrays.
 
 ```typescript
 const sandbox = createSandbox({ env: "es2022", apis: ["buffer"] });
@@ -296,11 +296,31 @@ await sandbox.run(`
 `);
 ```
 
-When the host runtime supports them, `SharedArrayBuffer` and `Atomics` are exposed together so
-shared memory remains usable inside the sandbox. If your embedder passes shared-memory-backed
-views across the sandbox boundary, treat them as mutable shared state rather than inert byte data.
+`BufferAPI` intentionally does not expose `SharedArrayBuffer` or `Atomics`. Use it when you need
+typed arrays and `ArrayBuffer` without adding shared-memory coordination primitives.
 
-**Includes:** `ArrayBuffer`, `SharedArrayBuffer`, `Atomics`, `DataView`, `Int8Array`, `Uint8Array`, `Uint8ClampedArray`, `Int16Array`, `Uint16Array`, `Int32Array`, `Uint32Array`, `Float32Array`, `Float64Array`, `BigInt64Array`, `BigUint64Array`
+**Includes:** `ArrayBuffer`, `DataView`, `Int8Array`, `Uint8Array`, `Uint8ClampedArray`, `Int16Array`, `Uint16Array`, `Int32Array`, `Uint32Array`, `Float32Array`, `Float64Array`, `BigInt64Array`, `BigUint64Array`
+
+### `SharedMemoryAPI`
+
+Provides explicit opt-in access to `SharedArrayBuffer` and `Atomics` when the host runtime supports
+them. Combine it with `BufferAPI` when sandbox code must construct typed array views over shared
+memory.
+
+```typescript
+const sandbox = createSandbox({ env: "es2022", apis: ["buffer", "shared-memory"] });
+
+await sandbox.run(`
+  const buffer = new SharedArrayBuffer(4);
+  const view = new Int32Array(buffer);
+  Atomics.store(view, 0, 42);
+`);
+```
+
+If your embedder passes shared-memory-backed views across the sandbox boundary, treat them as
+mutable shared state rather than inert byte data.
+
+**Includes:** `SharedArrayBuffer`, `Atomics`
 
 ### `StreamsAPI`
 
