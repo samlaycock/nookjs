@@ -4551,6 +4551,73 @@ describe("Module System", () => {
       expect(moduleSystem.getLoadedModules()).toEqual(["/two-second.js", "/three-third.js"]);
     });
 
+    test("should promote cached module records before bounded eviction", async () => {
+      const moduleSystem = new ModuleSystem({
+        enabled: true,
+        cache: true,
+        maxEntries: 2,
+        resolver: {
+          resolve(specifier) {
+            return {
+              type: "namespace",
+              exports: { value: specifier },
+              path: `/${specifier.slice(2)}.js`,
+            };
+          },
+          authorize() {
+            return true;
+          },
+        },
+      });
+
+      await moduleSystem.resolveModule("./a", "main.js");
+      await moduleSystem.resolveModule("./b", "main.js");
+      await moduleSystem.resolveModule("./a", "main.js");
+      await moduleSystem.resolveModule("./c", "main.js");
+
+      expect(moduleSystem.getCacheSize()).toBe(2);
+      expect(moduleSystem.isModuleCachedByPath("/a.js")).toBe(true);
+      expect(moduleSystem.isModuleCachedByPath("/b.js")).toBe(false);
+      expect(moduleSystem.isModuleCachedByPath("/c.js")).toBe(true);
+      expect(moduleSystem.getLoadedModules()).toEqual(["/a.js", "/c.js"]);
+    });
+
+    test("should defer bounded eviction until nested module initialization completes", async () => {
+      const files = new Map<string, string>([
+        ["a.js", 'import { value as b } from "b.js"; export const value = b + "a";'],
+        ["b.js", 'import { value as c } from "c.js"; export const value = c + "b";'],
+        ["c.js", 'export const value = "c";'],
+      ]);
+      const interpreter = new Interpreter({
+        modules: {
+          enabled: true,
+          cache: true,
+          maxEntries: 1,
+          resolver: {
+            resolve(specifier) {
+              const code = files.get(specifier);
+              if (code === undefined) {
+                return null;
+              }
+
+              return { type: "source", code, path: specifier };
+            },
+          },
+        },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        'import { value } from "a.js"; export const result = value;',
+        { path: "main.js" },
+      );
+
+      expect(result.result).toBe("cba");
+      expect(interpreter.getModuleCacheSize()).toBe(1);
+      expect(interpreter.isModuleCachedByPath("a.js")).toBe(true);
+      expect(interpreter.isModuleCachedByPath("b.js")).toBe(false);
+      expect(interpreter.isModuleCachedByPath("c.js")).toBe(false);
+    });
+
     test("should avoid JSON stringification when caching resolution contexts", async () => {
       let resolveCount = 0;
       const moduleSystem = new ModuleSystem({
