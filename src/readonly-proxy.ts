@@ -114,6 +114,19 @@ function shouldUnwrapAllowlistedTarget(
   return false;
 }
 
+function shouldUseShadowTarget(value: unknown): value is object {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+
+  if (Array.isArray(value) || isTypedArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
 /**
  * Unwrap a value for passing to native host functions.
  *
@@ -474,23 +487,26 @@ export class ReadOnlyProxy {
       return cachedProxy;
     }
 
+    const realTarget = value;
+    const proxyTarget = shouldUseShadowTarget(realTarget) ? Object.create(null) : realTarget;
+
     // Create a proxy that intercepts all operations (for objects like Math, console, etc.)
-    const proxy = new Proxy(value, {
-      get(target, prop, _receiver) {
+    const proxy = new Proxy(proxyTarget, {
+      get(_target, prop, _receiver) {
         // Allow retrieving the underlying target for instanceof checks
         if (prop === PROXY_TARGET) {
-          return target;
+          return realTarget;
         }
         if (prop === PROXY_NAME) {
           return name;
         }
 
         if (prop === Symbol.iterator || prop === Symbol.asyncIterator) {
-          const iterator = Reflect.get(target, prop, target);
+          const iterator = Reflect.get(realTarget, prop, realTarget);
           if (typeof iterator === "function") {
             return () =>
               ReadOnlyProxy.wrapIterator(
-                iterator.call(target),
+                iterator.call(realTarget),
                 name,
                 prop === Symbol.asyncIterator,
                 securityOptions,
@@ -512,23 +528,27 @@ export class ReadOnlyProxy {
         if (prop === "valueOf") {
           return () => {
             // For primitive wrapper objects (Number, String, Boolean), return the primitive
-            if (target instanceof Number || target instanceof String || target instanceof Boolean) {
+            if (
+              realTarget instanceof Number ||
+              realTarget instanceof String ||
+              realTarget instanceof Boolean
+            ) {
               // These are safe to call - they just return the wrapped primitive
-              return target.valueOf();
+              return realTarget.valueOf();
             }
             // For Date objects, return the timestamp (standard behavior)
-            if (target instanceof Date) {
-              return target.valueOf();
+            if (realTarget instanceof Date) {
+              return realTarget.valueOf();
             }
             // For all other objects, return the wrapped object itself
             // This is the standard Object.prototype.valueOf behavior
-            return ReadOnlyProxy.wrap(target, name, securityOptions, ecmaVersion);
+            return ReadOnlyProxy.wrap(realTarget, name, securityOptions, ecmaVersion);
           };
         }
 
         // Special handling for Error.stack - sanitize to remove host paths
         if (isError && prop === "stack") {
-          const stack = Reflect.get(target, prop, target);
+          const stack = Reflect.get(realTarget, prop, realTarget);
           if (effectiveOptions.sanitizeErrors) {
             return sanitizeErrorStack(stack);
           }
@@ -540,16 +560,19 @@ export class ReadOnlyProxy {
           throw new InterpreterError(`Cannot access ${String(prop)} on global '${name}'`);
         }
 
-        if (!isEcmaBuiltinStaticPropertyAvailable(name, target, prop, ecmaVersion)) {
+        if (!isEcmaBuiltinStaticPropertyAvailable(name, realTarget, prop, ecmaVersion)) {
           return undefined;
         }
 
         // Get the actual value
-        const val = Reflect.get(target, prop, target); // Use target as receiver to preserve 'this'
+        const val = Reflect.get(realTarget, prop, realTarget); // Use target as receiver to preserve 'this'
 
         // If it's a function, wrap it as HostFunctionValue
         if (typeof val === "function") {
-          const methodWrapperCache = ReadOnlyProxy.getMethodWrapperCache(effectiveOptions, target);
+          const methodWrapperCache = ReadOnlyProxy.getMethodWrapperCache(
+            effectiveOptions,
+            realTarget,
+          );
           const cachedMethodWrapper = methodWrapperCache.get(prop);
           if (cachedMethodWrapper && cachedMethodWrapper.fn === val) {
             return cachedMethodWrapper.wrapper;
@@ -562,7 +585,7 @@ export class ReadOnlyProxy {
             (...args: any[]) => {
               // Call with target as 'this' to preserve method binding
               // Example: Math.floor.call(Math, 4.7) should work
-              return val.apply(target, args);
+              return val.apply(realTarget, args);
             },
             `${name}.${String(prop)}`,
             isAsync,
@@ -584,14 +607,14 @@ export class ReadOnlyProxy {
         return val;
       },
 
-      set(target, prop, value) {
+      set(_target, prop, value) {
         // Allow element mutation on TypedArrays via numeric indices
         // TypedArrays need to be writable for common use cases like encoder.encodeInto()
-        if (isTypedArray(target)) {
+        if (isTypedArray(realTarget)) {
           // Allow numeric index writes (element mutation)
           const index = typeof prop === "string" ? Number(prop) : prop;
           if (typeof index === "number" && Number.isInteger(index) && index >= 0) {
-            (target as any)[prop] = value;
+            (realTarget as any)[prop] = value;
             return true;
           }
         }
@@ -603,14 +626,14 @@ export class ReadOnlyProxy {
         );
       },
 
-      deleteProperty(target, prop) {
+      deleteProperty(_target, prop) {
         throw new InterpreterError(
           `Cannot delete property '${String(prop)}' from global '${name}' (read-only)`,
         );
       },
 
       // Block defineProperty to prevent property descriptor manipulation
-      defineProperty(target, prop) {
+      defineProperty(_target, prop) {
         throw new InterpreterError(
           `Cannot define property '${String(prop)}' on global '${name}' (read-only)`,
         );
@@ -634,32 +657,88 @@ export class ReadOnlyProxy {
         if (isDangerousProperty(prop)) {
           return undefined;
         }
-        if (!isEcmaBuiltinStaticPropertyAvailable(name, target, prop, ecmaVersion)) {
+        if (!isEcmaBuiltinStaticPropertyAvailable(name, realTarget, prop, ecmaVersion)) {
           return undefined;
         }
-        return Reflect.getOwnPropertyDescriptor(target, prop);
+        const descriptor = Reflect.getOwnPropertyDescriptor(realTarget, prop);
+        if (!descriptor) {
+          return undefined;
+        }
+        if (target !== realTarget) {
+          const shadowDescriptor = Reflect.getOwnPropertyDescriptor(target, prop);
+          if (shadowDescriptor) {
+            return shadowDescriptor;
+          }
+        }
+
+        const wrappedDescriptorValue =
+          "value" in descriptor
+            ? ReadOnlyProxy.wrap(
+                descriptor.value,
+                `${name}.${String(prop)}`,
+                securityOptions,
+                ecmaVersion,
+              )
+            : undefined;
+        const wrappedGetter = descriptor.get
+          ? () =>
+              ReadOnlyProxy.wrap(
+                Reflect.apply(descriptor.get as () => unknown, realTarget, []),
+                `${name}.${String(prop)}`,
+                securityOptions,
+                ecmaVersion,
+              )
+          : undefined;
+
+        const normalizedDescriptor = {
+          configurable: target === realTarget ? (descriptor.configurable ?? false) : false,
+          enumerable: descriptor.enumerable ?? false,
+          ...(descriptor.get || descriptor.set
+            ? {
+                get: wrappedGetter,
+                set: undefined,
+              }
+            : {
+                value: wrappedDescriptorValue,
+                writable: target === realTarget ? (descriptor.writable ?? false) : false,
+              }),
+        };
+
+        if (target !== realTarget && !Reflect.has(target, prop)) {
+          const shadowDescriptor =
+            descriptor.get || descriptor.set
+              ? {
+                  configurable: false,
+                  enumerable: descriptor.enumerable ?? false,
+                  ...(wrappedGetter ? { get: wrappedGetter } : {}),
+                }
+              : normalizedDescriptor;
+          Reflect.defineProperty(target, prop, shadowDescriptor);
+        }
+
+        return normalizedDescriptor;
       },
 
       // Allow has operator (prop in obj)
-      has(target, prop) {
+      has(_target, prop) {
         // Block dangerous properties
         if (isDangerousProperty(prop)) {
           return false;
         }
-        if (!isEcmaBuiltinStaticPropertyAvailable(name, target, prop, ecmaVersion)) {
+        if (!isEcmaBuiltinStaticPropertyAvailable(name, realTarget, prop, ecmaVersion)) {
           return false;
         }
-        return Reflect.has(target, prop);
+        return Reflect.has(realTarget, prop);
       },
 
       // Allow ownKeys (Object.keys, Object.getOwnPropertyNames, etc.)
-      ownKeys(target) {
-        const keys = Reflect.ownKeys(target);
+      ownKeys(_target) {
+        const keys = Reflect.ownKeys(realTarget);
         // Filter out dangerous properties
         return keys.filter(
           (key) =>
             !isDangerousProperty(key) &&
-            isEcmaBuiltinStaticPropertyAvailable(name, target, key, ecmaVersion),
+            isEcmaBuiltinStaticPropertyAvailable(name, realTarget, key, ecmaVersion),
         );
       },
     });
