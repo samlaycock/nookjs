@@ -4567,6 +4567,51 @@ describe("Module System", () => {
       expect(resolutionContextStringifyCount).toBe(0);
     });
 
+    test("should preserve unrelated resolved-path context entries when a module fails", async () => {
+      const state = { failingShouldThrow: true, stableResolveCount: 0 };
+      const moduleSystem = new ModuleSystem({
+        enabled: true,
+        cache: true,
+        resolver: {
+          resolve(specifier) {
+            if (specifier === "./stable") {
+              state.stableResolveCount += 1;
+              return {
+                type: "namespace",
+                exports: { value: 1 },
+                path: "/stable.js",
+              };
+            }
+            if (specifier === "./failing") {
+              return {
+                type: "source",
+                code: state.failingShouldThrow
+                  ? 'throw "temporary failure";'
+                  : 'export const value = "recovered";',
+                path: "/failing.js",
+              };
+            }
+            return null;
+          },
+        },
+      });
+      const internalModuleSystem = moduleSystem as unknown as {
+        resolvedPathByContext: { size: number };
+      };
+
+      await moduleSystem.resolveModule("./stable", "main.js");
+      const failingRecord = await moduleSystem.resolveModule("./failing", "main.js");
+      expect(internalModuleSystem.resolvedPathByContext.size).toBe(2);
+      expect(failingRecord?.path).toBe("/failing.js");
+
+      moduleSystem.setModuleFailed("/failing.js", new Error("temporary failure"));
+
+      expect(internalModuleSystem.resolvedPathByContext.size).toBe(1);
+      await moduleSystem.resolveModule("./stable", "main.js");
+
+      expect(state.stableResolveCount).toBe(1);
+    });
+
     test("should handle path aliasing correctly for allowed imports", async () => {
       const resolver: ModuleResolver = {
         resolve(specifier) {
