@@ -526,6 +526,36 @@ describe("Security", () => {
         }).toThrow("Symbol 'Symbol(Symbol.toStringTag)' is not allowed for security reasons");
       });
 
+      it("should block dangerous symbol access through object rest destructuring", () => {
+        const sym = Symbol.toStringTag;
+        const interpreter = new Interpreter({
+          globals: { sym },
+        });
+        expect(() => {
+          interpreter.evaluate(`
+            const box = { [sym]: "secret", a: 1 };
+            const { a, ...rest } = box;
+            rest;
+          `);
+        }).toThrow("Symbol 'Symbol(Symbol.toStringTag)' is not allowed for security reasons");
+      });
+
+      it("should block dangerous symbol access through object rest destructuring in async evaluation", () => {
+        const sym = Symbol.toStringTag;
+        const interpreter = new Interpreter({
+          globals: { sym },
+        });
+        return expect(
+          interpreter.evaluateAsync(`
+            const box = { [sym]: "secret", a: 1 };
+            const { a, ...rest } = box;
+            rest;
+          `),
+        ).rejects.toThrow(
+          "Symbol 'Symbol(Symbol.toStringTag)' is not allowed for security reasons",
+        );
+      });
+
       it("should block dangerous symbol access in update expressions", () => {
         const sym = Symbol.toPrimitive;
         const interpreter = new Interpreter({
