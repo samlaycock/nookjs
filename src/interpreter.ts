@@ -5748,6 +5748,20 @@ export class Interpreter {
     }
   }
 
+  private copyObjectSpreadProperties(target: Record<PropertyKey, any>, source: object): void {
+    for (const key of Reflect.ownKeys(source)) {
+      if (!Object.prototype.propertyIsEnumerable.call(source, key)) {
+        continue;
+      }
+
+      if (typeof key === "string") {
+        validatePropertyName(key); // Security: prevent prototype pollution
+      }
+
+      target[key] = (source as Record<PropertyKey, any>)[key];
+    }
+  }
+
   /**
    * Parse function parameters from AST nodes into the arrays/maps needed by FunctionValue.
    * Handles Identifier, RestElement, AssignmentPattern, ObjectPattern, and ArrayPattern.
@@ -10005,7 +10019,7 @@ export class Interpreter {
       throw new InterpreterError("ObjectLiterals is not enabled");
     }
 
-    const obj: Record<string, any> = {};
+    const obj: Record<PropertyKey, any> = {};
 
     for (const property of node.properties) {
       if (property.type === "SpreadElement") {
@@ -10017,11 +10031,7 @@ export class Interpreter {
         const spreadValue = this.evaluateNode((property as ESTree.SpreadElement).argument);
         this.validateObjectSpread(spreadValue);
 
-        // Merge properties from spread object
-        for (const [key, value] of Object.entries(spreadValue)) {
-          validatePropertyName(key); // Security: prevent prototype pollution
-          obj[key] = value;
-        }
+        this.copyObjectSpreadProperties(obj, spreadValue);
       } else if (property.type === "Property") {
         // Get the property key - evaluate expression for computed properties
         const computedKey = property.computed ? this.evaluateNode(property.key) : null;
@@ -10062,7 +10072,7 @@ export class Interpreter {
     }
 
     // Track memory: estimate 64 bytes base + 32 bytes per property
-    const propertyCount = Object.keys(obj).length;
+    const propertyCount = Reflect.ownKeys(obj).length;
     this.trackMemory(64 + propertyCount * 32);
 
     return this.markSandboxContainer(obj);
@@ -12119,7 +12129,7 @@ export class Interpreter {
       throw new InterpreterError("ObjectLiterals is not enabled");
     }
 
-    const obj: Record<string, any> = {};
+    const obj: Record<PropertyKey, any> = {};
 
     for (const property of node.properties) {
       if (property.type === "SpreadElement") {
@@ -12129,11 +12139,7 @@ export class Interpreter {
         );
         this.validateObjectSpread(spreadValue);
 
-        // Merge properties from spread object
-        for (const [key, value] of Object.entries(spreadValue)) {
-          validatePropertyName(key); // Security: prevent prototype pollution
-          obj[key] = value;
-        }
+        this.copyObjectSpreadProperties(obj, spreadValue);
       } else if (property.type === "Property") {
         // Evaluate expression for computed properties
         const computedKey = property.computed ? await this.evaluateNodeAsync(property.key) : null;
