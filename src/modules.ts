@@ -395,6 +395,8 @@ export class ModuleSystem {
   private specifierToPaths: Map<string, Set<string>> = new Map();
   // Importer-aware index used by public introspection when a specifier is context-sensitive.
   private specifierToPathsByImporter: Map<string, Map<string | null, Set<string>>> = new Map();
+  private pathToSpecifiers: Map<string, Set<string>> = new Map();
+  private pathToSpecifierImporters: Map<string, Map<string, Set<string | null>>> = new Map();
   // Context-specific index for reusing cached module paths without re-running resolve()
   private resolvedPathByContext = new ResolutionContextPathCache(
     MAX_RESOLVED_PATH_CONTEXT_CACHE_SIZE,
@@ -489,6 +491,26 @@ export class ModuleSystem {
       pathsByImporter.set(importer, importerPaths);
     }
     importerPaths.add(path);
+
+    let specifiers = this.pathToSpecifiers.get(path);
+    if (!specifiers) {
+      specifiers = new Set();
+      this.pathToSpecifiers.set(path, specifiers);
+    }
+    specifiers.add(specifier);
+
+    let importersBySpecifier = this.pathToSpecifierImporters.get(path);
+    if (!importersBySpecifier) {
+      importersBySpecifier = new Map();
+      this.pathToSpecifierImporters.set(path, importersBySpecifier);
+    }
+
+    let importers = importersBySpecifier.get(specifier);
+    if (!importers) {
+      importers = new Set();
+      importersBySpecifier.set(specifier, importers);
+    }
+    importers.add(importer);
   }
 
   private normalizeMaxEntries(maxEntries: number | undefined): number {
@@ -519,16 +541,22 @@ export class ModuleSystem {
     this.resolvedPathByContext.deleteByPath(path);
   }
 
+  private hasInitializingModuleRecord(): boolean {
+    for (const record of this.cacheByPath.values()) {
+      if (record.status === "initializing") {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   private evictOldestModuleIfNeeded(): void {
-    if (this.cacheByPath.size <= this.maxEntries) {
+    if (this.cacheByPath.size <= this.maxEntries || this.hasInitializingModuleRecord()) {
       return;
     }
 
-    for (const [path, record] of this.cacheByPath) {
-      if (record.status === "initializing") {
-        continue;
-      }
-
+    for (const path of this.cacheByPath.keys()) {
       this.evictModulePath(path);
       if (this.cacheByPath.size <= this.maxEntries) {
         return;
@@ -537,25 +565,51 @@ export class ModuleSystem {
   }
 
   private unregisterPath(path: string): void {
-    for (const [specifier, paths] of this.specifierToPaths) {
+    const specifiers = this.pathToSpecifiers.get(path);
+    if (!specifiers) {
+      return;
+    }
+
+    for (const specifier of specifiers) {
+      const paths = this.specifierToPaths.get(specifier);
+      if (!paths) {
+        continue;
+      }
+
       paths.delete(path);
       if (paths.size === 0) {
         this.specifierToPaths.delete(specifier);
       }
     }
 
-    for (const [specifier, pathsByImporter] of this.specifierToPathsByImporter) {
-      for (const [importer, paths] of pathsByImporter) {
-        paths.delete(path);
-        if (paths.size === 0) {
-          pathsByImporter.delete(importer);
+    const importersBySpecifier = this.pathToSpecifierImporters.get(path);
+    if (importersBySpecifier) {
+      for (const [specifier, importers] of importersBySpecifier) {
+        const pathsByImporter = this.specifierToPathsByImporter.get(specifier);
+        if (!pathsByImporter) {
+          continue;
+        }
+
+        for (const importer of importers) {
+          const paths = pathsByImporter.get(importer);
+          if (!paths) {
+            continue;
+          }
+
+          paths.delete(path);
+          if (paths.size === 0) {
+            pathsByImporter.delete(importer);
+          }
+        }
+
+        if (pathsByImporter.size === 0) {
+          this.specifierToPathsByImporter.delete(specifier);
         }
       }
-
-      if (pathsByImporter.size === 0) {
-        this.specifierToPathsByImporter.delete(specifier);
-      }
     }
+
+    this.pathToSpecifiers.delete(path);
+    this.pathToSpecifierImporters.delete(path);
   }
 
   private getUnambiguousPath(paths?: ReadonlySet<string>): string | undefined {
@@ -828,6 +882,8 @@ export class ModuleSystem {
     this.cacheByPath.clear();
     this.specifierToPaths.clear();
     this.specifierToPathsByImporter.clear();
+    this.pathToSpecifiers.clear();
+    this.pathToSpecifierImporters.clear();
     this.resolvedPathByContext.clear();
     this.evaluationStack = [];
   }
