@@ -868,6 +868,26 @@ describe("Objects", () => {
           `);
           expect(result).toEqual([1, undefined, true, false, true]);
         });
+
+        it("should preserve multi-level sandbox prototype chains", () => {
+          const result = interpreter.evaluate(`
+            const grandproto = { root: 1 };
+            const proto = Object.create(grandproto);
+            proto.middle = 2;
+
+            const obj = Object.create(proto);
+            obj.leaf = 3;
+
+            [
+              obj.root,
+              obj.middle,
+              obj.leaf,
+              Object.getPrototypeOf(obj) === proto,
+              Object.getPrototypeOf(proto) === grandproto,
+            ];
+          `);
+          expect(result).toEqual([1, 2, 3, true, true]);
+        });
       });
 
       describe("Object.keys", () => {
