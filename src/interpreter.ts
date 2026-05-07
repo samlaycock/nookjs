@@ -8646,12 +8646,16 @@ export class Interpreter {
     // Second pass: Handle rest element if present
     if (restElement) {
       const restName = this.getRestElementName(restElement);
-      const restObj: Record<string, any> = this.markSandboxContainer({});
+      const restObj: Record<PropertyKey, any> = this.markSandboxContainer({});
 
       // Collect all non-destructured properties
-      for (const [key, val] of Object.entries(value)) {
-        if (!destructuredKeys.has(key)) {
-          validatePropertyName(key); // Security: prevent prototype pollution
+      for (const key of Reflect.ownKeys(value)) {
+        if (!destructuredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(value, key)) {
+          if (typeof key === "string") {
+            validatePropertyName(key); // Security: prevent prototype pollution
+          }
+
+          const val = value[key];
           restObj[key] = val;
         }
       }
@@ -11923,12 +11927,16 @@ export class Interpreter {
     // Second pass: Handle rest element if present
     if (restElement) {
       const restName = this.getRestElementName(restElement);
-      const restObj: Record<string, any> = this.markSandboxContainer({});
+      const restObj: Record<PropertyKey, any> = this.markSandboxContainer({});
 
       // Collect all non-destructured properties
-      for (const [key, val] of Object.entries(value)) {
-        if (!destructuredKeys.has(key)) {
-          validatePropertyName(key); // Security: prevent prototype pollution
+      for (const key of Reflect.ownKeys(value)) {
+        if (!destructuredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(value, key)) {
+          if (typeof key === "string") {
+            validatePropertyName(key); // Security: prevent prototype pollution
+          }
+
+          const val = value[key];
           restObj[key] = val;
         }
       }
