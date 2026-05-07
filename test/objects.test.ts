@@ -1788,6 +1788,19 @@ describe("Objects", () => {
         `);
         expect(result).toEqual([123, 1, 1, 2]);
       });
+
+      it("should count spread symbol keys against async memory limits", () => {
+        return expect(
+          interpreter.evaluateAsync(
+            `
+              const sym = Symbol("metadata");
+              const base = { [sym]: 123, a: 1 };
+              ({ ...base });
+            `,
+            { maxMemory: 240 },
+          ),
+        ).rejects.toThrow("Maximum memory limit exceeded");
+      });
     });
 
     describe("Object rest", () => {
