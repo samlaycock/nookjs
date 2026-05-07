@@ -51,6 +51,13 @@ class ResolutionContextPathCache {
     this.deleteEntry(entry);
   }
 
+  deleteByPath(path: string): void {
+    const matchingEntries = Array.from(this.lruEntries).filter((entry) => entry.path === path);
+    for (const entry of matchingEntries) {
+      this.deleteEntry(entry);
+    }
+  }
+
   get(
     specifier: string,
     importer: string | null,
@@ -757,7 +764,7 @@ export class ModuleSystem {
       record.error = error;
       this.cacheByPath.delete(path);
       this.unregisterPath(path);
-      this.resolvedPathByContext.clear();
+      this.resolvedPathByContext.deleteByPath(path);
       this.options.resolver.onError?.(record.specifier, record.importer, error);
     }
   }
