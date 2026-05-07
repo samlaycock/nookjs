@@ -1998,6 +1998,42 @@ describe("Security", () => {
     });
 
     describe("Property modification protection via proxy", () => {
+      it("should expose read-only descriptor metadata for wrapped host properties", () => {
+        const nested = { value: 1 };
+        const wrapped = ReadOnlyProxy.wrap({ nested }, "obj");
+
+        const descriptor = Object.getOwnPropertyDescriptor(wrapped, "nested");
+        const descriptorValue = descriptor?.value as { value: number } | undefined;
+
+        expect(descriptor).toBeDefined();
+        expect(descriptor?.writable).toBe(false);
+        expect(descriptor?.configurable).toBe(false);
+        expect(descriptor?.enumerable).toBe(true);
+        expect(descriptorValue).not.toBe(nested);
+        expect(descriptorValue?.value).toBe(1);
+        expect(() => {
+          if (!descriptorValue) {
+            throw new Error("Expected descriptor value");
+          }
+          descriptorValue.value = 2;
+        }).toThrow("Cannot modify property 'value' on global 'obj.nested' (read-only)");
+      });
+
+      it("should expose consistent read-only descriptors through Object.getOwnPropertyDescriptors", () => {
+        const nested = { value: 1 };
+        const wrapped = ReadOnlyProxy.wrap({ nested }, "obj");
+
+        const descriptors = Object.getOwnPropertyDescriptors(wrapped);
+        const nestedDescriptorValue = descriptors.nested?.value as { value: number } | undefined;
+
+        expect(descriptors.nested).toBeDefined();
+        expect(descriptors.nested?.writable).toBe(false);
+        expect(descriptors.nested?.configurable).toBe(false);
+        expect(descriptors.nested?.enumerable).toBe(true);
+        expect(nestedDescriptorValue).not.toBe(nested);
+        expect(nestedDescriptorValue?.value).toBe(1);
+      });
+
       it("should block setting properties", () => {
         const testObj = { value: 42 };
         const wrapped = ReadOnlyProxy.wrap(testObj, "obj");
