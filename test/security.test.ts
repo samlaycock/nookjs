@@ -2034,6 +2034,51 @@ describe("Security", () => {
         expect(nestedDescriptorValue?.value).toBe(1);
       });
 
+      it("should not violate descriptor invariants for non-plain host objects", () => {
+        class HostBox {
+          child = { value: 1 };
+        }
+
+        const host = new HostBox();
+        Object.defineProperty(host, "child", {
+          value: host.child,
+          writable: false,
+          configurable: false,
+          enumerable: true,
+        });
+
+        const wrapped = ReadOnlyProxy.wrap(host, "box");
+
+        const descriptor = Object.getOwnPropertyDescriptor(wrapped, "child");
+        const descriptorValue = descriptor?.value as { value: number } | undefined;
+
+        expect(descriptor).toBeDefined();
+        expect(descriptor?.writable).toBe(false);
+        expect(descriptor?.configurable).toBe(false);
+        expect(descriptorValue).not.toBe(host.child);
+        expect(descriptorValue?.value).toBe(1);
+      });
+
+      it("should keep setter-only descriptors accessor-shaped across repeated reads", () => {
+        const host = {};
+        Object.defineProperty(host, "writeOnly", {
+          set(_value: unknown) {},
+          configurable: true,
+          enumerable: true,
+        });
+
+        const wrapped = ReadOnlyProxy.wrap(host, "obj");
+
+        const firstDescriptor = Object.getOwnPropertyDescriptor(wrapped, "writeOnly");
+        const secondDescriptor = Object.getOwnPropertyDescriptor(wrapped, "writeOnly");
+
+        expect(firstDescriptor).toBeDefined();
+        expect(firstDescriptor?.get === undefined).toBe(true);
+        expect(firstDescriptor?.set === undefined).toBe(true);
+        expect("value" in (firstDescriptor ?? {})).toBe(false);
+        expect(secondDescriptor).toEqual(firstDescriptor);
+      });
+
       it("should block setting properties", () => {
         const testObj = { value: 42 };
         const wrapped = ReadOnlyProxy.wrap(testObj, "obj");

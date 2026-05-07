@@ -122,9 +122,7 @@ function shouldUseShadowTarget(value: unknown): value is object {
   if (Array.isArray(value) || isTypedArray(value)) {
     return false;
   }
-
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  return true;
 }
 
 /**
@@ -710,7 +708,8 @@ export class ReadOnlyProxy {
               ? {
                   configurable: false,
                   enumerable: descriptor.enumerable ?? false,
-                  ...(wrappedGetter ? { get: wrappedGetter } : {}),
+                  get: wrappedGetter,
+                  set: undefined,
                 }
               : normalizedDescriptor;
           Reflect.defineProperty(target, prop, shadowDescriptor);
