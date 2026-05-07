@@ -576,6 +576,49 @@ describe("Module System", () => {
       expect(exports?.value).toBe(42);
     });
 
+    test("should retry cached module path after evaluation failure", async () => {
+      const state = { shouldFail: true, resolveCount: 0 };
+
+      const resolver: ModuleResolver = {
+        resolve(specifier) {
+          state.resolveCount++;
+          return {
+            type: "source",
+            code: state.shouldFail
+              ? 'throw "temporary failure";'
+              : 'export const value = "recovered";',
+            path: specifier,
+          };
+        },
+      };
+
+      const interpreter = new Interpreter({
+        modules: { enabled: true, resolver, cache: true },
+      });
+
+      try {
+        await interpreter.evaluateModuleAsync('import { value } from "transient.js";', {
+          path: "main1.js",
+        });
+        throw new Error("Expected transient module import to fail");
+      } catch (error) {
+        expect((error as Error).message).toContain("temporary failure");
+      }
+
+      expect(interpreter.isModuleCached("transient.js")).toBe(false);
+      expect(interpreter.isModuleCachedByPath("transient.js")).toBe(false);
+
+      state.shouldFail = false;
+      const result = await interpreter.evaluateModuleAsync(
+        'import { value } from "transient.js"; export const output = value;',
+        { path: "main2.js" },
+      );
+
+      expect(result.output).toBe("recovered");
+      expect(state.resolveCount).toBe(2);
+      expect(interpreter.getModuleMetadata("transient.js")?.status).toBe("initialized");
+    });
+
     test("should provide module introspection API", async () => {
       const resolver: ModuleResolver = {
         resolve(specifier) {
@@ -3287,8 +3330,8 @@ describe("Module System", () => {
       expect(interpreter.getModuleExportsBySpecifier("nonexistent.js")).toBeUndefined();
     });
 
-    test("should track failed module in metadata", async () => {
-      let badModuleEvaluations = 0;
+    test("should evict failed module metadata and retry on next import", async () => {
+      const state = { badModuleEvaluations: 0 };
       const resolver: ModuleResolver = {
         resolve(specifier) {
           if (specifier === "bad.js") {
@@ -3305,8 +3348,8 @@ describe("Module System", () => {
       const interpreter = new Interpreter({
         globals: {
           bump: () => {
-            badModuleEvaluations += 1;
-            return badModuleEvaluations;
+            state.badModuleEvaluations += 1;
+            return state.badModuleEvaluations;
           },
         },
         modules: { enabled: true, resolver },
@@ -3325,11 +3368,9 @@ describe("Module System", () => {
         firstError instanceof Error ? firstError.message : String(firstError);
       expect(firstErrorMessage).toContain("Undefined variable 'nope'");
 
-      const metadata = interpreter.getModuleMetadata("bad.js");
-      expect(metadata).toBeDefined();
-      expect(metadata?.status).toBe("failed");
-      expect(metadata?.error).toBeDefined();
-      expect(badModuleEvaluations).toBe(1);
+      expect(interpreter.getModuleMetadata("bad.js")).toBeUndefined();
+      expect(interpreter.isModuleCached("bad.js")).toBe(false);
+      expect(state.badModuleEvaluations).toBe(1);
 
       let secondError: unknown;
       try {
@@ -3340,7 +3381,7 @@ describe("Module System", () => {
         secondError = error;
       }
       expect(secondError).toBeDefined();
-      expect(badModuleEvaluations).toBe(1);
+      expect(state.badModuleEvaluations).toBe(2);
     });
 
     test("should preserve importer attribution for failed module onError callbacks", async () => {

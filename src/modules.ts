@@ -481,6 +481,28 @@ export class ModuleSystem {
     importerPaths.add(path);
   }
 
+  private unregisterPath(path: string): void {
+    for (const [specifier, paths] of this.specifierToPaths) {
+      paths.delete(path);
+      if (paths.size === 0) {
+        this.specifierToPaths.delete(specifier);
+      }
+    }
+
+    for (const [specifier, pathsByImporter] of this.specifierToPathsByImporter) {
+      for (const [importer, paths] of pathsByImporter) {
+        paths.delete(path);
+        if (paths.size === 0) {
+          pathsByImporter.delete(importer);
+        }
+      }
+
+      if (pathsByImporter.size === 0) {
+        this.specifierToPathsByImporter.delete(specifier);
+      }
+    }
+  }
+
   private getUnambiguousPath(paths?: ReadonlySet<string>): string | undefined {
     if (!paths || paths.size !== 1) {
       return undefined;
@@ -608,10 +630,6 @@ export class ModuleSystem {
           if (existingByPath.status === "initializing") {
             return existingByPath;
           }
-          // If previously failed, return cached failure record
-          if (existingByPath.status === "failed") {
-            return existingByPath;
-          }
         }
       }
 
@@ -730,13 +748,16 @@ export class ModuleSystem {
   }
 
   /**
-   * Mark a module as failed.
+   * Mark a module as failed and evict it so the next import can retry.
    */
   setModuleFailed(path: string, error: Error): void {
     const record = this.cacheByPath.get(path);
     if (record) {
       record.status = "failed";
       record.error = error;
+      this.cacheByPath.delete(path);
+      this.unregisterPath(path);
+      this.resolvedPathByContext.clear();
       this.options.resolver.onError?.(record.specifier, record.importer, error);
     }
   }
