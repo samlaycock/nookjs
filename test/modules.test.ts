@@ -4510,6 +4510,47 @@ describe("Module System", () => {
       expect(internalModuleSystem.resolvedPathByContext.size).toBeLessThanOrEqual(1024);
     });
 
+    test("should bound module cache growth and keep indexes consistent", async () => {
+      const moduleSystem = new ModuleSystem({
+        enabled: true,
+        cache: true,
+        maxEntries: 2,
+        resolver: {
+          resolve(specifier, importer) {
+            return {
+              type: "namespace",
+              exports: { value: `${specifier}:${importer}` },
+              path: `/${specifier.slice(2)}-${importer}`,
+            };
+          },
+          authorize() {
+            return true;
+          },
+        },
+      });
+
+      await moduleSystem.resolveModule("./one", "first.js");
+      await moduleSystem.resolveModule("./two", "second.js");
+      await moduleSystem.resolveModule("./three", "third.js");
+
+      expect(moduleSystem.getCacheSize()).toBe(2);
+      expect(moduleSystem.isModuleCachedByPath("/one-first.js")).toBe(false);
+      expect(moduleSystem.isModuleCached("./one")).toBe(false);
+      expect(
+        moduleSystem.isModuleCached("./one", {
+          importer: "first.js",
+        }),
+      ).toBe(false);
+      expect(
+        moduleSystem.isModuleCached("./one", {
+          importer: "first.js",
+          importerChain: [],
+        }),
+      ).toBe(false);
+      expect(moduleSystem.getLoadedSpecifiers()).toEqual(["./two", "./three"]);
+      expect(moduleSystem.getLoadedModules()).toEqual(["/two-second.js", "/three-third.js"]);
+    });
+
     test("should avoid JSON stringification when caching resolution contexts", async () => {
       let resolveCount = 0;
       const moduleSystem = new ModuleSystem({
