@@ -359,6 +359,23 @@ describe("Simplified API", () => {
     );
   });
 
+  it("should require the shared-memory API preset for SharedArrayBuffer and Atomics", async () => {
+    const bufferOnly = createSandbox({ env: "es2022", apis: ["buffer"] });
+    expect(await bufferOnly.run<string[]>("[typeof SharedArrayBuffer, typeof Atomics]")).toEqual([
+      "undefined",
+      "undefined",
+    ]);
+
+    if (typeof SharedArrayBuffer === "undefined" || typeof Atomics === "undefined") {
+      return;
+    }
+
+    const withSharedMemory = createSandbox({ env: "es2022", apis: ["buffer", "shared-memory"] });
+    expect(
+      await withSharedMemory.run<string[]>("[typeof SharedArrayBuffer, typeof Atomics]"),
+    ).toEqual(["function", "object"]);
+  });
+
   it("should allow enabling additional features", async () => {
     const sandbox = createSandbox({
       env: "es5",

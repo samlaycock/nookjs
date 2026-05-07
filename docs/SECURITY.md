@@ -204,10 +204,12 @@ This prevents host objects from leaking sensitive data through custom `valueOf` 
 
 TypedArrays (e.g., `Uint8Array`, `Int32Array`) and `ArrayBuffer` instances have special security handling to balance usability with sandbox protection.
 
-If you also expose `BufferAPI`, the sandbox can receive `SharedArrayBuffer` and `Atomics` when the
-host runtime supports them. That is useful for shared-memory coordination, but it also means
-shared-memory-backed views can be mutated and synchronized across the sandbox boundary if your
-embedder shares those objects with host code or other sandboxes.
+`BufferAPI` exposes `ArrayBuffer`, `DataView`, and typed array constructors without exposing
+shared-memory primitives. If you also expose `SharedMemoryAPI`, the sandbox can receive
+`SharedArrayBuffer` and `Atomics` when the host runtime supports them. That is useful for
+shared-memory coordination, but it also means shared-memory-backed views can be mutated and
+synchronized across the sandbox boundary if your embedder shares those objects with host code or
+other sandboxes.
 
 #### Element Mutation is Allowed
 
@@ -281,8 +283,8 @@ await sandbox.run(`
 ### SharedArrayBuffer and Atomics Increase Coordination Power
 
 `SharedArrayBuffer` becomes materially more powerful once `Atomics` is available alongside it.
-With `BufferAPI`, sandbox code can coordinate through shared memory instead of only reading or
-writing buffer contents.
+With `SharedMemoryAPI`, sandbox code can coordinate through shared memory instead of only reading
+or writing buffer contents.
 
 Security tradeoff:
 
@@ -290,8 +292,9 @@ Security tradeoff:
   and synchronize mutations to the same underlying memory.
 - This does not create a sandbox escape by itself, but it does create a higher-bandwidth
   coordination channel than plain `ArrayBuffer`.
-- Only expose `BufferAPI` when your embedding model is comfortable with shared mutable memory, or
-  avoid passing shared-memory-backed views across trust boundaries.
+- Prefer `BufferAPI` when you only need typed arrays and `ArrayBuffer`.
+- Only expose `SharedMemoryAPI` when your embedding model is comfortable with shared mutable
+  memory, or avoid passing shared-memory-backed views across trust boundaries.
 
 **If you need stronger isolation:**
 

@@ -20,6 +20,7 @@ import {
   RegExpAPI,
   IntlAPI,
   BufferAPI,
+  SharedMemoryAPI,
   StreamsAPI,
   BlobAPI,
   PerformanceAPI,
@@ -331,13 +332,9 @@ describe("Presets", () => {
           expect(BufferAPI.globals?.Float64Array).toBe(Float64Array);
         });
 
-        it("should provide Atomics when the host runtime supports shared memory", () => {
-          if (typeof Atomics === "undefined") {
-            expect(BufferAPI.globals?.Atomics).toBeUndefined();
-            return;
-          }
-
-          expect(BufferAPI.globals?.Atomics).toBe(Atomics);
+        it("should not provide shared-memory globals", () => {
+          expect(BufferAPI.globals?.Atomics).toBeUndefined();
+          expect(BufferAPI.globals?.SharedArrayBuffer).toBeUndefined();
         });
 
         it("should work with interpreter - ArrayBuffer", async () => {
@@ -360,12 +357,35 @@ describe("Presets", () => {
           expect(result).toBe(5);
         });
 
+        it("should keep shared-memory globals unavailable in the interpreter", async () => {
+          const interpreter = new Interpreter(preset(ES2022, BufferAPI));
+
+          const result = await interpreter.evaluateAsync(`
+            [typeof SharedArrayBuffer, typeof Atomics]
+          `);
+
+          expect(result).toEqual(["undefined", "undefined"]);
+        });
+      });
+
+      describe("SharedMemoryAPI", () => {
+        it("should provide shared-memory globals when the host runtime supports them", () => {
+          if (typeof Atomics === "undefined" || typeof SharedArrayBuffer === "undefined") {
+            expect(SharedMemoryAPI.globals?.Atomics).toBeUndefined();
+            expect(SharedMemoryAPI.globals?.SharedArrayBuffer).toBeUndefined();
+            return;
+          }
+
+          expect(SharedMemoryAPI.globals?.Atomics).toBe(Atomics);
+          expect(SharedMemoryAPI.globals?.SharedArrayBuffer).toBe(SharedArrayBuffer);
+        });
+
         it("should support Atomics operations on SharedArrayBuffer-backed views", async () => {
           if (typeof Atomics === "undefined" || typeof SharedArrayBuffer === "undefined") {
             return;
           }
 
-          const interpreter = new Interpreter(preset(ES2022, BufferAPI));
+          const interpreter = new Interpreter(preset(ES2022, BufferAPI, SharedMemoryAPI));
 
           const result = await interpreter.evaluateAsync(`
             const buffer = new SharedArrayBuffer(4);
