@@ -882,6 +882,47 @@ describe("Security", () => {
         expect(Object.getPrototypeOf(hostObject)).toBe(Object.prototype);
       });
 
+      it("should fall back to read-only proxies for host objects with accessor-backed prototypes", () => {
+        const hostProto: Record<string, unknown> = {};
+        Object.defineProperty(hostProto, "computed", {
+          get: () => 2,
+          enumerable: true,
+          configurable: true,
+        });
+        const hostObject = Object.create(hostProto) as Record<string, unknown>;
+        hostObject.safe = 1;
+
+        const interpreter = new Interpreter({
+          globals: {
+            getAccessorPrototypeObject: () => hostObject,
+          },
+        });
+
+        const result = interpreter.evaluate(`
+          const obj = getAccessorPrototypeObject();
+          [obj.safe, obj.computed, obj];
+        `);
+
+        expect(result[0]).toBe(1);
+        expect(result[1]).toBe(2);
+        expect(Object.getPrototypeOf(result[2])).toBeNull();
+
+        const mutationInterpreter = new Interpreter({
+          globals: {
+            getAccessorPrototypeObject: () => hostObject,
+          },
+        });
+        expect(() => {
+          mutationInterpreter.evaluate(`
+            const proxied = getAccessorPrototypeObject();
+            proxied.safe = 2;
+          `);
+        }).toThrow(
+          "Cannot modify property 'safe' on global 'getAccessorPrototypeObject' (read-only)",
+        );
+        expect(hostObject.safe).toBe(1);
+      });
+
       it("should preserve circular references when materializing host objects", () => {
         const circular: any = { count: 1 };
         circular.self = circular;
