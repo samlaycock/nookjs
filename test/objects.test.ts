@@ -1764,6 +1764,30 @@ describe("Objects", () => {
         `);
         expect(result).toEqual({ a: 1, b: 3, c: 4 });
       });
+
+      it("should copy enumerable symbol keys with spread", () => {
+        const result = interpreter.evaluate(`
+          const sym = Symbol("metadata");
+          const hidden = Symbol("hidden");
+          const base = { [sym]: 123, a: 1 };
+          Object.defineProperty(base, hidden, { value: 456, enumerable: false });
+          const out = { ...base, b: 2 };
+          [out[sym], Object.getOwnPropertySymbols(out).length, out.a, out.b];
+        `);
+        expect(result).toEqual([123, 1, 1, 2]);
+      });
+
+      it("should copy enumerable symbol keys with spread in evaluateAsync", async () => {
+        const result = await interpreter.evaluateAsync(`
+          const sym = Symbol("metadata");
+          const hidden = Symbol("hidden");
+          const base = { [sym]: 123, a: 1 };
+          Object.defineProperty(base, hidden, { value: 456, enumerable: false });
+          const out = { ...base, b: 2 };
+          [out[sym], Object.getOwnPropertySymbols(out).length, out.a, out.b];
+        `);
+        expect(result).toEqual([123, 1, 1, 2]);
+      });
     });
 
     describe("Object rest", () => {
