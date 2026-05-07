@@ -418,6 +418,14 @@ function extractForInVariable(left: ESTree.ForInStatement["left"]): {
   throw new InterpreterError("Unsupported for...in left-hand side");
 }
 
+function enumerateForInKeys(obj: object): string[] {
+  const keys: string[] = [];
+  for (const key in obj) {
+    keys.push(key);
+  }
+  return keys;
+}
+
 /**
  * Represents a synchronous generator instance created by calling a generator function.
  * Implements the iterator protocol with next(), return(), and throw().
@@ -867,8 +875,7 @@ class GeneratorValue extends BaseGeneratorValue {
 
       const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
-      // Iterate over object keys
-      const keys = Object.keys(obj);
+      const keys = enumerateForInKeys(obj);
 
       for (const key of keys) {
         if (isDeclaration) {
@@ -1542,8 +1549,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
 
       const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
-      // Iterate over object keys
-      const keys = Object.keys(obj);
+      const keys = enumerateForInKeys(obj);
 
       for (const key of keys) {
         if (isDeclaration) {
@@ -8013,9 +8019,7 @@ export class Interpreter {
       let result: any = undefined;
       let iterations = 0;
 
-      // Iterate over object keys (own enumerable properties)
-      // Use Object.keys to get own enumerable property names
-      const keys = Object.keys(obj);
+      const keys = enumerateForInKeys(obj);
 
       for (const key of keys) {
         // Check execution limits at the start of each loop iteration
@@ -11435,8 +11439,7 @@ export class Interpreter {
       let result: any = undefined;
       let iterations = 0;
 
-      // Iterate over object keys (own enumerable properties)
-      const keys = Object.keys(obj);
+      const keys = enumerateForInKeys(obj);
 
       for (const key of keys) {
         // Check execution limits at the start of each loop iteration

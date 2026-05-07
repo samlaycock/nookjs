@@ -1,6 +1,7 @@
 import { describe, it, test, expect, beforeEach } from "bun:test";
 
 import { Interpreter, InterpreterError } from "../src/interpreter";
+import { createSandbox } from "../src/sandbox";
 
 describe("Control Flow", () => {
   describe("ES5", () => {
@@ -2671,6 +2672,22 @@ describe("Control Flow", () => {
           `);
           expect(result).toBe("y"); // Last key assigned
         });
+
+        it("should iterate inherited enumerable keys without duplicating shadowed keys", () => {
+          const sandbox = createSandbox({ env: "es2022" });
+          const result = sandbox.runSync(`
+            let proto = { inherited: 1, shadowed: "proto" };
+            let obj = Object.create(proto);
+            obj.own = 2;
+            obj.shadowed = "own";
+            let keys = [];
+            for (let key in obj) {
+              keys.push(key);
+            }
+            keys
+          `);
+          expect(result).toEqual(["own", "shadowed", "inherited"]);
+        });
       });
 
       describe("for...in with arrays", () => {
@@ -3019,6 +3036,22 @@ describe("Control Flow", () => {
             sum
           `);
           expect(result).toBe(30); // (5*2) + (10*2)
+        });
+
+        it("should iterate inherited enumerable keys in evaluateAsync", async () => {
+          const sandbox = createSandbox({ env: "es2022" });
+          const result = await sandbox.run(`
+            let proto = { inherited: 1, shadowed: "proto" };
+            let obj = Object.create(proto);
+            obj.own = 2;
+            obj.shadowed = "own";
+            let keys = [];
+            for (let key in obj) {
+              keys.push(key);
+            }
+            keys
+          `);
+          expect(result).toEqual(["own", "shadowed", "inherited"]);
         });
       });
 
