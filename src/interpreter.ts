@@ -2643,6 +2643,7 @@ export class Interpreter {
   private currentSuperBinding: SuperBinding | null = null;
   private instanceClassMap: WeakMap<object, ClassValue> = new WeakMap();
   private sandboxOwnedContainers: WeakSet<object> = new WeakSet();
+  private sandboxPrototypeLinkedContainers: WeakSet<object> = new WeakSet();
   private arrayMethodCache: WeakMap<any[], Map<string, HostFunctionValue>> = new WeakMap();
   private generatorMethodCache: WeakMap<GeneratorValue, Map<string, HostFunctionValue>> =
     new WeakMap();
@@ -5898,6 +5899,9 @@ export class Interpreter {
     if (Object.getPrototypeOf(object) === null) {
       return;
     }
+    if (this.sandboxPrototypeLinkedContainers.has(object)) {
+      return;
+    }
     // Allow Symbol.iterator for iteration protocol support
     if (property === Symbol.iterator) {
       return;
@@ -5943,6 +5947,9 @@ export class Interpreter {
       return;
     }
     if (Object.getPrototypeOf(object) === null) {
+      return;
+    }
+    if (this.sandboxPrototypeLinkedContainers.has(object)) {
       return;
     }
     if (object instanceof RegExp) {
@@ -6002,6 +6009,12 @@ export class Interpreter {
     return value;
   }
 
+  private markSandboxPrototypeLinkedContainer<T extends object>(value: T): T {
+    this.sandboxOwnedContainers.add(value);
+    this.sandboxPrototypeLinkedContainers.add(value);
+    return value;
+  }
+
   private defineMaterializedDataProperty(
     target: object,
     key: PropertyKey,
@@ -6025,6 +6038,33 @@ export class Interpreter {
     const wrapped = ReadOnlyProxy.wrap(value, name, this.securityOptions);
     seen.set(value, wrapped);
     return wrapped;
+  }
+
+  private resolveMaterializedHostPrototype(
+    prototype: any,
+    name: string,
+    seen: WeakMap<object, any>,
+  ): object | null | undefined {
+    if (prototype === null || prototype === Object.prototype) {
+      return null;
+    }
+
+    if (typeof prototype !== "object") {
+      return undefined;
+    }
+
+    const materializedPrototype = this.wrapHostReturnValue(prototype, `${name}.__proto__`, seen);
+    if (
+      materializedPrototype === null ||
+      typeof materializedPrototype !== "object" ||
+      Array.isArray(materializedPrototype) ||
+      this.isReadOnlyProxyObject(materializedPrototype) ||
+      this.instanceClassMap.has(materializedPrototype)
+    ) {
+      return undefined;
+    }
+
+    return materializedPrototype;
   }
 
   private wrapHostReturnValue(
@@ -6089,28 +6129,37 @@ export class Interpreter {
       return materialized;
     }
 
-    if (this.isPlainObjectLike(value)) {
+    if (typeof value === "object" && value !== null) {
       const descriptors = Object.getOwnPropertyDescriptors(value);
       for (const key of Reflect.ownKeys(descriptors)) {
         if (isDangerousProperty(key)) {
           return this.wrapHostFallbackValue(value, name, seen);
         }
-        const descriptor = descriptors[key as keyof typeof descriptors] as
-          | PropertyDescriptor
-          | undefined;
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
         if (descriptor && ("get" in descriptor || "set" in descriptor)) {
           return this.wrapHostFallbackValue(value, name, seen);
         }
       }
 
-      const materialized = Object.create(null) as Record<string | symbol, any>;
+      const materializedPrototype = this.resolveMaterializedHostPrototype(
+        Object.getPrototypeOf(value),
+        name,
+        seen,
+      );
+      if (materializedPrototype === undefined) {
+        return this.wrapHostFallbackValue(value, name, seen);
+      }
+
+      const materialized = Object.create(materializedPrototype) as Record<string | symbol, any>;
       seen.set(value, materialized);
-      this.markSandboxContainer(materialized);
+      if (materializedPrototype === null) {
+        this.markSandboxContainer(materialized);
+      } else {
+        this.markSandboxPrototypeLinkedContainer(materialized);
+      }
 
       for (const key of Reflect.ownKeys(descriptors)) {
-        const descriptor = descriptors[key as keyof typeof descriptors] as
-          | PropertyDescriptor
-          | undefined;
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
         if (!descriptor || !("value" in descriptor)) {
           continue;
         }
