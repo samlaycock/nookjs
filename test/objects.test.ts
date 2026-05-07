@@ -833,6 +833,41 @@ describe("Objects", () => {
           `);
           expect(result).toBe(1);
         });
+
+        it("should return a mutable sandbox object with its sandbox prototype preserved", () => {
+          const result = interpreter.evaluate(`
+            const proto = { inherited: 1 };
+            const obj = Object.create(proto);
+            obj.own = 2;
+            const deleted = delete obj.own;
+            [
+              obj.inherited,
+              obj.own,
+              deleted,
+              "own" in obj,
+              Object.getPrototypeOf(obj) === proto,
+            ];
+          `);
+          expect(result).toEqual([1, undefined, true, false, true]);
+        });
+
+        it("should preserve mutable Object.create results in async evaluation", async () => {
+          const asyncInterpreter = new Interpreter(ES2024);
+          const result = await asyncInterpreter.evaluateAsync(`
+            const proto = { inherited: 1 };
+            const obj = Object.create(proto);
+            obj.own = 2;
+            const deleted = delete obj.own;
+            [
+              obj.inherited,
+              obj.own,
+              deleted,
+              "own" in obj,
+              Object.getPrototypeOf(obj) === proto,
+            ];
+          `);
+          expect(result).toEqual([1, undefined, true, false, true]);
+        });
       });
 
       describe("Object.keys", () => {
