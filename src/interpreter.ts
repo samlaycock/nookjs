@@ -8653,6 +8653,8 @@ export class Interpreter {
         if (!destructuredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(value, key)) {
           if (typeof key === "string") {
             validatePropertyName(key); // Security: prevent prototype pollution
+          } else {
+            this.validateSymbolProperty(key);
           }
 
           const val = value[key];
@@ -11934,6 +11936,8 @@ export class Interpreter {
         if (!destructuredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(value, key)) {
           if (typeof key === "string") {
             validatePropertyName(key); // Security: prevent prototype pollution
+          } else {
+            this.validateSymbolProperty(key);
           }
 
           const val = value[key];
