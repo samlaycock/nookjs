@@ -390,6 +390,12 @@ await sandbox.runModule('import { x } from "mod.js";', { path: "a.js" });
 await sandbox.runModule('import { x } from "mod.js";', { path: "b.js" });
 ```
 
+Only successfully evaluated modules are retained in the cache. If resolution returns
+a source but evaluation fails, NookJS evicts that failed record so a later import of
+the same path can call the resolver again and recover from transient source,
+network, or storage failures. In-progress records are still reused while evaluating
+circular dependencies.
+
 ### Cache Control
 
 ```typescript
@@ -398,6 +404,9 @@ const sandbox = createSandbox({
   env: "es2022",
   modules: { resolver, cache: false },
 });
+
+// With cache disabled, both successful and failed imports are resolved and
+// evaluated again on each import attempt.
 
 // For programmatic cache management, use the internal Interpreter API
 // (see docs/INTERNAL_CLASSES.md).
