@@ -12180,7 +12180,7 @@ export class Interpreter {
     }
 
     // Track memory: estimate 64 bytes base + 32 bytes per property
-    const propertyCount = Object.keys(obj).length;
+    const propertyCount = Reflect.ownKeys(obj).length;
     this.trackMemory(64 + propertyCount * 32);
 
     return this.markSandboxContainer(obj);
