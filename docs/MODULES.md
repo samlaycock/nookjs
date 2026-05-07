@@ -61,6 +61,7 @@ const sandbox = createSandbox({
     resolver,
     maxDepth: 100, // Optional: max import depth (default: 100)
     cache: true, // Optional: enable caching (default: true)
+    maxEntries: 1000, // Optional: bound retained module records (default: unbounded)
   },
 });
 ```
@@ -407,6 +408,14 @@ const sandbox = createSandbox({
 
 // With cache disabled, both successful and failed imports are resolved and
 // evaluated again on each import attempt.
+
+// Bound cache growth for long-lived sandboxes. When the cache exceeds maxEntries,
+// the least recently used initialized module is evicted and specifier/importer
+// indexes are cleaned up with it.
+const boundedSandbox = createSandbox({
+  env: "es2022",
+  modules: { resolver, maxEntries: 1000 },
+});
 
 // For programmatic cache management, use the internal Interpreter API
 // (see docs/INTERNAL_CLASSES.md).

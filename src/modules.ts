@@ -320,6 +320,7 @@ export interface ModuleOptions {
   enabled: boolean;
   resolver: ModuleResolver;
   cache?: boolean;
+  maxEntries?: number;
   maxDepth?: number;
 }
 
@@ -399,6 +400,7 @@ export class ModuleSystem {
     MAX_RESOLVED_PATH_CONTEXT_CACHE_SIZE,
   );
   private options: ModuleOptions;
+  private readonly maxEntries: number;
   // Track depth per evaluation context using a stack (fixes shared depth counter)
   private evaluationStack: string[] = [];
 
@@ -409,6 +411,7 @@ export class ModuleSystem {
       cache: options.cache ?? true,
       maxDepth: options.maxDepth ?? 100,
     };
+    this.maxEntries = this.normalizeMaxEntries(this.options.maxEntries);
   }
 
   /**
@@ -486,6 +489,51 @@ export class ModuleSystem {
       pathsByImporter.set(importer, importerPaths);
     }
     importerPaths.add(path);
+  }
+
+  private normalizeMaxEntries(maxEntries: number | undefined): number {
+    if (maxEntries === undefined) {
+      return Infinity;
+    }
+
+    if (!Number.isFinite(maxEntries) || maxEntries < 0) {
+      throw new Error("Module cache maxEntries must be a non-negative finite number");
+    }
+
+    return Math.floor(maxEntries);
+  }
+
+  private touchModuleRecord(path: string): void {
+    const record = this.cacheByPath.get(path);
+    if (!record) {
+      return;
+    }
+
+    this.cacheByPath.delete(path);
+    this.cacheByPath.set(path, record);
+  }
+
+  private evictModulePath(path: string): void {
+    this.cacheByPath.delete(path);
+    this.unregisterPath(path);
+    this.resolvedPathByContext.deleteByPath(path);
+  }
+
+  private evictOldestModuleIfNeeded(): void {
+    if (this.cacheByPath.size <= this.maxEntries) {
+      return;
+    }
+
+    for (const [path, record] of this.cacheByPath) {
+      if (record.status === "initializing") {
+        continue;
+      }
+
+      this.evictModulePath(path);
+      if (this.cacheByPath.size <= this.maxEntries) {
+        return;
+      }
+    }
   }
 
   private unregisterPath(path: string): void {
@@ -595,6 +643,7 @@ export class ModuleSystem {
               context.importerChain,
               cachedPath,
             );
+            this.touchModuleRecord(cachedPath);
             return existingByPath;
           }
 
@@ -629,6 +678,7 @@ export class ModuleSystem {
           // resolve to a module path that is already cached.
           this.registerSpecifierPath(specifier, importer, source.path);
           this.cacheResolvedPathForContext(specifier, importer, context.importerChain, source.path);
+          this.touchModuleRecord(source.path);
           // If already initialized, return cached exports
           if (existingByPath.status === "initialized") {
             return existingByPath;
@@ -664,6 +714,7 @@ export class ModuleSystem {
         this.cacheByPath.set(source.path, record);
         this.registerSpecifierPath(specifier, importer, source.path);
         this.cacheResolvedPathForContext(specifier, importer, context.importerChain, source.path);
+        this.evictOldestModuleIfNeeded();
       }
 
       if (source.type === "namespace") {
@@ -673,6 +724,7 @@ export class ModuleSystem {
         // causes issues with proxy wrapping
         record.exports = shallowCloneWithDescriptors(source.exports);
         record.status = "initialized";
+        this.evictOldestModuleIfNeeded();
         this.options.resolver.onLoad?.(specifier, source.path, record.exports);
         return record;
       }
@@ -733,6 +785,8 @@ export class ModuleSystem {
       // Exports are already protected by ReadOnlyProxy from evaluateModuleAstAsync
       record.exports = exports;
       record.status = "initialized";
+      this.touchModuleRecord(path);
+      this.evictOldestModuleIfNeeded();
       this.options.resolver.onLoad?.(record.specifier, path, record.exports);
     }
   }
@@ -762,9 +816,7 @@ export class ModuleSystem {
     if (record) {
       record.status = "failed";
       record.error = error;
-      this.cacheByPath.delete(path);
-      this.unregisterPath(path);
-      this.resolvedPathByContext.deleteByPath(path);
+      this.evictModulePath(path);
       this.options.resolver.onError?.(record.specifier, record.importer, error);
     }
   }

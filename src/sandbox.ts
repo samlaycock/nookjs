@@ -131,6 +131,7 @@ export interface SandboxModules {
   readonly externals?: Record<string, Record<string, unknown>>;
   readonly resolver?: ModuleResolver;
   readonly cache?: boolean;
+  readonly maxEntries?: number;
   readonly maxDepth?: number;
 }
 
@@ -442,6 +443,7 @@ const resolveModules = (modules?: SandboxModules): ModuleOptions | undefined => 
     enabled: true,
     resolver,
     cache: modules.cache,
+    maxEntries: modules.maxEntries,
     maxDepth: modules.maxDepth,
   };
 };
