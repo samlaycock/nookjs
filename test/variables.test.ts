@@ -1,6 +1,7 @@
 import { describe, it, test, expect, beforeEach } from "bun:test";
 
 import { Interpreter, InterpreterError } from "../src/interpreter";
+import { ES2024 } from "../src/presets";
 
 describe("Variables", () => {
   describe("ES5", () => {
@@ -2406,6 +2407,44 @@ describe("Variables", () => {
             rest;
           `);
           expect(result).toEqual({ b: 2, c: 3 });
+        });
+
+        it("should preserve enumerable symbol keys in rest objects", () => {
+          const interpreter = new Interpreter(ES2024);
+          const result = interpreter.evaluate(`
+            const sym = Symbol("metadata");
+            const hidden = Symbol("hidden");
+            const source = { [sym]: 123, a: 1, b: 2 };
+            Object.defineProperty(source, hidden, { value: 456, enumerable: false });
+            const {a, ...rest} = source;
+            [rest[sym], Object.getOwnPropertySymbols(rest).length, rest.b];
+          `);
+          expect(result).toEqual([123, 1, 2]);
+        });
+
+        it("should exclude destructured symbol keys from rest objects", () => {
+          const interpreter = new Interpreter(ES2024);
+          const result = interpreter.evaluate(`
+            const keep = Symbol("keep");
+            const omit = Symbol("omit");
+            const source = { [keep]: 123, [omit]: 456, a: 1 };
+            const {[omit]: value, ...rest} = source;
+            [value, rest[keep], rest[omit], Object.getOwnPropertySymbols(rest).length, rest.a];
+          `);
+          expect(result).toEqual([456, 123, undefined, 1, 1]);
+        });
+
+        it("should preserve enumerable symbol keys in rest objects in evaluateAsync", async () => {
+          const interpreter = new Interpreter(ES2024);
+          const result = await interpreter.evaluateAsync(`
+            const sym = Symbol("metadata");
+            const hidden = Symbol("hidden");
+            const source = { [sym]: 123, a: 1, b: 2 };
+            Object.defineProperty(source, hidden, { value: 456, enumerable: false });
+            const {a, ...rest} = source;
+            [rest[sym], Object.getOwnPropertySymbols(rest).length, rest.b];
+          `);
+          expect(result).toEqual([123, 1, 2]);
         });
       });
 
