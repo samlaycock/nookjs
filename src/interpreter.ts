@@ -6141,20 +6141,23 @@ export class Interpreter {
         }
       }
 
+      const materialized = Object.create(null) as Record<string | symbol, any>;
+      seen.set(value, materialized);
+
       const materializedPrototype = this.resolveMaterializedHostPrototype(
         Object.getPrototypeOf(value),
         name,
         seen,
       );
       if (materializedPrototype === undefined) {
+        seen.delete(value);
         return this.wrapHostFallbackValue(value, name, seen);
       }
 
-      const materialized = Object.create(materializedPrototype) as Record<string | symbol, any>;
-      seen.set(value, materialized);
       if (materializedPrototype === null) {
         this.markSandboxContainer(materialized);
       } else {
+        Object.setPrototypeOf(materialized, materializedPrototype);
         this.markSandboxPrototypeLinkedContainer(materialized);
       }
 

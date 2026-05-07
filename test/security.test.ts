@@ -944,6 +944,30 @@ describe("Security", () => {
         expect(result).toEqual([true, 2]);
         expect(circular.count).toBe(1);
       });
+
+      it("should preserve identity for prototype-mediated back-references", () => {
+        const proto: Record<string, unknown> = {};
+        const child = Object.create(proto) as Record<string, unknown>;
+        proto.backRef = child;
+        child.parent = proto;
+        child.value = 1;
+
+        const interpreter = new Interpreter({
+          globals: {
+            getPrototypeCycleObject: () => child,
+          },
+        });
+
+        const result = interpreter.evaluate(`
+          const obj = getPrototypeCycleObject();
+          [
+            obj === obj.parent.backRef,
+            obj.parent.backRef.value,
+          ];
+        `);
+
+        expect(result).toEqual([true, 1]);
+      });
     });
 
     describe("edge cases", () => {
