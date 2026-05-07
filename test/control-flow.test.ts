@@ -1,6 +1,7 @@
 import { describe, it, test, expect, beforeEach } from "bun:test";
 
 import { Interpreter, InterpreterError } from "../src/interpreter";
+import { ES2022 } from "../src/presets";
 import { createSandbox } from "../src/sandbox";
 
 describe("Control Flow", () => {
@@ -3050,6 +3051,55 @@ describe("Control Flow", () => {
               keys.push(key);
             }
             keys
+          `);
+          expect(result).toEqual(["own", "shadowed", "inherited"]);
+        });
+      });
+
+      describe("for...in in generators", () => {
+        it("should iterate inherited enumerable keys from generator functions", () => {
+          const interpreter = new Interpreter(ES2022);
+          const result = interpreter.evaluate(`
+            let proto = { inherited: 1, shadowed: "proto" };
+            let obj = Object.create(proto);
+            obj.own = 2;
+            obj.shadowed = "own";
+            function* keysOf(value) {
+              for (let key in value) {
+                yield key;
+              }
+            }
+            let keys = [];
+            let iterator = keysOf(obj);
+            keys.push(iterator.next().value);
+            keys.push(iterator.next().value);
+            keys.push(iterator.next().value);
+            keys
+          `);
+          expect(result).toEqual(["own", "shadowed", "inherited"]);
+        });
+
+        it("should iterate inherited enumerable keys from async generator functions", async () => {
+          const interpreter = new Interpreter(ES2022);
+          const result = await interpreter.evaluateAsync(`
+            async function run() {
+              let proto = { inherited: 1, shadowed: "proto" };
+              let obj = Object.create(proto);
+              obj.own = 2;
+              obj.shadowed = "own";
+              async function* keysOf(value) {
+                for (let key in value) {
+                  yield key;
+                }
+              }
+              const iterator = keysOf(obj);
+              const results = [];
+              results.push((await iterator.next()).value);
+              results.push((await iterator.next()).value);
+              results.push((await iterator.next()).value);
+              return results;
+            }
+            run()
           `);
           expect(result).toEqual(["own", "shadowed", "inherited"]);
         });
