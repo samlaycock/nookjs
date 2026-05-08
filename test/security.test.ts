@@ -2636,6 +2636,30 @@ describe("Security", () => {
         expect(result).toBe(65);
       });
 
+      it("should snapshot DataView when native unwrap clone strategy is enabled", () => {
+        const buffer = new ArrayBuffer(1);
+        const view = new DataView(buffer);
+        view.setUint8(0, 65);
+
+        const hostMutateByte = (input: DataView): number => {
+          input.setUint8(0, 90);
+          return input.getUint8(0);
+        };
+
+        const interpreter = new Interpreter({
+          globals: { view, hostMutateByte },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["DataView"],
+            nativeUnwrapStrategy: "clone",
+          },
+        });
+
+        const result = interpreter.evaluate("hostMutateByte(view)");
+        expect(result).toBe(90);
+        expect(view.getUint8(0)).toBe(65);
+      });
+
       it("should allow Headers unwrapping when explicitly allowlisted", () => {
         if (typeof Headers !== "function") {
           return;
@@ -2656,6 +2680,56 @@ describe("Security", () => {
 
         const result = interpreter.evaluate("hostReadHeader(headers)");
         expect(result).toBe("ok");
+      });
+
+      it("should snapshot Headers when native unwrap clone strategy is enabled", () => {
+        if (typeof Headers !== "function") {
+          return;
+        }
+
+        const headers = new Headers([["x-test", "ok"]]);
+        const hostMutateHeader = (input: Headers): string | null => {
+          input.set("x-test", "changed");
+          return input.get("x-test");
+        };
+
+        const interpreter = new Interpreter({
+          globals: { headers, hostMutateHeader },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["Headers"],
+            nativeUnwrapStrategy: "clone",
+          },
+        });
+
+        const result = interpreter.evaluate("hostMutateHeader(headers)");
+        expect(result).toBe("changed");
+        expect(headers.get("x-test")).toBe("ok");
+      });
+
+      it("should snapshot URLSearchParams when native unwrap clone strategy is enabled", () => {
+        if (typeof URLSearchParams !== "function") {
+          return;
+        }
+
+        const params = new URLSearchParams("a=1");
+        const hostMutateParams = (input: URLSearchParams): string | null => {
+          input.set("a", "2");
+          return input.get("a");
+        };
+
+        const interpreter = new Interpreter({
+          globals: { params, hostMutateParams },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["URLSearchParams"],
+            nativeUnwrapStrategy: "clone",
+          },
+        });
+
+        const result = interpreter.evaluate("hostMutateParams(params)");
+        expect(result).toBe("2");
+        expect(params.get("a")).toBe("1");
       });
 
       it("should allow Blob unwrapping when explicitly allowlisted", () => {

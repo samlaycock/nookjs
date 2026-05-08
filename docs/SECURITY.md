@@ -34,6 +34,9 @@ const sandbox = createSandbox({
 
     // Optional extra branded types to unwrap for host API compatibility (default: none)
     nativeUnwrapAllowlist: ["DataView", "Headers"],
+
+    // Pass snapshots for allowlisted branded types instead of raw host instances (default: "raw")
+    nativeUnwrapStrategy: "clone",
   },
 });
 ```
@@ -132,6 +135,42 @@ Security tradeoff:
 - If you need `File` unwrapping, include `"File"` explicitly.
 - Container entries like `FormData` and `Request` may also require entry/body types like `Blob` or `File`; native APIs often expect real instances, not proxies.
 - Enable only the minimum set of types needed for your compatibility requirements.
+
+### `nativeUnwrapStrategy` (default: `"raw"`)
+
+`nativeUnwrapStrategy` controls what host functions receive for entries enabled by `nativeUnwrapAllowlist`.
+
+- `"raw"` passes the original host instance through. This preserves the previous behavior and has the highest compatibility, but mutable types like `DataView`, `Headers`, `URL`, `URLSearchParams`, and `FormData` can be mutated by the receiving host API.
+- `"clone"` passes a cloned or snapshotted branded instance where supported. Native brand checks still see the expected type, but mutations affect the clone instead of the original host object.
+
+Example:
+
+```typescript
+const sandbox = createSandbox({
+  env: "es2024",
+  globals: { headers, sendHeaders },
+  security: {
+    nativeUnwrapAllowlist: ["Headers"],
+    nativeUnwrapStrategy: "clone",
+  },
+});
+```
+
+Clone behavior by type:
+
+| Entry             | Clone strategy                                    | Mutability notes                                                      |
+| ----------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| `DataView`        | Copies the viewed bytes into a new `ArrayBuffer`  | Writes through the clone do not affect the original buffer segment.   |
+| `Headers`         | Constructs `new Headers(original)`                | Header mutations are isolated to the snapshot.                        |
+| `URLSearchParams` | Constructs `new URLSearchParams(original)`        | Parameter mutations are isolated to the snapshot.                     |
+| `URL`             | Constructs `new URL(original.href)`               | URL property mutations are isolated to the snapshot.                  |
+| `FormData`        | Appends current entries into a new `FormData`     | Entry list changes are isolated; object/blob entry values are reused. |
+| `Request`         | Uses `request.clone()`                            | Body cloning follows the host runtime's `Request.clone()` semantics.  |
+| `Response`        | Uses `response.clone()`                           | Body cloning follows the host runtime's `Response.clone()` semantics. |
+| `Blob`            | Constructs `new Blob([original])`                 | Blob contents are immutable.                                          |
+| `File`            | Constructs `new File([original], name, metadata)` | File contents are immutable; name/type/lastModified are preserved.    |
+
+Use `"clone"` when you need brand-check compatibility but do not want host-call mutation to share state with the original object. Use `"raw"` when the native API requires identity preservation, live mutations, or host-specific internals that cannot be cloned safely.
 
 ## What is Blocked
 
