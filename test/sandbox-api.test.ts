@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 
 import { ResourceExhaustedError } from "../src";
-import { createSandbox, parse, run } from "../src/sandbox";
+import { createSandbox, parse, run, runSyncIsolated } from "../src/sandbox";
 
 describe("Simplified API", () => {
   it("run() should evaluate code", async () => {
@@ -607,6 +607,47 @@ describe("Simplified API", () => {
     expect(() => sandbox.runSync("1 + 1", { timeoutMs: 10 })).toThrow(
       "timeoutMs is only supported for async execution",
     );
+  });
+
+  it("runSyncIsolated() should evaluate synchronous code with a timeout", () => {
+    const result = runSyncIsolated<number>("value * 2", {
+      timeoutMs: 1000,
+      sandbox: {
+        globals: { value: 21 },
+      },
+    });
+
+    expect(result).toBe(42);
+  });
+
+  it("runSyncIsolated() should hard-stop hostile synchronous code", () => {
+    expect(() =>
+      runSyncIsolated("while (true) {}", {
+        timeoutMs: 50,
+        sandbox: {
+          limits: { perRun: { loops: Number.MAX_SAFE_INTEGER } },
+        },
+      }),
+    ).toThrow("Execution aborted");
+  });
+
+  it("runSyncIsolated() should propagate child execution errors", () => {
+    expect(() =>
+      runSyncIsolated("missingValue + 1", {
+        timeoutMs: 1000,
+      }),
+    ).toThrow("Undefined variable");
+  });
+
+  it("runSyncIsolated() should require serializable options", () => {
+    expect(() =>
+      runSyncIsolated("1 + 1", {
+        timeoutMs: 1000,
+        sandbox: {
+          globals: { fn: () => 1 },
+        },
+      }),
+    ).toThrow("options must be JSON-serializable for isolated sync execution");
   });
 
   it("runSync() should reject AbortSignal", () => {

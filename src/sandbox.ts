@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+
 import type { ESTree } from "./ast";
 import type {
   EvaluateOptions,
@@ -11,6 +13,7 @@ import type {
 import type { ModuleOptions, ModuleResolver } from "./modules";
 import type { ResourceStats } from "./resource-tracker";
 
+import { ExecutionAbortedError } from "./errors";
 import { Interpreter } from "./interpreter";
 import {
   BlobAPI,
@@ -194,6 +197,19 @@ export interface RunOnceOptions extends RunOptions {
 }
 
 export interface RunOnceOptionsFull extends RunOnceOptions {
+  readonly result: "full";
+}
+
+export interface IsolatedRunSyncOptions extends Omit<RunOnceOptions, "signal" | "timeoutMs"> {
+  /**
+   * Wall-clock timeout for the isolated process. When exceeded, the child
+   * process is terminated so hostile synchronous code cannot monopolize the
+   * caller's thread.
+   */
+  readonly timeoutMs: number;
+}
+
+export interface IsolatedRunSyncOptionsFull extends IsolatedRunSyncOptions {
   readonly result: "full";
 }
 
@@ -494,6 +510,37 @@ const validateTimeoutMs = (timeoutMs: number): void => {
   }
 };
 
+const assertJsonSerializable = (name: string, value: unknown): void => {
+  const seen = new WeakSet<object>();
+  const visit = (path: string, current: unknown): void => {
+    if (current === undefined) {
+      return;
+    }
+    const type = typeof current;
+    if (type === "function" || type === "symbol" || type === "bigint") {
+      throw new Error(`${name} must be JSON-serializable for isolated sync execution`);
+    }
+    if (!current || type !== "object") {
+      return;
+    }
+    if (seen.has(current)) {
+      throw new Error(`${name} must not contain circular references`);
+    }
+    seen.add(current);
+    if (Array.isArray(current)) {
+      for (let index = 0; index < current.length; index++) {
+        visit(`${path}[${index}]`, current[index]);
+      }
+      return;
+    }
+    for (const [key, nested] of Object.entries(current as Record<string, unknown>)) {
+      visit(`${path}.${key}`, nested);
+    }
+  };
+
+  visit(name, value);
+};
+
 const resolveRunSignal = (defaultTimeoutMs?: number, options?: RunOptions): ResolvedRunSignal => {
   const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs;
   const externalSignal = options?.signal;
@@ -731,6 +778,91 @@ export async function run<T = unknown>(
 ): Promise<T | RunResult<T>> {
   const sandbox = createSandbox(options?.sandbox);
   return sandbox.run<T>(code, options);
+}
+
+interface IsolatedChildSuccess {
+  readonly ok: true;
+  readonly value: unknown;
+}
+
+interface IsolatedChildFailure {
+  readonly ok: false;
+  readonly error: {
+    readonly name: string;
+    readonly message: string;
+    readonly stack?: string;
+  };
+}
+
+type IsolatedChildResult = IsolatedChildSuccess | IsolatedChildFailure;
+
+export function runSyncIsolated<T = unknown>(
+  code: string,
+  options: IsolatedRunSyncOptionsFull,
+): RunResult<T>;
+export function runSyncIsolated<T = unknown>(code: string, options: IsolatedRunSyncOptions): T;
+export function runSyncIsolated<T = unknown>(
+  code: string,
+  options: IsolatedRunSyncOptions,
+): T | RunResult<T> {
+  validateTimeoutMs(options.timeoutMs);
+  assertJsonSerializable("options", options);
+
+  const childInput = JSON.stringify({
+    code,
+    options,
+    moduleUrl: import.meta.url,
+  });
+
+  const childScript = `
+const input = JSON.parse(await Bun.stdin.text());
+const { createSandbox } = await import(input.moduleUrl);
+try {
+  const sandbox = createSandbox(input.options.sandbox);
+  const { sandbox: _sandbox, timeoutMs: _timeoutMs, ...runOptions } = input.options;
+  const value = sandbox.runSync(input.code, runOptions);
+  process.stdout.write(JSON.stringify({ ok: true, value }));
+} catch (error) {
+  process.stdout.write(JSON.stringify({
+    ok: false,
+    error: {
+      name: error && typeof error === "object" && "name" in error ? error.name : "Error",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    },
+  }));
+  process.exitCode = 1;
+}
+`;
+
+  const result = spawnSync(process.execPath, ["--eval", childScript], {
+    input: childInput,
+    encoding: "utf8",
+    timeout: options.timeoutMs,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+
+  if (result.error) {
+    if ((result.error as NodeJS.ErrnoException).code === "ETIMEDOUT") {
+      throw new ExecutionAbortedError();
+    }
+    throw result.error;
+  }
+
+  const output = result.stdout.trim();
+  if (!output) {
+    throw new Error(result.stderr.trim() || "Isolated sync execution failed");
+  }
+
+  const payload = JSON.parse(output) as IsolatedChildResult;
+  if (payload.ok) {
+    return payload.value as T | RunResult<T>;
+  }
+
+  const error = new Error(payload.error.message);
+  error.name = payload.error.name;
+  error.stack = payload.error.stack;
+  throw error;
 }
 
 export const parse = (code: string, options?: ParseOnceOptions): ESTree.Program => {
