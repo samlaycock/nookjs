@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 
-import { ResourceExhaustedError } from "../src";
+import { InterpreterError, ResourceExhaustedError } from "../src";
 import { createSandbox, parse, run, runSyncIsolated } from "../src/sandbox";
 
 describe("Simplified API", () => {
@@ -639,12 +639,49 @@ describe("Simplified API", () => {
     ).toThrow("Undefined variable");
   });
 
+  it("runSyncIsolated() should preserve known child error identity", () => {
+    expect(() =>
+      runSyncIsolated("missingValue + 1", {
+        timeoutMs: 1000,
+      }),
+    ).toThrow(InterpreterError);
+
+    expect(() =>
+      runSyncIsolated("1 + 1", {
+        timeoutMs: 1000,
+        sandbox: {
+          limits: { total: { evaluations: 0 } },
+        },
+      }),
+    ).toThrow(ResourceExhaustedError);
+  });
+
   it("runSyncIsolated() should require serializable options", () => {
     expect(() =>
       runSyncIsolated("1 + 1", {
         timeoutMs: 1000,
         sandbox: {
           globals: { fn: () => 1 },
+        },
+      }),
+    ).toThrow("options must be JSON-serializable for isolated sync execution");
+  });
+
+  it("runSyncIsolated() should reject non-finite numbers before JSON serialization", () => {
+    expect(() =>
+      runSyncIsolated("1 + 1", {
+        timeoutMs: 1000,
+        sandbox: {
+          limits: { perRun: { loops: Number.NaN } },
+        },
+      }),
+    ).toThrow("options must be JSON-serializable for isolated sync execution");
+
+    expect(() =>
+      runSyncIsolated("1 + 1", {
+        timeoutMs: 1000,
+        sandbox: {
+          limits: { perRun: { memoryBytes: Number.POSITIVE_INFINITY } },
         },
       }),
     ).toThrow("options must be JSON-serializable for isolated sync execution");
