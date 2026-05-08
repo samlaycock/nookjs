@@ -2732,6 +2732,60 @@ describe("Security", () => {
         expect(params.get("a")).toBe("1");
       });
 
+      it("should snapshot URL when native unwrap clone strategy is enabled", () => {
+        if (typeof URL !== "function") {
+          return;
+        }
+
+        const url = new URL("https://example.com/original?a=1");
+        const hostMutateUrl = (input: URL): string => {
+          input.pathname = "/changed";
+          input.searchParams.set("a", "2");
+          return input.href;
+        };
+
+        const interpreter = new Interpreter({
+          globals: { url, hostMutateUrl },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["URL"],
+            nativeUnwrapStrategy: "clone",
+          },
+        });
+
+        const result = interpreter.evaluate("hostMutateUrl(url)");
+        expect(result).toBe("https://example.com/changed?a=2");
+        expect(url.href).toBe("https://example.com/original?a=1");
+      });
+
+      it("should snapshot FormData entries when native unwrap clone strategy is enabled", () => {
+        if (typeof FormData !== "function") {
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("name", "original");
+        const hostMutateFormData = (input: FormData): string | null => {
+          input.set("name", "changed");
+          input.append("extra", "value");
+          return input.get("name") as string | null;
+        };
+
+        const interpreter = new Interpreter({
+          globals: { formData, hostMutateFormData },
+          security: {
+            hideHostErrorMessages: false,
+            nativeUnwrapAllowlist: ["FormData"],
+            nativeUnwrapStrategy: "clone",
+          },
+        });
+
+        const result = interpreter.evaluate("hostMutateFormData(formData)");
+        expect(result).toBe("changed");
+        expect(formData.get("name")).toBe("original");
+        expect(formData.has("extra")).toBe(false);
+      });
+
       it("should allow Blob unwrapping when explicitly allowlisted", () => {
         if (typeof Blob !== "function") {
           return;

@@ -161,7 +161,9 @@ function cloneAllowlistedTarget(target: unknown): unknown {
     return new Blob([blob], { type: blob.type });
   }
 
-  return target;
+  throw new InterpreterError(
+    "nativeUnwrapStrategy 'clone' reached an allowlisted host object without a clone handler",
+  );
 }
 
 function shouldUseShadowTarget(value: unknown): value is object {
