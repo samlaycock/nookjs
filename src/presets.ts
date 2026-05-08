@@ -209,7 +209,7 @@ export const ES2016: InterpreterOptions = attachEcmaPresetVersion(
  * - async/await
  * - Object.values() / Object.entries() (via globals)
  * - String padding methods (on prototype)
- * - Shared memory and atomics (available via BufferAPI addon)
+ * - Shared memory and atomics (available via SharedMemoryAPI addon)
  */
 export const ES2017: InterpreterOptions = attachEcmaPresetVersion(
   {
