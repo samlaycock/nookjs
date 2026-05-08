@@ -38,8 +38,11 @@ export {
 export {
   createSandbox,
   run,
+  runSyncIsolated,
   parse,
   type FeatureToggles,
+  type IsolatedRunSyncOptions,
+  type IsolatedRunSyncOptionsFull,
   type ParseOnceOptions,
   type ResultMode,
   type RunLimits,
