@@ -45,6 +45,7 @@ const NATIVE_UNWRAP_ALLOWLIST_ENTRIES = [
 ] as const;
 
 export type NativeUnwrapAllowlistEntry = (typeof NATIVE_UNWRAP_ALLOWLIST_ENTRIES)[number];
+export type NativeUnwrapStrategy = "raw" | "clone";
 
 /**
  * Check if a value is a TypedArray instance.
@@ -112,6 +113,55 @@ function shouldUnwrapAllowlistedTarget(
   }
 
   return false;
+}
+
+function cloneAllowlistedTarget(target: unknown): unknown {
+  if (target instanceof DataView) {
+    const buffer = target.buffer.slice(target.byteOffset, target.byteOffset + target.byteLength);
+    return new DataView(buffer);
+  }
+
+  if (isInstanceOfGlobalConstructor(target, "Headers")) {
+    return new (globalThis as any).Headers(target);
+  }
+
+  if (isInstanceOfGlobalConstructor(target, "URLSearchParams")) {
+    return new (globalThis as any).URLSearchParams(target);
+  }
+
+  if (isInstanceOfGlobalConstructor(target, "URL")) {
+    return new URL((target as URL).href);
+  }
+
+  if (isInstanceOfGlobalConstructor(target, "FormData")) {
+    const cloned = new (globalThis as any).FormData();
+    for (const [name, value] of target as any) {
+      cloned.append(name, value);
+    }
+    return cloned;
+  }
+
+  if (
+    isInstanceOfGlobalConstructor(target, "Request") ||
+    isInstanceOfGlobalConstructor(target, "Response")
+  ) {
+    return (target as any).clone();
+  }
+
+  if (isInstanceOfGlobalConstructor(target, "File")) {
+    const file = target as any;
+    return new (globalThis as any).File([file], file.name, {
+      lastModified: file.lastModified,
+      type: file.type,
+    });
+  }
+
+  if (isInstanceOfGlobalConstructor(target, "Blob")) {
+    const blob = target as Blob;
+    return new Blob([blob], { type: blob.type });
+  }
+
+  return target;
 }
 
 function shouldUseShadowTarget(value: unknown): value is object {
@@ -187,6 +237,9 @@ export function unwrapForNative(value: unknown, securityOptions?: SecurityOption
   // Optionally unwrap additional branded host objects for compatibility.
   // Default remains conservative: no extra object types are unwrapped.
   if (shouldUnwrapAllowlistedTarget(target, effectiveSecurityOptions.nativeUnwrapAllowlist)) {
+    if (effectiveSecurityOptions.nativeUnwrapStrategy === "clone") {
+      return cloneAllowlistedTarget(target);
+    }
     return target;
   }
 
@@ -250,6 +303,17 @@ export interface SecurityOptions {
    * Only allow types you consider safe for your embedding environment.
    */
   nativeUnwrapAllowlist?: readonly NativeUnwrapAllowlistEntry[];
+
+  /**
+   * How allowlisted branded host objects are passed to native host functions.
+   *
+   * - "raw" passes the original host instance through for maximum compatibility.
+   * - "clone" passes a cloned/snapshotted instance where supported so host-call
+   *   mutation does not modify the original host object.
+   *
+   * Default: "raw" for backwards compatibility.
+   */
+  nativeUnwrapStrategy?: NativeUnwrapStrategy;
 }
 
 // Global security options - can be set by the Interpreter

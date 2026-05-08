@@ -22,7 +22,7 @@ import type {
   ModuleRecord,
   StarExportOrigin,
 } from "./modules";
-import type { NativeUnwrapAllowlistEntry } from "./readonly-proxy";
+import type { NativeUnwrapAllowlistEntry, NativeUnwrapStrategy } from "./readonly-proxy";
 
 import { parseModule, parseScript } from "./ast";
 import { isDangerousProperty, isDangerousSymbol, isForbiddenGlobalName } from "./constants";
@@ -2367,6 +2367,12 @@ export type SecurityOptions = {
    * Default: none (conservative mode).
    */
   nativeUnwrapAllowlist?: readonly NativeUnwrapAllowlistEntry[];
+
+  /**
+   * How allowlisted branded host object types are passed to native host
+   * functions. Defaults to "raw" for backwards compatibility.
+   */
+  nativeUnwrapStrategy?: NativeUnwrapStrategy;
 };
 
 export type NumericSemantics = "safe" | "strict-js";
@@ -2703,6 +2709,7 @@ export class Interpreter {
       sanitizeErrors: options?.security?.sanitizeErrors ?? true,
       hideHostErrorMessages: options?.security?.hideHostErrorMessages ?? true,
       nativeUnwrapAllowlist: options?.security?.nativeUnwrapAllowlist,
+      nativeUnwrapStrategy: options?.security?.nativeUnwrapStrategy,
     };
 
     // Initialize module system if provided
