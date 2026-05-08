@@ -13,7 +13,14 @@ import type {
 import type { ModuleOptions, ModuleResolver } from "./modules";
 import type { ResourceStats } from "./resource-tracker";
 
-import { ExecutionAbortedError } from "./errors";
+import {
+  ExecutionAbortedError,
+  FeatureError,
+  InterpreterError,
+  ParseError,
+  RuntimeError,
+  SecurityError,
+} from "./errors";
 import { Interpreter } from "./interpreter";
 import {
   BlobAPI,
@@ -48,6 +55,7 @@ import {
   WinterCG,
   preset,
 } from "./presets";
+import { ResourceExhaustedError } from "./resource-tracker";
 
 export type SandboxEnv =
   | "minimal"
@@ -520,6 +528,9 @@ const assertJsonSerializable = (name: string, value: unknown): void => {
     if (type === "function" || type === "symbol" || type === "bigint") {
       throw new Error(`${name} must be JSON-serializable for isolated sync execution`);
     }
+    if (type === "number" && !Number.isFinite(current)) {
+      throw new Error(`${name} must be JSON-serializable for isolated sync execution`);
+    }
     if (!current || type !== "object") {
       return;
     }
@@ -791,10 +802,38 @@ interface IsolatedChildFailure {
     readonly name: string;
     readonly message: string;
     readonly stack?: string;
+    readonly properties?: Record<string, unknown>;
   };
 }
 
 type IsolatedChildResult = IsolatedChildSuccess | IsolatedChildFailure;
+
+const ISOLATED_ERROR_PROTOTYPES: Record<string, Error> = {
+  ExecutionAbortedError: ExecutionAbortedError.prototype,
+  FeatureError: FeatureError.prototype,
+  InterpreterError: InterpreterError.prototype,
+  ParseError: ParseError.prototype,
+  ResourceExhaustedError: ResourceExhaustedError.prototype,
+  RuntimeError: RuntimeError.prototype,
+  SecurityError: SecurityError.prototype,
+};
+
+const reconstructIsolatedError = (serialized: IsolatedChildFailure["error"]): Error => {
+  const error = new Error(serialized.message);
+  error.name = serialized.name;
+  error.stack = serialized.stack;
+
+  for (const [key, value] of Object.entries(serialized.properties ?? {})) {
+    (error as unknown as Record<string, unknown>)[key] = value;
+  }
+
+  const prototype = ISOLATED_ERROR_PROTOTYPES[serialized.name];
+  if (prototype) {
+    Object.setPrototypeOf(error, prototype);
+  }
+
+  return error;
+};
 
 export function runSyncIsolated<T = unknown>(
   code: string,
@@ -823,12 +862,16 @@ try {
   const value = sandbox.runSync(input.code, runOptions);
   process.stdout.write(JSON.stringify({ ok: true, value }));
 } catch (error) {
+  const properties = error && typeof error === "object" ? Object.fromEntries(
+    Object.entries(error).filter(([, value]) => typeof value !== "function")
+  ) : undefined;
   process.stdout.write(JSON.stringify({
     ok: false,
     error: {
       name: error && typeof error === "object" && "name" in error ? error.name : "Error",
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
+      properties,
     },
   }));
   process.exitCode = 1;
@@ -859,10 +902,7 @@ try {
     return payload.value as T | RunResult<T>;
   }
 
-  const error = new Error(payload.error.message);
-  error.name = payload.error.name;
-  error.stack = payload.error.stack;
-  throw error;
+  throw reconstructIsolatedError(payload.error);
 }
 
 export const parse = (code: string, options?: ParseOnceOptions): ESTree.Program => {
