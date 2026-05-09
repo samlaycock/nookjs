@@ -1,5 +1,11 @@
 # nookjs
 
+## 0.7.1
+
+### Patch Changes
+
+- 55306e1: Simplify interpreter class member lookup and static member access helpers.
+
 ## 0.7.0
 
 ### Minor Changes
