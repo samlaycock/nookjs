@@ -13537,30 +13537,16 @@ export class Interpreter {
     superBinding: SuperBinding,
     methodName: string | symbol,
   ): { method: FunctionValue; definingClass: ClassValue } | null {
-    let current = superBinding.parentClass;
-    while (current) {
-      const method = current.instanceMethods.get(methodName);
-      if (method) {
-        return { method, definingClass: current };
-      }
-      current = current.parentClass;
-    }
-    return null;
+    const result = this.lookupClassMember(superBinding.parentClass, methodName, "instanceMethods");
+    return result ? { method: result.member, definingClass: result.definingClass } : null;
   }
 
   private lookupInstanceMethod(
     classValue: ClassValue,
     methodName: string | symbol,
   ): { method: FunctionValue; definingClass: ClassValue } | null {
-    let current: ClassValue | null = classValue;
-    while (current) {
-      const method = current.instanceMethods.get(methodName);
-      if (method) {
-        return { method, definingClass: current };
-      }
-      current = current.parentClass;
-    }
-    return null;
+    const result = this.lookupClassMember(classValue, methodName, "instanceMethods");
+    return result ? { method: result.member, definingClass: result.definingClass } : null;
   }
 
   /**
@@ -13570,30 +13556,20 @@ export class Interpreter {
     superBinding: SuperBinding,
     propertyName: string | symbol,
   ): { getter: FunctionValue; definingClass: ClassValue } | null {
-    let current = superBinding.parentClass;
-    while (current) {
-      const getter = current.instanceGetters.get(propertyName);
-      if (getter) {
-        return { getter, definingClass: current };
-      }
-      current = current.parentClass;
-    }
-    return null;
+    const result = this.lookupClassMember(
+      superBinding.parentClass,
+      propertyName,
+      "instanceGetters",
+    );
+    return result ? { getter: result.member, definingClass: result.definingClass } : null;
   }
 
   private lookupInstanceGetter(
     classValue: ClassValue,
     propertyName: string | symbol,
   ): { getter: FunctionValue; definingClass: ClassValue } | null {
-    let current: ClassValue | null = classValue;
-    while (current) {
-      const getter = current.instanceGetters.get(propertyName);
-      if (getter) {
-        return { getter, definingClass: current };
-      }
-      current = current.parentClass;
-    }
-    return null;
+    const result = this.lookupClassMember(classValue, propertyName, "instanceGetters");
+    return result ? { getter: result.member, definingClass: result.definingClass } : null;
   }
 
   /**
@@ -13603,75 +13579,67 @@ export class Interpreter {
     superBinding: SuperBinding,
     propertyName: string | symbol,
   ): { setter: FunctionValue; definingClass: ClassValue } | null {
-    let current = superBinding.parentClass;
-    while (current) {
-      const setter = current.instanceSetters.get(propertyName);
-      if (setter) {
-        return { setter, definingClass: current };
-      }
-      current = current.parentClass;
-    }
-    return null;
+    const result = this.lookupClassMember(
+      superBinding.parentClass,
+      propertyName,
+      "instanceSetters",
+    );
+    return result ? { setter: result.member, definingClass: result.definingClass } : null;
   }
 
   private lookupInstanceSetter(
     classValue: ClassValue,
     propertyName: string | symbol,
   ): { setter: FunctionValue; definingClass: ClassValue } | null {
-    let current: ClassValue | null = classValue;
-    while (current) {
-      const setter = current.instanceSetters.get(propertyName);
-      if (setter) {
-        return { setter, definingClass: current };
-      }
-      current = current.parentClass;
-    }
-    return null;
+    const result = this.lookupClassMember(classValue, propertyName, "instanceSetters");
+    return result ? { setter: result.member, definingClass: result.definingClass } : null;
   }
 
   private lookupSuperStaticMethod(
     superBinding: SuperBinding,
     methodName: string | symbol,
   ): { method: FunctionValue; definingClass: ClassValue } | null {
-    let current = superBinding.parentClass;
-    while (current) {
-      const method = current.staticMethods.get(methodName);
-      if (method) {
-        return { method, definingClass: current };
-      }
-      current = current.parentClass;
-    }
-    return null;
+    const result = this.lookupClassMember(superBinding.parentClass, methodName, "staticMethods");
+    return result ? { method: result.member, definingClass: result.definingClass } : null;
   }
 
   private lookupSuperStaticGetter(
     superBinding: SuperBinding,
     propertyName: string | symbol,
   ): { getter: FunctionValue; definingClass: ClassValue } | null {
-    let current = superBinding.parentClass;
-    while (current) {
-      const getter = current.staticGetters.get(propertyName);
-      if (getter) {
-        return { getter, definingClass: current };
-      }
-      current = current.parentClass;
-    }
-    return null;
+    const result = this.lookupClassMember(superBinding.parentClass, propertyName, "staticGetters");
+    return result ? { getter: result.member, definingClass: result.definingClass } : null;
   }
 
   private lookupSuperStaticSetter(
     superBinding: SuperBinding,
     propertyName: string | symbol,
   ): { setter: FunctionValue; definingClass: ClassValue } | null {
-    let current = superBinding.parentClass;
-    while (current) {
-      const setter = current.staticSetters.get(propertyName);
-      if (setter) {
-        return { setter, definingClass: current };
-      }
-      current = current.parentClass;
+    const result = this.lookupClassMember(superBinding.parentClass, propertyName, "staticSetters");
+    return result ? { setter: result.member, definingClass: result.definingClass } : null;
+  }
+
+  private lookupClassMember(
+    classValue: ClassValue | null,
+    propertyName: string | symbol,
+    memberMap:
+      | "instanceMethods"
+      | "instanceGetters"
+      | "instanceSetters"
+      | "staticMethods"
+      | "staticGetters"
+      | "staticSetters",
+  ): { member: FunctionValue; definingClass: ClassValue } | null {
+    if (!classValue) {
+      return null;
     }
-    return null;
+
+    const member = classValue[memberMap].get(propertyName);
+    if (member) {
+      return { member, definingClass: classValue };
+    }
+
+    return this.lookupClassMember(classValue.parentClass, propertyName, memberMap);
   }
 
   private getInstanceProperty(
@@ -13720,27 +13688,7 @@ export class Interpreter {
       ? this.evaluateComputedPropertyKey(node.property as ESTree.Expression)
       : (node.property as ESTree.Identifier).name;
 
-    this.validateDynamicPropertyKey(propertyName);
-
-    // Check for static method
-    const method = classValue.staticMethods.get(propertyName);
-    if (method) {
-      return method;
-    }
-
-    // Check for static getter
-    const getter = classValue.staticGetters.get(propertyName);
-    if (getter) {
-      return this.executeClassMethod(getter, classValue, classValue, []);
-    }
-
-    // Check for static field
-    if (classValue.staticFields.has(propertyName)) {
-      return classValue.staticFields.get(propertyName);
-    }
-
-    // Property not found
-    return undefined;
+    return this.getClassStaticMember(classValue, propertyName);
   }
 
   /**
@@ -13754,6 +13702,10 @@ export class Interpreter {
       ? await this.evaluateComputedPropertyKeyAsync(node.property as ESTree.Expression)
       : (node.property as ESTree.Identifier).name;
 
+    return this.getClassStaticMember(classValue, propertyName);
+  }
+
+  private getClassStaticMember(classValue: ClassValue, propertyName: string | symbol): any {
     this.validateDynamicPropertyKey(propertyName);
 
     const method = classValue.staticMethods.get(propertyName);
@@ -13781,16 +13733,7 @@ export class Interpreter {
     propertyName: string | symbol,
     value: any,
   ): any {
-    this.validateDynamicPropertyKey(propertyName);
-
-    const setter = classValue.staticSetters.get(propertyName);
-    if (setter) {
-      this.executeClassMethod(setter, classValue, classValue, [value]);
-      return value;
-    }
-
-    classValue.staticFields.set(propertyName, value);
-    return value;
+    return this.setClassStaticMember(classValue, propertyName, value);
   }
 
   /**
@@ -13801,6 +13744,14 @@ export class Interpreter {
     propertyName: string | symbol,
     value: any,
   ): Promise<any> {
+    return this.setClassStaticMember(classValue, propertyName, value);
+  }
+
+  private setClassStaticMember(
+    classValue: ClassValue,
+    propertyName: string | symbol,
+    value: any,
+  ): any {
     this.validateDynamicPropertyKey(propertyName);
 
     const setter = classValue.staticSetters.get(propertyName);
