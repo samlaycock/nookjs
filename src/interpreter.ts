@@ -13630,16 +13630,16 @@ export class Interpreter {
       | "staticGetters"
       | "staticSetters",
   ): { member: FunctionValue; definingClass: ClassValue } | null {
-    if (!classValue) {
-      return null;
+    let current: ClassValue | null = classValue;
+    while (current) {
+      const member = current[memberMap].get(propertyName);
+      if (member) {
+        return { member, definingClass: current };
+      }
+      current = current.parentClass;
     }
 
-    const member = classValue[memberMap].get(propertyName);
-    if (member) {
-      return { member, definingClass: classValue };
-    }
-
-    return this.lookupClassMember(classValue.parentClass, propertyName, memberMap);
+    return null;
   }
 
   private getInstanceProperty(
