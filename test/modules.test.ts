@@ -2417,7 +2417,7 @@ describe("Module System", () => {
         modules: { enabled: true, resolver: createResolver(files) },
       });
 
-      await expect(
+      expect(
         interpreter.evaluateModuleAsync(`import { a } from "a.js"; export { a };`, {
           path: "main.js",
         }),
@@ -3071,7 +3071,7 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      await expect(
+      expect(
         interpreter.evaluateModuleAsync(
           `import { shared } from "barrel.js"; export const value = shared;`,
           { path: "main.js" },
@@ -3099,8 +3099,10 @@ describe("Module System", () => {
         modules: { enabled: true, resolver },
       });
 
-      await expect(
-        interpreter.evaluateModuleAsync(`import { foo } from "top.js";`, { path: "main.js" }),
+      expect(
+        interpreter.evaluateModuleAsync(`import { foo } from "top.js";`, {
+          path: "main.js",
+        }),
       ).rejects.toThrow("ambiguous export 'foo'");
     });
 
@@ -3307,10 +3309,14 @@ describe("Module System", () => {
         "/modules/b/x.js",
       );
       expect(
-        interpreter.getModuleExportsBySpecifier("./x", { importer: "/modules/a.js" })?.value,
+        interpreter.getModuleExportsBySpecifier("./x", {
+          importer: "/modules/a.js",
+        })?.value,
       ).toBe("from-a");
       expect(
-        interpreter.getModuleExportsBySpecifier("./x", { importer: "/modules/b.js" })?.value,
+        interpreter.getModuleExportsBySpecifier("./x", {
+          importer: "/modules/b.js",
+        })?.value,
       ).toBe("from-b");
     });
 
@@ -3385,7 +3391,11 @@ describe("Module System", () => {
     });
 
     test("should preserve importer attribution for failed module onError callbacks", async () => {
-      const errors: Array<{ specifier: string; importer: string | null; message: string }> = [];
+      const errors: Array<{
+        specifier: string;
+        importer: string | null;
+        message: string;
+      }> = [];
 
       const resolver: ModuleResolver = {
         resolve(specifier) {

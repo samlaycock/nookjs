@@ -484,7 +484,7 @@ describe("Execution Control", () => {
           },
         });
 
-        await expect(
+        expect(
           interpreter.evaluateAsync(
             `
               async function run() {

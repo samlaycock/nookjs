@@ -14,6 +14,7 @@ const ES2021 = 2021;
 const ES2022 = 2022;
 const ES2023 = 2023;
 const ES2024 = 2024;
+// eslint-disable-next-line no-thenable -- intentional Promise.prototype method name
 const PROMISE_THEN = "then";
 
 const STATIC_PROPERTY_MIN_VERSION: Record<string, Record<string, EcmaPresetVersion>> = {
