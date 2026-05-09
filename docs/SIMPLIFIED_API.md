@@ -6,13 +6,10 @@ NookJS includes a simplified API for common use cases. Use `run()` for one-off e
 ## One-off execution
 
 ```typescript
-import { run, runSyncIsolated } from "nookjs";
+import { run } from "nookjs";
 
 const value = await run("2 + 3 * 4");
 console.log(value); // 14
-
-const syncValue = runSyncIsolated("2 + 3 * 4", { timeoutMs: 1000 });
-console.log(syncValue); // 14
 ```
 
 ## Create a sandbox
@@ -131,26 +128,10 @@ await sandbox.run(untrustedCode, { timeoutMs: 1000 }); // per-call override
 ```
 
 `timeoutMs` remains async-only for reusable `sandbox.runSync()` because synchronous code cannot be
-preempted safely on the caller's thread. Use `runSyncIsolated()` when you need a synchronous API
-surface with a hard wall-clock stop:
-
-```typescript
-import { runSyncIsolated } from "nookjs";
-
-const value = runSyncIsolated("while (true) {}", {
-  timeoutMs: 100,
-  sandbox: { env: "es2022" },
-});
-```
-
-`runSyncIsolated()` runs the evaluation in a separate Bun process and terminates that process when
-the timeout expires. This is the hard-stop mode for hostile synchronous code. Tradeoffs:
-
-- It is one-off only; state is not shared with a reusable sandbox.
-- `options` and returned values must be JSON-serializable.
-- Host functions, validators, custom module resolvers, and `AbortSignal` cannot cross the process boundary.
-- Startup and serialization make it slower than in-process `runSync()`.
-- It requires a Bun-compatible runtime because the child process is launched with the current Bun executable.
+preempted safely on the caller's thread. If you need a hard wall-clock stop for synchronous
+untrusted code, execute `runSync()` inside an application-owned Worker or process and terminate that
+host isolate from outside it. The core package does not spawn processes so it can run in browser and
+WinterCG runtimes.
 
 ### `policy`
 

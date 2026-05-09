@@ -1,9 +1,21 @@
 import { describe, it, expect } from "bun:test";
 
-import { InterpreterError, ResourceExhaustedError } from "../src";
+import { ResourceExhaustedError } from "../src";
 import { createSandbox, parse, run, runSyncIsolated } from "../src/sandbox";
 
 describe("Simplified API", () => {
+  it("source should not import Node or Bun runtime-specific APIs", async () => {
+    const nodeOrBunRuntimePattern =
+      /\bfrom\s+["']node:|\bfrom\s+["'](?:child_process|fs|path|os|crypto|buffer|process|worker_threads)["']|\brequire\(["']|\bprocess\.[A-Za-z_$]|\bBun\.|\bDeno\.|__dirname|__filename/;
+    const sourceFiles = new Bun.Glob("src/**/*.ts").scan(".");
+
+    for await (const path of sourceFiles) {
+      const contents = await Bun.file(path).text();
+      const executableContents = contents.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+      expect(executableContents, path).not.toMatch(nodeOrBunRuntimePattern);
+    }
+  });
+
   it("run() should evaluate code", async () => {
     const value = await run("1 + 2");
     expect(value).toBe(3);
@@ -609,54 +621,18 @@ describe("Simplified API", () => {
     );
   });
 
-  it("runSyncIsolated() should evaluate synchronous code with a timeout", () => {
-    const result = runSyncIsolated<number>("value * 2", {
-      timeoutMs: 1000,
-      sandbox: {
-        globals: { value: 21 },
-      },
-    });
-
-    expect(result).toBe(42);
-  });
-
-  it("runSyncIsolated() should hard-stop hostile synchronous code", () => {
+  it("runSyncIsolated() should reject runtime-neutral isolated execution", () => {
     expect(() =>
-      runSyncIsolated("while (true) {}", {
-        timeoutMs: 50,
-        sandbox: {
-          limits: { perRun: { loops: Number.MAX_SAFE_INTEGER } },
-        },
-      }),
-    ).toThrow("Execution aborted");
-  });
-
-  it("runSyncIsolated() should propagate child execution errors", () => {
-    expect(() =>
-      runSyncIsolated("missingValue + 1", {
-        timeoutMs: 1000,
-      }),
-    ).toThrow("Undefined variable");
-  });
-
-  it("runSyncIsolated() should preserve known child error identity", () => {
-    expect(() =>
-      runSyncIsolated("missingValue + 1", {
-        timeoutMs: 1000,
-      }),
-    ).toThrow(InterpreterError);
-
-    expect(() =>
-      runSyncIsolated("1 + 1", {
+      runSyncIsolated<number>("value * 2", {
         timeoutMs: 1000,
         sandbox: {
-          limits: { total: { evaluations: 0 } },
+          globals: { value: 21 },
         },
       }),
-    ).toThrow(ResourceExhaustedError);
+    ).toThrow("runSyncIsolated() is not available in the runtime-neutral package");
   });
 
-  it("runSyncIsolated() should require serializable options", () => {
+  it("runSyncIsolated() should still validate serializable options before rejecting runtime execution", () => {
     expect(() =>
       runSyncIsolated("1 + 1", {
         timeoutMs: 1000,
@@ -676,14 +652,6 @@ describe("Simplified API", () => {
         },
       }),
     ).toThrow("options must be JSON-serializable for isolated sync execution");
-  });
-
-  it("runSyncIsolated() should propagate errors with non-serializable thrown values", () => {
-    expect(() =>
-      runSyncIsolated("throw { nested: { fn: function () {} } }", {
-        timeoutMs: 1000,
-      }),
-    ).toThrow(InterpreterError);
   });
 
   it("runSyncIsolated() should reject non-finite numbers before JSON serialization", () => {
