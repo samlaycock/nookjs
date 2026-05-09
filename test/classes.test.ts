@@ -1312,6 +1312,22 @@ describe("Classes", () => {
           `);
         expect(result).toBe("hello world");
       });
+
+      it("should handle missing members in deep inheritance chains without recursive lookup", () => {
+        const interpreter = new Interpreter();
+        const declarations = [
+          "class C0 {}",
+          ...Array.from({ length: 2048 }, (_, index) => `class C${index + 1} extends C${index} {}`),
+        ];
+
+        const result = interpreter.evaluate(`
+            ${declarations.join("\n")}
+            const instance = new C2048();
+            instance.missingMember;
+          `);
+
+        expect(result).toBeUndefined();
+      });
     });
 
     describe("Constructor Behavior", () => {
