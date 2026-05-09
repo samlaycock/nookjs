@@ -6,7 +6,7 @@ import { createSandbox, parse, run, runSyncIsolated } from "../src/sandbox";
 describe("Simplified API", () => {
   it("source should not import Node or Bun runtime-specific APIs", async () => {
     const nodeOrBunRuntimePattern =
-      /\bfrom\s+["']node:|\bfrom\s+["'](?:child_process|fs|path|os|crypto|buffer|process|worker_threads)["']|\brequire\(["']|\bprocess\.[A-Za-z_$]|\bBun\.|\bDeno\.|__dirname|__filename/;
+      /\bfrom\s+["']node:|\bfrom\s+["']bun:|\bfrom\s+["'](?:child_process|fs|path|os|crypto|buffer|process|worker_threads)["']|\brequire\(["']|\bprocess\.[A-Za-z_$]|\bBun\.|\bDeno\.|__dirname|__filename/;
     const sourceFiles = new Bun.Glob("src/**/*.ts").scan(".");
 
     for await (const path of sourceFiles) {
