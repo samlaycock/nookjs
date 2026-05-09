@@ -667,6 +667,25 @@ describe("Simplified API", () => {
     ).toThrow("options must be JSON-serializable for isolated sync execution");
   });
 
+  it("runSyncIsolated() should reject undefined options before JSON serialization", () => {
+    expect(() =>
+      runSyncIsolated("x", {
+        timeoutMs: 1000,
+        sandbox: {
+          globals: { x: undefined },
+        },
+      }),
+    ).toThrow("options must be JSON-serializable for isolated sync execution");
+  });
+
+  it("runSyncIsolated() should propagate errors with non-serializable thrown values", () => {
+    expect(() =>
+      runSyncIsolated("throw { nested: { fn: function () {} } }", {
+        timeoutMs: 1000,
+      }),
+    ).toThrow(InterpreterError);
+  });
+
   it("runSyncIsolated() should reject non-finite numbers before JSON serialization", () => {
     expect(() =>
       runSyncIsolated("1 + 1", {
