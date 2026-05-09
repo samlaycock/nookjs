@@ -1,5 +1,24 @@
 # nookjs
 
+## 0.7.0
+
+### Minor Changes
+
+- 7c46e0e: Add an optional `maxEntries` module cache bound with LRU eviction for long-lived sandboxes.
+- 6f08f74: Add `runSyncIsolated()` as a process-backed synchronous execution helper with a hard wall-clock timeout for hostile untrusted code.
+- a60fe85: Add an opt-in `security.nativeUnwrapStrategy: "clone"` mode that passes cloned or snapshotted allowlisted branded host objects to native host functions.
+- 642372b: Remove Node/Bun process-spawning code from the runtime-neutral core package so it can be bundled for browser and WinterCG environments.
+- 7a11c6a: Split shared-memory primitives out of `BufferAPI` into a new explicit `SharedMemoryAPI` opt-in preset.
+
+### Patch Changes
+
+- e1aa79d: Fix `ReadOnlyProxy` descriptor reflection so wrapped host globals expose read-only descriptor semantics and wrapped descriptor payloads.
+- b56301a: Fix `Object.create()` so sandbox-created prototype objects produce mutable sandbox-owned results instead of read-only host proxies.
+- dcf71ce: Preserve enumerable symbol-keyed properties in object rest destructuring.
+- 475f357: Fix object spread so enumerable symbol-keyed properties are copied in sync and async evaluation.
+- 8eb04eb: Evict failed module records so cached resolvers can retry transient module evaluation failures.
+- 95307e5: Fix `for...in` enumeration so inherited enumerable properties are included while shadowed keys are not duplicated.
+
 ## 0.6.3
 
 ### Patch Changes
