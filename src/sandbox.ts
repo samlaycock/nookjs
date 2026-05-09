@@ -522,7 +522,7 @@ const assertJsonSerializable = (name: string, value: unknown): void => {
   const seen = new WeakSet<object>();
   const visit = (path: string, current: unknown): void => {
     if (current === undefined) {
-      return;
+      throw new Error(`${name} must be JSON-serializable for isolated sync execution`);
     }
     const type = typeof current;
     if (type === "function" || type === "symbol" || type === "bigint") {
@@ -856,16 +856,39 @@ export function runSyncIsolated<T = unknown>(
   const childScript = `
 const input = JSON.parse(await Bun.stdin.text());
 const { createSandbox } = await import(input.moduleUrl);
-try {
-  const sandbox = createSandbox(input.options.sandbox);
-  const { sandbox: _sandbox, timeoutMs: _timeoutMs, ...runOptions } = input.options;
-  const value = sandbox.runSync(input.code, runOptions);
-  process.stdout.write(JSON.stringify({ ok: true, value }));
-} catch (error) {
-  const properties = error && typeof error === "object" ? Object.fromEntries(
-    Object.entries(error).filter(([, value]) => typeof value !== "function")
-  ) : undefined;
-  process.stdout.write(JSON.stringify({
+const cloneSerializable = (value, seen = new WeakSet()) => {
+  if (value === undefined || typeof value === "function" || typeof value === "symbol") {
+    return undefined;
+  }
+  if (typeof value === "bigint") {
+    return String(value);
+  }
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    return String(value);
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  if (seen.has(value)) {
+    return "[Circular]";
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    return value.map((item) => cloneSerializable(item, seen));
+  }
+  const output = {};
+  for (const [key, nested] of Object.entries(value)) {
+    const cloned = cloneSerializable(nested, seen);
+    if (cloned !== undefined) {
+      output[key] = cloned;
+    }
+  }
+  seen.delete(value);
+  return output;
+};
+const writeFailure = (error) => {
+  const properties = error && typeof error === "object" ? cloneSerializable(error) : undefined;
+  const payload = {
     ok: false,
     error: {
       name: error && typeof error === "object" && "name" in error ? error.name : "Error",
@@ -873,7 +896,27 @@ try {
       stack: error instanceof Error ? error.stack : undefined,
       properties,
     },
-  }));
+  };
+  try {
+    process.stdout.write(JSON.stringify(payload));
+  } catch {
+    process.stdout.write(JSON.stringify({
+      ok: false,
+      error: {
+        name: payload.error.name,
+        message: payload.error.message,
+        stack: payload.error.stack,
+      },
+    }));
+  }
+};
+try {
+  const sandbox = createSandbox(input.options.sandbox);
+  const { sandbox: _sandbox, timeoutMs: _timeoutMs, ...runOptions } = input.options;
+  const value = sandbox.runSync(input.code, runOptions);
+  process.stdout.write(JSON.stringify({ ok: true, value }));
+} catch (error) {
+  writeFailure(error);
   process.exitCode = 1;
 }
 `;
