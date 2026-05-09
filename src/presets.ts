@@ -297,7 +297,7 @@ export const ES2020: InterpreterOptions = attachEcmaPresetVersion(
       ...ES2019.globals,
       // ES2020 additions
       BigInt,
-      globalThis: typeof globalThis !== "undefined" ? globalThis : global,
+      globalThis,
     },
   },
   2020,
@@ -1085,7 +1085,7 @@ export const Minimal: InterpreterOptions = attachEcmaPresetVersion(
       WeakSet,
       BigInt,
       // ES2020+
-      globalThis: typeof globalThis !== "undefined" ? globalThis : global,
+      globalThis,
     },
   },
   2024,

@@ -1,5 +1,3 @@
-import { spawnSync } from "node:child_process";
-
 import type { ESTree } from "./ast";
 import type {
   EvaluateOptions,
@@ -13,14 +11,6 @@ import type {
 import type { ModuleOptions, ModuleResolver } from "./modules";
 import type { ResourceStats } from "./resource-tracker";
 
-import {
-  ExecutionAbortedError,
-  FeatureError,
-  InterpreterError,
-  ParseError,
-  RuntimeError,
-  SecurityError,
-} from "./errors";
 import { Interpreter } from "./interpreter";
 import {
   BlobAPI,
@@ -55,7 +45,6 @@ import {
   WinterCG,
   preset,
 } from "./presets";
-import { ResourceExhaustedError } from "./resource-tracker";
 
 export type SandboxEnv =
   | "minimal"
@@ -210,9 +199,10 @@ export interface RunOnceOptionsFull extends RunOnceOptions {
 
 export interface IsolatedRunSyncOptions extends Omit<RunOnceOptions, "signal" | "timeoutMs"> {
   /**
-   * Wall-clock timeout for the isolated process. When exceeded, the child
-   * process is terminated so hostile synchronous code cannot monopolize the
-   * caller's thread.
+   * Wall-clock timeout for host-provided isolated execution.
+   *
+   * The core package does not spawn child processes because it must remain
+   * compatible with WinterCG and browser runtimes.
    */
   readonly timeoutMs: number;
 }
@@ -791,50 +781,6 @@ export async function run<T = unknown>(
   return sandbox.run<T>(code, options);
 }
 
-interface IsolatedChildSuccess {
-  readonly ok: true;
-  readonly value: unknown;
-}
-
-interface IsolatedChildFailure {
-  readonly ok: false;
-  readonly error: {
-    readonly name: string;
-    readonly message: string;
-    readonly stack?: string;
-    readonly properties?: Record<string, unknown>;
-  };
-}
-
-type IsolatedChildResult = IsolatedChildSuccess | IsolatedChildFailure;
-
-const ISOLATED_ERROR_PROTOTYPES: Record<string, Error> = {
-  ExecutionAbortedError: ExecutionAbortedError.prototype,
-  FeatureError: FeatureError.prototype,
-  InterpreterError: InterpreterError.prototype,
-  ParseError: ParseError.prototype,
-  ResourceExhaustedError: ResourceExhaustedError.prototype,
-  RuntimeError: RuntimeError.prototype,
-  SecurityError: SecurityError.prototype,
-};
-
-const reconstructIsolatedError = (serialized: IsolatedChildFailure["error"]): Error => {
-  const error = new Error(serialized.message);
-  error.name = serialized.name;
-  error.stack = serialized.stack;
-
-  for (const [key, value] of Object.entries(serialized.properties ?? {})) {
-    (error as unknown as Record<string, unknown>)[key] = value;
-  }
-
-  const prototype = ISOLATED_ERROR_PROTOTYPES[serialized.name];
-  if (prototype) {
-    Object.setPrototypeOf(error, prototype);
-  }
-
-  return error;
-};
-
 export function runSyncIsolated<T = unknown>(
   code: string,
   options: IsolatedRunSyncOptionsFull,
@@ -847,105 +793,10 @@ export function runSyncIsolated<T = unknown>(
   validateTimeoutMs(options.timeoutMs);
   assertJsonSerializable("options", options);
 
-  const childInput = JSON.stringify({
-    code,
-    options,
-    moduleUrl: import.meta.url,
-  });
-
-  const childScript = `
-const input = JSON.parse(await Bun.stdin.text());
-const { createSandbox } = await import(input.moduleUrl);
-const cloneSerializable = (value, seen = new WeakSet()) => {
-  if (value === undefined || typeof value === "function" || typeof value === "symbol") {
-    return undefined;
-  }
-  if (typeof value === "bigint") {
-    return String(value);
-  }
-  if (typeof value === "number" && !Number.isFinite(value)) {
-    return String(value);
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-  if (seen.has(value)) {
-    return "[Circular]";
-  }
-  seen.add(value);
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneSerializable(item, seen));
-  }
-  const output = {};
-  for (const [key, nested] of Object.entries(value)) {
-    const cloned = cloneSerializable(nested, seen);
-    if (cloned !== undefined) {
-      output[key] = cloned;
-    }
-  }
-  seen.delete(value);
-  return output;
-};
-const writeFailure = (error) => {
-  const properties = error && typeof error === "object" ? cloneSerializable(error) : undefined;
-  const payload = {
-    ok: false,
-    error: {
-      name: error && typeof error === "object" && "name" in error ? error.name : "Error",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      properties,
-    },
-  };
-  try {
-    process.stdout.write(JSON.stringify(payload));
-  } catch {
-    process.stdout.write(JSON.stringify({
-      ok: false,
-      error: {
-        name: payload.error.name,
-        message: payload.error.message,
-        stack: payload.error.stack,
-      },
-    }));
-  }
-};
-try {
-  const sandbox = createSandbox(input.options.sandbox);
-  const { sandbox: _sandbox, timeoutMs: _timeoutMs, ...runOptions } = input.options;
-  const value = sandbox.runSync(input.code, runOptions);
-  process.stdout.write(JSON.stringify({ ok: true, value }));
-} catch (error) {
-  writeFailure(error);
-  process.exitCode = 1;
-}
-`;
-
-  const result = spawnSync(process.execPath, ["--eval", childScript], {
-    input: childInput,
-    encoding: "utf8",
-    timeout: options.timeoutMs,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-
-  if (result.error) {
-    if ((result.error as NodeJS.ErrnoException).code === "ETIMEDOUT") {
-      throw new ExecutionAbortedError();
-    }
-    throw result.error;
-  }
-
-  const output = result.stdout.trim();
-  if (!output) {
-    throw new Error(result.stderr.trim() || "Isolated sync execution failed");
-  }
-
-  const payload = JSON.parse(output) as IsolatedChildResult;
-  if (payload.ok) {
-    return payload.value as T | RunResult<T>;
-  }
-
-  throw reconstructIsolatedError(payload.error);
+  void code;
+  throw new Error(
+    "runSyncIsolated() is not available in the runtime-neutral package. Use async run() with timeoutMs/AbortSignal, or execute runSync() inside an application-owned worker or process.",
+  );
 }
 
 export const parse = (code: string, options?: ParseOnceOptions): ESTree.Program => {

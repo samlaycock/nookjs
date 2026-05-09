@@ -472,32 +472,17 @@ await sandbox.run(code, {
 });
 ```
 
-For synchronous untrusted code that needs a hard wall-clock stop, use the isolated sync helper:
-
-```typescript
-import { runSyncIsolated } from "nookjs";
-
-runSyncIsolated("while (true) {}", {
-  timeoutMs: 100,
-  sandbox: {
-    env: "es2022",
-    limits: { perRun: { callDepth: 100, memoryBytes: 10 * 1024 * 1024 } },
-  },
-});
-```
-
-`runSyncIsolated()` launches a separate Bun process for the evaluation and terminates it when
-`timeoutMs` expires. This is the hard-stop mode for hostile synchronous code; unlike cooperative
-loop, call-depth, memory, `AbortSignal`, or async timeout checks, it does not require the interpreted
-program to reach a check point on the caller's thread.
+For synchronous untrusted code that needs a hard wall-clock stop, run NookJS inside an
+application-owned Worker or process and terminate that host isolate from outside it. The core
+package does not spawn processes because it must remain compatible with browser and WinterCG
+runtimes.
 
 Tradeoffs:
 
-- Use it for one-off sync executions; it does not share state with a reusable sandbox.
-- `options` and returned values must be JSON-serializable.
-- Host functions, validators, custom module resolvers, and `AbortSignal` cannot cross the process boundary.
+- Host-isolated sync execution is one-off by default unless your host isolate protocol preserves state.
+- Inputs and returned values usually need to be structured-cloneable or JSON-serializable.
+- Host functions, validators, custom module resolvers, and `AbortSignal` may require runtime-specific bridging.
 - Startup and serialization are slower than in-process `runSync()`.
-- Platform support follows the current Bun executable because the child process is launched with it.
 
 ### Execution Limits and AbortSignal
 
