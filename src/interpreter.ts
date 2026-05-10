@@ -11057,6 +11057,15 @@ export class Interpreter {
 
   private async evaluateVariableDeclarationAsync(node: ESTree.VariableDeclaration): Promise<any> {
     const kind = node.kind as "let" | "const" | "var";
+
+    // Check feature enablement based on declaration kind
+    if ((kind === "let" || kind === "const") && !this.isFeatureEnabled("LetConst")) {
+      throw new InterpreterError("LetConst is not enabled");
+    }
+    if (!this.isFeatureEnabled("VariableDeclarations")) {
+      throw new InterpreterError("VariableDeclarations is not enabled");
+    }
+
     this.validateVariableDeclarationKind(kind);
 
     let lastValue: any = undefined;
@@ -11813,6 +11822,10 @@ export class Interpreter {
     declare: boolean,
     kind?: "let" | "const" | "var",
   ): Promise<void> {
+    if (!this.isFeatureEnabled("Destructuring")) {
+      throw new InterpreterError("Destructuring is not enabled");
+    }
+
     if (pattern.type === "ArrayPattern") {
       await this.destructureArrayPatternAsync(pattern, value, declare, kind);
     } else if (pattern.type === "ObjectPattern") {
@@ -11965,6 +11978,10 @@ export class Interpreter {
     declare: boolean,
     kind?: "let" | "const" | "var",
   ): Promise<void> {
+    if (!this.isFeatureEnabled("DefaultParameters")) {
+      throw new InterpreterError("DefaultParameters is not enabled");
+    }
+
     // Use default if value is undefined
     const defaultExpr = pattern.right;
     if (!defaultExpr) {
@@ -12122,6 +12139,10 @@ export class Interpreter {
         elements.length += 1;
       } else if (element.type === "SpreadElement") {
         // Spread element: [...arr] - expand array into individual elements
+        if (!this.isFeatureEnabled("SpreadOperator")) {
+          throw new InterpreterError("SpreadOperator is not enabled");
+        }
+
         const spreadValue = await this.evaluateNodeAsync(
           (element as ESTree.SpreadElement).argument,
         );
@@ -12153,6 +12174,10 @@ export class Interpreter {
     for (const property of node.properties) {
       if (property.type === "SpreadElement") {
         // Spread element: {...obj} - expand object properties
+        if (!this.isFeatureEnabled("SpreadOperator")) {
+          throw new InterpreterError("SpreadOperator is not enabled");
+        }
+
         const spreadValue = await this.evaluateNodeAsync(
           (property as ESTree.SpreadElement).argument,
         );

@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 
-import { Interpreter } from "../src/interpreter";
+import { Interpreter, type LanguageFeature } from "../src/interpreter";
 
 describe("Feature Control", () => {
   describe("API", () => {
@@ -819,6 +819,87 @@ describe("Feature Control", () => {
         expect(() => {
           interpreter.evaluate("async function foo() { return 42; }");
         }).not.toThrow();
+      });
+    });
+
+    describe("Async evaluation parity", () => {
+      const expectSyncAndAsyncToReject = async (
+        source: string,
+        disabledFeature: LanguageFeature,
+        message: string | RegExp,
+      ) => {
+        const syncInterpreter = new Interpreter({
+          featureControl: {
+            mode: "blacklist",
+            features: [disabledFeature],
+          },
+        });
+        const asyncInterpreter = new Interpreter({
+          featureControl: {
+            mode: "blacklist",
+            features: [disabledFeature],
+          },
+        });
+
+        expect(() => {
+          syncInterpreter.evaluate(source);
+        }).toThrow(message);
+
+        let asyncError: unknown;
+        try {
+          await asyncInterpreter.evaluateAsync(source);
+        } catch (error) {
+          asyncError = error;
+        }
+        expect(() => {
+          if (asyncError) {
+            throw asyncError;
+          }
+        }).toThrow(message);
+      };
+
+      test("blocks let and const declarations in async evaluation", async () => {
+        await expectSyncAndAsyncToReject("let x = 1; x;", "LetConst", "LetConst is not enabled");
+        await expectSyncAndAsyncToReject("const x = 1; x;", "LetConst", "LetConst is not enabled");
+      });
+
+      test("blocks variable declarations in async evaluation", async () => {
+        await expectSyncAndAsyncToReject(
+          "var x = 1; x;",
+          "VariableDeclarations",
+          "VariableDeclarations is not enabled",
+        );
+      });
+
+      test("blocks array and object spread in async evaluation", async () => {
+        await expectSyncAndAsyncToReject(
+          "[...[1, 2]];",
+          "SpreadOperator",
+          "SpreadOperator is not enabled",
+        );
+        await expectSyncAndAsyncToReject(
+          "({ ...{ x: 1 } });",
+          "SpreadOperator",
+          "SpreadOperator is not enabled",
+        );
+      });
+
+      test("blocks destructuring and destructuring defaults in async evaluation", async () => {
+        await expectSyncAndAsyncToReject(
+          "const [x] = [1]; x;",
+          "Destructuring",
+          "Destructuring is not enabled",
+        );
+        await expectSyncAndAsyncToReject(
+          "const [x = 1] = []; x;",
+          "DefaultParameters",
+          "DefaultParameters is not enabled",
+        );
+        await expectSyncAndAsyncToReject(
+          "const { x = 1 } = {}; x;",
+          "DefaultParameters",
+          "DefaultParameters is not enabled",
+        );
       });
     });
 
