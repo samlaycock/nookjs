@@ -13827,10 +13827,23 @@ export class Interpreter {
   ): any {
     this.validateDynamicPropertyKey(propertyName);
 
-    const setterResult = this.lookupClassMember(classValue, propertyName, "staticSetters");
-    if (setterResult) {
-      this.executeClassMethod(setterResult.member, classValue, setterResult.definingClass, [value]);
-      return value;
+    let current: ClassValue | null = classValue;
+    while (current) {
+      const setter = current.staticSetters.get(propertyName);
+      if (setter) {
+        this.executeClassMethod(setter, classValue, current, [value]);
+        return value;
+      }
+
+      if (
+        current.staticMethods.has(propertyName) ||
+        current.staticGetters.has(propertyName) ||
+        current.staticFields.has(propertyName)
+      ) {
+        break;
+      }
+
+      current = current.parentClass;
     }
 
     classValue.staticFields.set(propertyName, value);
