@@ -1759,6 +1759,40 @@ describe("Classes", () => {
         expect(result).toEqual([4, "Rex"]);
       });
 
+      it("should initialize derived fields when the derived class has no constructor", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Parent {
+              constructor(value) {
+                this.parentValue = value;
+              }
+            }
+            class Child extends Parent {
+              childValue = this.parentValue + 1;
+            }
+            const child = new Child(41);
+            [child.parentValue, child.childValue];
+          `);
+        expect(result).toEqual([41, 42]);
+      });
+
+      it("should initialize async derived fields when the derived class has no constructor", async () => {
+        const interpreter = new Interpreter();
+        const result = await interpreter.evaluateAsync(`
+            class Parent {
+              constructor(value) {
+                this.parentValue = value;
+              }
+            }
+            class Child extends Parent {
+              childValue = this.parentValue + 1;
+            }
+            const child = new Child(41);
+            [child.parentValue, child.childValue];
+          `);
+        expect(result).toEqual([41, 42]);
+      });
+
       it("should allow child fields to override parent fields", () => {
         const interpreter = new Interpreter();
         const result = interpreter.evaluate(`
@@ -1931,6 +1965,42 @@ describe("Classes", () => {
             new User().getInfo();
           `);
         expect(result).toBe("John:123");
+      });
+
+      it("should initialize private derived fields when the derived class has no constructor", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Parent {
+              constructor(value) {
+                this.parentValue = value;
+              }
+            }
+            class Child extends Parent {
+              #childValue = this.parentValue + 1;
+              getChildValue() { return this.#childValue; }
+            }
+            const child = new Child(41);
+            [child.parentValue, child.getChildValue()];
+          `);
+        expect(result).toEqual([41, 42]);
+      });
+
+      it("should initialize async private derived fields when the derived class has no constructor", async () => {
+        const interpreter = new Interpreter();
+        const result = await interpreter.evaluateAsync(`
+            class Parent {
+              constructor(value) {
+                this.parentValue = value;
+              }
+            }
+            class Child extends Parent {
+              #childValue = this.parentValue + 1;
+              getChildValue() { return this.#childValue; }
+            }
+            const child = new Child(41);
+            [child.parentValue, child.getChildValue()];
+          `);
+        expect(result).toEqual([41, 42]);
       });
 
       it("should throw when accessing private field outside class", () => {

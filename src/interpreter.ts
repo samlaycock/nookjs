@@ -13040,14 +13040,13 @@ export class Interpreter {
     // Evaluate arguments
     const args = this.evaluateArguments(argNodes);
 
-    // Find the constructor to call (could be inherited)
-    const { constructor, definingClass } = this.findClassConstructor(classValue);
+    const constructor = classValue.constructorMethod;
 
     // Execute constructor if there is one
     if (constructor) {
       const { result, thisValue } = this.executeClassConstructorBody(
         constructor,
-        definingClass,
+        classValue,
         instance,
         args,
       );
@@ -13088,12 +13087,12 @@ export class Interpreter {
 
     const args = await this.evaluateArgumentsAsync(argNodes);
 
-    const { constructor, definingClass } = this.findClassConstructor(classValue);
+    const constructor = classValue.constructorMethod;
 
     if (constructor) {
       const { result, thisValue } = await this.executeClassConstructorBodyAsync(
         constructor,
-        definingClass,
+        classValue,
         instance,
         args,
       );
