@@ -1446,88 +1446,107 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
         node.left,
       );
 
-      while (true) {
-        const iterResult = isAsync
-          ? await (iterator as AsyncIterator<any>).next()
-          : (iterator as Iterator<any>).next();
-        if (iterResult.done) {
-          break;
+      let completed = false;
+
+      const closeIterator = async () => {
+        if (completed || typeof iterator.return !== "function") {
+          return;
         }
-
-        let currentValue = iterResult.value;
-        if (node.await) {
-          if (currentValue instanceof RawValue) {
-            currentValue = currentValue.value;
-          }
-          currentValue = await currentValue;
-        }
-
-        if (isDeclaration) {
-          const iterEnv = this.interpreter.environment;
-          this.interpreter.environment = new Environment(iterEnv);
-
-          if (pattern) {
-            await this.interpreter.destructurePatternAsync(
-              pattern,
-              currentValue,
-              true,
-              variableKind,
-            );
-          } else {
-            this.interpreter.environment.declare(variableName!, currentValue, variableKind!);
-          }
-
-          if (node.body.type === "BlockStatement") {
-            const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
-              (node.body as ESTree.BlockStatement).body,
-            );
-            if (shouldReturn) {
-              this.interpreter.environment = iterEnv;
-              return shouldReturn;
-            }
-            if (shouldBreak) {
-              this.interpreter.environment = iterEnv;
-              break;
-            }
-          } else {
-            const result = await this.interpreter.evaluateNodeAsync(node.body);
-            const processed = processGeneratorResult(result);
-            if (processed.yielded) {
-              if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
-              else yield processed.yieldValue;
-            } else if (processed.returned) {
-              this.interpreter.environment = iterEnv;
-              return processed.returned;
-            } else if (processed.shouldBreak) {
-              this.interpreter.environment = iterEnv;
-              break;
-            }
-          }
-
-          this.interpreter.environment = iterEnv;
+        completed = true;
+        if (isAsync || node.await) {
+          await (iterator as AsyncIterator<any>).return?.();
         } else {
-          if (pattern) {
-            await this.interpreter.destructurePatternAsync(pattern, currentValue, false);
-          } else {
-            this.interpreter.environment.set(variableName!, currentValue);
+          (iterator as Iterator<any>).return?.();
+        }
+      };
+
+      try {
+        while (true) {
+          const iterResult = isAsync
+            ? await (iterator as AsyncIterator<any>).next()
+            : (iterator as Iterator<any>).next();
+          if (iterResult.done) {
+            completed = true;
+            break;
           }
 
-          if (node.body.type === "BlockStatement") {
-            const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
-              (node.body as ESTree.BlockStatement).body,
-            );
-            if (shouldReturn) return shouldReturn;
-            if (shouldBreak) break;
+          let currentValue = iterResult.value;
+          if (node.await) {
+            if (currentValue instanceof RawValue) {
+              currentValue = currentValue.value;
+            }
+            currentValue = await currentValue;
+          }
+
+          if (isDeclaration) {
+            const iterEnv = this.interpreter.environment;
+            this.interpreter.environment = new Environment(iterEnv);
+
+            if (pattern) {
+              await this.interpreter.destructurePatternAsync(
+                pattern,
+                currentValue,
+                true,
+                variableKind,
+              );
+            } else {
+              this.interpreter.environment.declare(variableName!, currentValue, variableKind!);
+            }
+
+            if (node.body.type === "BlockStatement") {
+              const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
+                (node.body as ESTree.BlockStatement).body,
+              );
+              if (shouldReturn) {
+                this.interpreter.environment = iterEnv;
+                return shouldReturn;
+              }
+              if (shouldBreak) {
+                this.interpreter.environment = iterEnv;
+                break;
+              }
+            } else {
+              const result = await this.interpreter.evaluateNodeAsync(node.body);
+              const processed = processGeneratorResult(result);
+              if (processed.yielded) {
+                if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
+                else yield processed.yieldValue;
+              } else if (processed.returned) {
+                this.interpreter.environment = iterEnv;
+                return processed.returned;
+              } else if (processed.shouldBreak) {
+                this.interpreter.environment = iterEnv;
+                break;
+              }
+            }
+
+            this.interpreter.environment = iterEnv;
           } else {
-            const result = await this.interpreter.evaluateNodeAsync(node.body);
-            const processed = processGeneratorResult(result);
-            if (processed.yielded) {
-              if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
-              else yield processed.yieldValue;
-            } else if (processed.returned) return processed.returned;
-            else if (processed.shouldBreak) break;
+            if (pattern) {
+              await this.interpreter.destructurePatternAsync(pattern, currentValue, false);
+            } else {
+              this.interpreter.environment.set(variableName!, currentValue);
+            }
+
+            if (node.body.type === "BlockStatement") {
+              const { shouldBreak, shouldReturn } = yield* this.executeBlockBody(
+                (node.body as ESTree.BlockStatement).body,
+              );
+              if (shouldReturn) return shouldReturn;
+              if (shouldBreak) break;
+            } else {
+              const result = await this.interpreter.evaluateNodeAsync(node.body);
+              const processed = processGeneratorResult(result);
+              if (processed.yielded) {
+                if (processed.delegate) yield* this.delegateYield(processed.yieldValue);
+                else yield processed.yieldValue;
+              } else if (processed.returned) return processed.returned;
+              else if (processed.shouldBreak) break;
+            }
           }
         }
+      } finally {
+        await closeIterator();
       }
       return undefined;
     } finally {

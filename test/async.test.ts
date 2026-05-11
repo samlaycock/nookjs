@@ -1184,6 +1184,38 @@ describe("Async", () => {
         expect(result).toEqual([1, true]);
       });
 
+      test("runs iterator cleanup on early exit inside async generators", async () => {
+        const interpreter = new Interpreter();
+        const result = await interpreter.evaluateAsync(`
+          async function run() {
+            let cleaned = false;
+            function* source() {
+              try {
+                yield Promise.resolve(1);
+                yield Promise.resolve(2);
+              } finally {
+                cleaned = true;
+              }
+            }
+
+            async function* gen() {
+              for await (const val of source()) {
+                yield val;
+                break;
+              }
+            }
+
+            const items = [];
+            for await (const val of gen()) {
+              items.push(val);
+            }
+            return [items, cleaned];
+          }
+          run()
+        `);
+        expect(result).toEqual([[1], true]);
+      });
+
       describe("destructuring in for await", () => {
         test("for await with let declaration", async () => {
           const interpreter = new Interpreter();
