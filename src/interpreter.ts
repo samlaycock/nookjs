@@ -3465,8 +3465,9 @@ export class Interpreter {
       this.assertSyncSignalIsDisabled(options);
       this.beginEvaluation(options);
       evaluationStarted = true;
-      const ast = this.parseAndValidate(input, options, { allowTopLevelAwait: true });
+      const ast = typeof input === "string" ? parseScript(input, true) : input;
       this.ensureNoTopLevelAwait(ast);
+      this.validateAst(ast, options);
       const needsFreshScope = typeof input !== "string";
       const previousEnv = this.environment;
       if (needsFreshScope) {
