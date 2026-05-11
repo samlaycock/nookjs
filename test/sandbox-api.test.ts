@@ -757,6 +757,7 @@ describe("Simplified API", () => {
 
     try {
       sandbox.runSync("const obj = { value: 1 }; obj;");
+      expect.unreachable("Expected memoryBytes total limit to be exceeded");
     } catch (error) {
       expect(error).toBeInstanceOf(ResourceExhaustedError);
       expect((error as ResourceExhaustedError).resourceType).toBe("maxTotalMemory");
