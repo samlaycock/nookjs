@@ -12,6 +12,6 @@
 
 ## Gotchas
 
-- Top-level `await` is only supported in module evaluation (`runModule` / `evaluateModuleAsync`).
-- In non-module evaluation, `await` is only valid inside async functions.
+- Top-level `await` is supported in async script evaluation (`evaluateAsync` / `run`) and module evaluation (`evaluateModuleAsync` / `runModule`).
+- Synchronous `evaluate` rejects top-level `await`; use `evaluateAsync` for async snippets.
 - Calling async host functions in sync mode throws.

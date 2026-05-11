@@ -30,6 +30,25 @@ describe("Module System", () => {
   });
 
   describe("Basic Import/Export", () => {
+    test("should support top-level await in modules", async () => {
+      const interpreter = new Interpreter({
+        modules: {
+          enabled: true,
+          resolver: { resolve: () => null },
+        },
+      });
+
+      const exports = await interpreter.evaluateModuleAsync(
+        `
+        const value = await Promise.resolve(3);
+        export const result = value + 1;
+        `,
+        { path: "main.js" },
+      );
+
+      expect(exports.result).toBe(4);
+    });
+
     test("should export named constant", async () => {
       const files = new Map<string, string>([["math.js", "export const add = (a, b) => a + b;"]]);
 

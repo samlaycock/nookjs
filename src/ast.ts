@@ -5054,8 +5054,8 @@ export function parseModule(input: string): ESTree.Program {
   return parser.parseProgram("module");
 }
 
-export function parseScript(input: string): ESTree.Program {
-  const parser = new Parser(stripLeadingHashbang(input), false);
+export function parseScript(input: string, allowTopLevelAwait = false): ESTree.Program {
+  const parser = new Parser(stripLeadingHashbang(input), allowTopLevelAwait);
   return parser.parseProgram("script");
 }
 

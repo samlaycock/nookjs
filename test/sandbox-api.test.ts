@@ -332,10 +332,11 @@ describe("Simplified API", () => {
     ).rejects.toThrow("Maximum loop iterations exceeded");
   });
 
-  it("run() should reject top-level await in scripts", async () => {
+  it("run() should allow top-level await in scripts", async () => {
     const sandbox = createSandbox({ env: "es2022" });
 
-    expect(sandbox.run("await Promise.resolve(1)")).rejects.toThrow();
+    const result = await sandbox.run("await Promise.resolve(1)");
+    expect(result).toBe(1);
   });
 
   it("runModule() should allow top-level await", async () => {

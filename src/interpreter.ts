@@ -3382,10 +3382,14 @@ export class Interpreter {
       }
 
       if (node.type === "AwaitExpression" && !inAsync) {
-        throw new InterpreterError("Unexpected token: await");
+        throw new InterpreterError(
+          "Cannot use await in synchronous evaluate(). Use evaluateAsync() instead.",
+        );
       }
       if (node.type === "ForOfStatement" && (node as ESTree.ForOfStatement).await && !inAsync) {
-        throw new InterpreterError("Unexpected token: await");
+        throw new InterpreterError(
+          "Cannot use for await...of in synchronous evaluate(). Use evaluateAsync() instead.",
+        );
       }
 
       if (
@@ -3418,11 +3422,17 @@ export class Interpreter {
   private parseAndValidate(
     input: string | ESTree.Program,
     options?: EvaluateOptions,
+    parseOptions?: { allowTopLevelAwait?: boolean },
   ): ESTree.Program {
-    const ast = typeof input === "string" ? parseScript(input) : input;
+    const ast =
+      typeof input === "string"
+        ? parseScript(input, parseOptions?.allowTopLevelAwait === true)
+        : input;
 
     this.validateAst(ast, options);
-    this.ensureNoTopLevelAwait(ast);
+    if (parseOptions?.allowTopLevelAwait !== true) {
+      this.ensureNoTopLevelAwait(ast);
+    }
 
     return ast;
   }
@@ -3455,7 +3465,8 @@ export class Interpreter {
       this.assertSyncSignalIsDisabled(options);
       this.beginEvaluation(options);
       evaluationStarted = true;
-      const ast = this.parseAndValidate(input, options);
+      const ast = this.parseAndValidate(input, options, { allowTopLevelAwait: true });
+      this.ensureNoTopLevelAwait(ast);
       const needsFreshScope = typeof input !== "string";
       const previousEnv = this.environment;
       if (needsFreshScope) {
@@ -3496,7 +3507,7 @@ export class Interpreter {
         throw new ExecutionAbortedError();
       }
 
-      const ast = this.parseAndValidate(input, options);
+      const ast = this.parseAndValidate(input, options, { allowTopLevelAwait: true });
       const needsFreshScope = typeof input !== "string";
       const previousEnv = this.environment;
       if (needsFreshScope) {
@@ -11644,7 +11655,7 @@ export class Interpreter {
     // 3. The host should treat returned values as opaque (documented security consideration)
 
     // Await the promise (or pass through non-promise values)
-    return await value;
+    return await this.withImmediateExecutionLimitCheckAsync(async () => value);
   }
 
   private async evaluateImportExpressionAsync(node: ESTree.ImportExpression): Promise<any> {
