@@ -13772,18 +13772,23 @@ export class Interpreter {
   private getClassStaticMember(classValue: ClassValue, propertyName: string | symbol): any {
     this.validateDynamicPropertyKey(propertyName);
 
-    const method = classValue.staticMethods.get(propertyName);
-    if (method) {
-      return method;
-    }
+    let current: ClassValue | null = classValue;
+    while (current) {
+      const method = current.staticMethods.get(propertyName);
+      if (method) {
+        return method;
+      }
 
-    const getter = classValue.staticGetters.get(propertyName);
-    if (getter) {
-      return this.executeClassMethod(getter, classValue, classValue, []);
-    }
+      const getter = current.staticGetters.get(propertyName);
+      if (getter) {
+        return this.executeClassMethod(getter, classValue, current, []);
+      }
 
-    if (classValue.staticFields.has(propertyName)) {
-      return classValue.staticFields.get(propertyName);
+      if (current.staticFields.has(propertyName)) {
+        return current.staticFields.get(propertyName);
+      }
+
+      current = current.parentClass;
     }
 
     return undefined;
@@ -13818,9 +13823,9 @@ export class Interpreter {
   ): any {
     this.validateDynamicPropertyKey(propertyName);
 
-    const setter = classValue.staticSetters.get(propertyName);
-    if (setter) {
-      this.executeClassMethod(setter, classValue, classValue, [value]);
+    const setterResult = this.lookupClassMember(classValue, propertyName, "staticSetters");
+    if (setterResult) {
+      this.executeClassMethod(setterResult.member, classValue, setterResult.definingClass, [value]);
       return value;
     }
 
