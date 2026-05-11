@@ -1111,6 +1111,34 @@ describe("Classes", () => {
         expect(result).toEqual([1, 3]);
       });
 
+      it("should let setter-only static accessors shadow inherited static members", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class GetterBase {
+              static get value() {
+                return 1;
+              }
+            }
+            class GetterChild extends GetterBase {
+              static set value(next) {
+                this.received = next;
+              }
+            }
+
+            class FieldBase {
+              static value = 2;
+            }
+            class FieldChild extends FieldBase {
+              static set value(next) {
+                this.received = next;
+              }
+            }
+
+            [GetterChild.value, FieldChild.value];
+          `);
+        expect(result).toEqual([undefined, undefined]);
+      });
+
       it("should compute derived values with getters", () => {
         const interpreter = new Interpreter();
         const result = interpreter.evaluate(`

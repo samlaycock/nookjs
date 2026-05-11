@@ -13788,6 +13788,10 @@ export class Interpreter {
         return current.staticFields.get(propertyName);
       }
 
+      if (current.staticSetters.has(propertyName)) {
+        return undefined;
+      }
+
       current = current.parentClass;
     }
 
