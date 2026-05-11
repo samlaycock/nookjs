@@ -1006,6 +1006,38 @@ describe("Classes", () => {
           `);
         expect(result).toEqual([0, 0]);
       });
+
+      it("should inherit static methods from parent classes", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Base {
+              static value() {
+                return 1;
+              }
+            }
+            class Child extends Base {}
+            Child.value();
+          `);
+        expect(result).toBe(1);
+      });
+
+      it("should prefer child static methods over inherited static methods", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Base {
+              static value() {
+                return 1;
+              }
+            }
+            class Child extends Base {
+              static value() {
+                return 2;
+              }
+            }
+            Child.value();
+          `);
+        expect(result).toBe(2);
+      });
     });
 
     describe("Getters and Setters", () => {
@@ -1058,6 +1090,25 @@ describe("Classes", () => {
             Config.version;
           `);
         expect(result).toBe("1.0.0");
+      });
+
+      it("should inherit static getters and setters from parent classes", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Base {
+              static _value = 1;
+              static get value() {
+                return this._value;
+              }
+              static set value(next) {
+                this._value = next;
+              }
+            }
+            class Child extends Base {}
+            Child.value = 3;
+            [Base.value, Child.value];
+          `);
+        expect(result).toEqual([1, 3]);
       });
 
       it("should compute derived values with getters", () => {
@@ -1667,6 +1718,47 @@ describe("Classes", () => {
             Config.value;
           `);
         expect(result).toBe(undefined);
+      });
+
+      it("should inherit static fields from parent classes", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Base {
+              static value = 2;
+            }
+            class Child extends Base {}
+            Child.value;
+          `);
+        expect(result).toBe(2);
+      });
+
+      it("should prefer child static fields over inherited static fields", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Base {
+              static value = 2;
+            }
+            class Child extends Base {
+              static value = 4;
+            }
+            Child.value;
+          `);
+        expect(result).toBe(4);
+      });
+
+      it("should inherit static members in async evaluation", async () => {
+        const interpreter = new Interpreter();
+        const result = await interpreter.evaluateAsync(`
+            class Base {
+              static field = 2;
+              static method() {
+                return this.field;
+              }
+            }
+            class Child extends Base {}
+            Child.method();
+          `);
+        expect(result).toBe(2);
       });
 
       it("should evaluate instance field initializers for each instance", () => {
