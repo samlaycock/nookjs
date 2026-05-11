@@ -231,10 +231,17 @@ export class ResourceTracker {
       }
     }
 
-    this.checkLimits();
+    const exhaustedLimit = this.checkLimits();
+    if (exhaustedLimit) {
+      throw new ResourceExhaustedError(
+        exhaustedLimit,
+        this.getStats().limitStatus[exhaustedLimit]?.used ?? 0,
+        this.limits[exhaustedLimit] ?? 0,
+      );
+    }
   }
 
-  private checkLimits(): void {
+  private checkLimits(): keyof ResourceLimits | null {
     const stats = this.getStats();
 
     const preferredMemoryLimitStatus = stats.limitStatus[this.preferredMemoryLimitKey];
@@ -243,19 +250,21 @@ export class ResourceTracker {
       preferredMemoryLimitStatus.used >= preferredMemoryLimitStatus.limit
     ) {
       this.exhaustedLimit = this.preferredMemoryLimitKey;
-      return;
+      return this.preferredMemoryLimitKey;
     }
 
     for (const key of Object.keys(stats.limitStatus) as (keyof ResourceLimits)[]) {
-      if (key === "maxAllocationBytes" || key === "maxTotalMemory") {
+      if (key === "maxAllocationBytes" || key === "maxTotalMemory" || key === "maxEvaluations") {
         continue;
       }
       const status = stats.limitStatus[key];
       if (status && status.used >= status.limit) {
         this.exhaustedLimit = key;
-        return;
+        return key;
       }
     }
+
+    return null;
   }
 
   private syncMemoryLimitAliases(lastWritten?: "maxAllocationBytes" | "maxTotalMemory"): void {

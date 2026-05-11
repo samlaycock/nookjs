@@ -3284,15 +3284,20 @@ export class Interpreter {
     this.statsEndTime = performance.now();
 
     const currentMemoryUsage = this.getCurrentMemoryUsage();
+    let resourceError: unknown;
 
     if (this.integratedResourceTracker) {
       const cpuTimeMs = this.getCurrentEvaluationCpuTime(this.statsEndTime);
-      this.integratedResourceTracker.endEvaluation(
-        currentMemoryUsage,
-        this.statsLoopIterations,
-        this.statsFunctionCalls,
-        cpuTimeMs,
-      );
+      try {
+        this.integratedResourceTracker.endEvaluation(
+          currentMemoryUsage,
+          this.statsLoopIterations,
+          this.statsFunctionCalls,
+          cpuTimeMs,
+        );
+      } catch (error) {
+        resourceError = error;
+      }
     }
 
     // Always clean up per-call globals after execution.
@@ -3309,6 +3314,10 @@ export class Interpreter {
 
     // Clear execution control.
     this.executionCheckCounter = 0;
+
+    if (resourceError) {
+      throw resourceError;
+    }
   }
 
   private getCurrentEvaluationCpuTime(endTime = performance.now()): number {

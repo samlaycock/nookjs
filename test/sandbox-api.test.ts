@@ -693,6 +693,41 @@ describe("Simplified API", () => {
     expect(() => sandbox.runSync("2 + 2")).toThrow("Resource limit exceeded");
   });
 
+  it("runSync() should reject the evaluation that exceeds a total memory limit", () => {
+    const sandbox = createSandbox({
+      env: "es2022",
+      limits: { total: { memoryBytes: 64 } },
+    });
+
+    expect(() => sandbox.runSync("const a = [1, 2, 3, 4, 5]; a.length")).toThrow(
+      ResourceExhaustedError,
+    );
+
+    const resources = sandbox.resources();
+    expect(resources?.evaluations).toBe(1);
+    expect(resources?.memoryBytes).toBeGreaterThan(64);
+    expect(resources?.isExhausted).toBe(true);
+  });
+
+  it("run() should reject the async evaluation that exceeds a total memory limit", async () => {
+    const sandbox = createSandbox({
+      env: "es2022",
+      limits: { total: { memoryBytes: 64 } },
+    });
+
+    try {
+      await sandbox.run("const a = [1, 2, 3, 4, 5]; a.length");
+      expect.unreachable("Expected async total memory limit to be exceeded");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResourceExhaustedError);
+    }
+
+    const resources = sandbox.resources();
+    expect(resources?.evaluations).toBe(1);
+    expect(resources?.memoryBytes).toBeGreaterThan(64);
+    expect(resources?.isExhausted).toBe(true);
+  });
+
   it("should accept allocationBytes as the explicit cumulative memory budget alias", () => {
     const sandbox = createSandbox({
       env: "es2022",
@@ -720,10 +755,8 @@ describe("Simplified API", () => {
       limits: { total: { memoryBytes: 1 } },
     });
 
-    sandbox.runSync("const obj = { value: 1 }; obj;");
-
     try {
-      sandbox.runSync("const second = { value: 2 }; second;");
+      sandbox.runSync("const obj = { value: 1 }; obj;");
     } catch (error) {
       expect(error).toBeInstanceOf(ResourceExhaustedError);
       expect((error as ResourceExhaustedError).resourceType).toBe("maxTotalMemory");
@@ -736,10 +769,8 @@ describe("Simplified API", () => {
       limits: { total: { allocationBytes: 1 } },
     });
 
-    sandbox.runSync("const obj = { value: 1 }; obj;");
-
     try {
-      sandbox.runSync("const second = { value: 2 }; second;");
+      sandbox.runSync("const obj = { value: 1 }; obj;");
       expect.unreachable("Expected allocationBytes total limit to be exceeded");
     } catch (error) {
       expect(error).toBeInstanceOf(ResourceExhaustedError);
