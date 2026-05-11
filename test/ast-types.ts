@@ -5,7 +5,9 @@ type Equal<A, B> =
 type Expect<T extends true> = T;
 
 type ParseScriptParams = Parameters<typeof parseScript>;
-type AssertParseScriptParams = Expect<Equal<ParseScriptParams, [input: string]>>;
+type AssertParseScriptParams = Expect<
+  Equal<ParseScriptParams, [input: string, allowTopLevelAwait?: boolean]>
+>;
 
 type ParseModuleParams = Parameters<typeof parseModule>;
 type AssertParseModuleParams = Expect<Equal<ParseModuleParams, [input: string]>>;

@@ -98,6 +98,57 @@ describe("Async", () => {
       });
 
       describe("Basic async operations", () => {
+        it("should evaluate top-level await expressions", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync("await Promise.resolve(1)");
+          expect(result).toBe(1);
+        });
+
+        it("should reject top-level await when the awaited promise rejects", async () => {
+          const interpreter = new Interpreter();
+          return expect(interpreter.evaluateAsync("await Promise.reject('boom')")).rejects.toThrow(
+            "boom",
+          );
+        });
+
+        it("should reject top-level await in synchronous evaluate", () => {
+          const interpreter = new Interpreter();
+          expect(() => interpreter.evaluate("await Promise.resolve(1)")).toThrow(
+            "Cannot use await in synchronous evaluate(). Use evaluateAsync() instead.",
+          );
+        });
+
+        it("should check abort signals around top-level await", async () => {
+          const controller = new AbortController();
+          const interpreter = new Interpreter({
+            globals: {
+              abortNow: () => {
+                controller.abort();
+                return Promise.resolve(1);
+              },
+            },
+          });
+
+          return expect(
+            interpreter.evaluateAsync("await abortNow()", { signal: controller.signal }),
+          ).rejects.toThrow("Execution aborted");
+        });
+
+        it("should enforce limits while evaluating top-level for await...of", async () => {
+          const interpreter = new Interpreter();
+
+          return expect(
+            interpreter.evaluateAsync(
+              `
+              for await (const value of [1, 2]) {
+                value;
+              }
+              `,
+              { maxLoopIterations: 1 },
+            ),
+          ).rejects.toThrow("Maximum loop iterations exceeded");
+        });
+
         it("should evaluate binary expressions", async () => {
           const interpreter = new Interpreter();
           expect(await interpreter.evaluateAsync("5 + 3")).toBe(8);
@@ -1088,6 +1139,18 @@ describe("Async", () => {
       });
 
       describe("sync iterables with for await", () => {
+        test("for await...of over regular array at the top level", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(`
+            const items = [];
+            for await (const val of [10, 20, 30]) {
+              items.push(val);
+            }
+            items
+          `);
+          expect(result).toEqual([10, 20, 30]);
+        });
+
         test("for await...of over regular array", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
@@ -1244,7 +1307,9 @@ describe("Async", () => {
             interpreter.evaluate(`
               for await (const val of [1, 2, 3]) {}
             `),
-          ).toThrow("Unexpected token: await");
+          ).toThrow(
+            "Cannot use for await...of in synchronous evaluate(). Use evaluateAsync() instead.",
+          );
         });
       });
 
