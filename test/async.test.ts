@@ -1103,6 +1103,21 @@ describe("Async", () => {
           expect(result).toEqual([10, 20, 30]);
         });
 
+        test("awaits promised values from regular array", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(`
+            async function run() {
+              let sum = 0;
+              for await (const val of [Promise.resolve(1), 2, Promise.resolve(3)]) {
+                sum = sum + val;
+              }
+              return sum;
+            }
+            run()
+          `);
+          expect(result).toBe(6);
+        });
+
         test("for await...of over sync generator", async () => {
           const interpreter = new Interpreter();
           const result = await interpreter.evaluateAsync(`
@@ -1121,6 +1136,52 @@ describe("Async", () => {
           `);
           expect(result).toBe(3);
         });
+      });
+
+      test("awaits promised values from async generators", async () => {
+        const interpreter = new Interpreter();
+        const result = await interpreter.evaluateAsync(`
+          async function run() {
+            async function* gen() {
+              yield Promise.resolve(1);
+              yield 2;
+              yield Promise.resolve(3);
+            }
+            let sum = 0;
+            for await (const val of gen()) {
+              sum = sum + val;
+            }
+            return sum;
+          }
+          run()
+        `);
+        expect(result).toBe(6);
+      });
+
+      test("runs iterator cleanup on early exit after awaiting values", async () => {
+        const interpreter = new Interpreter();
+        const result = await interpreter.evaluateAsync(`
+          async function run() {
+            let cleaned = false;
+            function* gen() {
+              try {
+                yield Promise.resolve(1);
+                yield Promise.resolve(2);
+              } finally {
+                cleaned = true;
+              }
+            }
+
+            let sum = 0;
+            for await (const val of gen()) {
+              sum = sum + val;
+              break;
+            }
+            return [sum, cleaned];
+          }
+          run()
+        `);
+        expect(result).toEqual([1, true]);
       });
 
       describe("destructuring in for await", () => {
