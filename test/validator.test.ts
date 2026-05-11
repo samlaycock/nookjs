@@ -49,6 +49,15 @@ describe("Validator", () => {
           expect(() => interpreter.evaluate("1 + 1")).toThrow("AST validation failed");
         });
 
+        it("should reject top-level await before running constructor validators in sync evaluate", () => {
+          const validator = () => false;
+
+          const interpreter = new Interpreter({ validator });
+          expect(() => interpreter.evaluate("await Promise.resolve(1)")).toThrow(
+            "Cannot use await in synchronous evaluate(). Use evaluateAsync() instead.",
+          );
+        });
+
         it("should work with no validator", () => {
           const interpreter = new Interpreter();
           expect(interpreter.evaluate("1 + 1")).toBe(2);
@@ -72,6 +81,15 @@ describe("Validator", () => {
 
           // Next call without validator works again
           expect(interpreter.evaluate("7 + 7")).toBe(14);
+        });
+
+        it("should reject top-level await before running per-call validators in sync evaluate", () => {
+          const interpreter = new Interpreter();
+          const strictValidator = () => false;
+
+          expect(() =>
+            interpreter.evaluate("await Promise.resolve(1)", { validator: strictValidator }),
+          ).toThrow("Cannot use await in synchronous evaluate(). Use evaluateAsync() instead.");
         });
 
         it("should allow different validators per call", () => {
