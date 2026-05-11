@@ -1454,7 +1454,13 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
           break;
         }
 
-        const currentValue = iterResult.value;
+        let currentValue = iterResult.value;
+        if (node.await) {
+          if (currentValue instanceof RawValue) {
+            currentValue = currentValue.value;
+          }
+          currentValue = await currentValue;
+        }
 
         if (isDeclaration) {
           const iterEnv = this.interpreter.environment;
@@ -11357,7 +11363,13 @@ export class Interpreter {
         this.checkExecutionLimits();
         this.checkLoopIterations(iterations++);
 
-        const currentValue = iterResult.value;
+        let currentValue = iterResult.value;
+        if (node.await) {
+          if (currentValue instanceof RawValue) {
+            currentValue = currentValue.value;
+          }
+          currentValue = await currentValue;
+        }
 
         if (isDeclaration) {
           // For declarations (let/const), create a new scope for each iteration
