@@ -1139,6 +1139,44 @@ describe("Classes", () => {
         expect(result).toEqual([undefined, undefined]);
       });
 
+      it("should not invoke inherited static setters when child static members shadow them", () => {
+        const interpreter = new Interpreter();
+        const result = interpreter.evaluate(`
+            class Base {
+              static calls = 0;
+              static set value(next) {
+                this.calls = this.calls + 1;
+              }
+            }
+
+            class FieldChild extends Base {
+              static value = 0;
+            }
+            FieldChild.value = 5;
+
+            class MethodChild extends Base {
+              static value() {
+                return 0;
+              }
+            }
+            MethodChild.value = 6;
+
+            class GetterChild extends Base {
+              static get value() {
+                return 0;
+              }
+            }
+            GetterChild.value = 7;
+
+            [FieldChild.value, MethodChild.value(), GetterChild.value, Base.calls];
+          `);
+
+        expect(result[0]).toBe(5);
+        expect(result[1]).toBe(0);
+        expect(result[2]).toBe(0);
+        expect(result[3]).toBe(0);
+      });
+
       it("should compute derived values with getters", () => {
         const interpreter = new Interpreter();
         const result = interpreter.evaluate(`
