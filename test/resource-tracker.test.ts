@@ -172,7 +172,7 @@ describe("Resource Tracking", () => {
           }
         });
 
-        test("should throw when maxTotalIterations exceeded", () => {
+        test("should throw during the evaluation that exceeds maxTotalIterations", () => {
           const interpreter = new Interpreter({
             ...ES2022,
             resourceTracking: true,
@@ -181,11 +181,12 @@ describe("Resource Tracking", () => {
 
           interpreter.evaluate("let sum = 0; for (let i = 0; i < 5; i++) { sum += i; }");
 
-          interpreter.evaluate("let sum2 = 0; for (let i = 0; i < 5; i++) { sum2 += i; }");
-
           expect(() => {
-            interpreter.evaluate("let sum3 = 0; for (let i = 0; i < 5; i++) { sum3 += i; }");
+            interpreter.evaluate("let sum2 = 0; for (let i = 0; i < 5; i++) { sum2 += i; }");
           }).toThrow(ResourceExhaustedError);
+
+          expect(interpreter.getResourceStats().evaluations).toBe(2);
+          expect(interpreter.getResourceHistory()).toHaveLength(2);
         });
 
         test("should reject the first evaluation when maxEvaluations is 0", () => {
@@ -238,24 +239,21 @@ describe("Resource Tracking", () => {
           expect(interpreter.getResourceStats().evaluations).toBe(3);
         });
 
-        test("should throw when maxFunctionCalls exceeded", () => {
+        test("should throw during the evaluation that exceeds maxFunctionCalls", () => {
           const interpreter = new Interpreter({
             ...ES2022,
             resourceTracking: true,
           });
           interpreter.setResourceLimit("maxFunctionCalls", 1);
 
-          interpreter.evaluate(`
+          expect(() => {
+            interpreter.evaluate(`
         function add(a, b) { return a + b; }
         add(1, 2);
       `);
-
-          expect(() => {
-            interpreter.evaluate(`
-          function double(x) { return x * 2; }
-          double(1);
-        `);
           }).toThrow(ResourceExhaustedError);
+
+          expect(interpreter.getResourceStats().functionCalls).toBeGreaterThanOrEqual(1);
         });
 
         test("should report correct exhausted limit", () => {
@@ -316,7 +314,7 @@ describe("Resource Tracking", () => {
           allocationTracker.setLimit("maxAllocationBytes", 5);
 
           allocationTracker.beginEvaluation();
-          allocationTracker.endEvaluation(5, 0, 0, 0);
+          expect(() => allocationTracker.endEvaluation(5, 0, 0, 0)).toThrow(ResourceExhaustedError);
 
           expect(allocationTracker.getExhaustedLimit()).toBe("maxAllocationBytes");
 
@@ -324,7 +322,9 @@ describe("Resource Tracking", () => {
           totalMemoryTracker.setLimit("maxTotalMemory", 5);
 
           totalMemoryTracker.beginEvaluation();
-          totalMemoryTracker.endEvaluation(5, 0, 0, 0);
+          expect(() => totalMemoryTracker.endEvaluation(5, 0, 0, 0)).toThrow(
+            ResourceExhaustedError,
+          );
 
           expect(totalMemoryTracker.getExhaustedLimit()).toBe("maxTotalMemory");
         });
