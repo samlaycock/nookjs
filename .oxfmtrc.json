@@ -1,4 +1,5 @@
 {
+  "ignorePatterns": ["CHANGELOG.md", ".changeset/**"],
   "experimentalSortImports": {
     "groups": [
       "type-import",
