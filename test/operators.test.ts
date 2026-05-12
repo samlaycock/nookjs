@@ -1039,6 +1039,66 @@ describe("Operators", () => {
         });
       });
 
+      describe("With user-defined function constructors", () => {
+        test("returns true for objects created by the constructor", () => {
+          expect(
+            interpreter.evaluate(`
+              function F() {}
+              const f = new F();
+              f instanceof F;
+            `),
+          ).toBe(true);
+        });
+
+        test("tracks multiple constructors independently", () => {
+          expect(
+            interpreter.evaluate(`
+              function A() {}
+              function B() {}
+              const a = new A();
+              const b = new B();
+              a instanceof A && !(a instanceof B) && b instanceof B && !(b instanceof A);
+            `),
+          ).toBe(true);
+        });
+
+        test("does not confuse class instances with function constructor instances", () => {
+          expect(
+            interpreter.evaluate(`
+              function F() {}
+              class C {}
+              const f = new F();
+              const c = new C();
+              f instanceof F && !(f instanceof C) && c instanceof C && !(c instanceof F);
+            `),
+          ).toBe(true);
+        });
+
+        test("constructor object returns override the tracked instance", () => {
+          expect(
+            interpreter.evaluate(`
+              function F() {
+                return {};
+              }
+              const f = new F();
+              f instanceof F;
+            `),
+          ).toBe(false);
+        });
+
+        test("constructor primitive returns keep the tracked instance", () => {
+          expect(
+            interpreter.evaluate(`
+              function F() {
+                return 1;
+              }
+              const f = new F();
+              f instanceof F;
+            `),
+          ).toBe(true);
+        });
+      });
+
       describe("Primitives", () => {
         test("number is not instanceof Number", () => {
           expect(
@@ -1174,6 +1234,17 @@ describe("Operators", () => {
           const result = await interpreter.evaluateAsync("({a:1}) instanceof Object", {
             globals: { Object },
           });
+          expect(result).toBe(true);
+        });
+
+        test("async supports user-defined function constructors", async () => {
+          const result = await interpreter.evaluateAsync(`
+            function F() {
+              this.x = 1;
+            }
+            const f = new F();
+            f instanceof F && f.x === 1;
+          `);
           expect(result).toBe(true);
         });
       });

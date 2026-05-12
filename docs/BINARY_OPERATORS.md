@@ -23,6 +23,7 @@ Binary operations such as `+`, `-`, comparisons, bitwise operators, and `**`.
 
 - `in` requires the right-hand side to be an object.
 - `instanceof` supports host constructors, `ClassValue`, and `FunctionValue` instances.
+- `FunctionValue` `instanceof` uses constructor metadata, not `Function.prototype` chain semantics.
 - Division/modulo by zero defaults to `numericSemantics: "safe"` and throws an `InterpreterError`.
   Set `numericSemantics: "strict-js"` to use native JS results (`Infinity`, `-Infinity`, `NaN`).
 - String concatenation with `+` coerces the other operand to a string.
