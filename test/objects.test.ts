@@ -1789,6 +1789,27 @@ describe("Objects", () => {
         expect(result).toEqual([123, 1, 1, 2]);
       });
 
+      it("should skip nullish values and copy array indexes with spread", () => {
+        const result = interpreter.evaluate(`
+          ({ ...null, ...undefined, ...["a", "b"], ok: true });
+        `);
+        expect(result).toEqual({ 0: "a", 1: "b", ok: true });
+      });
+
+      it("should object-coerce primitives with spread", () => {
+        const result = interpreter.evaluate(`
+          ({ ...123, ...false, ..."ab" });
+        `);
+        expect(result).toEqual({ 0: "a", 1: "b" });
+      });
+
+      it("should skip nullish values and copy array indexes with spread in evaluateAsync", async () => {
+        const result = await interpreter.evaluateAsync(`
+          ({ ...null, ...undefined, ...["a", "b"], ok: true });
+        `);
+        expect(result).toEqual({ 0: "a", 1: "b", ok: true });
+      });
+
       it("should count spread symbol keys against async memory limits", () => {
         return expect(
           interpreter.evaluateAsync(

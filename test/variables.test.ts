@@ -1927,35 +1927,31 @@ describe("Variables", () => {
           expect(result).toEqual({ a: 1, b: 2 });
         });
 
-        it("should throw error when spreading array", () => {
+        it("should copy array indexes when spreading array", () => {
           const interpreter = new Interpreter();
-          expect(() => {
-            interpreter.evaluate(`({...[1, 2, 3]})`);
-          }).toThrow("Spread syntax in objects requires an object");
+          const result = interpreter.evaluate(`({...["a", "b"]})`);
+          expect(result).toEqual({ 0: "a", 1: "b" });
         });
 
-        it("should throw error when spreading null", () => {
+        it("should skip null when spreading object values", () => {
           const interpreter = new Interpreter();
-          expect(() => {
-            interpreter.evaluate(`({...null})`);
-          }).toThrow("Spread syntax in objects requires an object");
+          const result = interpreter.evaluate(`({...null, a: 1})`);
+          expect(result).toEqual({ a: 1 });
         });
 
-        it("should throw error when spreading undefined", () => {
+        it("should skip undefined when spreading object values", () => {
           const interpreter = new Interpreter();
-          expect(() => {
-            interpreter.evaluate(`
+          const result = interpreter.evaluate(`
               let x;
-              ({...x});
+              ({...x, a: 1});
             `);
-          }).toThrow("Spread syntax in objects requires an object");
+          expect(result).toEqual({ a: 1 });
         });
 
-        it("should throw error when spreading primitive (number)", () => {
+        it("should object-coerce primitives when spreading object values", () => {
           const interpreter = new Interpreter();
-          expect(() => {
-            interpreter.evaluate(`({...5})`);
-          }).toThrow("Spread syntax in objects requires an object");
+          const result = interpreter.evaluate(`({...5, ..."ab", ...true})`);
+          expect(result).toEqual({ 0: "a", 1: "b" });
         });
 
         it("should spread object from function return", () => {

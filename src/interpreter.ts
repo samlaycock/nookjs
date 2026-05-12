@@ -5792,13 +5792,15 @@ export class Interpreter {
   }
 
   /**
-   * Validates that a spread value in an object expression is an object.
-   * Throws an error if the value is not a valid object.
+   * Converts an object spread value to the source object used for enumerable own property copying.
+   * Native object spread skips nullish values and object-coerces primitives.
    */
-  private validateObjectSpread(spreadValue: any): void {
-    if (typeof spreadValue !== "object" || spreadValue === null || Array.isArray(spreadValue)) {
-      throw new InterpreterError("Spread syntax in objects requires an object");
+  private objectSpreadSource(spreadValue: any): object | null {
+    if (spreadValue === null || spreadValue === undefined) {
+      return null;
     }
+
+    return Object(spreadValue);
   }
 
   private copyObjectSpreadProperties(target: Record<PropertyKey, any>, source: object): void {
@@ -10088,9 +10090,10 @@ export class Interpreter {
         }
 
         const spreadValue = this.evaluateNode((property as ESTree.SpreadElement).argument);
-        this.validateObjectSpread(spreadValue);
-
-        this.copyObjectSpreadProperties(obj, spreadValue);
+        const spreadSource = this.objectSpreadSource(spreadValue);
+        if (spreadSource !== null) {
+          this.copyObjectSpreadProperties(obj, spreadSource);
+        }
       } else if (property.type === "Property") {
         // Get the property key - evaluate expression for computed properties
         const computedKey = property.computed ? this.evaluateNode(property.key) : null;
@@ -12233,9 +12236,10 @@ export class Interpreter {
         const spreadValue = await this.evaluateNodeAsync(
           (property as ESTree.SpreadElement).argument,
         );
-        this.validateObjectSpread(spreadValue);
-
-        this.copyObjectSpreadProperties(obj, spreadValue);
+        const spreadSource = this.objectSpreadSource(spreadValue);
+        if (spreadSource !== null) {
+          this.copyObjectSpreadProperties(obj, spreadSource);
+        }
       } else if (property.type === "Property") {
         // Evaluate expression for computed properties
         const computedKey = property.computed ? await this.evaluateNodeAsync(property.key) : null;
