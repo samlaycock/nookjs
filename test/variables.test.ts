@@ -1254,6 +1254,22 @@ describe("Variables", () => {
           expect(result).toBe(4);
         });
 
+        it("should not drain generators past consumed pattern slots", () => {
+          const interpreter = new Interpreter(ES2015);
+          const result = interpreter.evaluate(`
+            function* values() {
+              yield 1;
+              yield 2;
+              yield 3;
+            }
+            const iterator = values();
+            const [a] = iterator;
+            const b = iterator.next().value;
+            a + b
+          `);
+          expect(result).toBe(3);
+        });
+
         it("should destructure string values", () => {
           const interpreter = new Interpreter(ES2015);
           const result = interpreter.evaluate(`
@@ -1323,6 +1339,22 @@ describe("Variables", () => {
               return a + b;
             }
             sum(new Set([1, 2]));
+          `);
+          expect(result).toBe(3);
+        });
+
+        it("should not drain generators past consumed pattern slots in async evaluation", async () => {
+          const interpreter = new Interpreter(ES2015);
+          const result = await interpreter.evaluateAsync(`
+            function* values() {
+              yield 1;
+              yield 2;
+              yield 3;
+            }
+            const iterator = values();
+            const [a] = iterator;
+            const b = iterator.next().value;
+            a + b
           `);
           expect(result).toBe(3);
         });

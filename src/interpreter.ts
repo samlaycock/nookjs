@@ -6429,10 +6429,33 @@ export class Interpreter {
   }
 
   /**
-   * Converts an iterable value to the array consumed by array destructuring.
+   * Gets the iterator consumed by an array destructuring pattern.
    */
-  private arrayDestructuringValues(value: any): any[] {
-    return this.iterableToArray(value, "Cannot destructure non-iterable value");
+  private arrayDestructuringIterator(value: any): Iterator<any> {
+    return getSyncIterator(value, "Cannot destructure non-iterable value");
+  }
+
+  /**
+   * Reads the next value for one array destructuring pattern slot.
+   */
+  private nextArrayDestructuringValue(iterator: Iterator<any>): any {
+    const iterResult = iterator.next();
+    return iterResult.done ? undefined : iterResult.value;
+  }
+
+  /**
+   * Collects the remaining iterator values for a destructuring rest element.
+   */
+  private remainingArrayDestructuringValues(iterator: Iterator<any>): any[] {
+    const result: any[] = [];
+    while (true) {
+      const iterResult = iterator.next();
+      if (iterResult.done) {
+        break;
+      }
+      result.push(iterResult.value);
+    }
+    return result;
   }
 
   /**
@@ -8584,31 +8607,33 @@ export class Interpreter {
     declare: boolean,
     kind?: "let" | "const" | "var",
   ): void {
-    const values = this.arrayDestructuringValues(value);
+    const iterator = this.arrayDestructuringIterator(value);
 
     // Process each element in the pattern
     for (let i = 0; i < pattern.elements.length; i++) {
       const element = pattern.elements[i];
       if (element === null || element === undefined) {
         // Hole in array pattern: let [a, , c] = [1, 2, 3] - skip this position
+        this.nextArrayDestructuringValue(iterator);
         continue;
       }
 
-      // Get the corresponding value from the array (undefined if out of bounds)
-      const elementValue = i < values.length ? values[i] : undefined;
-
       if (element.type === "Identifier") {
         // Simple identifier: a
+        const elementValue = this.nextArrayDestructuringValue(iterator);
         this.bindDestructuredIdentifier(element.name, elementValue, declare, kind);
       } else if (element.type === "ArrayPattern" || element.type === "ObjectPattern") {
         // Nested destructuring: [a, [b, c]] or [a, {x, y}]
         // Recursively destructure the nested pattern
+        const elementValue = this.nextArrayDestructuringValue(iterator);
         this.destructurePattern(element, elementValue, declare, kind);
       } else if (element.type === "RestElement") {
         // Rest element: [...rest] - collect remaining array elements
         const restName = this.getRestElementName(element);
         // Collect all remaining elements from current position
-        const remainingValues = this.markSandboxContainer(values.slice(i));
+        const remainingValues = this.markSandboxContainer(
+          this.remainingArrayDestructuringValues(iterator),
+        );
         this.bindDestructuredIdentifier(restName, remainingValues, declare, kind);
 
         // Rest must be last element, so we break
@@ -8617,6 +8642,7 @@ export class Interpreter {
         // Must be AssignmentPattern (default value: a = 5)
         // TypeScript doesn't narrow this properly due to union type limitations
         // So we handle it as the else case with an assertion
+        const elementValue = this.nextArrayDestructuringValue(iterator);
         this.handleAssignmentPattern(
           element as unknown as ESTree.AssignmentPattern,
           elementValue,
@@ -11894,29 +11920,32 @@ export class Interpreter {
     declare: boolean,
     kind?: "let" | "const" | "var",
   ): Promise<void> {
-    const values = this.arrayDestructuringValues(value);
+    const iterator = this.arrayDestructuringIterator(value);
 
     // Process each element in the pattern
     for (let i = 0; i < pattern.elements.length; i++) {
       const element = pattern.elements[i];
       if (element === null || element === undefined) {
         // Hole in array pattern: let [a, , c] = [1, 2, 3]
+        this.nextArrayDestructuringValue(iterator);
         continue;
       }
 
-      const elementValue = i < values.length ? values[i] : undefined;
-
       if (element.type === "Identifier") {
         // Simple identifier: a
+        const elementValue = this.nextArrayDestructuringValue(iterator);
         this.bindDestructuredIdentifier(element.name, elementValue, declare, kind);
       } else if (element.type === "ArrayPattern" || element.type === "ObjectPattern") {
         // Nested destructuring: [a, [b, c]]
+        const elementValue = this.nextArrayDestructuringValue(iterator);
         await this.destructurePatternAsync(element, elementValue, declare, kind);
       } else if (element.type === "RestElement") {
         // Rest element: [...rest] - collect remaining array elements
         const restName = this.getRestElementName(element);
         // Collect all remaining elements from current position
-        const remainingValues = this.markSandboxContainer(values.slice(i));
+        const remainingValues = this.markSandboxContainer(
+          this.remainingArrayDestructuringValues(iterator),
+        );
         this.bindDestructuredIdentifier(restName, remainingValues, declare, kind);
 
         // Rest must be last element, so we break
@@ -11924,6 +11953,7 @@ export class Interpreter {
       } else {
         // Must be AssignmentPattern (default value: a = 5)
         // TypeScript doesn't narrow this properly, so we handle it as the else case
+        const elementValue = this.nextArrayDestructuringValue(iterator);
         await this.handleAssignmentPatternAsync(
           element as unknown as ESTree.AssignmentPattern,
           elementValue,
