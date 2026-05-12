@@ -148,7 +148,7 @@ export class FunctionValue {
     public homeIsStatic: boolean = false, // Whether the method is static
     public destructuredParams: Map<number, ESTree.ObjectPattern | ESTree.ArrayPattern> = new Map(), // Destructuring patterns by param index
     public isArrowFunction: boolean = false, // Arrow functions capture lexical this/arguments
-    public lexicalThisValue: any = undefined, // Captured this at arrow creation time
+    public lexicalThisValue?: any, // Captured this at arrow creation time
   ) {}
 }
 
@@ -2006,7 +2006,7 @@ class Environment {
 
   constructor(
     parent: Environment | null = null,
-    thisValue: any = undefined,
+    thisValue?: any,
     isFunctionScope: boolean = false,
   ) {
     this.parent = parent;
@@ -2679,6 +2679,7 @@ export class Interpreter {
   // Track super binding context during class method execution
   private currentSuperBinding: SuperBinding | null = null;
   private instanceClassMap: WeakMap<object, ClassValue> = new WeakMap();
+  private instanceFunctionMap: WeakMap<object, FunctionValue> = new WeakMap();
   private sandboxOwnedContainers: WeakSet<object> = new WeakSet();
   private sandboxPrototypeLinkedContainers: WeakSet<object> = new WeakSet();
   private arrayMethodCache: WeakMap<any[], Map<string, HostFunctionValue>> = new WeakMap();
@@ -6296,11 +6297,11 @@ export class Interpreter {
    * Check if an object is an instance of a FunctionValue (user-defined constructor).
    * This is for functions used as constructors with 'new'.
    */
-  private isInstanceOfFunction(_obj: any, _funcValue: FunctionValue): boolean {
-    // FunctionValue instances used as constructors aren't tracked the same way
-    // as ClassValue instances. For now, return false.
-    // This could be extended if we track function-based construction.
-    return false;
+  private isInstanceOfFunction(obj: any, funcValue: FunctionValue): boolean {
+    if (typeof obj !== "object" || obj === null) {
+      return false;
+    }
+    return this.instanceFunctionMap.get(obj) === funcValue;
   }
 
   /**
@@ -8988,6 +8989,7 @@ export class Interpreter {
 
       // Validate argument count
       this.validateFunctionArguments(callee, args);
+      this.instanceFunctionMap.set(instance, callee);
 
       // Execute with instance as 'this'
       result = this.executeSandboxFunction(callee, args, instance);
@@ -10547,6 +10549,7 @@ export class Interpreter {
 
       // Validate argument count
       this.validateFunctionArguments(callee, args);
+      this.instanceFunctionMap.set(instance, callee);
 
       // Execute with instance as 'this'
       result = await this.executeSandboxFunctionAsync(callee, args, instance);
