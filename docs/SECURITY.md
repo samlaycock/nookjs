@@ -440,7 +440,11 @@ Limits estimated memory usage in bytes. This is a **best-effort heuristic** that
 
 - Array allocations: ~16 bytes per element
 - Object allocations: ~64 bytes base + 32 bytes per property
-- String allocations (via template literals): ~2 bytes per character
+- String allocations: ~2 bytes per character
+
+The same accounting strategy is applied to allocations the interpreter can observe outside literals,
+including common array and string built-in methods, destructuring rest containers, function
+`arguments`/rest parameter arrays, and arrays or plain objects materialized from host return values.
 
 When exceeded, throws `InterpreterError: Maximum memory limit exceeded`.
 

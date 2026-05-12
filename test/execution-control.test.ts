@@ -309,6 +309,47 @@ describe("Execution Control", () => {
           }).toThrow("Maximum memory limit exceeded");
         });
 
+        test("should throw when array methods allocate beyond memory limit", () => {
+          const interpreter = new Interpreter();
+          expect(() => {
+            interpreter.evaluate(
+              `
+          const base = [1, 2, 3, 4, 5];
+          for (let i = 0; i < 100; i++) {
+            base.map((value) => value * 2);
+          }
+        `,
+              { maxMemory: 1000, maxLoopIterations: 100000 },
+            );
+          }).toThrow("Maximum memory limit exceeded");
+        });
+
+        test("should throw when string methods allocate beyond memory limit", () => {
+          const interpreter = new Interpreter();
+          expect(() => {
+            interpreter.evaluate(
+              `
+          const base = "hello";
+          for (let i = 0; i < 100; i++) {
+            base.repeat(10);
+          }
+        `,
+              { maxMemory: 1000, maxLoopIterations: 100000 },
+            );
+          }).toThrow("Maximum memory limit exceeded");
+        });
+
+        test("should throw when materialized host returns exceed memory limit", () => {
+          const interpreter = new Interpreter({
+            globals: {
+              createValues: () => Array.from({ length: 100 }, (_, index) => index),
+            },
+          });
+          expect(() => {
+            interpreter.evaluate(`createValues();`, { maxMemory: 1000 });
+          }).toThrow("Maximum memory limit exceeded");
+        });
+
         test("should reset memory tracking between evaluations", () => {
           // First interpreter uses some memory
           const interpreter1 = new Interpreter();
