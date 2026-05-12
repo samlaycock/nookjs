@@ -3167,7 +3167,11 @@ export class Interpreter {
   }
 
   private shouldRethrowExecutionControlError(error: unknown): boolean {
-    return error instanceof ResourceExhaustedError || error instanceof ExecutionAbortedError;
+    return (
+      error instanceof ResourceExhaustedError ||
+      error instanceof ExecutionAbortedError ||
+      error instanceof InterpreterError
+    );
   }
 
   /**
@@ -3239,6 +3243,22 @@ export class Interpreter {
     if (currentMemoryUsage > maxMemory) {
       throw new InterpreterError("Maximum memory limit exceeded");
     }
+  }
+
+  /**
+   * Best-effort allocation accounting for containers and strings created outside
+   * literal/template evaluators, such as built-ins and materialized host returns.
+   */
+  private trackArrayAllocation(value: readonly unknown[]): void {
+    this.trackMemory(value.length * 16);
+  }
+
+  private trackObjectAllocation(value: object): void {
+    this.trackMemory(64 + Reflect.ownKeys(value).length * 32);
+  }
+
+  private trackStringAllocation(value: string): void {
+    this.trackMemory(value.length * 2);
   }
 
   private beginEvaluation(options?: EvaluateOptions): void {
@@ -5502,7 +5522,9 @@ export class Interpreter {
   public bindFunctionParameters(fn: FunctionValue, args: any[]): void {
     if (!fn.isArrowFunction && !fn.params.includes("arguments")) {
       // Non-arrow functions get their own arguments object.
-      this.environment.declare("arguments", this.markSandboxContainer(args.slice()), "var");
+      const argumentsObject = args.slice();
+      this.trackArrayAllocation(argumentsObject);
+      this.environment.declare("arguments", this.markSandboxContainer(argumentsObject), "var");
     }
 
     const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
@@ -5529,7 +5551,9 @@ export class Interpreter {
     // Bind rest parameter if present
     if (fn.restParamIndex !== null) {
       const restParamName = fn.params[fn.restParamIndex]!;
-      const restArgs = this.markSandboxContainer(args.slice(fn.restParamIndex));
+      const restArgs = args.slice(fn.restParamIndex);
+      this.trackArrayAllocation(restArgs);
+      this.markSandboxContainer(restArgs);
       this.environment.declare(restParamName, restArgs, "let");
     }
   }
@@ -5541,7 +5565,9 @@ export class Interpreter {
   public async bindFunctionParametersAsync(fn: FunctionValue, args: any[]): Promise<void> {
     if (!fn.isArrowFunction && !fn.params.includes("arguments")) {
       // Non-arrow functions get their own arguments object.
-      this.environment.declare("arguments", this.markSandboxContainer(args.slice()), "var");
+      const argumentsObject = args.slice();
+      this.trackArrayAllocation(argumentsObject);
+      this.environment.declare("arguments", this.markSandboxContainer(argumentsObject), "var");
     }
 
     const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
@@ -5568,7 +5594,9 @@ export class Interpreter {
     // Bind rest parameter if present
     if (fn.restParamIndex !== null) {
       const restParamName = fn.params[fn.restParamIndex]!;
-      const restArgs = this.markSandboxContainer(args.slice(fn.restParamIndex));
+      const restArgs = args.slice(fn.restParamIndex);
+      this.trackArrayAllocation(restArgs);
+      this.markSandboxContainer(restArgs);
       this.environment.declare(restParamName, restArgs, "let");
     }
   }
@@ -5624,8 +5652,7 @@ export class Interpreter {
       }
     }
 
-    // Track memory: estimate 2 bytes per character (UTF-16)
-    this.trackMemory(result.length * 2);
+    this.trackStringAllocation(result);
 
     return result;
   }
@@ -6189,6 +6216,7 @@ export class Interpreter {
       seen.set(value, materialized);
       this.markSandboxContainer(materialized);
       materialized.length = value.length;
+      this.trackArrayAllocation(materialized);
 
       for (const key of Reflect.ownKeys(descriptors)) {
         if (key === "length") {
@@ -6250,6 +6278,7 @@ export class Interpreter {
         );
       }
 
+      this.trackObjectAllocation(materialized);
       return materialized;
     }
 
@@ -6456,6 +6485,7 @@ export class Interpreter {
       }
       result.push(iterResult.value);
     }
+    this.trackArrayAllocation(result);
     return result;
   }
 
@@ -8741,6 +8771,7 @@ export class Interpreter {
         }
       }
 
+      this.trackObjectAllocation(restObj);
       this.bindDestructuredIdentifier(restName, restObj, declare, kind);
     }
   }
@@ -9330,13 +9361,25 @@ export class Interpreter {
       // Non-mutation methods
       case "slice":
         return this.createHostFunction(
-          (start?: number, end?: number) => arr.slice(start, end),
+          (start?: number, end?: number) => {
+            const result = arr.slice(start, end);
+            this.trackArrayAllocation(result);
+            return this.markSandboxContainer(result);
+          },
           "slice",
           false,
         );
 
       case "concat":
-        return this.createHostFunction((...items: any[]) => arr.concat(...items), "concat", false);
+        return this.createHostFunction(
+          (...items: any[]) => {
+            const result = arr.concat(...items);
+            this.trackArrayAllocation(result);
+            return this.markSandboxContainer(result);
+          },
+          "concat",
+          false,
+        );
 
       case "indexOf":
         return this.createHostFunction(
@@ -9353,7 +9396,15 @@ export class Interpreter {
         );
 
       case "join":
-        return this.createHostFunction((separator?: string) => arr.join(separator), "join", false);
+        return this.createHostFunction(
+          (separator?: string) => {
+            const result = arr.join(separator);
+            this.trackStringAllocation(result);
+            return result;
+          },
+          "join",
+          false,
+        );
 
       case "reverse":
         return this.createHostFunction(() => arr.reverse(), "reverse", false);
@@ -9373,7 +9424,8 @@ export class Interpreter {
               const value = this.callCallback(callback, thisArg, [arr[i], i, arr]);
               result[i] = value;
             }
-            return result;
+            this.trackArrayAllocation(result);
+            return this.markSandboxContainer(result);
           },
           "map",
           false,
@@ -9395,7 +9447,8 @@ export class Interpreter {
                 result.push(arr[i]);
               }
             }
-            return result;
+            this.trackArrayAllocation(result);
+            return this.markSandboxContainer(result);
           },
           "filter",
           false,
@@ -9549,7 +9602,15 @@ export class Interpreter {
         );
 
       case "flat":
-        return this.createHostFunction((depth?: number) => arr.flat(depth), "flat", false);
+        return this.createHostFunction(
+          (depth?: number) => {
+            const result = arr.flat(depth);
+            this.trackArrayAllocation(result);
+            return this.markSandboxContainer(result);
+          },
+          "flat",
+          false,
+        );
 
       case "flatMap":
         return this.createHostFunction(
@@ -9571,7 +9632,8 @@ export class Interpreter {
                 result.push(mapped);
               }
             }
-            return result;
+            this.trackArrayAllocation(result);
+            return this.markSandboxContainer(result);
           },
           "flatMap",
           false,
@@ -9649,10 +9711,12 @@ export class Interpreter {
       case "splice":
         return this.createHostFunction(
           (start: number, deleteCount?: number, ...items: any[]) => {
-            if (deleteCount === undefined) {
-              return arr.splice(start);
-            }
-            return arr.splice(start, deleteCount, ...items);
+            const result =
+              deleteCount === undefined
+                ? arr.splice(start)
+                : arr.splice(start, deleteCount, ...items);
+            this.trackArrayAllocation(result);
+            return this.markSandboxContainer(result);
           },
           "splice",
           false,
@@ -9707,7 +9771,9 @@ export class Interpreter {
       case "substring":
         return this.createHostFunction(
           (start: number, end?: number) => {
-            return str.substring(start, end);
+            const result = str.substring(start, end);
+            this.trackStringAllocation(result);
+            return result;
           },
           "substring",
           false,
@@ -9716,7 +9782,9 @@ export class Interpreter {
       case "slice":
         return this.createHostFunction(
           (start: number, end?: number) => {
-            return str.slice(start, end);
+            const result = str.slice(start, end);
+            this.trackStringAllocation(result);
+            return result;
           },
           "slice",
           false,
@@ -9725,7 +9793,9 @@ export class Interpreter {
       case "charAt":
         return this.createHostFunction(
           (index: number) => {
-            return str.charAt(index);
+            const result = str.charAt(index);
+            this.trackStringAllocation(result);
+            return result;
           },
           "charAt",
           false,
@@ -9782,7 +9852,9 @@ export class Interpreter {
       case "toUpperCase":
         return this.createHostFunction(
           () => {
-            return str.toUpperCase();
+            const result = str.toUpperCase();
+            this.trackStringAllocation(result);
+            return result;
           },
           "toUpperCase",
           false,
@@ -9791,7 +9863,9 @@ export class Interpreter {
       case "toLowerCase":
         return this.createHostFunction(
           () => {
-            return str.toLowerCase();
+            const result = str.toLowerCase();
+            this.trackStringAllocation(result);
+            return result;
           },
           "toLowerCase",
           false,
@@ -9801,7 +9875,9 @@ export class Interpreter {
       case "trim":
         return this.createHostFunction(
           () => {
-            return str.trim();
+            const result = str.trim();
+            this.trackStringAllocation(result);
+            return result;
           },
           "trim",
           false,
@@ -9811,7 +9887,9 @@ export class Interpreter {
       case "trimLeft":
         return this.createHostFunction(
           () => {
-            return str.trimStart();
+            const result = str.trimStart();
+            this.trackStringAllocation(result);
+            return result;
           },
           "trimStart",
           false,
@@ -9821,7 +9899,9 @@ export class Interpreter {
       case "trimRight":
         return this.createHostFunction(
           () => {
-            return str.trimEnd();
+            const result = str.trimEnd();
+            this.trackStringAllocation(result);
+            return result;
           },
           "trimEnd",
           false,
@@ -9831,13 +9911,19 @@ export class Interpreter {
       case "split":
         return this.createHostFunction(
           (separator?: string | RegExp | null, limit?: number) => {
+            let result: string[];
             if (separator === undefined) {
-              return [str];
+              result = [str];
+            } else if (separator === null) {
+              result = str.split("null", limit);
+            } else {
+              result = str.split(separator, limit);
             }
-            if (separator === null) {
-              return str.split("null", limit);
+            this.trackArrayAllocation(result);
+            for (const part of result) {
+              this.trackStringAllocation(part);
             }
-            return str.split(separator, limit);
+            return this.markSandboxContainer(result);
           },
           "split",
           false,
@@ -9846,7 +9932,9 @@ export class Interpreter {
       case "replace":
         return this.createHostFunction(
           (searchValue: string, replaceValue: string) => {
-            return str.replace(searchValue, replaceValue);
+            const result = str.replace(searchValue, replaceValue);
+            this.trackStringAllocation(result);
+            return result;
           },
           "replace",
           false,
@@ -9855,7 +9943,9 @@ export class Interpreter {
       case "repeat":
         return this.createHostFunction(
           (count: number) => {
-            return str.repeat(count);
+            const result = str.repeat(count);
+            this.trackStringAllocation(result);
+            return result;
           },
           "repeat",
           false,
@@ -9865,7 +9955,9 @@ export class Interpreter {
       case "padStart":
         return this.createHostFunction(
           (targetLength: number, padString?: string) => {
-            return str.padStart(targetLength, padString);
+            const result = str.padStart(targetLength, padString);
+            this.trackStringAllocation(result);
+            return result;
           },
           "padStart",
           false,
@@ -9874,7 +9966,9 @@ export class Interpreter {
       case "padEnd":
         return this.createHostFunction(
           (targetLength: number, padString?: string) => {
-            return str.padEnd(targetLength, padString);
+            const result = str.padEnd(targetLength, padString);
+            this.trackStringAllocation(result);
+            return result;
           },
           "padEnd",
           false,
@@ -10094,8 +10188,7 @@ export class Interpreter {
       }
     }
 
-    // Track memory: estimate 16 bytes per array element
-    this.trackMemory(elements.length * 16);
+    this.trackArrayAllocation(elements);
 
     return this.markSandboxContainer(elements);
   }
@@ -10158,9 +10251,7 @@ export class Interpreter {
       }
     }
 
-    // Track memory: estimate 64 bytes base + 32 bytes per property
-    const propertyCount = Reflect.ownKeys(obj).length;
-    this.trackMemory(64 + propertyCount * 32);
+    this.trackObjectAllocation(obj);
 
     return this.markSandboxContainer(obj);
   }
@@ -12049,6 +12140,7 @@ export class Interpreter {
         }
       }
 
+      this.trackObjectAllocation(restObj);
       this.bindDestructuredIdentifier(restName, restObj, declare, kind);
     }
   }
@@ -12242,8 +12334,7 @@ export class Interpreter {
       }
     }
 
-    // Track memory: estimate 16 bytes per array element
-    this.trackMemory(elements.length * 16);
+    this.trackArrayAllocation(elements);
 
     return this.markSandboxContainer(elements);
   }
@@ -12308,9 +12399,7 @@ export class Interpreter {
       }
     }
 
-    // Track memory: estimate 64 bytes base + 32 bytes per property
-    const propertyCount = Reflect.ownKeys(obj).length;
-    this.trackMemory(64 + propertyCount * 32);
+    this.trackObjectAllocation(obj);
 
     return this.markSandboxContainer(obj);
   }

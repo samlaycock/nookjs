@@ -342,7 +342,11 @@ Memory tracking is a best-effort estimate based on:
 
 - Array allocations: ~16 bytes per element
 - Object allocations: ~64 bytes base + 32 bytes per property
-- String allocations (via template literals): ~2 bytes per character
+- String allocations: ~2 bytes per character
+
+The interpreter applies this best-effort strategy to observable literal allocations, common
+allocating array and string built-ins, destructuring rest containers, function `arguments`/rest
+parameter arrays, and arrays or plain objects materialized from host return values.
 
 This is not precise memory accounting but serves to detect runaway allocations.
 
