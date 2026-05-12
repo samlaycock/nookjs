@@ -5764,14 +5764,14 @@ export class Interpreter {
    * Converts an iterable to an array.
    * Supports arrays, generators, and objects with [Symbol.iterator].
    */
-  private iterableToArray(value: any): any[] {
+  private iterableToArray(
+    value: any,
+    errorMessage = "Spread syntax requires an iterable (array, generator, or object with [Symbol.iterator])",
+  ): any[] {
     if (Array.isArray(value)) {
       return value;
     }
-    const iterator = getSyncIterator(
-      value,
-      "Spread syntax requires an iterable (array, generator, or object with [Symbol.iterator])",
-    );
+    const iterator = getSyncIterator(value, errorMessage);
     const result: any[] = [];
     while (true) {
       const iterResult = iterator.next();
@@ -6429,12 +6429,10 @@ export class Interpreter {
   }
 
   /**
-   * Validates that a value is an array for array destructuring.
+   * Converts an iterable value to the array consumed by array destructuring.
    */
-  private validateArrayDestructuring(value: any): void {
-    if (!Array.isArray(value)) {
-      throw new InterpreterError(`Cannot destructure non-array value`);
-    }
+  private arrayDestructuringValues(value: any): any[] {
+    return this.iterableToArray(value, "Cannot destructure non-iterable value");
   }
 
   /**
@@ -8586,8 +8584,7 @@ export class Interpreter {
     declare: boolean,
     kind?: "let" | "const" | "var",
   ): void {
-    // Validate value is array-like
-    this.validateArrayDestructuring(value);
+    const values = this.arrayDestructuringValues(value);
 
     // Process each element in the pattern
     for (let i = 0; i < pattern.elements.length; i++) {
@@ -8598,7 +8595,7 @@ export class Interpreter {
       }
 
       // Get the corresponding value from the array (undefined if out of bounds)
-      const elementValue = i < value.length ? value[i] : undefined;
+      const elementValue = i < values.length ? values[i] : undefined;
 
       if (element.type === "Identifier") {
         // Simple identifier: a
@@ -8611,7 +8608,7 @@ export class Interpreter {
         // Rest element: [...rest] - collect remaining array elements
         const restName = this.getRestElementName(element);
         // Collect all remaining elements from current position
-        const remainingValues = this.markSandboxContainer(value.slice(i));
+        const remainingValues = this.markSandboxContainer(values.slice(i));
         this.bindDestructuredIdentifier(restName, remainingValues, declare, kind);
 
         // Rest must be last element, so we break
@@ -11897,8 +11894,7 @@ export class Interpreter {
     declare: boolean,
     kind?: "let" | "const" | "var",
   ): Promise<void> {
-    // Validate value is array-like
-    this.validateArrayDestructuring(value);
+    const values = this.arrayDestructuringValues(value);
 
     // Process each element in the pattern
     for (let i = 0; i < pattern.elements.length; i++) {
@@ -11908,7 +11904,7 @@ export class Interpreter {
         continue;
       }
 
-      const elementValue = i < value.length ? value[i] : undefined;
+      const elementValue = i < values.length ? values[i] : undefined;
 
       if (element.type === "Identifier") {
         // Simple identifier: a
@@ -11920,7 +11916,7 @@ export class Interpreter {
         // Rest element: [...rest] - collect remaining array elements
         const restName = this.getRestElementName(element);
         // Collect all remaining elements from current position
-        const remainingValues = this.markSandboxContainer(value.slice(i));
+        const remainingValues = this.markSandboxContainer(values.slice(i));
         this.bindDestructuredIdentifier(restName, remainingValues, declare, kind);
 
         // Rest must be last element, so we break

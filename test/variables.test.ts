@@ -1,7 +1,7 @@
 import { describe, it, test, expect, beforeEach } from "bun:test";
 
 import { Interpreter, InterpreterError } from "../src/interpreter";
-import { ES2024 } from "../src/presets";
+import { ES2015, ES2024 } from "../src/presets";
 
 describe("Variables", () => {
   describe("ES5", () => {
@@ -1230,6 +1230,104 @@ describe("Variables", () => {
         });
       });
 
+      describe("Array Destructuring - Iterables", () => {
+        it("should destructure Set values", () => {
+          const interpreter = new Interpreter(ES2015);
+          const result = interpreter.evaluate(`
+            const [a, b] = new Set([1, 2]);
+            a + b
+          `);
+          expect(result).toBe(3);
+        });
+
+        it("should destructure generator values", () => {
+          const interpreter = new Interpreter(ES2015);
+          const result = interpreter.evaluate(`
+            function* values() {
+              yield 1;
+              yield 2;
+              yield 3;
+            }
+            const [a, , c] = values();
+            a + c
+          `);
+          expect(result).toBe(4);
+        });
+
+        it("should destructure string values", () => {
+          const interpreter = new Interpreter(ES2015);
+          const result = interpreter.evaluate(`
+            const [a, b, ...rest] = "abcd";
+            a + b + rest.join("")
+          `);
+          expect(result).toBe("abcd");
+        });
+
+        it("should destructure custom iterables", () => {
+          const customIterable = {
+            [Symbol.iterator]: () => {
+              let value = 0;
+              return {
+                next: () => {
+                  value = value + 1;
+                  if (value <= 3) return { value, done: false };
+                  return { value: undefined, done: true };
+                },
+              };
+            },
+          };
+          const interpreter = new Interpreter({
+            ...ES2015,
+            globals: { ...ES2015.globals, customIterable },
+          });
+          const result = interpreter.evaluate(`
+            const [a, b, c] = customIterable;
+            a + b + c
+          `);
+          expect(result).toBe(6);
+        });
+
+        it("should collect remaining iterable values in rest elements", () => {
+          const interpreter = new Interpreter(ES2015);
+          const result = interpreter.evaluate(`
+            const [first, ...rest] = new Set([1, 2, 3]);
+            first + rest[0] + rest[1]
+          `);
+          expect(result).toBe(6);
+        });
+
+        it("should apply defaults for exhausted iterables", () => {
+          const interpreter = new Interpreter(ES2015);
+          const result = interpreter.evaluate(`
+            const [a, b = 2] = new Set([1]);
+            a + b
+          `);
+          expect(result).toBe(3);
+        });
+
+        it("should assign from iterables in assignment patterns", () => {
+          const interpreter = new Interpreter(ES2015);
+          const result = interpreter.evaluate(`
+            let a = 0;
+            let rest = [];
+            [a, ...rest] = new Set([1, 2, 3]);
+            a + rest[0] + rest[1]
+          `);
+          expect(result).toBe(6);
+        });
+
+        it("should destructure iterable function parameters", () => {
+          const interpreter = new Interpreter(ES2015);
+          const result = interpreter.evaluate(`
+            function sum([a, b]) {
+              return a + b;
+            }
+            sum(new Set([1, 2]));
+          `);
+          expect(result).toBe(3);
+        });
+      });
+
       describe("Object Destructuring - Basic", () => {
         it("should destructure simple object", () => {
           const interpreter = new Interpreter();
@@ -1351,11 +1449,11 @@ describe("Variables", () => {
       });
 
       describe("Error Cases", () => {
-        it("should throw on non-array destructuring", () => {
+        it("should throw on non-iterable array destructuring", () => {
           const interpreter = new Interpreter();
           expect(() => {
-            interpreter.evaluate(`let [a, b] = "string";`);
-          }).toThrow("Cannot destructure non-array value");
+            interpreter.evaluate(`let [a, b] = 42;`);
+          }).toThrow("Cannot destructure non-iterable value");
         });
 
         it("should throw on non-object destructuring", () => {
