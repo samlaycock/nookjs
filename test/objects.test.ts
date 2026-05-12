@@ -1810,6 +1810,13 @@ describe("Objects", () => {
         expect(result).toEqual({ 0: "a", 1: "b", ok: true });
       });
 
+      it("should object-coerce primitives with spread in evaluateAsync", async () => {
+        const result = await interpreter.evaluateAsync(`
+          ({ ...123, ...false, ..."ab" });
+        `);
+        expect(result).toEqual({ 0: "a", 1: "b" });
+      });
+
       it("should count spread symbol keys against async memory limits", () => {
         return expect(
           interpreter.evaluateAsync(
