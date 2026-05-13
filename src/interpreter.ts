@@ -10184,7 +10184,7 @@ export class Interpreter {
 
         const spreadValue = this.evaluateNode((element as ESTree.SpreadElement).argument);
         const spreadArray = this.validateArraySpread(spreadValue);
-        elements.push(...spreadArray);
+        this.appendSpreadArgs(elements, spreadArray);
       } else {
         elements.push(this.evaluateNode(element));
       }
@@ -12325,7 +12325,7 @@ export class Interpreter {
           (element as ESTree.SpreadElement).argument,
         );
         const spreadArray = this.validateArraySpread(spreadValue);
-        elements.push(...spreadArray);
+        this.appendSpreadArgs(elements, spreadArray);
       } else {
         let val = await this.evaluateNodeAsync(element);
         // Unwrap RawValue (used to prevent Promise auto-awaiting from call/new expressions)
