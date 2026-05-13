@@ -62,6 +62,20 @@ describe("Arrays", () => {
             `);
         expect(result).toEqual([3, false, undefined]);
       });
+
+      test("large array spread does not exceed host call argument limits", () => {
+        const arr = Array.from({ length: 200_000 }, (_, index) => index);
+        const largeSpreadInterpreter = new Interpreter({ globals: { arr } });
+
+        expect(largeSpreadInterpreter.evaluate("[...arr].length")).toBe(arr.length);
+      });
+
+      test("large array spread in evaluateAsync does not exceed host call argument limits", async () => {
+        const arr = Array.from({ length: 200_000 }, (_, index) => index);
+        const largeSpreadInterpreter = new Interpreter({ globals: { arr } });
+
+        expect(await largeSpreadInterpreter.evaluateAsync("[...arr].length")).toBe(arr.length);
+      });
     });
 
     describe("Array indexing", () => {
