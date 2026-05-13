@@ -339,6 +339,22 @@ describe("Execution Control", () => {
           }).toThrow("Maximum memory limit exceeded");
         });
 
+        test("should not double count split without a separator", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(
+            `
+              const base = "hello world";
+              for (let i = 0; i < 10; i++) {
+                base.split();
+              }
+              base.length;
+            `,
+            { maxMemory: 200, maxLoopIterations: 100000 },
+          );
+
+          expect(result).toBe(11);
+        });
+
         test("should throw when materialized host returns exceed memory limit", () => {
           const interpreter = new Interpreter({
             globals: {
@@ -348,6 +364,42 @@ describe("Execution Control", () => {
           expect(() => {
             interpreter.evaluate(`createValues();`, { maxMemory: 1000 });
           }).toThrow("Maximum memory limit exceeded");
+        });
+
+        test("should rethrow sandbox memory errors from host callbacks without host wrapping", () => {
+          const interpreter = new Interpreter({
+            globals: {
+              runCallback: (callback: () => void) => callback(),
+            },
+          });
+
+          expect(() => {
+            interpreter.evaluate(
+              `
+                runCallback(() => {
+                  const base = "hello";
+                  for (let i = 0; i < 100; i++) {
+                    base.repeat(10);
+                  }
+                });
+              `,
+              { maxMemory: 1000, maxLoopIterations: 100000 },
+            );
+          }).toThrow("Maximum memory limit exceeded");
+
+          expect(() => {
+            interpreter.evaluate(
+              `
+                runCallback(() => {
+                  const base = "hello";
+                  for (let i = 0; i < 100; i++) {
+                    base.repeat(10);
+                  }
+                });
+              `,
+              { maxMemory: 1000, maxLoopIterations: 100000 },
+            );
+          }).not.toThrow("Host function 'runCallback' threw error");
         });
 
         test("should reset memory tracking between evaluations", () => {

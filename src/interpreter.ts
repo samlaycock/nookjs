@@ -9920,8 +9920,10 @@ export class Interpreter {
               result = str.split(separator, limit);
             }
             this.trackArrayAllocation(result);
-            for (const part of result) {
-              this.trackStringAllocation(part);
+            if (separator !== undefined) {
+              for (const part of result) {
+                this.trackStringAllocation(part);
+              }
             }
             return this.markSandboxContainer(result);
           },
