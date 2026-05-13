@@ -690,3 +690,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 ## License
 
 MIT License - see [LICENSE.md](LICENSE.md) for details.
+
+---
+
+<img src="branding/poster.webp" alt="nookjs" style="width:400px; height:auto;">
