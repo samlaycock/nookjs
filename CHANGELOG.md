@@ -1,5 +1,21 @@
 # nookjs
 
+## 0.7.2
+
+### Patch Changes
+
+- c499e22: Match native object spread semantics for nullish values, arrays, and object-coercible primitives.
+- 81ae9ba: Await `for await...of` values produced by sync and async iterables.
+- 7613fc9: Track interpreted function constructor instances for `instanceof` checks.
+- 9ac1c97: Initialize subclass fields when derived classes use the default constructor.
+- 73e92d1: Fix async evaluation feature-control enforcement for declarations, spread, destructuring, and destructuring defaults.
+- 04caf88: Allow array destructuring patterns to consume sync iterables such as sets, generators, strings, and custom iterables.
+- 3e8d770: Throw from the evaluation that exhausts total resource limits instead of delaying the error until the next evaluation.
+- af0bac6: Track memory for allocating array and string built-ins plus materialized host return containers.
+- fde44f6: Inherit public static methods, accessors, and fields through subclass chains.
+- 367db3d: Support top-level await in async script evaluation.
+- 7dbac7c: Avoid host argument limits when materializing large array literal spreads.
+
 ## 0.7.1
 
 ### Patch Changes
