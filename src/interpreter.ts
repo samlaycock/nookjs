@@ -6503,12 +6503,14 @@ export class Interpreter {
   }
 
   /**
-   * Validates that a value is an object (not null, not array) for object destructuring.
+   * Coerces a value into an object for object destructuring.
    */
-  private validateObjectDestructuring(value: any): void {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  private coerceObjectDestructuringSource(value: any): Record<PropertyKey, any> {
+    if (value === null || value === undefined) {
       throw new InterpreterError(`Cannot destructure non-object value`);
     }
+
+    return Object(value);
   }
 
   /**
@@ -8708,8 +8710,7 @@ export class Interpreter {
     declare: boolean,
     kind?: "let" | "const" | "var",
   ): void {
-    // Validate value is an object (not null, not array)
-    this.validateObjectDestructuring(value);
+    const source = this.coerceObjectDestructuringSource(value);
 
     // Track which keys have been destructured (needed for rest)
     const destructuredKeys = new Set<string | symbol>();
@@ -8739,7 +8740,7 @@ export class Interpreter {
         destructuredKeys.add(key);
 
         // Get the value from the source object (undefined if property doesn't exist)
-        const propValue = value[key];
+        const propValue = source[key];
 
         // Extract the target (where to assign/declare the variable)
         const target = property.value;
@@ -8771,15 +8772,15 @@ export class Interpreter {
       const restObj: Record<PropertyKey, any> = this.markSandboxContainer({});
 
       // Collect all non-destructured properties
-      for (const key of Reflect.ownKeys(value)) {
-        if (!destructuredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(value, key)) {
+      for (const key of Reflect.ownKeys(source)) {
+        if (!destructuredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(source, key)) {
           if (typeof key === "string") {
             validatePropertyName(key); // Security: prevent prototype pollution
           } else {
             this.validateSymbolProperty(key);
           }
 
-          const val = value[key];
+          const val = source[key];
           restObj[key] = val;
         }
       }
@@ -12072,8 +12073,7 @@ export class Interpreter {
     declare: boolean,
     kind?: "let" | "const" | "var",
   ): Promise<void> {
-    // Validate value is an object
-    this.validateObjectDestructuring(value);
+    const source = this.coerceObjectDestructuringSource(value);
 
     // Track which keys have been destructured (needed for rest)
     const destructuredKeys = new Set<string | symbol>();
@@ -12103,7 +12103,7 @@ export class Interpreter {
         destructuredKeys.add(key);
 
         // Get the value from the source object
-        const propValue = value[key];
+        const propValue = source[key];
 
         // Extract the target (where to assign)
         const target = property.value;
@@ -12132,15 +12132,15 @@ export class Interpreter {
       const restObj: Record<PropertyKey, any> = this.markSandboxContainer({});
 
       // Collect all non-destructured properties
-      for (const key of Reflect.ownKeys(value)) {
-        if (!destructuredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(value, key)) {
+      for (const key of Reflect.ownKeys(source)) {
+        if (!destructuredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(source, key)) {
           if (typeof key === "string") {
             validatePropertyName(key); // Security: prevent prototype pollution
           } else {
             this.validateSymbolProperty(key);
           }
 
-          const val = value[key];
+          const val = source[key];
           restObj[key] = val;
         }
       }

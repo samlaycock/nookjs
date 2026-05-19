@@ -1488,10 +1488,43 @@ describe("Variables", () => {
           }).toThrow("Cannot destructure non-iterable value");
         });
 
-        it("should throw on non-object destructuring", () => {
+        it("should destructure array properties with object patterns", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            let values = [1, 2];
+            let {length} = values;
+            length
+          `);
+          expect(result).toBe(2);
+        });
+
+        it("should destructure string properties with object patterns", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            let {length} = "abc";
+            length
+          `);
+          expect(result).toBe(3);
+        });
+
+        it("should return undefined for missing primitive object destructuring properties", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            let {missing: fromNumber} = 42;
+            let {missing: fromBoolean} = true;
+            fromNumber === undefined && fromBoolean === undefined
+          `);
+          expect(result).toBe(true);
+        });
+
+        it("should throw on nullish object destructuring", () => {
           const interpreter = new Interpreter();
           expect(() => {
-            interpreter.evaluate(`let {x} = 42;`);
+            interpreter.evaluate(`let {x} = null;`);
+          }).toThrow("Cannot destructure non-object value");
+
+          expect(() => {
+            interpreter.evaluate(`let {x} = undefined;`);
           }).toThrow("Cannot destructure non-object value");
         });
 
