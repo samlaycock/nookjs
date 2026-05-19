@@ -3050,6 +3050,29 @@ describe("Control Flow", () => {
           `);
           expect(result).toEqual(["own", "shadowed", "inherited"]);
         });
+
+        it("should coerce primitives in evaluateAsync", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(`
+            let stringKeys = [];
+            for (let key in "ab") {
+              stringKeys.push(key);
+            }
+
+            let numberKeys = [];
+            for (let key in 42) {
+              numberKeys.push(key);
+            }
+
+            let booleanKeys = [];
+            for (let key in true) {
+              booleanKeys.push(key);
+            }
+
+            [stringKeys, numberKeys, booleanKeys]
+          `);
+          expect(result).toEqual([["0", "1"], [], []]);
+        });
       });
 
       describe("for...in in generators", () => {
@@ -3152,16 +3175,63 @@ describe("Control Flow", () => {
           }).toThrow("for...in requires an object or array, got null/undefined");
         });
 
-        it("should throw error for primitives", () => {
+        it("should coerce primitives", () => {
           const interpreter = new Interpreter();
-          expect(() => {
-            interpreter.evaluate(`
-              let num = 42;
-              for (let key in num) {
+          const result = interpreter.evaluate(`
+            let stringKeys = [];
+            for (let key in "ab") {
+              stringKeys.push(key);
+            }
+
+            let numberKeys = [];
+            for (let key in 42) {
+              numberKeys.push(key);
+            }
+
+            let booleanKeys = [];
+            for (let key in true) {
+              booleanKeys.push(key);
+            }
+
+            [stringKeys, numberKeys, booleanKeys]
+          `);
+          expect(result).toEqual([["0", "1"], [], []]);
+        });
+
+        it("should throw error for null in evaluateAsync", async () => {
+          const interpreter = new Interpreter();
+          try {
+            await interpreter.evaluateAsync(`
+              let obj = null;
+              for (let key in obj) {
                 // should not reach here
               }
             `);
-          }).toThrow("for...in requires an object or array, got number");
+            throw new Error("Expected evaluateAsync() to reject for null");
+          } catch (error) {
+            expect(error).toBeInstanceOf(InterpreterError);
+            expect((error as Error).message).toContain(
+              "for...in requires an object or array, got null/undefined",
+            );
+          }
+        });
+
+        it("should throw error for undefined in evaluateAsync", async () => {
+          const interpreter = new Interpreter();
+          try {
+            await interpreter.evaluateAsync(`
+              let obj;
+              for (let key in obj) {
+                // should not reach here
+              }
+            `);
+            throw new Error("Expected evaluateAsync() to reject for undefined");
+          } catch (error) {
+            expect(error).toBeInstanceOf(InterpreterError);
+            expect((error as Error).message).toContain(
+              "for...in requires an object or array, got null/undefined",
+            );
+          }
         });
 
         it("should handle object with numeric keys", () => {
