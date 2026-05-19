@@ -2408,20 +2408,16 @@ describe("Control Flow", () => {
           expect(() => interpreter.evaluate(code)).toThrow();
         });
 
-        it("should throw error for update on non-number", () => {
+        it("should coerce non-number values in update expressions", () => {
           const interpreter = new Interpreter();
           const code = `
-            let x = "hello";
-            x++
+            let x = "1";
+            let y = true;
+            x++;
+            ++y;
+            x + y
           `;
-          // Only evaluate once to avoid redeclaration error
-          try {
-            interpreter.evaluate(code);
-            expect(true).toBe(false); // Should have thrown
-          } catch (error: any) {
-            expect(error).toBeInstanceOf(InterpreterError);
-            expect(error.message).toContain("can only be used with numbers");
-          }
+          expect(interpreter.evaluate(code)).toBe(4);
         });
       });
 

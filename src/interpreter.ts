@@ -5419,7 +5419,7 @@ export class Interpreter {
   }
 
   /**
-   * Applies an update operator (++ or --) to a number value.
+   * Applies an update operator (++ or --) with JavaScript ToNumeric semantics.
    * Returns [newValue, returnValue] where returnValue depends on prefix/postfix.
    * This core logic is shared between sync and async evaluation paths.
    */
@@ -5427,18 +5427,16 @@ export class Interpreter {
     operator: string,
     currentValue: any,
     isPrefix: boolean,
-  ): [number, number] {
-    if (typeof currentValue !== "number") {
-      throw new InterpreterError("Update expression can only be used with numbers");
-    }
+  ): [number | bigint, any] {
+    const numericValue = typeof currentValue === "bigint" ? currentValue : Number(currentValue);
 
-    let newValue: number;
+    let newValue: number | bigint;
     switch (operator) {
       case "++":
-        newValue = currentValue + 1;
+        newValue = typeof numericValue === "bigint" ? numericValue + 1n : numericValue + 1;
         break;
       case "--":
-        newValue = currentValue - 1;
+        newValue = typeof numericValue === "bigint" ? numericValue - 1n : numericValue - 1;
         break;
       default:
         throw new InterpreterError(`Unsupported update operator: ${operator}`);
