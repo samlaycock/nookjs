@@ -1480,14 +1480,7 @@ describe("Variables", () => {
         });
       });
 
-      describe("Error Cases", () => {
-        it("should throw on non-iterable array destructuring", () => {
-          const interpreter = new Interpreter();
-          expect(() => {
-            interpreter.evaluate(`let [a, b] = 42;`);
-          }).toThrow("Cannot destructure non-iterable value");
-        });
-
+      describe("Object Destructuring - Coercion", () => {
         it("should destructure array properties with object patterns", () => {
           const interpreter = new Interpreter();
           const result = interpreter.evaluate(`
@@ -1516,14 +1509,24 @@ describe("Variables", () => {
           `);
           expect(result).toBe(true);
         });
+      });
 
-        it("should throw on nullish object destructuring", () => {
+      describe("Error Cases", () => {
+        it("should throw on non-iterable array destructuring", () => {
           const interpreter = new Interpreter();
           expect(() => {
+            interpreter.evaluate(`let [a, b] = 42;`);
+          }).toThrow("Cannot destructure non-iterable value");
+        });
+
+        it("should throw on nullish object destructuring", () => {
+          expect(() => {
+            const interpreter = new Interpreter();
             interpreter.evaluate(`let {x} = null;`);
           }).toThrow("Cannot destructure non-object value");
 
           expect(() => {
+            const interpreter = new Interpreter();
             interpreter.evaluate(`let {x} = undefined;`);
           }).toThrow("Cannot destructure non-object value");
         });
