@@ -5443,7 +5443,7 @@ export class Interpreter {
     }
 
     // Return old value for postfix (i++), new value for prefix (++i)
-    const returnValue = isPrefix ? newValue : currentValue;
+    const returnValue = isPrefix ? newValue : numericValue;
     return [newValue, returnValue];
   }
 

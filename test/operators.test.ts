@@ -1686,7 +1686,7 @@ describe("Operators", () => {
             ];
           `);
 
-          expect(result).toEqual(["1", 2, 2, 2, 1, true]);
+          expect(result).toEqual([1, 2, 2, 2, 1, true]);
         });
 
         it("should coerce primitive values for member updates", () => {
@@ -1714,7 +1714,7 @@ describe("Operators", () => {
             ];
           `);
 
-          expect(result).toEqual(["1", 2, 1, 1, 1, true]);
+          expect(result).toEqual([1, 2, 1, 1, 1, true]);
         });
 
         it("should preserve BigInt values for update expressions", () => {
