@@ -964,8 +964,19 @@ class GeneratorValue extends BaseGeneratorValue {
 
         try {
           // Bind error to catch parameter if provided
-          if (node.handler.param && node.handler.param.type === "Identifier") {
-            this.interpreter.environment.declare(node.handler.param.name, error, "let");
+          if (node.handler.param) {
+            if (node.handler.param.type === "Identifier") {
+              this.interpreter.environment.declare(node.handler.param.name, error, "let");
+            } else if (
+              node.handler.param.type === "ObjectPattern" ||
+              node.handler.param.type === "ArrayPattern"
+            ) {
+              const value =
+                error instanceof InterpreterError && "thrownValue" in error
+                  ? error.thrownValue
+                  : error;
+              this.interpreter.destructurePattern(node.handler.param, value, true, "let");
+            }
           }
 
           // Execute catch block
@@ -1670,8 +1681,24 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
 
         try {
           // Bind error to catch parameter if provided
-          if (node.handler.param && node.handler.param.type === "Identifier") {
-            this.interpreter.environment.declare(node.handler.param.name, error, "let");
+          if (node.handler.param) {
+            if (node.handler.param.type === "Identifier") {
+              this.interpreter.environment.declare(node.handler.param.name, error, "let");
+            } else if (
+              node.handler.param.type === "ObjectPattern" ||
+              node.handler.param.type === "ArrayPattern"
+            ) {
+              const value =
+                error instanceof InterpreterError && "thrownValue" in error
+                  ? error.thrownValue
+                  : error;
+              await this.interpreter.destructurePatternAsync(
+                node.handler.param,
+                value,
+                true,
+                "let",
+              );
+            }
           }
 
           // Execute catch block
