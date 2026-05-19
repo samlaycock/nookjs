@@ -560,6 +560,50 @@ describe("Resource Tracking", () => {
           const stats = interpreter.getResourceStats();
           expect(stats.evaluations).toBe(3);
         });
+
+        test("should track allocation stats without per-run maxMemory", () => {
+          const interpreter = new Interpreter({
+            ...ES2022,
+            resourceTracking: true,
+          });
+
+          interpreter.evaluate("const values = [1, 2, 3, 4, 5];");
+
+          const stats = interpreter.getResourceStats();
+          expect(stats.memoryBytes).toBeGreaterThan(0);
+          expect(stats.allocationBytes).toBe(stats.memoryBytes);
+          expect(stats.peakMemoryBytes).toBe(stats.memoryBytes);
+        });
+
+        test("should enforce maxTotalMemory without per-run maxMemory", () => {
+          const interpreter = new Interpreter({
+            ...ES2022,
+            resourceTracking: true,
+          });
+          interpreter.setResourceLimit("maxTotalMemory", 1);
+
+          expect(() => {
+            interpreter.evaluate("const values = [1, 2, 3, 4, 5];");
+          }).toThrow(ResourceExhaustedError);
+
+          expect(interpreter.getResourceStats().isExhausted).toBe(true);
+          expect(interpreter.getResourceStats().memoryBytes).toBeGreaterThan(0);
+        });
+
+        test("should enforce maxAllocationBytes without per-run maxMemory", () => {
+          const interpreter = new Interpreter({
+            ...ES2022,
+            resourceTracking: true,
+          });
+          interpreter.setResourceLimit("maxAllocationBytes", 1);
+
+          expect(() => {
+            interpreter.evaluate("const values = [1, 2, 3, 4, 5];");
+          }).toThrow(ResourceExhaustedError);
+
+          expect(interpreter.getResourceStats().isExhausted).toBe(true);
+          expect(interpreter.getResourceStats().allocationBytes).toBeGreaterThan(0);
+        });
       });
 
       describe("ResourceExhaustedError", () => {

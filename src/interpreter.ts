@@ -3235,12 +3235,12 @@ export class Interpreter {
    */
   private trackMemory(bytes: number): void {
     const maxMemory = this.getCurrentMaxMemory();
-    if (maxMemory === undefined) {
+    if (maxMemory === undefined && !this.integratedResourceTracker) {
       return;
     }
     const currentMemoryUsage = this.getCurrentMemoryUsage() + bytes;
     this.setCurrentMemoryUsage(currentMemoryUsage);
-    if (currentMemoryUsage > maxMemory) {
+    if (maxMemory !== undefined && currentMemoryUsage > maxMemory) {
       throw new InterpreterError("Maximum memory limit exceeded");
     }
   }
