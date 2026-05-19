@@ -1662,6 +1662,77 @@ describe("Operators", () => {
     });
 
     describe("Update expressions on member expressions", () => {
+      describe("Numeric coercion", () => {
+        it("should coerce primitive values for identifier updates", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            let numericString = "1";
+            let booleanValue = true;
+            let nullValue = null;
+            let undefinedValue = undefined;
+
+            const oldString = numericString++;
+            const newBoolean = ++booleanValue;
+            nullValue++;
+            undefinedValue++;
+
+            [
+              oldString,
+              numericString,
+              newBoolean,
+              booleanValue,
+              nullValue,
+              undefinedValue !== undefinedValue
+            ];
+          `);
+
+          expect(result).toEqual(["1", 2, 2, 2, 1, true]);
+        });
+
+        it("should coerce primitive values for member updates", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            const obj = {
+              numericString: "1",
+              booleanValue: false,
+              nullValue: null,
+              undefinedValue: undefined
+            };
+
+            const oldString = obj.numericString++;
+            const newBoolean = ++obj.booleanValue;
+            obj.nullValue++;
+            obj.undefinedValue++;
+
+            [
+              oldString,
+              obj.numericString,
+              newBoolean,
+              obj.booleanValue,
+              obj.nullValue,
+              obj.undefinedValue !== obj.undefinedValue
+            ];
+          `);
+
+          expect(result).toEqual(["1", 2, 1, 1, 1, true]);
+        });
+
+        it("should preserve BigInt values for update expressions", () => {
+          const interpreter = new Interpreter(ES2024);
+          const result = interpreter.evaluate(`
+            let x = 1n;
+            const obj = { y: 3n };
+
+            const oldX = x++;
+            const newY = --obj.y;
+
+            [oldX, x, newY, obj.y];
+          `);
+
+          expect(result).toEqual([1n, 2n, 2n, 2n]);
+        });
+      });
+
       describe("Postfix increment (obj.prop++)", () => {
         it("should increment object property", () => {
           const interpreter = new Interpreter();
