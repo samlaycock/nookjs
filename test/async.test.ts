@@ -1154,6 +1154,29 @@ describe("Async", () => {
           `);
           expect(result).toBe(42);
         });
+
+        test("skips hoisted function declarations while exhausting async generator bodies", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(`
+            async function run() {
+              async function* gen() {
+                function getValue() {
+                  return 42;
+                }
+                yield getValue();
+                yield getValue() + 1;
+              }
+              const iterator = gen();
+              const values = [];
+              values.push((await iterator.next()).value);
+              values.push((await iterator.next()).value);
+              values.push((await iterator.next()).done);
+              return values;
+            }
+            run()
+          `);
+          expect(result).toEqual([42, 43, true]);
+        });
       });
 
       describe("sync iterables with for await", () => {
