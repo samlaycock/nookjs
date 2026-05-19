@@ -426,6 +426,13 @@ function enumerateForInKeys(obj: object): string[] {
   return keys;
 }
 
+function toForInObject(value: any): object {
+  if (value === null || value === undefined) {
+    throw new InterpreterError("for...in requires an object or array, got null/undefined");
+  }
+  return Object(value);
+}
+
 /**
  * Represents a synchronous generator instance created by calling a generator function.
  * Implements the iterator protocol with next(), return(), and throw().
@@ -864,14 +871,7 @@ class GeneratorValue extends BaseGeneratorValue {
 
     try {
       // Evaluate the object
-      const obj = this.interpreter.evaluateNode(node.right);
-
-      if (obj === null || obj === undefined) {
-        throw new InterpreterError("for...in requires an object or array, got null/undefined");
-      }
-      if (typeof obj !== "object") {
-        throw new InterpreterError(`for...in requires an object or array, got ${typeof obj}`);
-      }
+      const obj = toForInObject(this.interpreter.evaluateNode(node.right));
 
       const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
@@ -1579,14 +1579,7 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
 
     try {
       // Evaluate the object
-      const obj = await this.interpreter.evaluateNodeAsync(node.right);
-
-      if (obj === null || obj === undefined) {
-        throw new InterpreterError("for...in requires an object or array, got null/undefined");
-      }
-      if (typeof obj !== "object") {
-        throw new InterpreterError(`for...in requires an object or array, got ${typeof obj}`);
-      }
+      const obj = toForInObject(await this.interpreter.evaluateNodeAsync(node.right));
 
       const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
 
@@ -8138,16 +8131,7 @@ export class Interpreter {
 
     try {
       // Evaluate the object (right side)
-      const obj = this.evaluateNode(node.right);
-
-      // Check if obj is an object or array
-      if (obj === null || obj === undefined) {
-        throw new InterpreterError("for...in requires an object or array, got null/undefined");
-      }
-
-      if (typeof obj !== "object") {
-        throw new InterpreterError(`for...in requires an object or array, got ${typeof obj}`);
-      }
+      const obj = toForInObject(this.evaluateNode(node.right));
 
       // Extract variable information
       const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
@@ -11632,16 +11616,7 @@ export class Interpreter {
 
     try {
       // Evaluate the object (right side)
-      const obj = await this.evaluateNodeAsync(node.right);
-
-      // Check if obj is an object or array
-      if (obj === null || obj === undefined) {
-        throw new InterpreterError("for...in requires an object or array, got null/undefined");
-      }
-
-      if (typeof obj !== "object") {
-        throw new InterpreterError(`for...in requires an object or array, got ${typeof obj}`);
-      }
+      const obj = toForInObject(await this.evaluateNodeAsync(node.right));
 
       // Extract variable information
       const { variableName, isDeclaration, variableKind } = extractForInVariable(node.left);
