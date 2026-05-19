@@ -3122,6 +3122,59 @@ describe("Control Flow", () => {
           `);
           expect(result).toEqual(["own", "shadowed", "inherited"]);
         });
+
+        it("should coerce primitives in generator functions", () => {
+          const interpreter = new Interpreter(ES2022);
+          const result = interpreter.evaluate(`
+            function* keysOf(value) {
+              for (let key in value) {
+                yield key;
+              }
+            }
+
+            let stringIterator = keysOf("ab");
+            let stringKeys = [];
+            stringKeys.push(stringIterator.next().value);
+            stringKeys.push(stringIterator.next().value);
+
+            let numberIterator = keysOf(42);
+            let numberDone = numberIterator.next().done;
+
+            let booleanIterator = keysOf(true);
+            let booleanDone = booleanIterator.next().done;
+
+            [stringKeys, numberDone, booleanDone]
+          `);
+          expect(result).toEqual([["0", "1"], true, true]);
+        });
+
+        it("should coerce primitives in async generator functions", async () => {
+          const interpreter = new Interpreter(ES2022);
+          const result = await interpreter.evaluateAsync(`
+            async function run() {
+              async function* keysOf(value) {
+                for (let key in value) {
+                  yield key;
+                }
+              }
+
+              const stringIterator = keysOf("ab");
+              const stringKeys = [];
+              stringKeys.push((await stringIterator.next()).value);
+              stringKeys.push((await stringIterator.next()).value);
+
+              const numberIterator = keysOf(42);
+              const numberDone = (await numberIterator.next()).done;
+
+              const booleanIterator = keysOf(true);
+              const booleanDone = (await booleanIterator.next()).done;
+
+              return [stringKeys, numberDone, booleanDone];
+            }
+            run()
+          `);
+          expect(result).toEqual([["0", "1"], true, true]);
+        });
       });
 
       describe("Edge cases", () => {
@@ -3200,38 +3253,46 @@ describe("Control Flow", () => {
 
         it("should throw error for null in evaluateAsync", async () => {
           const interpreter = new Interpreter();
-          try {
-            await interpreter.evaluateAsync(`
+          await interpreter
+            .evaluateAsync(`
               let obj = null;
               for (let key in obj) {
                 // should not reach here
               }
-            `);
-            throw new Error("Expected evaluateAsync() to reject for null");
-          } catch (error) {
-            expect(error).toBeInstanceOf(InterpreterError);
-            expect((error as Error).message).toContain(
-              "for...in requires an object or array, got null/undefined",
+            `)
+            .then(
+              () => {
+                throw new Error("Expected evaluateAsync() to reject for null");
+              },
+              (error) => {
+                expect(error).toBeInstanceOf(InterpreterError);
+                expect((error as Error).message).toContain(
+                  "for...in requires an object or array, got null/undefined",
+                );
+              },
             );
-          }
         });
 
         it("should throw error for undefined in evaluateAsync", async () => {
           const interpreter = new Interpreter();
-          try {
-            await interpreter.evaluateAsync(`
+          await interpreter
+            .evaluateAsync(`
               let obj;
               for (let key in obj) {
                 // should not reach here
               }
-            `);
-            throw new Error("Expected evaluateAsync() to reject for undefined");
-          } catch (error) {
-            expect(error).toBeInstanceOf(InterpreterError);
-            expect((error as Error).message).toContain(
-              "for...in requires an object or array, got null/undefined",
+            `)
+            .then(
+              () => {
+                throw new Error("Expected evaluateAsync() to reject for undefined");
+              },
+              (error) => {
+                expect(error).toBeInstanceOf(InterpreterError);
+                expect((error as Error).message).toContain(
+                  "for...in requires an object or array, got null/undefined",
+                );
+              },
             );
-          }
         });
 
         it("should handle object with numeric keys", () => {
