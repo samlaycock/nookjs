@@ -1020,6 +1020,10 @@ class GeneratorValue extends BaseGeneratorValue {
       this.interpreter.hoistVarDeclarationsInScope(this.fn.body.body);
 
       for (const statement of this.fn.body.body) {
+        if (statement.type === "FunctionDeclaration") {
+          continue;
+        }
+
         const result = yield* this.executeStatement(statement);
 
         if (isControlFlowKind(result, "return")) {
@@ -1727,6 +1731,10 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
       this.interpreter.hoistVarDeclarationsInScope(this.fn.body.body);
 
       for (const statement of this.fn.body.body) {
+        if (statement.type === "FunctionDeclaration") {
+          continue;
+        }
+
         const result = yield* this.executeStatement(statement);
 
         if (isControlFlowKind(result, "return")) {

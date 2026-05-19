@@ -1408,6 +1408,26 @@ describe("Functions", () => {
           `);
           expect(result).toBe(42);
         });
+
+        test("skips hoisted function declarations while exhausting generator bodies", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function* gen() {
+              function getValue() {
+                return 42;
+              }
+              yield getValue();
+              yield getValue() + 1;
+            }
+            const iterator = gen();
+            const values = [];
+            values.push(iterator.next().value);
+            values.push(iterator.next().value);
+            values.push(iterator.next().done);
+            values;
+          `);
+          expect(result).toEqual([42, 43, true]);
+        });
       });
 
       describe("Generator with parameters", () => {
