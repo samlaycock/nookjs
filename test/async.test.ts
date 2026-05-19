@@ -1136,6 +1136,24 @@ describe("Async", () => {
           `);
           expect(result).toBe(2);
         });
+
+        test("hoists function declarations before async generator body statements run", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(`
+            async function run() {
+              async function* gen() {
+                yield getValue();
+                function getValue() {
+                  return 42;
+                }
+              }
+              const next = await gen().next();
+              return next.value;
+            }
+            run()
+          `);
+          expect(result).toBe(42);
+        });
       });
 
       describe("sync iterables with for await", () => {
