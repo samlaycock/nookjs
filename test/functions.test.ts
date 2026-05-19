@@ -1428,6 +1428,36 @@ describe("Functions", () => {
           `);
           expect(result).toEqual([42, 43, true]);
         });
+
+        test("destructures object catch parameters inside generator functions", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function* gen() {
+              try {
+                throw { value: 42 };
+              } catch ({ value }) {
+                yield value;
+              }
+            }
+            gen().next().value;
+          `);
+          expect(result).toBe(42);
+        });
+
+        test("destructures array catch parameters inside generator functions", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            function* gen() {
+              try {
+                throw [1, 2, 3];
+              } catch ([first, second]) {
+                yield first + second;
+              }
+            }
+            gen().next().value;
+          `);
+          expect(result).toBe(3);
+        });
       });
 
       describe("Generator with parameters", () => {
@@ -1661,6 +1691,42 @@ describe("Functions", () => {
             run()
           `);
           expect(result).toEqual([undefined, 10]);
+        });
+
+        test("destructures object catch parameters inside async generator functions", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(`
+            async function run() {
+              async function* gen() {
+                try {
+                  throw { value: 42 };
+                } catch ({ value }) {
+                  yield value;
+                }
+              }
+              return (await gen().next()).value;
+            }
+            run()
+          `);
+          expect(result).toBe(42);
+        });
+
+        test("destructures array catch parameters inside async generator functions", async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(`
+            async function run() {
+              async function* gen() {
+                try {
+                  throw [1, 2, 3];
+                } catch ([first, second]) {
+                  yield first + second;
+                }
+              }
+              return (await gen().next()).value;
+            }
+            run()
+          `);
+          expect(result).toBe(3);
         });
 
         test("async generator with await", async () => {
