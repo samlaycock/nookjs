@@ -2663,16 +2663,15 @@ describe("Variables", () => {
           expect(result).toEqual([1, [2, 3, 4]]);
         });
 
-        it("should throw error when too few arguments", () => {
+        it("should bind omitted regular parameters before rest as undefined", () => {
           const interpreter = new Interpreter();
-          expect(() => {
-            interpreter.evaluate(`
+          const result = interpreter.evaluate(`
               function fn(a, b, ...rest) {
-                return rest;
+                return [a, b, rest];
               }
               fn(1);
             `);
-          }).toThrow("Expected at least 2 arguments but got 1");
+          expect(result).toEqual([1, undefined, []]);
         });
 
         it("should allow zero arguments when only rest parameter", () => {

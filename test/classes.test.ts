@@ -356,17 +356,17 @@ describe("Classes", () => {
           expect(result).toEqual([1, 2, 3, 4]);
         });
 
-        it("should throw error for too few arguments", () => {
+        it("should bind omitted constructor parameters as undefined", () => {
           const interpreter = new Interpreter();
-          expect(() => {
-            interpreter.evaluate(`
+          const result = interpreter.evaluate(`
               function RequiresTwo(a, b) {
                 this.a = a;
                 this.b = b;
               }
               new RequiresTwo(1);
             `);
-          }).toThrow("Expected at least 2 arguments but got 1");
+          expect(result.a).toBe(1);
+          expect(result.b).toBeUndefined();
         });
       });
 

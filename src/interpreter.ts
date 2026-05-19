@@ -5638,29 +5638,6 @@ export class Interpreter {
   }
 
   /**
-   * Validates that a function has received the minimum required arguments.
-   * Throws if too few arguments are provided (excluding parameters with defaults).
-   * This core logic is shared between sync and async function calls.
-   */
-  private validateFunctionArguments(fn: FunctionValue, args: any[]): void {
-    const regularParamCount = fn.restParamIndex !== null ? fn.restParamIndex : fn.params.length;
-
-    // Count required parameters (those without default values)
-    let requiredParamCount = 0;
-    for (let i = 0; i < regularParamCount; i++) {
-      if (!fn.defaultValues.has(i)) {
-        requiredParamCount = i + 1; // Last required parameter position + 1
-      }
-    }
-
-    if (args.length < requiredParamCount) {
-      throw new InterpreterError(
-        `Expected at least ${requiredParamCount} arguments but got ${args.length}`,
-      );
-    }
-  }
-
-  /**
    * Builds a template literal string from quasis and evaluated expression values.
    * Interleaves static text parts with interpolated expressions.
    * This core logic is shared between sync and async template literal evaluation.
@@ -8999,9 +8976,6 @@ export class Interpreter {
     // Evaluate all arguments, handling spread
     const args = this.evaluateArguments(node.arguments);
 
-    // Validate argument count
-    this.validateFunctionArguments(callee, args);
-
     // If generator function, return a generator instance
     if (callee.isGenerator) {
       if (callee.isAsync) {
@@ -9054,8 +9028,6 @@ export class Interpreter {
       // Sandbox function constructor
       const callee = constructor as FunctionValue;
 
-      // Validate argument count
-      this.validateFunctionArguments(callee, args);
       this.instanceFunctionMap.set(instance, callee);
 
       // Execute with instance as 'this'
@@ -10617,9 +10589,6 @@ export class Interpreter {
 
     const args = await this.evaluateArgumentsAsync(node.arguments);
 
-    // Validate argument count
-    this.validateFunctionArguments(callee, args);
-
     // If generator function, return a generator instance
     if (callee.isGenerator) {
       if (callee.isAsync) {
@@ -10676,8 +10645,6 @@ export class Interpreter {
       // Sandbox function constructor
       const callee = constructor as FunctionValue;
 
-      // Validate argument count
-      this.validateFunctionArguments(callee, args);
       this.instanceFunctionMap.set(instance, callee);
 
       // Execute with instance as 'this'

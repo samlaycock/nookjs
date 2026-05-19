@@ -194,16 +194,24 @@ describe("Functions", () => {
           expect(interpreter.evaluate(code)).toBe(100);
         });
 
-        test("throws on wrong argument count - too few", () => {
+        test("binds omitted parameters as undefined", () => {
           const code = `
-            function add(a, b) {
-              return a + b;
+            function fn(a, b) {
+              return a === undefined && b === undefined;
             }
-            add(5)
+            fn()
           `;
-          expect(() => interpreter.evaluate(code)).toThrow(
-            "Expected at least 2 arguments but got 1",
-          );
+          expect(interpreter.evaluate(code)).toBe(true);
+        });
+
+        test("binds trailing omitted parameters as undefined", () => {
+          const code = `
+            function fn(a, b) {
+              return [a, b];
+            }
+            fn(5)
+          `;
+          expect(interpreter.evaluate(code)).toEqual([5, undefined]);
         });
 
         test("allows extra arguments (for compatibility with rest parameters)", () => {
