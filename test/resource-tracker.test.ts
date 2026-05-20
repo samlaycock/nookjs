@@ -714,6 +714,63 @@ describe("Resource Tracking", () => {
           expect(tracker.getHistory().length).toBe(0);
         });
 
+        test("should keep bounded history in oldest-to-newest order", () => {
+          const tracker = new ResourceTracker({ historySize: 3 });
+
+          for (let i = 1; i <= 5; i++) {
+            tracker.beginEvaluation();
+            tracker.endEvaluation(i * 10, i, i + 1, i + 2);
+          }
+
+          expect(tracker.getHistory().map((entry) => entry.evaluationNumber)).toEqual([3, 4, 5]);
+          expect(tracker.getHistory().map((entry) => entry.memoryBytes)).toEqual([30, 40, 50]);
+        });
+
+        test("should reset wrapped history state", () => {
+          const tracker = new ResourceTracker({ historySize: 2 });
+
+          for (let i = 1; i <= 3; i++) {
+            tracker.beginEvaluation();
+            tracker.endEvaluation(i, i, i, i);
+          }
+
+          expect(tracker.getHistory().map((entry) => entry.evaluationNumber)).toEqual([2, 3]);
+
+          tracker.reset();
+          tracker.beginEvaluation();
+          tracker.endEvaluation(10, 20, 30, 40);
+
+          expect(tracker.getHistory().map((entry) => entry.evaluationNumber)).toEqual([1]);
+          expect(tracker.getHistory()[0]).toMatchObject({
+            memoryBytes: 10,
+            iterations: 20,
+            functionCalls: 30,
+          });
+        });
+
+        test("should support custom history sizes without array shifts", () => {
+          const originalShift = Array.prototype.shift;
+          const tracker = new ResourceTracker({ historySize: 1 });
+          const shiftStats = { calls: 0 };
+
+          Array.prototype.shift = function shift<T>(this: T[]): T | undefined {
+            shiftStats.calls++;
+            return originalShift.call(this);
+          };
+
+          try {
+            tracker.beginEvaluation();
+            tracker.endEvaluation(1, 1, 1, 1);
+            tracker.beginEvaluation();
+            tracker.endEvaluation(2, 2, 2, 2);
+          } finally {
+            Array.prototype.shift = originalShift;
+          }
+
+          expect(shiftStats.calls).toBe(0);
+          expect(tracker.getHistory().map((entry) => entry.evaluationNumber)).toEqual([2]);
+        });
+
         test("should get and set limits", () => {
           const tracker = new ResourceTracker();
           tracker.setLimit("maxTotalIterations", 1000);
