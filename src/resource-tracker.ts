@@ -83,6 +83,7 @@ export class ResourceTracker {
       this.syncMemoryLimitAliases(this.preferredMemoryLimitKey);
     }
     this.historySize = Math.max(0, Math.floor(options?.historySize ?? 100));
+    this.history = this.createHistoryBuffer();
   }
 
   getStats(): ResourceStats {
@@ -157,7 +158,7 @@ export class ResourceTracker {
     this.largestEvaluationMemory = 0;
     this.largestEvaluationIterations = 0;
     this.exhaustedLimit = null;
-    this.history = [];
+    this.history = this.createHistoryBuffer();
     this.historyWriteIndex = 0;
     this.historyCount = 0;
     this.evaluationNumber = 0;
@@ -278,6 +279,10 @@ export class ResourceTracker {
     }
 
     return null;
+  }
+
+  private createHistoryBuffer(): (ResourceHistoryEntry | undefined)[] {
+    return Array.from<ResourceHistoryEntry | undefined>({ length: this.historySize });
   }
 
   private syncMemoryLimitAliases(lastWritten?: "maxAllocationBytes" | "maxTotalMemory"): void {
