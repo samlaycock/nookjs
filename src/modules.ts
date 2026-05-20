@@ -541,22 +541,16 @@ export class ModuleSystem {
     this.resolvedPathByContext.deleteByPath(path);
   }
 
-  private hasInitializingModuleRecord(): boolean {
-    for (const record of this.cacheByPath.values()) {
-      if (record.status === "initializing") {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   private evictOldestModuleIfNeeded(): void {
-    if (this.cacheByPath.size <= this.maxEntries || this.hasInitializingModuleRecord()) {
+    if (this.cacheByPath.size <= this.maxEntries) {
       return;
     }
 
-    for (const path of this.cacheByPath.keys()) {
+    for (const [path, record] of this.cacheByPath) {
+      if (record.status === "initializing") {
+        continue;
+      }
+
       this.evictModulePath(path);
       if (this.cacheByPath.size <= this.maxEntries) {
         return;

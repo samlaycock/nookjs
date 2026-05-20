@@ -4647,6 +4647,46 @@ describe("Module System", () => {
       expect(interpreter.isModuleCachedByPath("c.js")).toBe(false);
     });
 
+    test("should evict initialized modules while preserving initializing records", async () => {
+      const moduleSystem = new ModuleSystem({
+        enabled: true,
+        cache: true,
+        maxEntries: 2,
+        resolver: {
+          resolve(specifier) {
+            if (specifier === "./pending") {
+              return {
+                type: "source",
+                code: "export const value = 1;",
+                path: "/pending.js",
+              };
+            }
+
+            return {
+              type: "namespace",
+              exports: { value: specifier },
+              path: `/${specifier.slice(2)}.js`,
+            };
+          },
+          authorize() {
+            return true;
+          },
+        },
+      });
+
+      await moduleSystem.resolveModule("./pending", "main.js");
+      await moduleSystem.resolveModule("./one", "main.js");
+      await moduleSystem.resolveModule("./two", "main.js");
+      await moduleSystem.resolveModule("./three", "main.js");
+
+      expect(moduleSystem.getCacheSize()).toBe(2);
+      expect(moduleSystem.isModuleCachedByPath("/pending.js")).toBe(true);
+      expect(moduleSystem.isModuleCachedByPath("/one.js")).toBe(false);
+      expect(moduleSystem.isModuleCachedByPath("/two.js")).toBe(false);
+      expect(moduleSystem.isModuleCachedByPath("/three.js")).toBe(true);
+      expect(moduleSystem.getLoadedModules()).toEqual(["/pending.js", "/three.js"]);
+    });
+
     test("should avoid JSON stringification when caching resolution contexts", async () => {
       let resolveCount = 0;
       const moduleSystem = new ModuleSystem({
