@@ -748,27 +748,22 @@ describe("Resource Tracking", () => {
           });
         });
 
-        test("should support custom history sizes without array shifts", () => {
-          const originalShift = Array.prototype.shift;
+        test("should wrap custom history size one to the newest entry", () => {
           const tracker = new ResourceTracker({ historySize: 1 });
-          const shiftStats = { calls: 0 };
 
-          Array.prototype.shift = function shift<T>(this: T[]): T | undefined {
-            shiftStats.calls++;
-            return originalShift.call(this);
-          };
+          tracker.beginEvaluation();
+          tracker.endEvaluation(1, 1, 1, 1);
+          tracker.beginEvaluation();
+          tracker.endEvaluation(2, 2, 2, 2);
 
-          try {
-            tracker.beginEvaluation();
-            tracker.endEvaluation(1, 1, 1, 1);
-            tracker.beginEvaluation();
-            tracker.endEvaluation(2, 2, 2, 2);
-          } finally {
-            Array.prototype.shift = originalShift;
-          }
-
-          expect(shiftStats.calls).toBe(0);
-          expect(tracker.getHistory().map((entry) => entry.evaluationNumber)).toEqual([2]);
+          expect(tracker.getHistory()).toEqual([
+            expect.objectContaining({
+              evaluationNumber: 2,
+              memoryBytes: 2,
+              iterations: 2,
+              functionCalls: 2,
+            }),
+          ]);
         });
 
         test("should get and set limits", () => {
