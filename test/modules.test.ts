@@ -4687,6 +4687,60 @@ describe("Module System", () => {
       expect(moduleSystem.getLoadedModules()).toEqual(["/pending.js", "/three.js"]);
     });
 
+    test("should evict initialized modules while a source module is evaluating", async () => {
+      let interpreter: Interpreter | undefined;
+      const resolveExtraModules = async () => {
+        const moduleSystem = (interpreter as unknown as { moduleSystem: ModuleSystem })
+          .moduleSystem;
+
+        await moduleSystem.resolveModule("./one", "main.js");
+        await moduleSystem.resolveModule("./two", "main.js");
+        await moduleSystem.resolveModule("./three", "main.js");
+
+        expect(moduleSystem.getModuleMetadataByPath("/pending.js")?.status).toBe("initializing");
+        return 7;
+      };
+
+      interpreter = new Interpreter({
+        globals: { resolveExtraModules },
+        modules: {
+          enabled: true,
+          cache: true,
+          maxEntries: 2,
+          resolver: {
+            resolve(specifier) {
+              if (specifier === "./pending") {
+                return {
+                  type: "source",
+                  code: "export const value = await resolveExtraModules();",
+                  path: "/pending.js",
+                };
+              }
+
+              return {
+                type: "namespace",
+                exports: { value: specifier },
+                path: `/${specifier.slice(2)}.js`,
+              };
+            },
+          },
+        },
+      });
+
+      const result = await interpreter.evaluateModuleAsync(
+        'import { value } from "./pending"; export const result = value;',
+        { path: "main.js" },
+      );
+
+      expect(result.result).toBe(7);
+      expect(interpreter.getModuleCacheSize()).toBe(2);
+      expect(interpreter.isModuleCachedByPath("/pending.js")).toBe(true);
+      expect(interpreter.isModuleCachedByPath("/one.js")).toBe(false);
+      expect(interpreter.isModuleCachedByPath("/two.js")).toBe(false);
+      expect(interpreter.isModuleCachedByPath("/three.js")).toBe(true);
+      expect(interpreter.getLoadedModulePaths()).toEqual(["/three.js", "/pending.js"]);
+    });
+
     test("should avoid JSON stringification when caching resolution contexts", async () => {
       let resolveCount = 0;
       const moduleSystem = new ModuleSystem({
