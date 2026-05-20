@@ -556,6 +556,8 @@ export class ModuleSystem {
         return;
       }
     }
+    // If every cached record is still initializing, exceeding maxEntries is
+    // unavoidable until at least one record completes and becomes evictable.
   }
 
   private unregisterPath(path: string): void {
