@@ -56,7 +56,9 @@ export class ResourceExhaustedError extends InterpreterError {
 export class ResourceTracker {
   private limits: ResourceLimits = {};
   private historySize: number;
-  private history: ResourceHistoryEntry[] = [];
+  private history: (ResourceHistoryEntry | undefined)[] = [];
+  private historyWriteIndex = 0;
+  private historyCount = 0;
   private evaluationNumber = 0;
   private preferredMemoryLimitKey: "maxAllocationBytes" | "maxTotalMemory" = "maxAllocationBytes";
 
@@ -80,7 +82,7 @@ export class ResourceTracker {
         options.limits.maxAllocationBytes !== undefined ? "maxAllocationBytes" : "maxTotalMemory";
       this.syncMemoryLimitAliases(this.preferredMemoryLimitKey);
     }
-    this.historySize = options?.historySize ?? 100;
+    this.historySize = Math.max(0, Math.floor(options?.historySize ?? 100));
   }
 
   getStats(): ResourceStats {
@@ -156,11 +158,24 @@ export class ResourceTracker {
     this.largestEvaluationIterations = 0;
     this.exhaustedLimit = null;
     this.history = [];
+    this.historyWriteIndex = 0;
+    this.historyCount = 0;
     this.evaluationNumber = 0;
   }
 
   getHistory(): ResourceHistoryEntry[] {
-    return [...this.history];
+    const history: ResourceHistoryEntry[] = [];
+
+    for (let offset = 0; offset < this.historyCount; offset++) {
+      const index =
+        (this.historyWriteIndex - this.historyCount + offset + this.historySize) % this.historySize;
+      const entry = this.history[index];
+      if (entry) {
+        history.push(entry);
+      }
+    }
+
+    return history;
   }
 
   getLimit(key: keyof ResourceLimits): number | undefined {
@@ -218,17 +233,15 @@ export class ResourceTracker {
     this.cumulativeCpuTime += cpuTimeMs;
 
     if (this.historySize > 0) {
-      this.history.push({
+      this.history[this.historyWriteIndex] = {
         timestamp: new Date(),
         memoryBytes,
         iterations,
         functionCalls,
         evaluationNumber: this.evaluationNumber,
-      });
-
-      if (this.history.length > this.historySize) {
-        this.history.shift();
-      }
+      };
+      this.historyWriteIndex = (this.historyWriteIndex + 1) % this.historySize;
+      this.historyCount = Math.min(this.historyCount + 1, this.historySize);
     }
 
     const exhaustedLimit = this.checkLimits();
