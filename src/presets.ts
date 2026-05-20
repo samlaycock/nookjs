@@ -185,15 +185,17 @@ export const ES6 = ES2015;
  * Small update that added:
  * - Array.prototype.includes (on prototype, automatically available)
  * - Exponentiation operator (**)
- *
- * Note: The interpreter's BinaryOperators feature includes ** (exponentiation),
- * which was technically added in ES2016, but for simplicity it's bundled with
- * all other binary operators from ES5. To strictly enforce ES2016 semantics,
- * you would need to use a custom validator to check for ** usage.
  */
 export const ES2016: InterpreterOptions = attachEcmaPresetVersion(
   {
     ...ES2015,
+    featureControl: {
+      mode: "whitelist" as const,
+      features: [
+        ...(ES2015.featureControl!.features as LanguageFeature[]),
+        "ExponentiationOperator",
+      ],
+    },
     globals: {
       ...ES2015.globals,
       // ES2016 additions (Array.prototype.includes is on the prototype)
@@ -272,14 +274,12 @@ export const ES2019: InterpreterOptions = attachEcmaPresetVersion(
  * ES2020 (ECMAScript 2020) - June 2020
  *
  * Added:
- * - Nullish coalescing (??) (supported via LogicalOperators)
+ * - Nullish coalescing (??)
  * - Optional chaining (?.)
  * - BigInt (via globals)
  * - Promise.allSettled() (on Promise)
  * - globalThis (via globals)
  * - Dynamic import (import())
- *
- * Note: Nullish coalescing is included under LogicalOperators in all presets.
  */
 export const ES2020: InterpreterOptions = attachEcmaPresetVersion(
   {
@@ -288,6 +288,7 @@ export const ES2020: InterpreterOptions = attachEcmaPresetVersion(
       mode: "whitelist" as const,
       features: [
         ...(ES2019.featureControl!.features as LanguageFeature[]),
+        "NullishCoalescing",
         "OptionalChaining",
         "BigIntLiteral",
         "DynamicImport",

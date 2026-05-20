@@ -6,6 +6,8 @@ import {
   preset,
   ES5,
   ES2015,
+  ES2016,
+  ES2019,
   ES2020,
   ES2021,
   ES2022,
@@ -495,6 +497,32 @@ describe("Presets", () => {
     });
 
     describe("ECMAScript preset built-in gating", () => {
+      it("should gate exponentiation to ES2016 and later presets", () => {
+        expect(() => new Interpreter(ES5).evaluate("2 ** 3")).toThrow(
+          "ExponentiationOperator is not enabled",
+        );
+        expect(() => new Interpreter(ES2015).evaluate("2 ** 3")).toThrow(
+          "ExponentiationOperator is not enabled",
+        );
+
+        expect(new Interpreter(ES2016).evaluate("2 ** 3")).toBe(8);
+        expect(new Interpreter(ES2016).evaluate("let x = 2; x **= 3; x")).toBe(8);
+      });
+
+      it("should gate nullish coalescing to ES2020 and later presets", () => {
+        expect(() => new Interpreter(ES5).evaluate("null ?? 'fallback'")).toThrow(
+          "NullishCoalescing is not enabled",
+        );
+        expect(() => new Interpreter(ES2019).evaluate("null ?? 'fallback'")).toThrow(
+          "NullishCoalescing is not enabled",
+        );
+
+        expect(new Interpreter(ES2020).evaluate("null ?? 'fallback'")).toBe("fallback");
+        expect(new Interpreter(ES2021).evaluate("let x = null; x ??= 'fallback'; x")).toBe(
+          "fallback",
+        );
+      });
+
       it("should hide later-era APIs from older presets", () => {
         const es5 = new Interpreter(ES5);
         const es2015 = new Interpreter(ES2015);

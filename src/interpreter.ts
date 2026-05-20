@@ -2341,6 +2341,8 @@ export type LanguageFeature =
   | "BinaryOperators"
   | "UnaryOperators"
   | "LogicalOperators"
+  | "ExponentiationOperator" // ** and **=
+  | "NullishCoalescing" // ?? and ??=
   | "ConditionalExpression"
   | "MemberExpression"
   | "CallExpression"
@@ -6926,6 +6928,9 @@ export class Interpreter {
     if (!this.isFeatureEnabled("BinaryOperators")) {
       throw new InterpreterError("BinaryOperators is not enabled");
     }
+    if (node.operator === "**" && !this.isFeatureEnabled("ExponentiationOperator")) {
+      throw new InterpreterError("ExponentiationOperator is not enabled");
+    }
 
     if (node.operator === "in" && node.left.type === "PrivateIdentifier") {
       const right = this.evaluateNode(node.right);
@@ -7095,6 +7100,9 @@ export class Interpreter {
     if (!this.isFeatureEnabled("LogicalOperators")) {
       throw new InterpreterError("LogicalOperators is not enabled");
     }
+    if (node.operator === "??" && !this.isFeatureEnabled("NullishCoalescing")) {
+      throw new InterpreterError("NullishCoalescing is not enabled");
+    }
 
     const left = this.evaluateNode(node.left);
     if (isControlFlowKind(left, "yield")) return left;
@@ -7144,6 +7152,9 @@ export class Interpreter {
     if (node.operator === "||=" || node.operator === "&&=" || node.operator === "??=") {
       if (!this.isFeatureEnabled("LogicalAssignment")) {
         throw new InterpreterError("LogicalAssignment is not enabled");
+      }
+      if (node.operator === "??=" && !this.isFeatureEnabled("NullishCoalescing")) {
+        throw new InterpreterError("NullishCoalescing is not enabled");
       }
       return this.evaluateLogicalAssignment(node);
     }
@@ -7526,6 +7537,10 @@ export class Interpreter {
    * These operators read the current value, apply the operation, and assign the result.
    */
   private evaluateCompoundAssignment(node: ESTree.AssignmentExpression): any {
+    if (node.operator === "**=" && !this.isFeatureEnabled("ExponentiationOperator")) {
+      throw new InterpreterError("ExponentiationOperator is not enabled");
+    }
+
     const rightValue = this.evaluateNode(node.right);
 
     // Get the current value and compute the new value
@@ -10334,6 +10349,9 @@ export class Interpreter {
     if (!this.isFeatureEnabled("BinaryOperators")) {
       throw new InterpreterError("BinaryOperators is not enabled");
     }
+    if (node.operator === "**" && !this.isFeatureEnabled("ExponentiationOperator")) {
+      throw new InterpreterError("ExponentiationOperator is not enabled");
+    }
 
     if (node.operator === "in" && node.left.type === "PrivateIdentifier") {
       const right = await this.evaluateNodeAsync(node.right);
@@ -10386,6 +10404,9 @@ export class Interpreter {
   private async evaluateLogicalExpressionAsync(node: ESTree.LogicalExpression): Promise<any> {
     if (!this.isFeatureEnabled("LogicalOperators")) {
       throw new InterpreterError("LogicalOperators is not enabled");
+    }
+    if (node.operator === "??" && !this.isFeatureEnabled("NullishCoalescing")) {
+      throw new InterpreterError("NullishCoalescing is not enabled");
     }
 
     const left = await this.evaluateNodeAsync(node.left);
@@ -10651,6 +10672,9 @@ export class Interpreter {
     if (node.operator === "||=" || node.operator === "&&=" || node.operator === "??=") {
       if (!this.isFeatureEnabled("LogicalAssignment")) {
         throw new InterpreterError("LogicalAssignment is not enabled");
+      }
+      if (node.operator === "??=" && !this.isFeatureEnabled("NullishCoalescing")) {
+        throw new InterpreterError("NullishCoalescing is not enabled");
       }
       return await this.evaluateLogicalAssignmentAsync(node);
     }
@@ -11022,6 +11046,10 @@ export class Interpreter {
    * Evaluates compound assignment operators: +=, -=, *=, /=, %=, **=, <<=, >>=, >>>=, &=, |=, ^=
    */
   private async evaluateCompoundAssignmentAsync(node: ESTree.AssignmentExpression): Promise<any> {
+    if (node.operator === "**=" && !this.isFeatureEnabled("ExponentiationOperator")) {
+      throw new InterpreterError("ExponentiationOperator is not enabled");
+    }
+
     const rightValue = await this.evaluateNodeAsync(node.right);
 
     // Get the current value and compute the new value

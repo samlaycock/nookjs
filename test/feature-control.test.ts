@@ -111,6 +111,37 @@ describe("Feature Control", () => {
           expect(result).toBe(true);
         });
 
+        test("blocks exponentiation without ExponentiationOperator", () => {
+          expect(() => {
+            interpreter.evaluate("2 ** 3");
+          }).toThrow("ExponentiationOperator is not enabled");
+        });
+
+        test("blocks exponentiation assignment without ExponentiationOperator", () => {
+          expect(() => {
+            interpreter.evaluate("let x = 2; x **= 3");
+          }).toThrow("ExponentiationOperator is not enabled");
+        });
+
+        test("blocks nullish coalescing without NullishCoalescing", () => {
+          expect(() => {
+            interpreter.evaluate("null ?? 'fallback'");
+          }).toThrow("NullishCoalescing is not enabled");
+        });
+
+        test("blocks nullish coalescing assignment without NullishCoalescing", () => {
+          const interpreterWithLogicalAssignment = new Interpreter({
+            featureControl: {
+              mode: "whitelist",
+              features: ["VariableDeclarations", "LetConst", "LogicalAssignment"],
+            },
+          });
+
+          expect(() => {
+            interpreterWithLogicalAssignment.evaluate("let x = null; x ??= 'fallback'");
+          }).toThrow("NullishCoalescing is not enabled");
+        });
+
         test("allows conditional expression", () => {
           const result = interpreter.evaluate("10 > 5 ? 'yes' : 'no'");
           expect(result).toBe("yes");
