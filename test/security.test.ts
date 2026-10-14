@@ -1306,6 +1306,59 @@ describe("Security", () => {
         `);
         expect(result).toEqual([true, 2, true, "fn"]);
       });
+
+      const identityCases: Record<string, string> = {
+        "constructor function instances": `
+          function Box() { this.value = 1; }
+          const held = new Box();
+          const pending = Promise.resolve(held);
+          const resolved = await pending;
+          resolved.value = 2;
+          [resolved === held, resolved instanceof Box, held.value === 2]
+        `,
+        "regex literals": `
+          const held = /a/g;
+          const pending = Promise.resolve(held);
+          const resolved = await pending;
+          resolved.lastIndex = 1;
+          [resolved === held, held.lastIndex === 1, resolved.test("ba")]
+        `,
+        "tagged template strings": `
+          const tag = (strings) => strings;
+          const held = tag\`a\${1}b\`;
+          const pending = Promise.resolve(held);
+          const resolved = await pending;
+          [resolved === held, resolved.raw === held.raw, resolved[1] === "b"]
+        `,
+        "caught errors": `
+          let held;
+          try { null.value; } catch (error) { held = error; }
+          const pending = Promise.resolve(held);
+          const resolved = await pending;
+          [resolved === held, resolved.message === held.message, true]
+        `,
+        "values nested in combinator results": `
+          function Box() { this.value = 1; }
+          const held = new Box();
+          const pending = Promise.all([held]);
+          const [resolved] = await pending;
+          resolved.value = 2;
+          [resolved === held, resolved instanceof Box, held.value === 2]
+        `,
+        "values returned from then callbacks": `
+          const held = /b/;
+          const resolved = await Promise.resolve(1).then(() => held);
+          [resolved === held, resolved.test("b"), true]
+        `,
+      };
+
+      for (const [description, code] of Object.entries(identityCases)) {
+        it(`should preserve sandbox-owned identity of ${description}`, async () => {
+          const interpreter = new Interpreter();
+          const result = await interpreter.evaluateAsync(code);
+          expect(result).toEqual([true, true, true]);
+        });
+      }
     });
 
     describe("Built-in object access", () => {
