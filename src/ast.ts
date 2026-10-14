@@ -614,12 +614,11 @@ const STOP_TOKEN = {
   Rest: 6,
   Var: 7,
   ClassField: 8,
-  Assertion: 9,
-  Arrow: 10,
-  ParamsStart: 11,
-  ClassSignature: 12,
-  TypeAssertionEnd: 13,
-  MethodReturn: 14,
+  Arrow: 9,
+  ParamsStart: 10,
+  ClassSignature: 11,
+  TypeAssertionEnd: 12,
+  MethodReturn: 13,
 } as const;
 
 type StopToken = (typeof STOP_TOKEN)[keyof typeof STOP_TOKEN];
@@ -3512,18 +3511,293 @@ class Parser {
     this.skipType(stopTokens);
   }
 
-  private consumeTypeAssertions(expression: ESTree.Expression): ESTree.Expression {
-    if (!this.isTypeAssertionOperator()) {
-      return expression;
-    }
-    while (this.isTypeAssertionOperator()) {
+  // Consume exactly one type (as/satisfies operand) so following runtime operators survive erasure.
+  private skipTypeExpression(): void {
+    this.skipUnionType();
+    if (
+      this.currentType === TOKEN.Keyword &&
+      this.currentValue === "extends" &&
+      !this.currentLineBreakBefore
+    ) {
       this.next();
-      this.skipType(STOP_TOKEN.Assertion);
-      if (this.currentType !== TOKEN.Identifier) {
-        break;
+      this.skipUnionType();
+      this.expectPunctuator("?");
+      this.skipConditionalTypeBranches();
+    }
+  }
+
+  private skipConditionalTypeBranches(): void {
+    this.skipTypeExpression();
+    this.expectPunctuator(":");
+    this.skipTypeExpression();
+  }
+
+  private skipUnionType(): void {
+    if (this.isCurrentPunctuator("|")) {
+      this.next();
+    }
+    this.skipIntersectionType();
+    while (this.isCurrentPunctuator("|")) {
+      this.next();
+      this.skipIntersectionType();
+    }
+  }
+
+  private skipIntersectionType(): void {
+    if (this.isCurrentPunctuator("&")) {
+      this.next();
+    }
+    this.skipTypeOperatorType();
+    while (this.isCurrentPunctuator("&")) {
+      this.next();
+      this.skipTypeOperatorType();
+    }
+  }
+
+  private skipTypeOperatorType(): void {
+    if (this.currentType === TOKEN.Identifier) {
+      switch (this.currentValue) {
+        case "keyof":
+        case "unique":
+        case "readonly":
+          if (this.isTypeStart(this.tokenizer.peekType(), this.tokenizer.peekValue())) {
+            this.next();
+            this.skipTypeOperatorType();
+            return;
+          }
+          break;
+        case "infer":
+          if (this.tokenizer.peekType() === TOKEN.Identifier) {
+            this.next();
+            this.next();
+            return;
+          }
+          break;
+        default:
+          break;
       }
     }
-    return expression;
+
+    this.skipPrimaryType();
+    // Array/indexed-access suffixes cannot start on a new line, matching TypeScript.
+    while (this.isCurrentPunctuator("[") && !this.currentLineBreakBefore) {
+      this.skipBalancedTypeTokens("[", "]");
+    }
+  }
+
+  private skipPrimaryType(): void {
+    switch (this.currentType) {
+      case TOKEN.String:
+      case TOKEN.Number:
+      case TOKEN.BigInt:
+        this.next();
+        return;
+      case TOKEN.Punctuator:
+        switch (this.currentValue) {
+          case "(":
+            this.skipBalancedTypeTokens("(", ")");
+            if (this.isCurrentPunctuator("=>")) {
+              this.next();
+              this.skipTypeExpression();
+            }
+            return;
+          case "<":
+            this.skipFunctionType();
+            return;
+          case "{":
+            this.skipBalancedTypeTokens("{", "}");
+            return;
+          case "[":
+            this.skipBalancedTypeTokens("[", "]");
+            return;
+          case "`":
+            this.skipTemplateLiteralType();
+            return;
+          case "-":
+            this.next();
+            if (
+              (this.currentType as TokenType) !== TOKEN.Number &&
+              (this.currentType as TokenType) !== TOKEN.BigInt
+            ) {
+              throw new ParseError("Expected numeric literal type");
+            }
+            this.next();
+            return;
+          default:
+            throw new ParseError(`Unexpected token in type: ${this.currentValue}`);
+        }
+      case TOKEN.Keyword:
+        switch (this.currentValue) {
+          case "new":
+            this.next();
+            this.skipFunctionType();
+            return;
+          case "typeof":
+            this.next();
+            if (this.currentType === TOKEN.Keyword && (this.currentValue as string) === "import") {
+              this.skipImportType();
+            } else {
+              this.skipTypeReference();
+            }
+            return;
+          case "import":
+            this.skipImportType();
+            return;
+          default:
+            this.skipTypeReference();
+            return;
+        }
+      case TOKEN.Identifier:
+        if (
+          this.currentValue === "abstract" &&
+          this.tokenizer.peekType() === TOKEN.Keyword &&
+          this.tokenizer.peekValue() === "new"
+        ) {
+          this.next();
+          this.next();
+          this.skipFunctionType();
+          return;
+        }
+        this.skipTypeReference();
+        return;
+      default:
+        throw new ParseError("Expected type");
+    }
+  }
+
+  private isTypeStart(type: TokenType, value: string): boolean {
+    if (type !== TOKEN.Punctuator) {
+      return type !== TOKEN.EOF && type !== TOKEN.PrivateIdentifier && type !== TOKEN.RegExp;
+    }
+    return value === "(" || value === "[" || value === "{" || value === "`" || value === "-";
+  }
+
+  // Handles `<T>(...) => R` and `(...) => R` after any leading `new`/`abstract new`.
+  private skipFunctionType(): void {
+    if (this.isCurrentPunctuator("<")) {
+      this.skipTypeArguments();
+    }
+    if (!this.isCurrentPunctuator("(")) {
+      throw new ParseError("Expected '(' in function type");
+    }
+    this.skipBalancedTypeTokens("(", ")");
+    this.expectPunctuator("=>");
+    this.skipTypeExpression();
+  }
+
+  private skipImportType(): void {
+    this.expectKeyword("import");
+    if (!this.isCurrentPunctuator("(")) {
+      throw new ParseError("Expected '(' in import type");
+    }
+    this.skipBalancedTypeTokens("(", ")");
+    if (this.isCurrentPunctuator(".")) {
+      this.next();
+      this.skipTypeReference();
+    } else if (this.isCurrentPunctuator("<") && !this.currentLineBreakBefore) {
+      this.skipTypeArguments();
+    }
+  }
+
+  private skipTypeReference(): void {
+    if (!this.isCurrentTypeName()) {
+      throw new ParseError("Expected type name");
+    }
+    this.next();
+    while (this.isCurrentPunctuator(".")) {
+      this.next();
+      if (!this.isCurrentTypeName()) {
+        throw new ParseError("Expected type name");
+      }
+      this.next();
+    }
+    if (this.isCurrentPunctuator("<") && !this.currentLineBreakBefore) {
+      this.skipTypeArguments();
+    }
+  }
+
+  // Type arguments and type parameters share enough shape to skip with one routine.
+  private skipTypeArguments(): void {
+    this.expectPunctuator("<");
+    while (this.currentType !== TOKEN.Punctuator || !this.currentValue.startsWith(">")) {
+      // Type parameter modifiers (`in`, `out`, `const`) precede the parameter name.
+      while (
+        (this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword) &&
+        (this.currentValue === "in" ||
+          this.currentValue === "out" ||
+          this.currentValue === "const") &&
+        (this.tokenizer.peekType() === TOKEN.Identifier ||
+          this.tokenizer.peekType() === TOKEN.Keyword)
+      ) {
+        this.next();
+      }
+      this.skipUnionType();
+      // `extends` is either a type parameter constraint or the start of a conditional type argument.
+      if (this.currentType === TOKEN.Keyword && this.currentValue === "extends") {
+        this.next();
+        this.skipUnionType();
+        if (this.isCurrentPunctuator("?")) {
+          this.next();
+          this.skipConditionalTypeBranches();
+        }
+      }
+      if (this.isCurrentPunctuator("=")) {
+        this.next();
+        this.skipTypeExpression();
+      }
+      if (this.isCurrentPunctuator(",")) {
+        this.next();
+        continue;
+      }
+      break;
+    }
+    this.consumeAngleBracketPunctuator();
+  }
+
+  private skipBalancedTypeTokens(open: string, close: string): void {
+    this.expectPunctuator(open);
+    let depth = 1;
+    while ((this.currentType as TokenType) !== TOKEN.EOF) {
+      if (this.currentType === TOKEN.Punctuator) {
+        if (this.currentValue === "`") {
+          this.skipTemplateLiteralType();
+          continue;
+        }
+        if (this.currentValue === open) {
+          depth += 1;
+        } else if (this.currentValue === close) {
+          depth -= 1;
+          if (depth === 0) {
+            this.next();
+            return;
+          }
+        }
+      }
+      this.next();
+    }
+    throw new ParseError(`Expected '${close}' in type`);
+  }
+
+  private skipTemplateLiteralType(): void {
+    if (!this.isCurrentPunctuator("`")) {
+      throw new ParseError("Expected template literal type start");
+    }
+    while (!this.tokenizer.readTemplateElement().tail) {
+      this.next();
+      this.skipTypeExpression();
+      if (!this.isCurrentPunctuator("}")) {
+        throw new ParseError("Unterminated template literal type");
+      }
+    }
+    this.next();
+  }
+
+  private isCurrentPunctuator(value: string): boolean {
+    return this.currentType === TOKEN.Punctuator && this.currentValue === value;
+  }
+
+  private isCurrentTypeName(): boolean {
+    return this.currentType === TOKEN.Identifier || this.currentType === TOKEN.Keyword;
   }
 
   private consumeGenericParameterList(stopTokens: StopToken): void {
@@ -3592,8 +3866,6 @@ class Parser {
           return value === "=" || value === "," || value === ";" || value === ")";
         case STOP_TOKEN.ClassField:
           return value === "=" || value === ";" || value === "}";
-        case STOP_TOKEN.Assertion:
-          return value === "," || value === ";" || value === ")" || value === "]" || value === "}";
         case STOP_TOKEN.Arrow:
           return value === "=>";
         case STOP_TOKEN.ParamsStart:
@@ -3751,8 +4023,7 @@ class Parser {
       return arrow;
     }
 
-    let leftExpression = this.parseConditionalExpression(allowIn);
-    leftExpression = this.consumeTypeAssertions(leftExpression);
+    const leftExpression = this.parseConditionalExpression(allowIn);
     if (this.currentType === TOKEN.Punctuator) {
       const operator = this.currentValue;
       switch (operator) {
@@ -3863,6 +4134,20 @@ class Parser {
 
     while (true) {
       const type = this.currentType;
+      // `as`/`satisfies` bind like relational operators; the erased assertion stays the left operand.
+      if (type === TOKEN.Identifier) {
+        if (
+          minPrecedence > 8 ||
+          this.currentLineBreakBefore ||
+          left.type === "PrivateIdentifier" ||
+          !this.isTypeAssertionOperator()
+        ) {
+          break;
+        }
+        this.next();
+        this.skipTypeExpression();
+        continue;
+      }
       if (type === TOKEN.Keyword) {
         if (this.currentValue === "in") {
           if (!allowIn) {
