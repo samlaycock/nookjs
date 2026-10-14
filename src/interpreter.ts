@@ -2763,6 +2763,9 @@ export class Interpreter {
   private numericSemantics: NumericSemantics;
   private ecmaPresetVersion?: EcmaPresetVersion;
   private queuedEvaluations = 0;
+  // Depth of native calls made during async evaluation that run sandbox callbacks synchronously
+  private syncNativeCallbackDepth = 0;
+  private awaitFreeFunctionBodies = new WeakMap<ESTree.Node, boolean>();
   private nodeHandlers: Record<
     string,
     { sync: (node: ASTNode) => any; async: (node: ASTNode) => any }
@@ -6925,6 +6928,99 @@ export class Interpreter {
   }
 
   /**
+   * Runs `call` while marking that sandbox callbacks are being invoked
+   * synchronously by a native during async evaluation.
+   */
+  private withSyncNativeCallbacks<T>(enabled: boolean, call: () => T): T {
+    if (!enabled) {
+      return call();
+    }
+    this.syncNativeCallbackDepth++;
+    try {
+      return call();
+    } finally {
+      this.syncNativeCallbackDepth--;
+    }
+  }
+
+  /**
+   * Calls an async sandbox function from a callback that a native runs
+   * synchronously during async evaluation. A body without `await` runs to
+   * completion synchronously, exactly as it would natively, and its outcome is
+   * returned as a settled Promise. Bodies that await would have to interleave
+   * with other sandbox code, which the evaluator cannot do safely.
+   */
+  private callAwaitFreeAsyncFunction(
+    fn: FunctionValue,
+    argNodes: ESTree.CallExpression["arguments"],
+    thisValue: any,
+  ): Promise<any> {
+    if (!this.isAwaitFreeFunction(fn)) {
+      throw new InterpreterError(
+        "Cannot call an async function that uses await from a callback that a native function runs synchronously",
+      );
+    }
+    const args = this.evaluateArguments(argNodes);
+    try {
+      return Promise.resolve(this.executeSandboxFunction(fn, args, thisValue));
+    } catch (error) {
+      // Aborts and resource limits must stop the evaluation rather than reject
+      if (error instanceof ResourceExhaustedError || error instanceof ExecutionAbortedError) {
+        throw error;
+      }
+      return Promise.reject(error);
+    }
+  }
+
+  private isAwaitFreeFunction(fn: FunctionValue): boolean {
+    const cached = this.awaitFreeFunctionBodies.get(fn.body);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const visit = (value: unknown): boolean => {
+      if (!value || typeof value !== "object") {
+        return true;
+      }
+      if (Array.isArray(value)) {
+        return value.every(visit);
+      }
+      const node = value as ESTree.Node;
+      if (typeof node.type !== "string") {
+        return true;
+      }
+      if (node.type === "AwaitExpression") {
+        return false;
+      }
+      if (node.type === "ForOfStatement" && (node as ESTree.ForOfStatement).await) {
+        return false;
+      }
+      // Nested functions have their own await scope
+      if (
+        node.type === "FunctionDeclaration" ||
+        node.type === "FunctionExpression" ||
+        node.type === "ArrowFunctionExpression"
+      ) {
+        return true;
+      }
+      const record = node as unknown as Record<string, unknown>;
+      for (const key of Object.keys(node)) {
+        if (key !== "type" && key !== "loc" && key !== "line" && !visit(record[key])) {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    const awaitFree =
+      visit([...fn.defaultValues.values()]) &&
+      visit([...fn.destructuredParams.values()]) &&
+      visit(fn.body.body);
+    this.awaitFreeFunctionBodies.set(fn.body, awaitFree);
+    return awaitFree;
+  }
+
+  /**
    * Executes a sandbox function (asynchronous version).
    * Sets up environment, binds parameters, executes body, and unwraps return value.
    * Handles both sync and async sandbox functions.
@@ -9070,7 +9166,7 @@ export class Interpreter {
     // Handle host functions
     if (callee instanceof HostFunctionValue) {
       // Check if async host function in sync mode
-      if (callee.isAsync) {
+      if (callee.isAsync && this.syncNativeCallbackDepth === 0) {
         throw new InterpreterError(
           `Cannot call async host function '${callee.name}' in synchronous evaluate(). Use evaluateAsync() instead.`,
         );
@@ -9117,6 +9213,9 @@ export class Interpreter {
 
     // Check if async sandbox function in sync mode
     if (callee.isAsync && !callee.isGenerator) {
+      if (this.syncNativeCallbackDepth > 0) {
+        return this.callAwaitFreeAsyncFunction(callee, node.arguments, thisValue);
+      }
       throw new InterpreterError(
         "Cannot call async function in synchronous evaluate(). Use evaluateAsync() instead.",
       );
@@ -10094,7 +10193,7 @@ export class Interpreter {
           this.trackStringAllocation(result);
           return result;
         };
-        recordNativeSource(replace, String.prototype.replace);
+        recordNativeSource(replace, Reflect.get(String.prototype, "replace") as Function);
         return this.createHostFunction(replace, "replace", false);
       }
 
@@ -10682,9 +10781,12 @@ export class Interpreter {
     // Handle host functions (sync and async)
     if (callee instanceof HostFunctionValue) {
       const args = await this.evaluateArgumentsAsync(node.arguments);
+      // Sandbox array methods (skipArgWrapping) also run their callbacks synchronously
+      const syncCallbacks =
+        callee.skipArgWrapping || invokesCallbacksSynchronously(callee.hostFunc);
       const wrappedArgs = callee.skipArgWrapping
         ? args
-        : this.wrapArgsForHost(args, !invokesCallbacksSynchronously(callee.hostFunc));
+        : this.wrapArgsForHost(args, !syncCallbacks);
 
       try {
         // If async host function, await the promise
@@ -10694,7 +10796,9 @@ export class Interpreter {
           );
           return this.wrapHostReturnValue(resolved, callee.name);
         }
-        const result = this.withImmediateExecutionLimitCheck(() => callee.hostFunc(...wrappedArgs));
+        const result = this.withSyncNativeCallbacks(syncCallbacks, () =>
+          this.withImmediateExecutionLimitCheck(() => callee.hostFunc(...wrappedArgs)),
+        );
         const wrapped = this.wrapHostReturnValue(result, callee.name);
         // Wrap Promise results in RawValue to prevent auto-awaiting by async/await
         // This preserves Promise identity for chaining (e.g., Promise.resolve(1).then(...))
@@ -10719,9 +10823,12 @@ export class Interpreter {
     // Handle native JavaScript functions (e.g., bound class methods like .then, .catch)
     if (typeof callee === "function") {
       const args = await this.evaluateArgumentsAsync(node.arguments);
-      const wrappedArgs = this.wrapArgsForHost(args, !invokesCallbacksSynchronously(callee));
-      const result = this.withImmediateExecutionLimitCheck(() =>
-        thisValue !== undefined ? callee.call(thisValue, ...wrappedArgs) : callee(...wrappedArgs),
+      const syncCallbacks = invokesCallbacksSynchronously(callee);
+      const wrappedArgs = this.wrapArgsForHost(args, !syncCallbacks);
+      const result = this.withSyncNativeCallbacks(syncCallbacks, () =>
+        this.withImmediateExecutionLimitCheck(() =>
+          thisValue !== undefined ? callee.call(thisValue, ...wrappedArgs) : callee(...wrappedArgs),
+        ),
       );
       // Wrap Promise results in RawValue to prevent auto-awaiting
       if (result instanceof Promise) {
