@@ -2769,6 +2769,9 @@ export class Interpreter {
       nativeUnwrapAllowlist: options?.security?.nativeUnwrapAllowlist,
       nativeUnwrapStrategy: options?.security?.nativeUnwrapStrategy,
     };
+    ReadOnlyProxy.setPromiseFulfillmentWrapper(this.securityOptions, (value, name) =>
+      this.wrapHostPromiseFulfillment(value, name),
+    );
 
     // Initialize module system if provided
     if (options?.modules) {
@@ -6176,6 +6179,23 @@ export class Interpreter {
     }
 
     return materializedPrototype;
+  }
+
+  /**
+   * Protects a value fulfilled by a host Promise. Values the sandbox already
+   * owns keep their identity; host values get the same protection as host
+   * function return values.
+   */
+  private wrapHostPromiseFulfillment(value: any, name: string): any {
+    if (
+      value instanceof FunctionValue ||
+      value instanceof ClassValue ||
+      value instanceof HostFunctionValue ||
+      value instanceof BaseGeneratorValue
+    ) {
+      return value;
+    }
+    return this.wrapHostReturnValue(value, name);
   }
 
   private wrapHostReturnValue(

@@ -1173,6 +1173,141 @@ describe("Security", () => {
       });
     });
 
+    describe("Host Promise fulfillment protection", () => {
+      const createHost = () => {
+        const secret = { value: 1, nested: { value: 2 } };
+        const promise = Promise.resolve(secret);
+        const interpreter = new Interpreter({
+          globals: {
+            promise,
+            getPromise: () => Promise.resolve(secret),
+          },
+        });
+        return { secret, promise, interpreter };
+      };
+
+      const tamperingCases: Record<string, string> = {
+        "awaiting a host function result": "const target = await getPromise();",
+        "awaiting a host Promise global": "const target = await promise;",
+        "a then callback": "let target; await getPromise().then((value) => { target = value; });",
+        "a chained then result": "const target = await getPromise().then((value) => value);",
+        "Promise.all": "const [target] = await Promise.all([getPromise()]);",
+        "Promise.race": "const target = await Promise.race([promise]);",
+        "Promise.allSettled": "const [{ value: target }] = await Promise.allSettled([promise]);",
+        "Promise.resolve adoption": "const target = await Promise.resolve(promise);",
+        "an async function return":
+          "const read = async () => promise; const target = await read();",
+      };
+
+      for (const [description, setup] of Object.entries(tamperingCases)) {
+        it(`should keep host fulfillment values immutable through ${description}`, async () => {
+          const { secret, interpreter } = createHost();
+          await interpreter.evaluateAsync(`
+            ${setup}
+            try { target.value = 99; } catch {}
+            try { target.nested.value = 99; } catch {}
+            try { delete target.value; } catch {}
+          `);
+          expect(secret).toEqual({ value: 1, nested: { value: 2 } });
+        });
+      }
+
+      it("should still expose host fulfillment values for reading", async () => {
+        const { interpreter } = createHost();
+        const result = await interpreter.evaluateAsync(`
+          const target = await getPromise();
+          target.value + target.nested.value
+        `);
+        expect(result).toBe(3);
+      });
+
+      it("should protect host functions fulfilled by host Promises", async () => {
+        let calls = 0;
+        const interpreter = new Interpreter({
+          globals: {
+            getHandler: () =>
+              Promise.resolve(() => {
+                calls++;
+                return "called";
+              }),
+          },
+        });
+        const result = await interpreter.evaluateAsync(`
+          const handler = await getHandler();
+          handler()
+        `);
+        expect(result).toBe("called");
+        expect(calls).toBe(1);
+      });
+
+      it("should keep the same fulfillment identity across repeated awaits", async () => {
+        const { interpreter } = createHost();
+        const result = await interpreter.evaluateAsync(`
+          (await promise) === (await promise)
+        `);
+        expect(result).toBe(true);
+      });
+
+      it("should not invoke overridden then methods on host Promises", async () => {
+        const secret = { value: 1 };
+        const promise = Promise.resolve(secret);
+        let thenCalls = 0;
+        // eslint-disable-next-line no-thenable -- simulates a host Promise with an overridden then
+        promise.then = function (this: Promise<any>, ...args: any[]) {
+          thenCalls++;
+          return Promise.prototype.then.apply(this, args as any);
+        } as any;
+        const interpreter = new Interpreter({ globals: { promise } });
+        await interpreter.evaluateAsync(`
+          const target = await promise;
+          try { target.value = 99; } catch {}
+        `);
+        expect(thenCalls).toBe(0);
+        expect(secret.value).toBe(1);
+      });
+
+      it("should preserve rejection of host Promises", async () => {
+        const interpreter = new Interpreter({
+          globals: { fail: () => Promise.reject(new Error("host failure")) },
+        });
+        const result = await interpreter.evaluateAsync(`
+          let caught = false;
+          try { await fail(); } catch { caught = true; }
+          caught
+        `);
+        expect(result).toBe(true);
+      });
+
+      it("should preserve sandbox-owned identity through Promise.resolve", async () => {
+        const interpreter = new Interpreter();
+        const result = await interpreter.evaluateAsync(`
+          const obj = { count: 1 };
+          const arr = [1, 2];
+          const resolvedObj = await Promise.resolve(obj);
+          const resolvedArr = await Promise.resolve(arr);
+          resolvedObj.count = 2;
+          resolvedArr.push(3);
+          [resolvedObj === obj, resolvedArr === arr, obj.count, arr.length]
+        `);
+        expect(result).toEqual([true, true, 2, 3]);
+      });
+
+      it("should preserve sandbox-owned identity through new Promise and then", async () => {
+        const interpreter = new Interpreter();
+        const result = await interpreter.evaluateAsync(`
+          class Box { constructor() { this.value = 1; } }
+          const box = new Box();
+          const fn = () => "fn";
+          const pending = new Promise((resolve) => resolve(box));
+          const resolvedBox = await pending;
+          const resolvedFn = await Promise.resolve(1).then(() => fn);
+          resolvedBox.value = 2;
+          [resolvedBox === box, box.value, resolvedFn === fn, resolvedFn()]
+        `);
+        expect(result).toEqual([true, 2, true, "fn"]);
+      });
+    });
+
     describe("Built-in object access", () => {
       it("should have access to Promise constructor for async/await support", async () => {
         const interpreter = new Interpreter();

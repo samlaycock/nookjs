@@ -14,6 +14,18 @@ export const PROXY_TARGET = Symbol("ReadOnlyProxy.target");
 export const PROXY_NAME = Symbol("ReadOnlyProxy.name");
 
 /**
+ * Protects the fulfillment value of a host Promise before sandbox code can
+ * observe it through await, then callbacks or Promise combinators.
+ */
+export type PromiseFulfillmentWrapper = (value: unknown, name: string) => unknown;
+
+// Captured before any host code runs so later prototype tampering cannot
+// interfere with Promise protection.
+const NativePromise = Promise;
+const nativePromiseThen = Reflect.get(Promise.prototype, "then") as Function;
+const nativePromiseCatch = Reflect.get(Promise.prototype, "catch") as Function;
+
+/**
  * TypedArray constructors that need unwrapping when passed to native methods.
  * Native methods like TextDecoder.decode() require actual TypedArray instances,
  * not Proxy objects wrapping them.
@@ -392,6 +404,76 @@ export class ReadOnlyProxy {
     WeakMap<object, Map<PropertyKey, { fn: Function; wrapper: HostFunctionValue }>>
   >();
 
+  private static protectedPromiseCacheByOptions = new WeakMap<
+    SecurityOptions,
+    WeakMap<Promise<unknown>, Promise<unknown>>
+  >();
+  private static promiseFulfillmentWrapperByOptions = new WeakMap<
+    SecurityOptions,
+    PromiseFulfillmentWrapper
+  >();
+
+  /**
+   * Register how fulfillment values of host Promises are protected for a
+   * given set of security options. The interpreter uses this so values the
+   * sandbox already owns keep their identity while host values are wrapped.
+   */
+  static setPromiseFulfillmentWrapper(
+    securityOptions: SecurityOptions,
+    wrapper: PromiseFulfillmentWrapper,
+  ): void {
+    ReadOnlyProxy.promiseFulfillmentWrapperByOptions.set(securityOptions, wrapper);
+  }
+
+  /**
+   * Replace a host Promise with a derived Promise whose fulfillment value is
+   * protected. Derived Promises are cached so repeated reads keep identity,
+   * and are never wrapped twice. Rejection reasons pass through unchanged.
+   */
+  private static protectPromise(
+    promise: Promise<unknown>,
+    name: string,
+    securityOptions: SecurityOptions,
+    ecmaVersion?: EcmaPresetVersion,
+  ): Promise<unknown> {
+    let cache = ReadOnlyProxy.protectedPromiseCacheByOptions.get(securityOptions);
+    if (!cache) {
+      cache = new WeakMap<Promise<unknown>, Promise<unknown>>();
+      ReadOnlyProxy.protectedPromiseCacheByOptions.set(securityOptions, cache);
+    }
+    const cachedPromise = cache.get(promise);
+    if (cachedPromise) {
+      return cachedPromise;
+    }
+
+    const wrapFulfillment =
+      ReadOnlyProxy.promiseFulfillmentWrapperByOptions.get(securityOptions) ??
+      ((value: unknown, valueName: string) =>
+        ReadOnlyProxy.wrap(value, valueName, securityOptions, ecmaVersion));
+
+    // SECURITY: Subscribe through the captured intrinsic so host Promises with
+    // overridden then methods cannot observe or replace the protection step.
+    const protectedPromise = new NativePromise<unknown>((resolve, reject) => {
+      Reflect.apply(nativePromiseThen, promise, [
+        (value: unknown) => {
+          try {
+            resolve(wrapFulfillment(value, name));
+          } catch (error) {
+            reject(error);
+          }
+        },
+        reject,
+      ]);
+    });
+    // The original Promise's rejection handling is the host's concern; the
+    // derived Promise must not introduce a new unhandled rejection.
+    Reflect.apply(nativePromiseCatch, protectedPromise, [() => {}]);
+
+    cache.set(promise, protectedPromise);
+    cache.set(protectedPromise, protectedPromise);
+    return protectedPromise;
+  }
+
   private static getObjectProxyCache(securityOptions: SecurityOptions): WeakMap<object, any> {
     let cache = ReadOnlyProxy.objectProxyCacheByOptions.get(securityOptions);
     if (!cache) {
@@ -512,10 +594,11 @@ export class ReadOnlyProxy {
       return value;
     }
 
-    // Pass Promises through unwrapped - they are safe (just hold values) and
-    // wrapping breaks the thenable protocol that await relies on
-    if (value instanceof Promise) {
-      return value;
+    // Promises cannot be proxied without breaking the thenable protocol that
+    // await relies on, so substitute a derived Promise with a protected
+    // fulfillment value instead.
+    if (value instanceof NativePromise) {
+      return ReadOnlyProxy.protectPromise(value, name, effectiveOptions, ecmaVersion);
     }
 
     // If the value itself is a function (not an object with function properties),
