@@ -34,6 +34,7 @@ import {
 } from "./ecmascript-builtins";
 import { ExecutionAbortedError, InterpreterError, SecurityError, ErrorCode } from "./errors";
 import { ModuleSystem } from "./modules";
+import { invokesCallbacksSynchronously, recordNativeSource } from "./native-callbacks";
 import {
   ReadOnlyProxy,
   PROXY_NAME,
@@ -1911,6 +1912,7 @@ export class HostFunctionValue {
             }
 
             const bound = val.bind(target.hostFunc);
+            recordNativeSource(bound, val);
             const wrapped = ReadOnlyProxy.wrap(
               bound,
               `${target.name}.${String(prop)}`,
@@ -10086,16 +10088,15 @@ export class Interpreter {
           false,
         );
 
-      case "replace":
-        return this.createHostFunction(
-          (searchValue: string, replaceValue: string) => {
-            const result = str.replace(searchValue, replaceValue);
-            this.trackStringAllocation(result);
-            return result;
-          },
-          "replace",
-          false,
-        );
+      case "replace": {
+        const replace = (searchValue: string, replaceValue: string) => {
+          const result = str.replace(searchValue, replaceValue);
+          this.trackStringAllocation(result);
+          return result;
+        };
+        recordNativeSource(replace, String.prototype.replace);
+        return this.createHostFunction(replace, "replace", false);
+      }
 
       case "repeat":
         return this.createHostFunction(
@@ -10150,20 +10151,16 @@ export class Interpreter {
           return cached.wrapper;
         }
 
-        const wrapper = this.createHostFunction(
-          (...args: any[]) => value.apply(object, args),
-          property,
-          false,
-        );
+        const forward = (...args: any[]) => value.apply(object, args);
+        recordNativeSource(forward, value);
+        const wrapper = this.createHostFunction(forward, property, false);
         cache.set(property, { fn: value, wrapper });
         return wrapper;
       }
 
-      return this.createHostFunction(
-        (...args: any[]) => value.apply(object, args),
-        property,
-        false,
-      );
+      const forward = (...args: any[]) => value.apply(object, args);
+      recordNativeSource(forward, value);
+      return this.createHostFunction(forward, property, false);
     }
     return value;
   }
@@ -10685,7 +10682,9 @@ export class Interpreter {
     // Handle host functions (sync and async)
     if (callee instanceof HostFunctionValue) {
       const args = await this.evaluateArgumentsAsync(node.arguments);
-      const wrappedArgs = callee.skipArgWrapping ? args : this.wrapArgsForHost(args, true);
+      const wrappedArgs = callee.skipArgWrapping
+        ? args
+        : this.wrapArgsForHost(args, !invokesCallbacksSynchronously(callee.hostFunc));
 
       try {
         // If async host function, await the promise
@@ -10720,7 +10719,7 @@ export class Interpreter {
     // Handle native JavaScript functions (e.g., bound class methods like .then, .catch)
     if (typeof callee === "function") {
       const args = await this.evaluateArgumentsAsync(node.arguments);
-      const wrappedArgs = this.wrapArgsForHost(args, true);
+      const wrappedArgs = this.wrapArgsForHost(args, !invokesCallbacksSynchronously(callee));
       const result = this.withImmediateExecutionLimitCheck(() =>
         thisValue !== undefined ? callee.call(thisValue, ...wrappedArgs) : callee(...wrappedArgs),
       );
