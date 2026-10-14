@@ -339,21 +339,27 @@ Security tradeoff:
 
 If your use case requires preventing sandbox code from mutating TypedArrays or preventing native host code from seeing sandbox-created data, avoid providing TypedArray-related APIs, or implement your own copying wrapper that creates a fresh TypedArray from the data before passing to sensitive operations.
 
-### Promises Pass Through Unwrapped
+### Promises Are Not Proxied
 
-Promise objects are passed through `ReadOnlyProxy.wrap()` without wrapping. This is **intentional** because:
+Promise objects cannot be wrapped in a `ReadOnlyProxy` because:
 
 1. Wrapping breaks the thenable protocol that `await` relies on
 2. `await` checks for a `.then` property to determine if something is a Promise
 3. If `.then` becomes a `HostFunctionValue`, the native Promise resolution fails
 
+Instead, `ReadOnlyProxy.wrap()` substitutes a derived native Promise whose fulfillment value is protected before sandbox code can observe it:
+
+- Host objects and functions fulfilled by a host Promise receive the same protection as host function return values, whether they are observed through `await`, `.then()` callbacks or combinators such as `Promise.all()`
+- Values the sandbox already owns (object literals, arrays, class instances, sandbox functions) keep their identity, so `await Promise.resolve(obj) === obj` still holds
+- The derived Promise subscribes through the intrinsic `Promise.prototype.then`, so overridden `then` methods on host Promises are never invoked
+- Derived Promises are cached per original Promise, so repeated reads observe the same Promise and fulfillment value
+- Rejection reasons pass through unchanged, and the derived Promise does not introduce new unhandled rejections
+
 **Implications:**
 
 - Sandbox code can call native Promise methods directly
 - Promise values are resolved/rejected through standard interfaces
-- This is considered an acceptable trade-off for async/await support
-
-**Risk Assessment:** Low - Promise API doesn't provide access to prototype chain or dangerous capabilities.
+- Promises returned to the host are the derived Promises rather than the original host Promise objects
 
 ### Error Messages Hidden by Default
 
