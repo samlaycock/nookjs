@@ -947,17 +947,7 @@ describe("Feature Control", () => {
           features: { disable: [disabledFeature] },
         });
 
-        let error: unknown;
-        try {
-          await sandbox.runModule(source, { path: "main.js" });
-        } catch (caught) {
-          error = caught;
-        }
-        expect(() => {
-          if (error) {
-            throw error;
-          }
-        }).toThrow(message);
+        await expect(sandbox.runModule(source, { path: "main.js" })).rejects.toThrow(message);
       };
 
       test("blocks function declarations in every export form", async () => {
