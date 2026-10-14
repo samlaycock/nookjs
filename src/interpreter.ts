@@ -2648,6 +2648,8 @@ class EvaluationContext {
   maxMemory?: number;
   memoryUsage = 0;
   callStackDepth = 0;
+  // Dynamic imports started by this evaluation that have not yet settled.
+  pendingDynamicImports = new Set<Promise<unknown>>();
 }
 
 /**
@@ -2973,6 +2975,40 @@ export class Interpreter {
   }
 
   private evaluationMutexQueue: Promise<void> = Promise.resolve();
+
+  /**
+   * Register a dynamic import job with the evaluation that started it, so the
+   * evaluation can wait for it to settle before releasing its context.
+   */
+  private trackPendingDynamicImport(job: Promise<unknown>): void {
+    const context = this.getCurrentContext();
+    if (!context) {
+      return;
+    }
+    const pending = context.pendingDynamicImports;
+    const settled = job.then(
+      () => undefined,
+      () => undefined,
+    );
+    pending.add(settled);
+    void settled.then(() => pending.delete(settled));
+  }
+
+  /**
+   * Wait for every dynamic import started by the current evaluation to settle.
+   * Detached `import()` calls would otherwise resume after the evaluation has
+   * ended and run module code with a later evaluation's globals, limits and
+   * statistics. Imports started while draining are drained as well.
+   */
+  private async drainPendingDynamicImports(): Promise<void> {
+    const pending = this.getCurrentContext()?.pendingDynamicImports;
+    if (!pending) {
+      return;
+    }
+    while (pending.size > 0) {
+      await Promise.all(pending);
+    }
+  }
 
   /**
    * Format a host error message respecting security options.
@@ -3594,6 +3630,7 @@ export class Interpreter {
       throw this.enhanceError(error);
     } finally {
       if (evaluationStarted) {
+        await this.drainPendingDynamicImports();
         this.endEvaluation(options);
       }
       this.currentSourceCode = "";
@@ -4107,6 +4144,7 @@ export class Interpreter {
       throw this.enhanceError(error);
     } finally {
       if (evaluationStarted) {
+        await this.drainPendingDynamicImports();
         this.endEvaluation(options);
       }
       this.currentSourceCode = "";
@@ -11875,6 +11913,7 @@ export class Interpreter {
     const promise = this.resolveModuleExports(sourceValue, importerPath).then((exports) =>
       ReadOnlyProxy.wrap(exports, `import("${sourceValue}")`, this.securityOptions),
     );
+    this.trackPendingDynamicImport(promise);
 
     return new RawValue(promise);
   }
