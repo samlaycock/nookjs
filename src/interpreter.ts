@@ -6282,7 +6282,11 @@ export class Interpreter {
    * owns keep their identity; host values get the same protection as host
    * function return values.
    */
-  private wrapHostPromiseFulfillment(value: any, name: string): any {
+  private wrapHostPromiseFulfillment(
+    value: any,
+    name: string,
+    seen: WeakMap<object, any> = new WeakMap(),
+  ): any {
     if (
       value instanceof FunctionValue ||
       value instanceof ClassValue ||
@@ -6291,7 +6295,7 @@ export class Interpreter {
     ) {
       return value;
     }
-    return this.wrapHostReturnValue(value, name);
+    return this.wrapHostReturnValue(value, name, seen);
   }
 
   private wrapHostReturnValue(
@@ -6816,11 +6820,14 @@ export class Interpreter {
    * get the same protection as host function return values.
    */
   private wrapHostCallbackInputs(hostArgs: any[], thisValue: any): { args: any[]; thisValue: any } {
+    // Share one cache so a host object reachable from several inputs keeps a single identity
+    const seen = new WeakMap<object, any>();
+    const wrappedThis = this.wrapHostPromiseFulfillment(thisValue, "callback this", seen);
     const args = Array.from({ length: hostArgs.length });
     for (let i = 0; i < hostArgs.length; i++) {
-      args[i] = this.wrapHostPromiseFulfillment(hostArgs[i], `callback argument ${i}`);
+      args[i] = this.wrapHostPromiseFulfillment(hostArgs[i], `callback argument ${i}`, seen);
     }
-    return { args, thisValue: this.wrapHostPromiseFulfillment(thisValue, "callback this") };
+    return { args, thisValue: wrappedThis };
   }
 
   private enterFunctionContext(
