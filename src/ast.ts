@@ -604,6 +604,29 @@ const SINGLE_CHAR_PUNCTUATORS: Record<number, string> = {
   126: "~",
 };
 
+const isKeywordType = (value: string): boolean => {
+  switch (value) {
+    case "any":
+    case "unknown":
+    case "string":
+    case "number":
+    case "bigint":
+    case "symbol":
+    case "boolean":
+    case "object":
+    case "never":
+    case "undefined":
+    case "void":
+    case "null":
+    case "this":
+    case "true":
+    case "false":
+      return true;
+    default:
+      return false;
+  }
+};
+
 const STOP_TOKEN = {
   Equals: 0,
   Semicolon: 1,
@@ -1668,6 +1691,8 @@ class Parser {
   private currentType: TokenType = TOKEN.EOF;
   private currentValue = "";
   private currentLineBreakBefore = false;
+  // True while skipping a conditional type's `extends` clause, where `infer` constraints bind.
+  private inConditionalExtendsType = false;
   private inFunction = false;
   private inGenerator = false;
   private inAsync = false;
@@ -3520,10 +3545,59 @@ class Parser {
       !this.currentLineBreakBefore
     ) {
       this.next();
+      const previous = this.inConditionalExtendsType;
+      this.inConditionalExtendsType = true;
       this.skipUnionType();
+      this.inConditionalExtendsType = previous;
       this.expectPunctuator("?");
       this.skipConditionalTypeBranches();
     }
+  }
+
+  // Nested type contexts (type arguments, function returns, templates) allow conditional types again.
+  private skipTypeExpressionAllowingConditional(): void {
+    const previous = this.inConditionalExtendsType;
+    this.inConditionalExtendsType = false;
+    this.skipTypeExpression();
+    this.inConditionalExtendsType = previous;
+  }
+
+  // Function type returns may be type predicates (`x is T`, `asserts x is T`, `asserts x`).
+  private skipReturnType(): void {
+    if (
+      this.currentType === TOKEN.Identifier &&
+      this.currentValue === "asserts" &&
+      !this.tokenizer.peekLineBreakBefore() &&
+      (this.tokenizer.peekType() === TOKEN.Identifier ||
+        (this.tokenizer.peekType() === TOKEN.Keyword && this.tokenizer.peekValue() === "this"))
+    ) {
+      this.next();
+      this.next();
+      if (this.isTypePredicateKeyword()) {
+        this.next();
+        this.skipTypeExpressionAllowingConditional();
+      }
+      return;
+    }
+    if (
+      (this.currentType === TOKEN.Identifier ||
+        (this.currentType === TOKEN.Keyword && this.currentValue === "this")) &&
+      !this.tokenizer.peekLineBreakBefore() &&
+      this.tokenizer.peekType() === TOKEN.Identifier &&
+      this.tokenizer.peekValue() === "is"
+    ) {
+      this.next();
+      this.next();
+    }
+    this.skipTypeExpressionAllowingConditional();
+  }
+
+  private isTypePredicateKeyword(): boolean {
+    return (
+      this.currentType === TOKEN.Identifier &&
+      this.currentValue === "is" &&
+      !this.currentLineBreakBefore
+    );
   }
 
   private skipConditionalTypeBranches(): void {
@@ -3570,6 +3644,7 @@ class Parser {
           if (this.tokenizer.peekType() === TOKEN.Identifier) {
             this.next();
             this.next();
+            this.skipInferConstraint();
             return;
           }
           break;
@@ -3582,6 +3657,23 @@ class Parser {
     // Array/indexed-access suffixes cannot start on a new line, matching TypeScript.
     while (this.isCurrentPunctuator("[") && !this.currentLineBreakBefore) {
       this.skipBalancedTypeTokens("[", "]");
+    }
+  }
+
+  // Mirrors TypeScript: an `infer U extends C` constraint is kept inside a conditional's extends
+  // clause, or when no `?` follows; otherwise `extends` starts a conditional type instead.
+  private skipInferConstraint(): void {
+    if (this.currentType !== TOKEN.Keyword || this.currentValue !== "extends") {
+      return;
+    }
+    const snapshot = this.snapshot();
+    this.next();
+    const previous = this.inConditionalExtendsType;
+    this.inConditionalExtendsType = true;
+    this.skipUnionType();
+    this.inConditionalExtendsType = previous;
+    if (!this.inConditionalExtendsType && this.isCurrentPunctuator("?")) {
+      this.restore(snapshot);
     }
   }
 
@@ -3598,7 +3690,7 @@ class Parser {
             this.skipBalancedTypeTokens("(", ")");
             if (this.isCurrentPunctuator("=>")) {
               this.next();
-              this.skipTypeExpression();
+              this.skipReturnType();
             }
             return;
           case "<":
@@ -3682,7 +3774,7 @@ class Parser {
     }
     this.skipBalancedTypeTokens("(", ")");
     this.expectPunctuator("=>");
-    this.skipTypeExpression();
+    this.skipReturnType();
   }
 
   private skipImportType(): void {
@@ -3703,6 +3795,11 @@ class Parser {
     if (!this.isCurrentTypeName()) {
       throw new ParseError("Expected type name");
     }
+    // Like TypeScript, keyword types never take type arguments, so a following `<` is a comparison.
+    if (isKeywordType(this.currentValue)) {
+      this.next();
+      return;
+    }
     this.next();
     while (this.isCurrentPunctuator(".")) {
       this.next();
@@ -3719,6 +3816,8 @@ class Parser {
   // Type arguments and type parameters share enough shape to skip with one routine.
   private skipTypeArguments(): void {
     this.expectPunctuator("<");
+    const previous = this.inConditionalExtendsType;
+    this.inConditionalExtendsType = false;
     while (this.currentType !== TOKEN.Punctuator || !this.currentValue.startsWith(">")) {
       // Type parameter modifiers (`in`, `out`, `const`) precede the parameter name.
       while (
@@ -3735,7 +3834,9 @@ class Parser {
       // `extends` is either a type parameter constraint or the start of a conditional type argument.
       if (this.currentType === TOKEN.Keyword && this.currentValue === "extends") {
         this.next();
+        this.inConditionalExtendsType = true;
         this.skipUnionType();
+        this.inConditionalExtendsType = false;
         if (this.isCurrentPunctuator("?")) {
           this.next();
           this.skipConditionalTypeBranches();
@@ -3751,6 +3852,7 @@ class Parser {
       }
       break;
     }
+    this.inConditionalExtendsType = previous;
     this.consumeAngleBracketPunctuator();
   }
 
@@ -3784,7 +3886,7 @@ class Parser {
     }
     while (!this.tokenizer.readTemplateElement().tail) {
       this.next();
-      this.skipTypeExpression();
+      this.skipTypeExpressionAllowingConditional();
       if (!this.isCurrentPunctuator("}")) {
         throw new ParseError("Unterminated template literal type");
       }
