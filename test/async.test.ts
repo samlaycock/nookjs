@@ -175,6 +175,51 @@ describe("Async", () => {
           expect(result).toBe("[object Promise]b");
         });
 
+        it("should let sync callbacks return promises from await-free async sandbox functions", async () => {
+          const result = await interpreter.evaluateAsync(`
+            async function double(x) { return x * 2; }
+            Promise.all(Array.from([1, 2, 3], (x) => double(x)))
+          `);
+          expect(result).toEqual([2, 4, 6]);
+        });
+
+        it("should let sandbox array callbacks call await-free async sandbox functions", async () => {
+          const result = await interpreter.evaluateAsync(`
+            const double = async (x) => x * 2;
+            Promise.all([1, 2].map((x) => double(x)))
+          `);
+          expect(result).toEqual([2, 4]);
+        });
+
+        it("should reject the returned promise when an await-free async function throws", async () => {
+          const result = await interpreter.evaluateAsync(`
+            async function fail(x) { throw 'bad ' + x; }
+            const [promise] = Array.from([1], (x) => fail(x));
+            promise.then(() => 'resolved', () => 'rejected')
+          `);
+          expect(result).toBe("rejected");
+        });
+
+        it("should let sync callbacks return promises from async host functions", async () => {
+          const fetchValue = async (x: number) => x + 10;
+          const result = await interpreter.evaluateAsync(
+            `Promise.all(Array.from([1, 2], (x) => fetchValue(x)))`,
+            { globals: { fetchValue } },
+          );
+          expect(result).toEqual([11, 12]);
+        });
+
+        it("should reject calling an awaiting async function from a sync callback", async () => {
+          return expect(
+            interpreter.evaluateAsync(`
+              async function double(x) { const y = await x; return y * 2; }
+              Promise.all(Array.from([1, 2], (x) => double(x)))
+            `),
+          ).rejects.toThrow(
+            "Cannot call an async function that uses await from a callback that a native function runs synchronously",
+          );
+        });
+
         it("should keep Promise reactions able to call async host functions", async () => {
           const double = async (x: number) => x * 2;
           const result = await interpreter.evaluateAsync(
