@@ -966,7 +966,11 @@ class GeneratorValue extends BaseGeneratorValue {
           // Bind error to catch parameter if provided
           if (node.handler.param) {
             if (node.handler.param.type === "Identifier") {
-              this.interpreter.environment.declare(node.handler.param.name, error, "let");
+              this.interpreter.environment.declare(
+                node.handler.param.name,
+                this.interpreter.markSandboxHeld(error),
+                "let",
+              );
             } else if (
               node.handler.param.type === "ObjectPattern" ||
               node.handler.param.type === "ArrayPattern"
@@ -1676,7 +1680,11 @@ class AsyncGeneratorValue extends BaseGeneratorValue {
           // Bind error to catch parameter if provided
           if (node.handler.param) {
             if (node.handler.param.type === "Identifier") {
-              this.interpreter.environment.declare(node.handler.param.name, error, "let");
+              this.interpreter.environment.declare(
+                node.handler.param.name,
+                this.interpreter.markSandboxHeld(error),
+                "let",
+              );
             } else if (
               node.handler.param.type === "ObjectPattern" ||
               node.handler.param.type === "ArrayPattern"
@@ -2713,6 +2721,10 @@ export class Interpreter {
   private instanceClassMap: WeakMap<object, ClassValue> = new WeakMap();
   private instanceFunctionMap: WeakMap<object, FunctionValue> = new WeakMap();
   private sandboxOwnedContainers: WeakSet<object> = new WeakSet();
+  // Objects sandbox code holds a direct reference to that are not plain
+  // containers (regex literals, template strings, caught errors, values handed
+  // to host code). They keep their identity when they flow back from the host.
+  private sandboxHeldObjects: WeakSet<object> = new WeakSet();
   private sandboxPrototypeLinkedContainers: WeakSet<object> = new WeakSet();
   private arrayMethodCache: WeakMap<any[], Map<string, HostFunctionValue>> = new WeakMap();
   private generatorMethodCache: WeakMap<GeneratorValue, Map<string, HostFunctionValue>> =
@@ -5255,7 +5267,7 @@ export class Interpreter {
     if ("bigint" in node && !this.isFeatureEnabled("BigIntLiteral")) {
       throw new InterpreterError("BigIntLiteral is not enabled");
     }
-    return node.value;
+    return this.markSandboxHeld(node.value);
   }
 
   private evaluateIdentifier(node: ESTree.Identifier): any {
@@ -5532,7 +5544,8 @@ export class Interpreter {
       configurable: false,
     });
     Object.freeze(strings);
-    return strings;
+    this.markSandboxHeld(raw);
+    return this.markSandboxHeld(strings);
   }
 
   private callTagFunction(tag: any, args: any[], isAsync: boolean): any {
@@ -6131,6 +6144,27 @@ export class Interpreter {
     return value;
   }
 
+  /**
+   * Records that sandbox code already holds a direct reference to a value, so
+   * host round-trips (such as Promise fulfillment) return it unchanged.
+   */
+  markSandboxHeld<T>(value: T): T {
+    if (value !== null && (typeof value === "object" || typeof value === "function")) {
+      this.sandboxHeldObjects.add(value as object);
+    }
+    return value;
+  }
+
+  private isSandboxOwnedValue(value: object): boolean {
+    return (
+      this.isReadOnlyProxyObject(value) ||
+      this.instanceClassMap.has(value) ||
+      this.instanceFunctionMap.has(value) ||
+      this.sandboxOwnedContainers.has(value) ||
+      this.sandboxHeldObjects.has(value)
+    );
+  }
+
   private markSandboxPrototypeLinkedContainer<T extends object>(value: T): T {
     this.sandboxOwnedContainers.add(value);
     this.sandboxPrototypeLinkedContainers.add(value);
@@ -6219,11 +6253,7 @@ export class Interpreter {
       return value;
     }
 
-    if (
-      this.isReadOnlyProxyObject(value) ||
-      this.instanceClassMap.has(value) ||
-      this.sandboxOwnedContainers.has(value)
-    ) {
+    if (this.isSandboxOwnedValue(value)) {
       return value;
     }
 
@@ -6695,17 +6725,21 @@ export class Interpreter {
         if (isAsync || arg.isAsync) {
           wrappedArgs[i] = ((interpreter: Interpreter, callback: FunctionValue) =>
             async function (this: any, ...hostArgs: any[]) {
-              return await interpreter.executeSandboxFunctionAsync(callback, hostArgs, this);
+              return interpreter.markSandboxHeld(
+                await interpreter.executeSandboxFunctionAsync(callback, hostArgs, this),
+              );
             })(this, arg);
         } else {
           wrappedArgs[i] = ((interpreter: Interpreter, callback: FunctionValue) =>
             function (this: any, ...hostArgs: any[]) {
-              return interpreter.executeSandboxFunction(callback, hostArgs, this);
+              return interpreter.markSandboxHeld(
+                interpreter.executeSandboxFunction(callback, hostArgs, this),
+              );
             })(this, arg);
         }
       } else {
         // Unwrap proxied TypedArrays/ArrayBuffers for native method compatibility
-        wrappedArgs[i] = unwrapForNative(arg, this.securityOptions);
+        wrappedArgs[i] = unwrapForNative(this.markSandboxHeld(arg), this.securityOptions);
       }
     }
     return wrappedArgs;
@@ -8597,7 +8631,7 @@ export class Interpreter {
           // Bind error to catch parameter if provided
           if (node.handler.param) {
             if (node.handler.param.type === "Identifier") {
-              this.environment.declare(node.handler.param.name, error, "let");
+              this.environment.declare(node.handler.param.name, this.markSandboxHeld(error), "let");
             } else if (
               node.handler.param.type === "ObjectPattern" ||
               node.handler.param.type === "ArrayPattern"
@@ -11974,7 +12008,7 @@ export class Interpreter {
           // Bind error to catch parameter if provided
           if (node.handler.param) {
             if (node.handler.param.type === "Identifier") {
-              this.environment.declare(node.handler.param.name, error, "let");
+              this.environment.declare(node.handler.param.name, this.markSandboxHeld(error), "let");
             } else if (
               node.handler.param.type === "ObjectPattern" ||
               node.handler.param.type === "ArrayPattern"

@@ -350,7 +350,7 @@ Promise objects cannot be wrapped in a `ReadOnlyProxy` because:
 Instead, `ReadOnlyProxy.wrap()` substitutes a derived native Promise whose fulfillment value is protected before sandbox code can observe it:
 
 - Host objects and functions fulfilled by a host Promise receive the same protection as host function return values, whether they are observed through `await`, `.then()` callbacks or combinators such as `Promise.all()`
-- Values the sandbox already owns (object literals, arrays, class instances, sandbox functions) keep their identity, so `await Promise.resolve(obj) === obj` still holds
+- Values the sandbox already owns keep their identity, so `await Promise.resolve(obj) === obj` still holds. This covers object and array literals, class and constructor function instances, regex literals, tagged template strings, caught errors, sandbox functions, values the sandbox passed to host functions and values returned from sandbox callbacks
 - The derived Promise subscribes through the intrinsic `Promise.prototype.then`, so overridden `then` methods on host Promises are never invoked
 - Derived Promises are cached per original Promise, so repeated reads observe the same Promise and fulfillment value
 - Rejection reasons pass through unchanged, and the derived Promise does not introduce new unhandled rejections
