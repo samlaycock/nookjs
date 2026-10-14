@@ -1361,6 +1361,175 @@ describe("Security", () => {
       }
     });
 
+    describe("Host callback argument protection", () => {
+      const createHost = () => {
+        const secret = { value: 1, nested: { value: 2 }, list: [1, 2] };
+        const secretError = new Error("host failure");
+        const interpreter = new Interpreter({
+          globals: {
+            withSecret: (callback: (value: any) => any) => callback(secret),
+            withSecretAsync: async (callback: (value: any) => any) => await callback(secret),
+            withSecretReceiver: (callback: () => any) => callback.call(secret),
+            withSecretArray: (callback: (value: any) => any) => callback([secret]),
+            withSecretError: (callback: (value: any) => any) => callback(secretError),
+          },
+        });
+        return { secret, secretError, interpreter };
+      };
+
+      const expectUntouched = (secret: object) => {
+        expect(secret).toEqual({ value: 1, nested: { value: 2 }, list: [1, 2] });
+      };
+
+      const tamper = (target: string) => `
+        try { ${target}.value = 99; } catch {}
+        try { ${target}.nested.value = 99; } catch {}
+        try { ${target}.list.push(3); } catch {}
+        try { ${target}.list[0] = 99; } catch {}
+        try { delete ${target}.value; } catch {}
+      `;
+
+      it("should keep host objects passed to sync callbacks immutable", () => {
+        const { secret, interpreter } = createHost();
+        interpreter.evaluate(`withSecret((target) => { ${tamper("target")} });`);
+        expectUntouched(secret);
+      });
+
+      it("should keep host objects passed to async callbacks immutable", async () => {
+        const { secret, interpreter } = createHost();
+        await interpreter.evaluateAsync(`
+          await withSecretAsync(async (target) => { ${tamper("target")} });
+        `);
+        expectUntouched(secret);
+      });
+
+      it("should keep host objects passed to callbacks immutable in evaluateAsync", async () => {
+        const { secret, interpreter } = createHost();
+        await interpreter.evaluateAsync(`withSecret((target) => { ${tamper("target")} });`);
+        expectUntouched(secret);
+      });
+
+      it("should keep host callback receivers immutable", () => {
+        const { secret, interpreter } = createHost();
+        interpreter.evaluate(`withSecretReceiver(function () { ${tamper("this")} });`);
+        expectUntouched(secret);
+      });
+
+      it("should keep host callback receivers immutable in evaluateAsync", async () => {
+        const { secret, interpreter } = createHost();
+        await interpreter.evaluateAsync(`
+          withSecretReceiver(function () { ${tamper("this")} });
+        `);
+        expectUntouched(secret);
+      });
+
+      it("should keep host objects nested in callback arrays immutable", () => {
+        const { secret, interpreter } = createHost();
+        interpreter.evaluate(`withSecretArray(([target]) => { ${tamper("target")} });`);
+        expectUntouched(secret);
+      });
+
+      it("should keep host errors passed to callbacks immutable", () => {
+        const { secretError, interpreter } = createHost();
+        interpreter.evaluate(`
+          withSecretError((error) => {
+            try { error.message = "tampered"; } catch {}
+          });
+        `);
+        expect(secretError.message).toBe("host failure");
+      });
+
+      it("should still expose host callback arguments for reading", () => {
+        const { interpreter } = createHost();
+        const result = interpreter.evaluate(`
+          withSecret((target) => target.value + target.nested.value + target.list.length)
+        `);
+        expect(result).toBe(5);
+      });
+
+      it("should still expose host callback receivers for reading", () => {
+        const { interpreter } = createHost();
+        const result = interpreter.evaluate(`
+          withSecretReceiver(function () { return this.value + this.nested.value; })
+        `);
+        expect(result).toBe(3);
+      });
+
+      it("should let callbacks call host functions they receive", () => {
+        let calls = 0;
+        const interpreter = new Interpreter({
+          globals: {
+            withHandler: (callback: (handler: () => string) => any) =>
+              callback(() => {
+                calls++;
+                return "called";
+              }),
+          },
+        });
+        const result = interpreter.evaluate(`withHandler((handler) => handler())`);
+        expect(result).toBe("called");
+        expect(calls).toBe(1);
+      });
+
+      it("should preserve identity of sandbox values passed back to callbacks", () => {
+        const interpreter = new Interpreter({
+          globals: {
+            echo: (value: any, callback: (value: any) => any) => callback(value),
+            echoReceiver: (value: any, callback: () => any) => callback.call(value),
+          },
+        });
+        const result = interpreter.evaluate(`
+          const obj = { value: 1 };
+          const arr = [obj];
+          const sameArg = echo(obj, (value) => value === obj);
+          const sameArray = echo(arr, (value) => value === arr);
+          const sameReceiver = echoReceiver(obj, function () { return this === obj; });
+          echo(obj, (value) => { value.value = 2; });
+          [sameArg, sameArray, sameReceiver, obj.value]
+        `);
+        expect(result).toEqual([true, true, true, 2]);
+      });
+
+      it("should resolve and reject sandbox Promises through executor callbacks", async () => {
+        const interpreter = new Interpreter({ globals: { Promise } });
+        const result = await interpreter.evaluateAsync(`
+          const pending = new Promise((resolve) => resolve(1));
+          const resolved = await pending;
+          let rejected;
+          try {
+            await new Promise((_, reject) => reject("boom"));
+          } catch (error) {
+            rejected = error;
+          }
+          const results = [resolved, rejected];
+          results
+        `);
+        expect(result).toEqual([1, "boom"]);
+      });
+
+      it("should let callbacks pass host functions they receive back to the host", () => {
+        const interpreter = new Interpreter({
+          globals: {
+            withHandler: (callback: (handler: () => string) => any) => callback(() => "called"),
+            invoke: (handler: () => string) => handler(),
+          },
+        });
+        const result = interpreter.evaluate(`withHandler((handler) => invoke(handler))`);
+        expect(result).toBe("called");
+      });
+
+      it("should keep host typed arrays passed to callbacks mutable by index", () => {
+        const bytes = new Uint8Array([1, 2, 3]);
+        const interpreter = new Interpreter({
+          globals: {
+            withBytes: (callback: (value: Uint8Array) => any) => callback(bytes),
+          },
+        });
+        interpreter.evaluate(`withBytes((target) => { target[0] = 9; })`);
+        expect(Array.from(bytes)).toEqual([9, 2, 3]);
+      });
+    });
+
     describe("Built-in object access", () => {
       it("should have access to Promise constructor for async/await support", async () => {
         const interpreter = new Interpreter();
