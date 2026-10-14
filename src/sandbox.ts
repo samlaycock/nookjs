@@ -377,7 +377,9 @@ const resolveFeatureControl = (
   const enable = new Set(toggles.enable ?? []);
   const disable = new Set(toggles.disable ?? []);
 
-  if (base?.mode === "whitelist") {
+  // An explicit mode defines the exact policy rather than modifying the preset,
+  // otherwise a requested whitelist would silently retain every preset feature.
+  if (!toggles.mode && base?.mode === "whitelist") {
     const features = new Set(base.features);
     for (const feature of enable) {
       features.add(feature);
@@ -388,7 +390,7 @@ const resolveFeatureControl = (
     return { mode: "whitelist", features: [...features] as LanguageFeature[] };
   }
 
-  if (base?.mode === "blacklist") {
+  if (!toggles.mode && base?.mode === "blacklist") {
     const features = new Set(base.features);
     for (const feature of enable) {
       features.delete(feature);
@@ -401,6 +403,9 @@ const resolveFeatureControl = (
 
   const mode = toggles.mode ?? (disable.size > 0 ? "blacklist" : "whitelist");
   if (mode === "whitelist") {
+    for (const feature of disable) {
+      enable.delete(feature);
+    }
     return { mode: "whitelist", features: [...enable] as LanguageFeature[] };
   }
 
