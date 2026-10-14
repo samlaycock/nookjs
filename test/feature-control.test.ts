@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from "bun:test";
 
 import { Interpreter, type LanguageFeature } from "../src/interpreter";
+import { createSandbox } from "../src/sandbox";
 
 describe("Feature Control", () => {
   describe("API", () => {
@@ -931,6 +932,99 @@ describe("Feature Control", () => {
           "DefaultParameters",
           "DefaultParameters is not enabled",
         );
+      });
+    });
+
+    describe("Module export forms", () => {
+      const expectModuleToReject = async (
+        source: string,
+        disabledFeature: LanguageFeature,
+        message: string | RegExp,
+      ) => {
+        const sandbox = createSandbox({
+          env: "es2022",
+          modules: {},
+          features: { disable: [disabledFeature] },
+        });
+
+        let error: unknown;
+        try {
+          await sandbox.runModule(source, { path: "main.js" });
+        } catch (caught) {
+          error = caught;
+        }
+        expect(() => {
+          if (error) {
+            throw error;
+          }
+        }).toThrow(message);
+      };
+
+      test("blocks function declarations in every export form", async () => {
+        const message = "FunctionDeclarations is not enabled";
+        await expectModuleToReject("function f() {}", "FunctionDeclarations", message);
+        await expectModuleToReject("export function f() {}", "FunctionDeclarations", message);
+        await expectModuleToReject(
+          "export default function f() {}",
+          "FunctionDeclarations",
+          message,
+        );
+        await expectModuleToReject(
+          "export default function () {}",
+          "FunctionDeclarations",
+          message,
+        );
+      });
+
+      test("blocks class declarations in every export form", async () => {
+        const message = "Classes is not enabled";
+        await expectModuleToReject("class C {}", "Classes", message);
+        await expectModuleToReject("export class C {}", "Classes", message);
+        await expectModuleToReject("export default class C {}", "Classes", message);
+        await expectModuleToReject("export default class {}", "Classes", message);
+      });
+
+      test("blocks async and generator subfeatures on default-exported functions", async () => {
+        await expectModuleToReject(
+          "export default async function f() {}",
+          "AsyncAwait",
+          "AsyncAwait is not enabled",
+        );
+        await expectModuleToReject(
+          "export default function* f() {}",
+          "Generators",
+          "Generators is not enabled",
+        );
+        await expectModuleToReject(
+          "export default async function* f() {}",
+          "AsyncGenerators",
+          "AsyncGenerators is not enabled",
+        );
+      });
+
+      test("blocks class subfeatures on default-exported classes", async () => {
+        await expectModuleToReject(
+          "export default class C { x = 1; }",
+          "ClassFields",
+          "ClassFields is not enabled",
+        );
+      });
+
+      test("allows default-exported declarations when their features are enabled", async () => {
+        const sandbox = createSandbox({
+          env: "es2022",
+          modules: {
+            files: {
+              "class.js": "export default class C { static value = 1; }",
+              "function.js": "export default function f() { return 2; }",
+            },
+          },
+        });
+        const exports = await sandbox.runModule(
+          'import C from "class.js"; import f from "function.js"; export const value = C.value + f();',
+          { path: "main.js" },
+        );
+        expect(exports.value).toBe(3);
       });
     });
 
