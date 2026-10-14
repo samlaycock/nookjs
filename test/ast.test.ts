@@ -623,6 +623,91 @@ describe("AST", () => {
         expect(result).toBe(1);
       });
 
+      describe("type assertion and satisfies erasure", () => {
+        it("keeps arithmetic and assignments that follow an as assertion", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            let n = 0;
+            const x = 1 as number + (n = 2);
+            [x, n];
+          `);
+
+          expect(result).toEqual([3, 2]);
+        });
+
+        it("keeps arithmetic and assignments that follow a satisfies expression", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            let n = 0;
+            const x = 1 satisfies number + (n = 2);
+            [x, n];
+          `);
+
+          expect(result).toEqual([3, 2]);
+        });
+
+        it("keeps comparisons that follow an assertion", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            [1 as number === 1, 3 as number > 2, 2 as number >= 3];
+          `);
+
+          expect(result).toEqual([true, true, false]);
+        });
+
+        it("keeps logical operators that follow an assertion", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            let k = 0;
+            const a = false as boolean || (k = 3);
+            const b = null as unknown ?? "fallback";
+            [a, k, b];
+          `);
+
+          expect(result).toEqual([3, 3, "fallback"]);
+        });
+
+        it("keeps conditional expressions that follow an assertion", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            true as boolean ? "yes" : "no";
+          `);
+
+          expect(result).toBe("yes");
+        });
+
+        it("consumes complex nested types without swallowing following operators", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            let n = 0;
+            const obj = { a: 1 };
+            const fn = (a: number) => a * 2;
+            [
+              obj as Record<string, Array<Map<string, number>>> | null ?? "fallback",
+              (fn as (a: number) => number)(4) + (fn as unknown as { (a: number): number })(1),
+              (fn as <T extends number = 1>(a: T) => T)(1) + (fn as Box<string extends T ? 1 : 2>)(2),
+              (1 as unknown as number) * 3 - (2 as any as number),
+              obj.a as number & {} | [string, number?][] | (keyof typeof obj)[] | \`id-\${string}\` + (n = 5),
+              obj as typeof obj extends { a: number } ? { a: 1 } : never === obj,
+              n,
+            ];
+          `);
+
+          expect(result).toEqual([{ a: 1 }, 10, 6, 1, 6, true, 5]);
+        });
+
+        it("parses an assertion as the left operand of a following binary operator", () => {
+          const expr = parseFirstExpression("x as number + (n = 2);");
+
+          expect(expr).toMatchObject({
+            type: "BinaryExpression",
+            operator: "+",
+            left: { type: "Identifier", name: "x" },
+            right: { type: "AssignmentExpression", operator: "=" },
+          });
+        });
+      });
+
       it("preserves runtime behavior when stripping angle-bracket type assertions", () => {
         const interpreter = new Interpreter();
         const result = interpreter.evaluate(`

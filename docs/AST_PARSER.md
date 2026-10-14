@@ -24,7 +24,7 @@ Type syntax is parsed and discarded so runtime behavior matches plain JavaScript
 
 - Generic parameter lists on functions, classes, and methods
 - Variable/parameter/property annotations and function return types
-- `as` assertions and `satisfies` expressions
+- `as` assertions and `satisfies` expressions (parsed at relational precedence; exactly one type is consumed structurally, so following runtime operators such as `1 as number + (n = 2)` are preserved)
 - Optional (`?`) and definite assignment (`!`) markers
 - `abstract` class modifiers and runtime-less abstract members
 - `implements` clauses
