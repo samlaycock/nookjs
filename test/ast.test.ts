@@ -696,6 +696,42 @@ describe("AST", () => {
           expect(result).toEqual([{ a: 1 }, 10, 6, 1, 6, true, 5]);
         });
 
+        it("keeps less-than comparisons that follow keyword types", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            [1 as number < 2, 3 satisfies number < 2, 1 as any < 2, null as null < 1];
+          `);
+
+          expect(result).toEqual([true, false, true, true]);
+        });
+
+        it("consumes type guard and assertion return types in function types", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            const isString = (x: unknown) => typeof x === "string";
+            const check = (x: unknown) => {};
+            [
+              (isString as (x: unknown) => x is string)("a"),
+              (check as (x: unknown) => asserts x is string)("a") === undefined,
+              (check as (x: unknown) => asserts x)(1) === undefined,
+            ];
+          `);
+
+          expect(result).toEqual([true, true, true]);
+        });
+
+        it("consumes constrained infer types in conditional types", () => {
+          const interpreter = new Interpreter();
+          const result = interpreter.evaluate(`
+            [
+              1 as number extends infer U extends number ? U : never,
+              2 as Box<number extends infer U extends number ? U : never>,
+            ];
+          `);
+
+          expect(result).toEqual([1, 2]);
+        });
+
         it("parses an assertion as the left operand of a following binary operator", () => {
           const expr = parseFirstExpression("x as number + (n = 2);");
 
