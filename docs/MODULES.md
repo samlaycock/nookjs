@@ -533,7 +533,7 @@ const sandbox = createSandbox({
 
 ## Differences from Native ES Modules
 
-1. **Dynamic import is async-only**: Use `import()` from async contexts (e.g. `await import("./mod.js")`)
+1. **Dynamic import is async-only**: Use `import()` from async contexts (e.g. `await import("./mod.js")`). Imports started by an `evaluateAsync()`/`evaluateModuleAsync()` call are owned by that evaluation: it does not resolve until every `import()` it started has settled, even ones that were never awaited. A detached import therefore always runs with the globals, limits, abort signal and statistics of the evaluation that started it, and never leaks into a later run. An unawaited import that never settles (for example, a resolver that never returns) keeps its evaluation pending.
 2. **Partial import.meta support**: Read-only `import.meta.url` is available (with optional resolver-provided fields)
 3. **Synchronous resolution**: While resolver can be async, module graph is built before execution
 4. **Custom resolution**: No automatic Node.js-style resolution (you control it via resolver)

@@ -362,6 +362,154 @@ describe("Module System", () => {
         }),
       ).rejects.toThrow("depth exceeded");
     });
+
+    describe("Detached dynamic imports", () => {
+      const createGatedInterpreter = () => {
+        let openGate!: () => void;
+        const gate = new Promise<void>((resolve) => {
+          openGate = resolve;
+        });
+        let notifyResolveStarted!: () => void;
+        const resolveStarted = new Promise<void>((resolve) => {
+          notifyResolveStarted = resolve;
+        });
+        const reports: unknown[] = [];
+
+        const resolver: ModuleResolver = {
+          async resolve(specifier) {
+            if (specifier !== "dep.js") {
+              return null;
+            }
+            notifyResolveStarted();
+            await gate;
+            return {
+              type: "source",
+              code: `report(typeof secret === "undefined" ? "no secret" : secret);
+                     export const value = 1;`,
+              path: "dep.js",
+            };
+          },
+        };
+
+        const interpreter = new Interpreter({
+          globals: {
+            report: (value: unknown) => {
+              reports.push(value);
+            },
+          },
+          modules: { enabled: true, resolver },
+        });
+
+        return { interpreter, openGate, resolveStarted, reports };
+      };
+
+      test("should finish a detached script import before the evaluation resolves", async () => {
+        const { interpreter, openGate, resolveStarted, reports } = createGatedInterpreter();
+
+        let settled = false;
+        const first = interpreter.evaluateAsync(`import("dep.js"); "first"`).then((value) => {
+          settled = true;
+          return value;
+        });
+        await resolveStarted;
+        await Promise.resolve();
+        expect(settled).toBe(false);
+
+        openGate();
+        expect(await first).toBe("first");
+        expect(reports).toEqual(["no secret"]);
+      });
+
+      test("should not run a detached import with a later evaluation's globals", async () => {
+        const { interpreter, openGate, resolveStarted, reports } = createGatedInterpreter();
+
+        const first = interpreter.evaluateAsync(`import("dep.js"); "first"`);
+        await resolveStarted;
+        const second = interpreter.evaluateAsync(`"second"`, {
+          globals: { secret: "second-run-secret" },
+        });
+
+        openGate();
+        expect(await Promise.all([first, second])).toEqual(["first", "second"]);
+        expect(reports).toEqual(["no secret"]);
+      });
+
+      test("should finish a detached module import before the module evaluation resolves", async () => {
+        const { interpreter, openGate, resolveStarted, reports } = createGatedInterpreter();
+
+        const first = interpreter.evaluateModuleAsync(`export const ok = true; import("dep.js");`, {
+          path: "main.js",
+        });
+        await resolveStarted;
+        const second = interpreter.evaluateAsync(`"second"`, {
+          globals: { secret: "second-run-secret" },
+        });
+
+        openGate();
+        expect((await first).ok).toBe(true);
+        expect(await second).toBe("second");
+        expect(reports).toEqual(["no secret"]);
+      });
+
+      test("should attribute detached import work to the evaluation that started it", async () => {
+        const { interpreter, openGate, resolveStarted } = createGatedInterpreter();
+        const baseline = new Interpreter();
+        await baseline.evaluateAsync(`"second"`);
+        const baselineNodeCount = baseline.getStats().nodeCount;
+
+        const first = interpreter.evaluateAsync(`import("dep.js"); "first"`);
+        await resolveStarted;
+        const second = interpreter.evaluateAsync(`"second"`);
+
+        openGate();
+        await first;
+        await second;
+        expect(interpreter.getStats().nodeCount).toBe(baselineNodeCount);
+      });
+
+      test("should not run a detached import after its evaluation is aborted", async () => {
+        const { interpreter, openGate, resolveStarted, reports } = createGatedInterpreter();
+        const controller = new AbortController();
+
+        const first = interpreter.evaluateAsync(
+          `import("dep.js");
+           await new Promise(() => {});`,
+          { signal: controller.signal },
+        );
+        await resolveStarted;
+        controller.abort();
+        openGate();
+        const error = await first.then(
+          () => undefined,
+          (caught: unknown) => caught,
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect(() => {
+          throw error;
+        }).toThrow("aborted");
+
+        const second = await interpreter.evaluateAsync(`"second"`, {
+          globals: { secret: "second-run-secret" },
+        });
+        expect(second).toBe("second");
+        expect(reports).toEqual([]);
+      });
+
+      test("should not fail the evaluation when a detached import rejects", async () => {
+        const interpreter = new Interpreter({
+          modules: {
+            enabled: true,
+            resolver: {
+              resolve() {
+                return null;
+              },
+            },
+          },
+        });
+
+        expect(await interpreter.evaluateAsync(`import("missing.js"); "done"`)).toBe("done");
+      });
+    });
   });
 
   describe("Export Types", () => {
