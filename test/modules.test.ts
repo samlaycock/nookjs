@@ -495,6 +495,51 @@ describe("Module System", () => {
         expect(reports).toEqual([]);
       });
 
+      test("should reject a script evaluation aborted while draining a detached import", async () => {
+        const { interpreter, openGate, resolveStarted, reports } = createGatedInterpreter();
+        const controller = new AbortController();
+
+        const first = interpreter.evaluateAsync(`import("dep.js"); "first"`, {
+          signal: controller.signal,
+        });
+        await resolveStarted;
+        controller.abort();
+        openGate();
+        const error = await first.then(
+          () => undefined,
+          (caught: unknown) => caught,
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect(() => {
+          throw error;
+        }).toThrow("aborted");
+        expect(reports).toEqual([]);
+        expect(await interpreter.evaluateAsync(`"second"`)).toBe("second");
+      });
+
+      test("should reject a module evaluation aborted while draining a detached import", async () => {
+        const { interpreter, openGate, resolveStarted, reports } = createGatedInterpreter();
+        const controller = new AbortController();
+
+        const first = interpreter.evaluateModuleAsync(`export const ok = true; import("dep.js");`, {
+          path: "main.js",
+          signal: controller.signal,
+        });
+        await resolveStarted;
+        controller.abort();
+        openGate();
+        const error = await first.then(
+          () => undefined,
+          (caught: unknown) => caught,
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect(() => {
+          throw error;
+        }).toThrow("aborted");
+        expect(reports).toEqual([]);
+        expect(await interpreter.evaluateAsync(`"second"`)).toBe("second");
+      });
+
       test("should not fail the evaluation when a detached import rejects", async () => {
         const interpreter = new Interpreter({
           modules: {

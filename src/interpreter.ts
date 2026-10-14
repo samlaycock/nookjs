@@ -2998,7 +2998,9 @@ export class Interpreter {
    * Wait for every dynamic import started by the current evaluation to settle.
    * Detached `import()` calls would otherwise resume after the evaluation has
    * ended and run module code with a later evaluation's globals, limits and
-   * statistics. Imports started while draining are drained as well.
+   * statistics. Imports started while draining are drained as well. Entry
+   * points also drain in `finally` so failed evaluations never leave jobs
+   * behind; once drained, that second call is a no-op.
    */
   private async drainPendingDynamicImports(): Promise<void> {
     const pending = this.getCurrentContext()?.pendingDynamicImports;
@@ -3008,6 +3010,17 @@ export class Interpreter {
     while (pending.size > 0) {
       await Promise.all(pending);
     }
+  }
+
+  /**
+   * Drain the current evaluation's dynamic imports before it reports success.
+   * Import failures are not observed by the drain, so re-check the abort
+   * signal and CPU budget afterwards: an evaluation cancelled or exhausted
+   * while waiting must not resolve with its earlier result.
+   */
+  private async completePendingDynamicImports(): Promise<void> {
+    await this.drainPendingDynamicImports();
+    this.checkExecutionLimits(true);
   }
 
   /**
@@ -3620,6 +3633,7 @@ export class Interpreter {
       }
       try {
         const result = await this.evaluateNodeAsync(ast);
+        await this.completePendingDynamicImports();
         return result instanceof RawValue ? result.value : result;
       } finally {
         if (needsFreshScope) {
@@ -4139,7 +4153,9 @@ export class Interpreter {
       }
 
       const ast = this.parseModuleAndValidate(code, options);
-      return await this.evaluateModuleAstAsync(ast, options.path);
+      const exports = await this.evaluateModuleAstAsync(ast, options.path);
+      await this.completePendingDynamicImports();
+      return exports;
     } catch (error) {
       throw this.enhanceError(error);
     } finally {
