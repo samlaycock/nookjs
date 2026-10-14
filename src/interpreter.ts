@@ -6756,7 +6756,7 @@ export class Interpreter {
     let needsTransformation = false;
     for (let i = 0; i < count; i++) {
       const arg = args[i];
-      if (arg instanceof FunctionValue) {
+      if (arg instanceof FunctionValue || arg instanceof HostFunctionValue) {
         needsTransformation = true;
         break;
       }
@@ -6779,24 +6779,48 @@ export class Interpreter {
         if (isAsync || arg.isAsync) {
           wrappedArgs[i] = ((interpreter: Interpreter, callback: FunctionValue) =>
             async function (this: any, ...hostArgs: any[]) {
+              const { args: callbackArgs, thisValue } = interpreter.wrapHostCallbackInputs(
+                hostArgs,
+                this,
+              );
               return interpreter.markSandboxHeld(
-                await interpreter.executeSandboxFunctionAsync(callback, hostArgs, this),
+                await interpreter.executeSandboxFunctionAsync(callback, callbackArgs, thisValue),
               );
             })(this, arg);
         } else {
           wrappedArgs[i] = ((interpreter: Interpreter, callback: FunctionValue) =>
             function (this: any, ...hostArgs: any[]) {
+              const { args: callbackArgs, thisValue } = interpreter.wrapHostCallbackInputs(
+                hostArgs,
+                this,
+              );
               return interpreter.markSandboxHeld(
-                interpreter.executeSandboxFunction(callback, hostArgs, this),
+                interpreter.executeSandboxFunction(callback, callbackArgs, thisValue),
               );
             })(this, arg);
         }
+      } else if (arg instanceof HostFunctionValue) {
+        // Host functions came from the host, so hand back the original callable
+        wrappedArgs[i] = arg.hostFunc;
       } else {
         // Unwrap proxied TypedArrays/ArrayBuffers for native method compatibility
         wrappedArgs[i] = unwrapForNative(this.markSandboxHeld(arg), this.securityOptions);
       }
     }
     return wrappedArgs;
+  }
+
+  /**
+   * Protects the arguments and receiver a host passes when invoking a sandbox
+   * callback. Values the sandbox already owns keep their identity; host values
+   * get the same protection as host function return values.
+   */
+  private wrapHostCallbackInputs(hostArgs: any[], thisValue: any): { args: any[]; thisValue: any } {
+    const args = Array.from({ length: hostArgs.length });
+    for (let i = 0; i < hostArgs.length; i++) {
+      args[i] = this.wrapHostPromiseFulfillment(hostArgs[i], `callback argument ${i}`);
+    }
+    return { args, thisValue: this.wrapHostPromiseFulfillment(thisValue, "callback this") };
   }
 
   private enterFunctionContext(

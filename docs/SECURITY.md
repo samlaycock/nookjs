@@ -226,6 +226,15 @@ Host objects are wrapped in a `ReadOnlyProxy` which:
 - Recursively wraps nested objects
 - Wraps function properties as `HostFunctionValue`
 
+### Callback Arguments and Receivers
+
+When host code invokes a sandbox callback (for example a function passed to a host API, a Promise executor or a `.then()` handler), its arguments and `this` value get the same protection as host function return values:
+
+- Host objects, arrays and errors are materialized as sandbox copies or wrapped in a `ReadOnlyProxy`, including nested values, so callbacks cannot mutate trusted host state
+- Host functions are wrapped as `HostFunctionValue`; passing one back to a host function hands the host its original function
+- Values the sandbox already owns keep their identity, so a sandbox object passed to a host function and handed back to a callback is still the same object
+- TypedArrays and `ArrayBuffer` instances keep their documented element-mutation exception
+
 ### valueOf Behavior
 
 The `valueOf` method is handled specially for security:
