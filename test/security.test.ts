@@ -1490,6 +1490,22 @@ describe("Security", () => {
         expect(result).toEqual([true, true, true, 2]);
       });
 
+      it("should preserve shared host references across callback arguments and receivers", () => {
+        const item = { value: 1 };
+        const interpreter = new Interpreter({
+          globals: {
+            withItem: (callback: (value: any, list: any[]) => any) =>
+              callback.call(item, item, [item]),
+          },
+        });
+        const result = interpreter.evaluate(`
+          withItem(function (value, list) {
+            return [value === list[0], this === value];
+          })
+        `);
+        expect(result).toEqual([true, true]);
+      });
+
       it("should resolve and reject sandbox Promises through executor callbacks", async () => {
         const interpreter = new Interpreter({ globals: { Promise } });
         const result = await interpreter.evaluateAsync(`
