@@ -408,6 +408,68 @@ describe("Simplified API", () => {
     expect(() => sandbox.runSync("(() => 1)()")).toThrow("ArrowFunctions is not enabled");
   });
 
+  describe("Explicit feature modes", () => {
+    it("should treat an explicit whitelist as exact instead of extending the env preset", () => {
+      const sandbox = createSandbox({
+        env: "es2022",
+        features: { mode: "whitelist", enable: ["BinaryOperators"] },
+      });
+
+      expect(sandbox.runSync<number>("1 + 2")).toBe(3);
+      expect(() => sandbox.runSync("() => 42")).toThrow("ArrowFunctions is not enabled");
+      expect(() => sandbox.runSync("Math.max(1, 2)")).toThrow("CallExpression is not enabled");
+      expect(() => sandbox.runSync("let x = 1")).toThrow("LetConst is not enabled");
+    });
+
+    it("should treat an explicit per-run whitelist as exact instead of extending the sandbox", () => {
+      const sandbox = createSandbox({ env: "es2022" });
+      const features = { mode: "whitelist", enable: ["BinaryOperators"] } as const;
+
+      expect(sandbox.runSync<number>("1 + 2", { features })).toBe(3);
+      expect(() => sandbox.runSync("() => 42", { features })).toThrow(
+        "ArrowFunctions is not enabled",
+      );
+      expect(sandbox.runSync<number>("(() => 42)()")).toBe(42);
+    });
+
+    it("should treat an explicit blacklist as exact instead of keeping the preset whitelist", () => {
+      const sandbox = createSandbox({
+        env: "es5",
+        features: { mode: "blacklist", disable: ["ArrowFunctions"] },
+      });
+
+      expect(sandbox.runSync<number>("let x = 1; x")).toBe(1);
+      expect(() => sandbox.runSync("(() => 42)()")).toThrow("ArrowFunctions is not enabled");
+    });
+
+    it("should treat an explicit per-run blacklist as exact instead of extending the sandbox", () => {
+      const sandbox = createSandbox({
+        env: "es2022",
+        features: { disable: ["LetConst"] },
+      });
+      const features = { mode: "blacklist", disable: ["ArrowFunctions"] } as const;
+
+      expect(sandbox.runSync<number>("let x = 1; x", { features })).toBe(1);
+      expect(() => sandbox.runSync("(() => 42)()", { features })).toThrow(
+        "ArrowFunctions is not enabled",
+      );
+      expect(() => sandbox.runSync("let x = 1; x")).toThrow("LetConst is not enabled");
+    });
+
+    it("should apply disable entries to an explicit whitelist", () => {
+      const sandbox = createSandbox({
+        env: "es2022",
+        features: {
+          mode: "whitelist",
+          enable: ["BinaryOperators", "ArrowFunctions"],
+          disable: ["ArrowFunctions"],
+        },
+      });
+
+      expect(() => sandbox.runSync("() => 42")).toThrow("ArrowFunctions is not enabled");
+    });
+  });
+
   it("should enforce per-run loop limits", () => {
     const sandbox = createSandbox({
       env: "es2022",

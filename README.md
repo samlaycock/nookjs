@@ -205,6 +205,8 @@ const sandbox = createSandbox({
 });
 ```
 
+Setting `mode` explicitly defines the exact policy and replaces the `env` preset's feature list (a whitelist only allows the listed `enable` features; a blacklist allows everything except the listed `disable` features). Omit `mode` to adjust the preset instead, e.g. `features: { enable: ["LetConst"] }` adds to the preset's features and `features: { disable: ["ArrowFunctions"] }` removes from them. The same rules apply to per-run `features` passed to `run()`/`runSync()`/`runModule()`, relative to the sandbox's configured features.
+
 See [Presets Documentation](docs/PRESETS.md) and [Language Features](docs/README.md) for complete details.
 
 ## Global Value Injection
