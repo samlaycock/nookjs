@@ -1,7 +1,7 @@
 import { describe, it, test, expect, beforeEach } from "bun:test";
 
 import { Interpreter } from "../src/interpreter";
-import { ES2024 } from "../src/presets";
+import { BufferAPI, ES2024, preset } from "../src/presets";
 
 describe("Async", () => {
   describe("ES2017", () => {
@@ -94,6 +94,94 @@ describe("Async", () => {
           });
           const result = await interpreter.evaluateAsync("asyncDouble(syncAdd(3, 7))");
           expect(result).toBe(20);
+        });
+      });
+
+      describe("Sync callbacks passed to native APIs in async mode", () => {
+        let interpreter: Interpreter;
+
+        beforeEach(() => {
+          interpreter = new Interpreter(preset(ES2024, BufferAPI));
+        });
+
+        it("should use replacer callback results in String.prototype.replace", async () => {
+          const result = await interpreter.evaluateAsync(`'ab'.replace('a', () => 'x')`);
+          expect(result).toBe("xb");
+        });
+
+        it("should use replacer callback results with a regex pattern", async () => {
+          const result = await interpreter.evaluateAsync(
+            `'aXa'.replaceAll(/a/g, function (match) { return match.toUpperCase(); })`,
+          );
+          expect(result).toBe("AXA");
+        });
+
+        it("should use mapper callback results in Array.from", async () => {
+          const result = await interpreter.evaluateAsync(`Array.from([1, 2], (x) => x + 1)`);
+          expect(result).toEqual([2, 3]);
+        });
+
+        it("should use mapper callback results in typed array from", async () => {
+          const result = await interpreter.evaluateAsync(
+            `Array.from(Uint8Array.from([1, 2], (x) => x * 3))`,
+          );
+          expect(result).toEqual([3, 6]);
+        });
+
+        it("should use reviver results in JSON.parse", async () => {
+          const result = await interpreter.evaluateAsync(
+            `JSON.parse('{"a":1,"b":[2]}', (key, value) => typeof value === 'number' ? value + 1 : value)`,
+          );
+          expect(result).toEqual({ a: 2, b: [3] });
+        });
+
+        it("should use replacer results in JSON.stringify", async () => {
+          const result = await interpreter.evaluateAsync(
+            `JSON.stringify({ a: 1 }, (key, value) => typeof value === 'number' ? value + 1 : value)`,
+          );
+          expect(result).toBe('{"a":2}');
+        });
+
+        it("should use key callback results in Object.groupBy and Map.groupBy", async () => {
+          const result = await interpreter.evaluateAsync(`
+            const parity = (x) => (x % 2 ? 'odd' : 'even');
+            const byObject = Object.groupBy([1, 2, 3], parity);
+            const byMap = Map.groupBy([1, 2, 3], parity);
+            [byObject.odd, byObject.even, byMap.get('odd'), byMap.get('even')]
+          `);
+          expect(result).toEqual([[1, 3], [2], [1, 3], [2]]);
+        });
+
+        it("should run collection forEach callbacks synchronously in order", async () => {
+          const result = await interpreter.evaluateAsync(`
+            const seen = [];
+            new Map([['a', 1], ['b', 2]]).forEach((value, key) => { seen.push(key + value); });
+            new Set([3, 4]).forEach((value) => { seen.push(value); });
+            seen.push('done');
+            seen
+          `);
+          expect(result).toEqual(["a1", "b2", 3, 4, "done"]);
+        });
+
+        it("should use comparator results when sorting native typed arrays", async () => {
+          const result = await interpreter.evaluateAsync(
+            `Array.from(new Int8Array([1, 3, 2]).sort((a, b) => b - a))`,
+          );
+          expect(result).toEqual([3, 2, 1]);
+        });
+
+        it("should still let async sandbox callbacks return promises", async () => {
+          const result = await interpreter.evaluateAsync(`'ab'.replace('a', async () => 'x')`);
+          expect(result).toBe("[object Promise]b");
+        });
+
+        it("should keep Promise reactions able to call async host functions", async () => {
+          const double = async (x: number) => x * 2;
+          const result = await interpreter.evaluateAsync(
+            `Promise.resolve(2).then((x) => double(x))`,
+            { globals: { double } },
+          );
+          expect(result).toBe(4);
         });
       });
 

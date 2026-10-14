@@ -4,6 +4,7 @@ import {
   type EcmaPresetVersion,
 } from "./ecmascript-builtins";
 import { InterpreterError, HostFunctionValue, FunctionValue, ClassValue } from "./interpreter";
+import { recordNativeSource } from "./native-callbacks";
 
 /**
  * Symbol used to retrieve the underlying target from a ReadOnlyProxy.
@@ -728,12 +729,14 @@ export class ReadOnlyProxy {
           // Detect if it's an async function
           const isAsync = val.constructor.name === "AsyncFunction";
 
+          const forward = (...args: any[]) => {
+            // Call with target as 'this' to preserve method binding
+            // Example: Math.floor.call(Math, 4.7) should work
+            return val.apply(realTarget, args);
+          };
+          recordNativeSource(forward, val);
           const wrappedMethod = new HostFunctionValue(
-            (...args: any[]) => {
-              // Call with target as 'this' to preserve method binding
-              // Example: Math.floor.call(Math, 4.7) should work
-              return val.apply(realTarget, args);
-            },
+            forward,
             `${name}.${String(prop)}`,
             isAsync,
             false,
