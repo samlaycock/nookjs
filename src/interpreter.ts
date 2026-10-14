@@ -4623,6 +4623,10 @@ export class Interpreter {
 
   // Helper to create a FunctionValue without declaring it
   private createFunctionValue(node: ESTree.FunctionDeclaration): FunctionValue {
+    if (!this.isFeatureEnabled("FunctionDeclarations")) {
+      throw new InterpreterError("FunctionDeclarations is not enabled");
+    }
+
     if (node.async && !this.isFeatureEnabled("AsyncAwait")) {
       throw new InterpreterError("AsyncAwait is not enabled");
     }
@@ -4664,6 +4668,10 @@ export class Interpreter {
 
   // Helper to create a ClassValue without declaring it (for export default)
   private async createClassValue(node: ESTree.ClassDeclaration): Promise<ClassValue> {
+    if (!this.isFeatureEnabled("Classes")) {
+      throw new InterpreterError("Classes is not enabled");
+    }
+
     return await this.buildClassValueAsync(node);
   }
 
