@@ -1,5 +1,30 @@
 # nookjs
 
+## 0.7.3
+
+### Patch Changes
+
+- 197fcbf: Protect values fulfilled by host Promises so sandbox code cannot mutate host objects through `await`, `.then()` callbacks or Promise combinators, while preserving the identity of sandbox-owned values.
+- 60fd612: Coerce non-nullish primitives before enumerating `for...in` keys.
+- a73e2e5: Treat an explicit `features.mode` as an exact whitelist/blacklist instead of merging it into the `env` preset or sandbox feature control, for both `createSandbox()` and per-run options. Omitting `mode` still adds to or removes from the preset.
+- b18e0ca: Fix `as` and `satisfies` type erasure swallowing runtime code that followed the asserted type. Expressions such as `1 as number + (n = 2)` now evaluate the trailing arithmetic, comparisons, logical and conditional operators, and their side effects, matching TypeScript's own type erasure.
+- 9d1a7f9: Keep module cache bounds effective while preserving initializing module records.
+- 2e7a142: Bind destructured catch parameters inside generator and async generator functions.
+- 9935783: Add granular feature gates for exponentiation and nullish coalescing operators.
+- 96441c2: Protect the arguments and `this` value host code passes to sandbox callbacks so callbacks cannot mutate host objects, arrays or errors, while preserving the identity of sandbox-owned values. Host functions passed back into host functions now receive the original host function.
+- 1276256: Keep detached dynamic imports inside the evaluation that started them. `evaluateAsync()` and `evaluateModuleAsync()` now wait for every `import()` they started to settle before ending, so an unawaited import can no longer run module code after its evaluation has finished, under a later evaluation's per-call globals, limits or abort signal, or count towards another run's execution statistics.
+- 112c966: Fix integrated resource tracking so allocation accounting runs without per-run maxMemory.
+- 6f85428: Fix update expressions to coerce primitive operands and preserve BigInt results.
+- c024814: Replace ResourceTracker history compaction with a bounded ring buffer.
+- d23e495: Bind omitted sandbox function arguments as undefined instead of rejecting calls with fewer arguments than declared parameters.
+- d172696: Allow object destructuring to read array and primitive sources via object coercion.
+- 0aa5954: Enforce `FunctionDeclarations` and `Classes` feature gates on `export default function`/`export default class` declarations, matching plain and named-export declarations.
+- 8dd0ca3: Keep non-async sandbox callbacks synchronous when they are passed to native APIs that use callback return values during async evaluation. `'ab'.replace('a', () => 'x')`, `Array.from` mappers, `JSON.parse` revivers, `JSON.stringify` replacers, `Object.groupBy`/`Map.groupBy`, typed array comparators and `Map`/`Set` `forEach` now behave the same under `evaluateAsync()`/`run()` as under `evaluate()`, instead of receiving Promises.
+
+  Inside those callbacks, async host functions and async sandbox functions without `await` can still be called and return Promises, so `Promise.all(Array.from(xs, (x) => double(x)))` resolves correctly (including for multiple elements, which previously produced corrupted results).
+
+- 59eb88d: Fix function declaration hoisting inside generator and async generator bodies.
+
 ## 0.7.2
 
 ### Patch Changes
